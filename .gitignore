@@ -53,6 +53,9 @@ storage/
 index/
 
 # IDE and OS files
+.agents/
+.codex/
+.claude/
 .idea/
 .vscode/
 *.swp

@@ -4,6 +4,8 @@ Trước khi thực hiện thay đổi mã nguồn, hãy tham khảo các tài l
 
 * `docs/git-workflow.md`: Quy trình Git, quy tắc đặt tên branch, commit message và Pull Request.
 * `docs/coding-standards.md`: Quy chuẩn coding của dự án.
+* `docs/module-contracts.md`: Contract và ranh giới module dùng chung.
+* `docs/ai-collaboration-guide.md`: Quy trình phối hợp với AI Coding Assistant.
 
 ## Nguyên tắc chung
 
