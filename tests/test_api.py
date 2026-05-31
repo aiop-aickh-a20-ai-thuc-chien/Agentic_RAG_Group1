@@ -11,6 +11,7 @@ def test_health_endpoint_shape() -> None:
 
 def test_answer_endpoint_uses_mock_evidence_by_default(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "mock")
 
     answer = answer_question(AnswerRequest(question="Pin bao hanh bao lau?"))
 
@@ -18,7 +19,9 @@ def test_answer_endpoint_uses_mock_evidence_by_default(monkeypatch: MonkeyPatch)
     assert answer.citations
 
 
-def test_answer_endpoint_can_disable_mock_evidence() -> None:
+def test_answer_endpoint_can_disable_mock_evidence(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "mock")
+
     answer = answer_question(
         AnswerRequest(question="Pin bao hanh bao lau?", use_mock_evidence=False)
     )
@@ -34,6 +37,7 @@ def test_stream_answer_events_include_deltas_citations_and_done() -> None:
             question="Pin bao hanh bao lau?",
             evidence_context=format_evidence_context(evidence_chunks),
             evidence_chunks=evidence_chunks,
+            provider="mock",
         )
     )
 

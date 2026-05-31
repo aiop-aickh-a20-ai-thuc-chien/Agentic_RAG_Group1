@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Protocol
 from urllib import request
 
+from agentic_rag.runtime_env import load_local_env
+
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "qwen3.5:9b-q4_K_M"
@@ -180,6 +182,7 @@ class OllamaChatClient:
 def configured_llm_client() -> LLMClient | None:
     """Return the configured LLM client, otherwise `None` for evidence fallback."""
 
+    load_local_env()
     provider = os.getenv("LLM_PROVIDER", "").strip().lower()
     if provider == "ollama":
         return OllamaChatClient(

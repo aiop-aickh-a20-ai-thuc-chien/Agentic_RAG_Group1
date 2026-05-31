@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowUpRight,
   Bot,
   ChevronLeft,
@@ -45,8 +44,42 @@ type AnswerResponse = {
   citations: Citation[];
 };
 
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  status?: "answered" | "not_found" | "thinking";
+  citations?: Citation[];
+};
+
+type SourceUploadResponse = {
+  provider: string;
+  dataset_id: string;
+  document_id: string;
+  name: string;
+  parse_started: boolean;
+};
+
+type SourceChunk = {
+  chunk: {
+    chunk_id: string;
+    text: string;
+    metadata: Record<string, unknown>;
+  };
+  score: number;
+  rank: number;
+  retriever: string;
+};
+
+type SourceChunksResponse = {
+  provider: string;
+  document_id: string;
+  chunks: SourceChunk[];
+};
+
 type SourceMode = "pdf" | "url" | "text";
 type Theme = "light" | "dark";
+type SourceProcessingStatus = "idle" | "uploading" | "processing" | "ready" | "error";
 type StreamEvent = {
   event: string;
   data: Record<string, unknown>;
@@ -61,49 +94,35 @@ const sourceModes: Array<{ id: SourceMode; label: string; icon: LucideIcon }> = 
   { id: "text", label: "Văn bản", icon: FileText },
 ];
 
-const sampleSources = [
-  {
-    name: "vinfast_warranty.pdf",
-    detail: "Chính sách bảo hành xe điện",
-    status: "Đã nạp",
-  },
-  {
-    name: "example.com/warranty",
-    detail: "Trang chính sách từ website",
-    status: "Chưa nạp",
-  },
-  {
-    name: "Ghi chú của tôi",
-    detail: "Văn bản người dùng tự nhập",
-    status: "Bản nháp",
-  },
-];
-
-const evidencePreview = [
-  "Pin cao áp được bảo hành 8 năm hoặc 160.000 km.",
-  "Nội dung chính từ website về chính sách bảo hành.",
-];
-
-const suggestedQuestions = [
-  "Pin VF8 được bảo hành bao lâu?",
-  "Điều kiện bảo hành pin là gì?",
-  "Nguồn nào nói về thời hạn bảo hành?",
-];
-
 export default function CitationChatPage() {
   const [theme, setTheme] = useState<Theme>("light");
   const [showSources, setShowSources] = useState(true);
   const [showCitations, setShowCitations] = useState(true);
   const [sourceMode, setSourceMode] = useState<SourceMode>("pdf");
-  const [question, setQuestion] = useState("Pin VF8 được bảo hành bao lâu?");
+  const [question, setQuestion] = useState("");
   const [sourceText, setSourceText] = useState("");
   const [fileName, setFileName] = useState("");
+  const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [sourceStatus, setSourceStatus] = useState<SourceProcessingStatus>("idle");
+  const [sourceChunkCount, setSourceChunkCount] = useState(0);
+  const [sourceChunks, setSourceChunks] = useState<SourceChunk[]>([]);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "Tải tài liệu lên, chờ trạng thái sẵn sàng rồi đặt câu hỏi.",
+      status: "answered",
+      citations: [],
+    },
+  ]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const isDark = theme === "dark";
   const citationCount = answer?.citations.length ?? 0;
+  const isSourceBusy = sourceStatus === "uploading" || sourceStatus === "processing";
 
   const sourcePlaceholder = useMemo(() => {
     if (sourceMode === "url") return "https://example.com/chinh-sach";
@@ -112,18 +131,45 @@ export default function CitationChatPage() {
   }, [fileName, sourceMode]);
 
   async function askQuestion() {
-    if (!question.trim()) return;
+    const userQuestion = question.trim();
+    if (!userQuestion) return;
+    if (sourceMode === "pdf" && fileName && sourceStatus !== "ready") {
+      setError("Tài liệu vẫn đang được RAGFlow xử lý. Chờ trạng thái sẵn sàng rồi hỏi lại.");
+      return;
+    }
+    if (!documentIds.length) {
+      setError("Hãy tải tài liệu lên và chờ trạng thái sẵn sàng trước khi đặt câu hỏi.");
+      return;
+    }
 
     setError("");
     setIsLoading(true);
+    setQuestion("");
+
+    const userMessage: ChatMessage = {
+      id: createMessageId(),
+      role: "user",
+      content: userQuestion,
+    };
+    const assistantMessageId = createMessageId();
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: "assistant",
+      content: "",
+      status: "thinking",
+      citations: [],
+    };
+    setMessages((current) => [...current, userMessage, assistantMessage]);
 
     try {
       const response = await fetch(`${API_URL}/answer/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
-          use_mock_evidence: true,
+          question: userQuestion,
+          evidence_provider: "ragflow",
+          document_ids: documentIds,
+          use_mock_evidence: false,
         }),
       });
 
@@ -139,7 +185,6 @@ export default function CitationChatPage() {
       let buffer = "";
       let streamedAnswer = "";
       let streamedCitations: Citation[] = [];
-      setAnswer({ answer: "", status: "answered", citations: [] });
 
       while (true) {
         const { done, value } = await reader.read();
@@ -154,9 +199,9 @@ export default function CitationChatPage() {
             const text = streamEvent.data.text;
             if (typeof text === "string") {
               streamedAnswer += text;
-              setAnswer({
-                answer: streamedAnswer,
-                status: "answered",
+              updateAssistantMessage(assistantMessageId, {
+                content: streamedAnswer,
+                status: "thinking",
                 citations: streamedCitations,
               });
             }
@@ -165,19 +210,30 @@ export default function CitationChatPage() {
           if (streamEvent.event === "citation") {
             const citation = streamEvent.data as Citation;
             streamedCitations = [...streamedCitations, citation];
-            setAnswer({
-              answer: streamedAnswer,
-              status: "answered",
+            updateAssistantMessage(assistantMessageId, {
+              content: streamedAnswer,
+              status: "thinking",
               citations: streamedCitations,
             });
           }
 
           if (streamEvent.event === "done") {
-            setAnswer(streamEvent.data as AnswerResponse);
+            const finalAnswer = streamEvent.data as AnswerResponse;
+            setAnswer(finalAnswer);
+            updateAssistantMessage(assistantMessageId, {
+              content: finalAnswer.answer,
+              status: finalAnswer.status,
+              citations: finalAnswer.citations,
+            });
           }
         }
       }
     } catch (requestError) {
+      updateAssistantMessage(assistantMessageId, {
+        content: "Không kết nối được API trả lời.",
+        status: "not_found",
+        citations: [],
+      });
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -188,18 +244,29 @@ export default function CitationChatPage() {
     }
   }
 
+  function updateAssistantMessage(
+    messageId: string,
+    patch: Partial<ChatMessage>,
+  ) {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === messageId ? { ...message, ...patch } : message,
+      ),
+    );
+  }
+
   const contentGrid = cn(
-    "grid min-h-0 flex-1 gap-3",
-    showSources && showCitations && "xl:grid-cols-[310px_minmax(0,1fr)_340px]",
-    showSources && !showCitations && "xl:grid-cols-[310px_minmax(0,1fr)]",
-    !showSources && showCitations && "xl:grid-cols-[minmax(0,1fr)_340px]",
+    "grid min-h-0 flex-1 gap-3 overflow-y-auto xl:overflow-hidden",
+    showSources && showCitations && "xl:grid-cols-[280px_minmax(0,1fr)_300px] 2xl:grid-cols-[310px_minmax(0,1fr)_330px]",
+    showSources && !showCitations && "xl:grid-cols-[300px_minmax(0,1fr)]",
+    !showSources && showCitations && "xl:grid-cols-[minmax(0,1fr)_320px]",
     !showSources && !showCitations && "xl:grid-cols-1",
   );
 
   return (
     <main
       className={cn(
-        "relative min-h-[100dvh] overflow-hidden transition-colors",
+        "relative h-[100dvh] max-h-[100dvh] overflow-hidden transition-colors",
         isDark
           ? "dark bg-[#0b1220] text-white"
           : "bg-[linear-gradient(135deg,#fbfcf8,#edf7f1_52%,#f7f8f2)] text-ink",
@@ -208,8 +275,8 @@ export default function CitationChatPage() {
       <KnowledgeScene />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,rgba(15,143,114,0.14),transparent_28rem)] dark:bg-[radial-gradient(circle_at_78%_12%,rgba(52,211,153,0.18),transparent_30rem)]" />
 
-      <section className="relative z-10 mx-auto flex min-h-[100dvh] max-w-[1500px] flex-col gap-3 p-3 lg:p-4">
-        <header className="rounded-lg border border-line/80 bg-white/84 px-4 py-3 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90">
+      <section className="relative z-10 mx-auto flex h-[100dvh] max-h-[100dvh] w-full max-w-[1500px] flex-col gap-3 overflow-hidden p-3 lg:p-4">
+        <header className="shrink-0 rounded-lg border border-line/80 bg-white/84 px-4 py-3 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <Link
@@ -222,7 +289,7 @@ export default function CitationChatPage() {
               <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink text-white dark:bg-white dark:text-ink">
                 <Bot className="h-5 w-5" aria-hidden="true" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-lg font-semibold tracking-normal">
                   Hỏi đáp có trích dẫn
                 </h1>
@@ -280,70 +347,59 @@ export default function CitationChatPage() {
           {showSources ? (
             <SourcePanel
               fileName={fileName}
+              isUploading={isUploading}
+              setSourceChunkCount={setSourceChunkCount}
+              setSourceChunks={setSourceChunks}
+              setSourceStatus={setSourceStatus}
+              setDocumentIds={setDocumentIds}
+              setError={setError}
               setFileName={setFileName}
+              setIsUploading={setIsUploading}
               setSourceMode={setSourceMode}
               setSourceText={setSourceText}
               sourceMode={sourceMode}
               sourcePlaceholder={sourcePlaceholder}
+              sourceChunkCount={sourceChunkCount}
+              sourceStatus={sourceStatus}
               sourceText={sourceText}
             />
           ) : null}
 
-          <section className="flex min-h-[calc(100dvh-7rem)] flex-col overflow-hidden rounded-lg border border-line/80 bg-white/90 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90">
-            <div className="border-b border-line px-5 py-4 dark:border-white/14">
+          <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line/80 bg-white/90 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90">
+            <div className="shrink-0 border-b border-line px-5 py-4 dark:border-white/14">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-mint dark:text-emerald-200">
                     Phiên hỏi đáp
                   </p>
-                  <h2 className="mt-2 max-w-3xl text-3xl font-semibold leading-tight tracking-normal">
+                  <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-tight tracking-normal sm:text-3xl">
                     Đặt câu hỏi, nhận câu trả lời cùng nguồn.
                   </h2>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center lg:w-72">
-                  <Metric label="Nguồn" value="2 mẫu" />
+                <div className="grid grid-cols-3 gap-2 text-center lg:w-72 xl:w-64 2xl:w-72">
+                  <Metric label="Nguồn" value={sourceChunkCount ? `${sourceChunkCount} đoạn` : "0 đoạn"} />
                   <Metric label="Kiểm chứng" value="bật" />
-                  <Metric label="Trạng thái" value={answer ? "đã trả lời" : "sẵn sàng"} />
+                  <Metric
+                    label="Trạng thái"
+                    value={
+                      isSourceBusy
+                        ? "đang nạp"
+                        : sourceStatus === "ready"
+                          ? answer
+                            ? "đã trả lời"
+                            : "sẵn sàng"
+                          : "chưa nạp"
+                    }
+                  />
                 </div>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5">
               <div className="space-y-4">
-                <div className="max-w-[84%] rounded-lg bg-paper px-4 py-3 dark:bg-slate-900/82">
-                  <div className="mb-1 flex items-center gap-2 text-xs font-medium text-ink/52 dark:text-slate-300">
-                    <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                    Bạn hỏi
-                  </div>
-                  <p className="text-sm leading-6 text-ink/84 dark:text-white/88">
-                    {question}
-                  </p>
-                </div>
-
-                <div className="ml-auto max-w-[90%] rounded-lg border border-mint/25 bg-mint/8 px-4 py-3 dark:border-emerald-300/24 dark:bg-emerald-300/12">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-mint dark:text-emerald-200">
-                      <Bot className="h-4 w-4" aria-hidden="true" />
-                      Câu trả lời
-                    </div>
-                    <Badge className="border-mint/25 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
-                      {answer?.status === "answered" ? "đã kiểm chứng" : "chưa gửi"}
-                    </Badge>
-                  </div>
-                  {answer ? (
-                    <p className="text-sm leading-7 text-ink/84 dark:text-white/88">
-                      {answer.answer}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="h-3 w-11/12 rounded-full bg-mint/12 dark:bg-white/16" />
-                      <div className="h-3 w-8/12 rounded-full bg-mint/10 dark:bg-white/12" />
-                      <p className="pt-1 text-sm leading-6 text-ink/58 dark:text-slate-200">
-                        Nhấn Enter để gửi. Câu trả lời sẽ chỉ dựa trên nguồn có sẵn.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {messages.map((message) => (
+                  <ChatBubble key={message.id} message={message} />
+                ))}
 
                 {error ? (
                   <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-sm text-danger dark:text-red-200">
@@ -353,19 +409,7 @@ export default function CitationChatPage() {
               </div>
             </div>
 
-            <div className="border-t border-line bg-white/78 p-4 dark:border-white/14 dark:bg-slate-950/72">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {suggestedQuestions.map((item) => (
-                  <button
-                    className="rounded-full border border-line bg-white px-3 py-1 text-xs text-ink/62 transition hover:border-mint hover:text-mint dark:border-white/14 dark:bg-slate-900/82 dark:text-slate-200 dark:hover:border-emerald-300 dark:hover:text-emerald-200"
-                    key={item}
-                    onClick={() => setQuestion(item)}
-                    type="button"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+            <div className="shrink-0 border-t border-line bg-white/78 p-4 dark:border-white/14 dark:bg-slate-950/72">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Textarea
                   className="min-h-11 flex-1 py-2"
@@ -382,7 +426,7 @@ export default function CitationChatPage() {
                 />
                 <Button
                   className="shrink-0 shadow-lift"
-                  disabled={isLoading || !question.trim()}
+                  disabled={isLoading || isSourceBusy || !question.trim()}
                   onClick={askQuestion}
                 >
                   {isLoading ? (
@@ -396,7 +440,9 @@ export default function CitationChatPage() {
             </div>
           </section>
 
-          {showCitations ? <CitationPanel answer={answer} /> : null}
+          {showCitations ? (
+            <CitationPanel answer={answer} sourceChunks={sourceChunks} />
+          ) : null}
         </div>
       </section>
     </main>
@@ -439,25 +485,108 @@ function parseStreamEvent(chunk: string): StreamEvent | null {
   }
 }
 
+function ChatBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === "user";
+  return (
+    <div
+      className={cn(
+        "flex",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
+      <article
+        className={cn(
+          "max-w-[86%] rounded-lg px-4 py-3",
+          isUser
+            ? "bg-ink text-white dark:bg-white dark:text-ink"
+            : "border border-mint/25 bg-mint/8 dark:border-emerald-300/24 dark:bg-emerald-300/12",
+        )}
+      >
+        <div
+          className={cn(
+            "mb-2 flex items-center gap-2 text-xs font-semibold",
+            isUser ? "text-white/70 dark:text-ink/60" : "text-mint dark:text-emerald-200",
+          )}
+        >
+          {isUser ? (
+            <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {isUser ? "Bạn" : "Agentic RAG"}
+          {!isUser && message.status === "thinking" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : null}
+        </div>
+        {message.content ? (
+          <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+        ) : (
+          <div className="space-y-2 py-1">
+            <div className="h-3 w-48 rounded-full bg-mint/12 dark:bg-white/16" />
+            <div className="h-3 w-32 rounded-full bg-mint/10 dark:bg-white/12" />
+          </div>
+        )}
+        {!isUser && message.citations?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {message.citations.map((citation, index) => (
+              <Badge
+                className="border-mint/25 text-mint dark:border-emerald-300/24 dark:text-emerald-200"
+                key={`${citation.chunk_id}-${index}`}
+              >
+                [{index + 1}] {citation.source}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </article>
+    </div>
+  );
+}
+
+function createMessageId(): string {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function SourcePanel({
   fileName,
+  isUploading,
+  setSourceChunkCount,
+  setSourceChunks,
+  setSourceStatus,
+  setDocumentIds,
+  setError,
   setFileName,
+  setIsUploading,
   setSourceMode,
   setSourceText,
   sourceMode,
   sourcePlaceholder,
+  sourceChunkCount,
+  sourceStatus,
   sourceText,
 }: {
   fileName: string;
+  isUploading: boolean;
+  setSourceChunkCount: (count: number) => void;
+  setSourceChunks: (chunks: SourceChunk[]) => void;
+  setSourceStatus: (status: SourceProcessingStatus) => void;
+  setDocumentIds: (documentIds: string[]) => void;
+  setError: (error: string) => void;
   setFileName: (fileName: string) => void;
+  setIsUploading: (isUploading: boolean) => void;
   setSourceMode: (mode: SourceMode) => void;
   setSourceText: (text: string) => void;
   sourceMode: SourceMode;
   sourcePlaceholder: string;
+  sourceChunkCount: number;
+  sourceStatus: SourceProcessingStatus;
   sourceText: string;
 }) {
+  const sourceStatusLabel = sourceStatusText(sourceStatus, sourceChunkCount);
+  const sourceProgress = sourceStatusProgress(sourceStatus);
+
   return (
-    <aside className="grid content-start gap-3">
+    <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
       <Panel>
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -494,19 +623,87 @@ function SourcePanel({
 
         <div className="mt-4">
           {sourceMode === "pdf" ? (
-            <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-mint/40 bg-mist/70 px-3 py-4 text-center transition hover:border-mint hover:bg-white dark:border-emerald-300/34 dark:bg-slate-900/76 dark:hover:bg-slate-800">
+            <label className="flex min-h-32 min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-mint/40 bg-mist/70 px-3 py-4 text-center transition hover:border-mint hover:bg-white dark:border-emerald-300/34 dark:bg-slate-900/76 dark:hover:bg-slate-800">
               <Upload className="mb-2 h-5 w-5 text-mint dark:text-emerald-300" aria-hidden="true" />
-              <span className="text-sm font-medium">{fileName || "Chọn tệp PDF"}</span>
-              <span className="mt-1 text-xs text-ink/50 dark:text-slate-300">
-                Tệp đã sẵn sàng trong phiên làm việc
+              <span
+                className="block max-w-full truncate px-1 text-sm font-medium"
+                title={fileName || "Chọn tệp PDF"}
+              >
+                {fileName || "Chọn tệp PDF"}
               </span>
+              <span className="mt-1 text-xs text-ink/50 dark:text-slate-300">
+                {isUploading ? "Đang nạp vào RAGFlow" : sourceStatusLabel}
+              </span>
+              {fileName ? (
+                <div className="mx-auto mt-3 w-full max-w-48 px-1">
+                  <div
+                    aria-label="Tiến trình nạp tài liệu"
+                    aria-valuemax={100}
+                    aria-valuemin={0}
+                    aria-valuenow={sourceProgress}
+                    className="h-1.5 overflow-hidden rounded-full bg-white/80 dark:bg-slate-800"
+                    role="progressbar"
+                  >
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        sourceStatus === "error"
+                          ? "bg-danger"
+                          : "bg-mint dark:bg-emerald-300",
+                      )}
+                      style={{ width: `${sourceProgress}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center justify-between gap-3 text-[11px] text-ink/46 dark:text-slate-300">
+                    <span className="min-w-0 truncate">{sourceStatusLabel}</span>
+                    <span>{sourceProgress}%</span>
+                  </div>
+                </div>
+              ) : null}
               <input
                 accept="application/pdf"
                 className="sr-only"
                 type="file"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  setFileName(file?.name ?? "");
+                  if (!file) {
+                    setFileName("");
+                    setDocumentIds([]);
+                    setSourceChunkCount(0);
+                    setSourceChunks([]);
+                    setSourceStatus("idle");
+                    return;
+                  }
+
+                  setFileName(file.name);
+                  setError("");
+                  setDocumentIds([]);
+                  setSourceChunkCount(0);
+                  setSourceChunks([]);
+                  setSourceStatus("uploading");
+                  setIsUploading(true);
+                  void uploadSource(file)
+                    .then((uploaded) => {
+                      setDocumentIds([uploaded.document_id]);
+                      setSourceStatus("processing");
+                      return waitForSourceChunks(uploaded.document_id);
+                    })
+                    .then((chunks) => {
+                      setSourceChunks(chunks);
+                      setSourceChunkCount(chunks.length);
+                      setSourceStatus("ready");
+                    })
+                    .catch((uploadError) => {
+                      setSourceChunkCount(0);
+                      setSourceChunks([]);
+                      setSourceStatus("error");
+                      setError(
+                        uploadError instanceof Error
+                          ? uploadError.message
+                          : "Không nạp được tài liệu vào RAGFlow. Kiểm tra cấu hình API.",
+                      );
+                    })
+                    .finally(() => setIsUploading(false));
                 }}
               />
             </label>
@@ -529,37 +726,55 @@ function SourcePanel({
 
       <Panel>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Thư viện</h2>
+          <h2 className="text-sm font-semibold">Tài liệu đang dùng</h2>
           <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
-            Mẫu
+            Thật
           </Badge>
         </div>
         <div className="space-y-2">
-          {sampleSources.map((source) => (
+          {fileName ? (
             <article
-              className="rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76"
-              key={source.name}
+              className="min-w-0 overflow-hidden rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76"
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-medium">{source.name}</p>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-ink/56 dark:bg-slate-800 dark:text-slate-200">
-                  {source.status}
+              <div className="flex min-w-0 items-start justify-between gap-2">
+                <p className="min-w-0 flex-1 truncate text-sm font-medium" title={fileName}>
+                  {fileName}
+                </p>
+                <span
+                  className="max-w-24 shrink-0 truncate rounded-full bg-white px-2 py-0.5 text-[11px] text-ink/56 dark:bg-slate-800 dark:text-slate-200"
+                  title={sourceStatus === "ready" ? "Sẵn sàng" : sourceStatusLabel}
+                >
+                  {sourceStatus === "ready" ? "Sẵn sàng" : sourceStatusLabel}
                 </span>
               </div>
               <p className="mt-1 text-xs text-ink/52 dark:text-slate-300">
-                {source.detail}
+                {sourceChunkCount
+                  ? `${sourceChunkCount} đoạn bằng chứng đã được tạo`
+                  : "Đang chờ RAGFlow xử lý tài liệu"}
               </p>
             </article>
-          ))}
+          ) : (
+            <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
+              Chưa có tài liệu. Tải PDF lên để bắt đầu phiên hỏi đáp thật.
+            </div>
+          )}
         </div>
       </Panel>
     </aside>
   );
 }
 
-function CitationPanel({ answer }: { answer: AnswerResponse | null }) {
+function CitationPanel({
+  answer,
+  sourceChunks,
+}: {
+  answer: AnswerResponse | null;
+  sourceChunks: SourceChunk[];
+}) {
+  const evidenceItems = sourceChunks.slice(0, 4);
+
   return (
-    <aside className="grid content-start gap-3">
+    <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
       <Panel>
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -575,16 +790,19 @@ function CitationPanel({ answer }: { answer: AnswerResponse | null }) {
           {answer?.citations.length ? (
             answer.citations.map((citation, index) => (
               <article
-                className="rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76"
+                className="min-w-0 overflow-hidden rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76"
                 key={citation.chunk_id}
               >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <Badge className="border-mint/25 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
+                <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
+                  <span
+                    className="min-w-0 flex-1 truncate rounded-full border border-mint/25 bg-white/70 px-2 py-1 text-xs font-medium text-mint dark:border-emerald-300/24 dark:bg-slate-950/70 dark:text-emerald-200"
+                    title={citation.source}
+                  >
                     [{index + 1}] {citation.source}
-                  </Badge>
+                  </span>
                   {citation.page ? <Badge>tr.{citation.page}</Badge> : null}
                 </div>
-                <p className="break-all text-xs leading-5 text-ink/62 dark:text-slate-300">
+                <p className="break-words text-xs leading-5 text-ink/62 [overflow-wrap:anywhere] dark:text-slate-300">
                   {citation.chunk_id}
                 </p>
                 {citation.section ? (
@@ -608,23 +826,113 @@ function CitationPanel({ answer }: { answer: AnswerResponse | null }) {
           <Quote className="h-4 w-4 text-mint dark:text-emerald-300" aria-hidden="true" />
         </div>
         <div className="space-y-2">
-          {evidencePreview.map((text, index) => (
-            <div className="rounded-md bg-paper/70 p-3 dark:bg-slate-900/76" key={text}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-mint/10 text-xs font-semibold text-mint dark:bg-emerald-300/12 dark:text-emerald-200">
+          {evidenceItems.length ? (
+            evidenceItems.map((result, index) => (
+            <div
+              className="min-w-0 overflow-hidden rounded-md bg-paper/70 p-3 dark:bg-slate-900/76"
+              key={result.chunk.chunk_id}
+            >
+              <div className="mb-2 flex min-w-0 items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-mint/10 text-xs font-semibold text-mint dark:bg-emerald-300/12 dark:text-emerald-200">
                   {index + 1}
                 </span>
-                <p className="text-xs font-medium text-ink/52 dark:text-slate-300">
-                  Đoạn nguồn
+                <p
+                  className="min-w-0 flex-1 truncate text-xs font-medium text-ink/52 dark:text-slate-300"
+                  title={chunkSourceLabel(result)}
+                >
+                  {chunkSourceLabel(result)}
                 </p>
               </div>
-              <p className="text-sm leading-6 text-ink/72 dark:text-slate-200">{text}</p>
+              <p className="max-h-36 overflow-hidden break-words text-sm leading-6 text-ink/72 [overflow-wrap:anywhere] dark:text-slate-200">
+                {result.chunk.text}
+              </p>
+              <p className="mt-2 text-[11px] text-ink/46 dark:text-slate-400">
+                {result.retriever} · điểm {result.score.toFixed(3)}
+              </p>
             </div>
-          ))}
+            ))
+          ) : (
+            <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
+              Các đoạn bằng chứng thật sẽ hiện ở đây sau khi PDF được xử lý.
+            </div>
+          )}
         </div>
       </Panel>
     </aside>
   );
+}
+
+async function uploadSource(file: File): Promise<SourceUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/sources/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.status}`);
+  }
+
+  return (await response.json()) as SourceUploadResponse;
+}
+
+async function waitForSourceChunks(
+  documentId: string,
+  attempts = 20,
+  delayMs = 3000,
+): Promise<SourceChunk[]> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(`${API_URL}/sources/${documentId}/chunks`);
+    if (response.ok) {
+      const payload = (await response.json()) as SourceChunksResponse;
+      if (payload.chunks.length > 0) {
+        return payload.chunks;
+      }
+    }
+    await delay(delayMs);
+  }
+
+  throw new Error("RAGFlow đã nhận tài liệu nhưng chưa tạo chunk. Chờ thêm rồi thử lại.");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function sourceStatusText(status: SourceProcessingStatus, chunkCount: number): string {
+  if (status === "uploading") return "Đang tải tài liệu lên RAGFlow";
+  if (status === "processing") return "RAGFlow đang tách đoạn tài liệu";
+  if (status === "ready") return `Sẵn sàng hỏi đáp (${chunkCount} đoạn)`;
+  if (status === "error") return "Chưa nạp được tài liệu";
+  return "Tệp sẽ được nạp vào RAGFlow";
+}
+
+function sourceStatusProgress(status: SourceProcessingStatus): number {
+  if (status === "uploading") return 35;
+  if (status === "processing") return 72;
+  if (status === "ready") return 100;
+  if (status === "error") return 100;
+  return 0;
+}
+
+function chunkSourceLabel(result: SourceChunk): string {
+  const source = metadataValue(result.chunk.metadata, "source")
+    ?? metadataValue(result.chunk.metadata, "file_name")
+    ?? "Đoạn nguồn";
+  const page = metadataValue(result.chunk.metadata, "page");
+  return page ? `${source} · tr.${page}` : source;
+}
+
+function metadataValue(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = metadata[key];
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 function Panel({
@@ -637,7 +945,7 @@ function Panel({
   return (
     <section
       className={cn(
-        "rounded-lg border border-line/80 bg-white/88 p-4 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90",
+        "min-w-0 overflow-hidden rounded-lg border border-line/80 bg-white/88 p-4 shadow-panel backdrop-blur-xl dark:border-white/14 dark:bg-slate-950/90",
         className,
       )}
     >

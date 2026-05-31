@@ -126,16 +126,52 @@ http://127.0.0.1:8000
 
 UI hiện tại thuộc phạm vi #149:
 
-- Source panel cho PDF/URL/Text ở mức input placeholder.
+- Source panel cho PDF/URL/Text.
+- PDF upload có thể nạp tài liệu thật vào RAGFlow qua `/sources/upload`.
 - Chat panel để gửi question.
 - Answer panel.
 - Citation panel.
-- Không parse PDF.
 - Không fetch URL.
-- Không build retrieval.
+- Không tự build parse/chunk/retrieval khi chưa có phần #145-#148.
 - Không fusion/rerank.
 
-Khi các phần #145-#148 hoàn thành, chỉ cần thay mock evidence bằng evidence thật từ phần #148. Contract `Answer`, `Citation`, `SearchResult` không đổi.
+Khi các phần #145-#148 hoàn thành, chỉ cần thay `EVIDENCE_PROVIDER=ragflow` bằng provider của pipeline nhóm. Contract `Answer`, `Citation`, `SearchResult` không đổi.
+
+## RAGFlow fallback
+
+RAGFlow được dùng theo từng tầng, không gọi all-in-one chat answer:
+
+```text
+PDF upload -> RAGFlow parse/chunk/index
+question -> RAGFlow retrieval chunks
+retrieval chunks -> SearchResult
+SearchResult -> generate_answer() của project
+```
+
+Backend endpoints:
+
+```text
+POST /sources/upload
+GET  /sources/{document_id}/chunks
+POST /answer
+POST /answer/stream
+```
+
+Env cần bật:
+
+```bash
+EVIDENCE_PROVIDER=ragflow
+RAGFLOW_BASE_URL=http://127.0.0.1:9380
+RAGFLOW_API_KEY=...
+RAGFLOW_DATASET_ID=...
+```
+
+Log trace JSONL:
+
+```bash
+RAG_TRACE_ENABLED=true
+RAG_TRACE_PATH=logs/rag_runs.jsonl
+```
 
 ## Verification
 

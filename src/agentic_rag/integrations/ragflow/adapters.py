@@ -20,8 +20,14 @@ def chunk_from_ragflow_payload(payload: Mapping[str, object]) -> Chunk:
     """Convert a RAGFlow document/chunk payload into a shared `Chunk`."""
 
     metadata = _metadata_from_payload(payload)
-    text = _first_text(payload, ("text", "content", "chunk_text", "document_content"))
-    source = _first_text(payload, ("source", "document_name", "dataset_name", "url"))
+    text = _first_text(
+        payload,
+        ("text", "content", "content_with_weight", "chunk_text", "document_content"),
+    )
+    source = _first_text(
+        payload,
+        ("source", "document_name", "document_keyword", "docnm_kwd", "dataset_name", "url"),
+    )
 
     if source:
         metadata.setdefault("source", source)
@@ -31,8 +37,13 @@ def chunk_from_ragflow_payload(payload: Mapping[str, object]) -> Chunk:
     metadata.setdefault("source_type", RAGFLOW_RETRIEVER)
     metadata.setdefault("file_name", _optional_text(payload, "document_name"))
     metadata.setdefault("url", _optional_text(payload, "url"))
-    metadata.setdefault("page", _optional_int(payload, "page"))
+    metadata.setdefault("page", _optional_int(payload, "page") or _page_from_positions(payload))
     metadata.setdefault("section", _optional_text(payload, "section"))
+    metadata.setdefault("document_id", _optional_text(payload, "document_id"))
+    metadata.setdefault("dataset_id", _optional_text(payload, "dataset_id"))
+    metadata.setdefault("similarity", _optional_float(payload, "similarity"))
+    metadata.setdefault("vector_similarity", _optional_float(payload, "vector_similarity"))
+    metadata.setdefault("term_similarity", _optional_float(payload, "term_similarity"))
 
     chunk_id = _first_text(payload, ("chunk_id", "id", "document_id"))
     if not chunk_id:
@@ -59,9 +70,7 @@ def search_result_from_ragflow_hit(
     if result_rank is None:
         result_rank = 1
 
-    score = _optional_float(payload, "score")
-    if score is None:
-        score = _optional_float(payload, "similarity")
+    score = _optional_float(payload, "score") or _optional_float(payload, "similarity")
     if score is None:
         score = 1.0 / result_rank
 
@@ -196,6 +205,28 @@ def _optional_float(payload: Mapping[str, object], key: str) -> float | None:
             return float(value)
         except ValueError:
             return None
+    return None
+
+
+def _page_from_positions(payload: Mapping[str, object]) -> int | None:
+    positions = payload.get("positions")
+    if not isinstance(positions, list) or not positions:
+        return None
+
+    first_position = positions[0]
+    if isinstance(first_position, list) and first_position:
+        value = first_position[0]
+    else:
+        value = first_position
+
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
     return None
 
 

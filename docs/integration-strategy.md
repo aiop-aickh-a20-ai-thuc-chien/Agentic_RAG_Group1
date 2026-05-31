@@ -175,7 +175,7 @@ from agentic_rag.testing.fixtures import sample_search_results
 Hoặc dùng RAGFlow adapter:
 
 ```python
-from agentic_rag.integrations.ragflow import answer_from_ragflow_payload
+from agentic_rag.generation.evidence import evidence_for_question
 ```
 
 Phần generation/UI vẫn phải nhận:
@@ -185,6 +185,24 @@ generate_answer(question, evidence_context, evidence_chunks)
 ```
 
 Không viết UI phụ thuộc trực tiếp vào raw output của RAGFlow.
+
+Nếu cần dùng RAGFlow trước khi #145-#148 hoàn thành:
+
+```text
+RAGFlow upload/list chunks/retrieve
+-> agentic_rag.integrations.ragflow.providers
+-> list[Chunk] hoặc list[SearchResult]
+-> generation của project
+```
+
+Các file chính:
+
+```text
+src/agentic_rag/integrations/ragflow/client.py
+src/agentic_rag/integrations/ragflow/providers.py
+src/agentic_rag/generation/evidence.py
+src/agentic_rag/observability/trace.py
+```
 
 ## Khi ghép end-to-end
 
