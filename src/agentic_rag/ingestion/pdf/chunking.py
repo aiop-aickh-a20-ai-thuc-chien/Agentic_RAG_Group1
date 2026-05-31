@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 _HEADING_RE = re.compile(r"^#{1,6}(?!#)\s*(?P<title>.+?)\s*$")
 
 
-@dataclass(frozen=True, slots=True)
-class MarkdownSection:
+class _PdfChunkingModel(BaseModel):
+    """Base config for PDF-local chunking models."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class MarkdownSection(_PdfChunkingModel):
     """A Markdown section associated with the nearest heading."""
 
     title: str | None
     text: str
 
 
-@dataclass(frozen=True, slots=True)
-class MarkdownChunk:
+class MarkdownChunk(_PdfChunkingModel):
     """A chunk of Markdown text ready to map into the shared Chunk contract."""
 
     section: str | None
