@@ -18,12 +18,19 @@ def load_pdf_chunks(path: str) -> list[Chunk]:
 
 
 def _load_pdf_chunks(path: Path, parser: PdfMarkdownParser) -> list[Chunk]:
+    _validate_pdf_path(path)
+    markdown = parser.parse_to_markdown(path)
+    return _chunks_from_markdown(path, markdown)
+
+
+def _validate_pdf_path(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(f"PDF file does not exist: {path}")
     if path.suffix.lower() != ".pdf":
         raise ValueError(f"Expected a PDF file path, got: {path}")
 
-    markdown = parser.parse_to_markdown(path)
+
+def _chunks_from_markdown(path: Path, markdown: str) -> list[Chunk]:
     markdown_chunks = chunk_markdown(markdown)
     safe_file_stem = _safe_chunk_id_part(path.stem)
 

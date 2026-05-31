@@ -48,6 +48,16 @@ def test_load_pdf_chunks_returns_empty_list_for_empty_markdown(tmp_path: Path) -
     assert _load_pdf_chunks(pdf_path, FakeParser(" \n\n")) == []
 
 
+def test_load_pdf_chunks_does_not_write_debug_files_next_to_input(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+
+    chunks = _load_pdf_chunks(pdf_path, FakeParser("# Intro\nNoi dung."))
+
+    assert len(chunks) == 1
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["source.pdf"]
+
+
 def test_load_pdf_chunks_rejects_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"missing\.pdf"):
         load_pdf_chunks(str(tmp_path / "missing.pdf"))
