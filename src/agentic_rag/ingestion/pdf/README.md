@@ -75,6 +75,44 @@ src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
 Không commit nội dung trong `.data/`; đây chỉ là dữ liệu phục vụ debug và
 evaluation cục bộ.
 
+## Lưu artifact đa phương thức
+
+Khi cần giữ lại bảng, hình ảnh hoặc chart candidate để hậu xử lý, dùng helper
+rõ ràng thay vì thêm side effect vào `load_pdf_chunks()`:
+
+```bash
+uv run python -c "from agentic_rag.ingestion.pdf import save_pdf_multimodal_artifacts; print(save_pdf_multimodal_artifacts('path/to/file.pdf').model_dump())"
+```
+
+Helper này vẫn không thay đổi `load_pdf_chunks()`. Output mặc định nằm trong
+`.data/`:
+
+```text
+src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
+  parsed.md
+  chunks.jsonl
+  manifest.json
+  elements.jsonl
+  assets/
+    images/
+    tables/
+    charts/
+```
+
+Ý nghĩa phần mở rộng:
+
+- `elements.jsonl`: mỗi dòng mô tả một asset bằng `element_id`, loại asset,
+  page nếu có, đường dẫn file asset và các `chunk_id` liên quan.
+- `assets/images/`: raw image được Docling trích ra từ PDF.
+- `assets/tables/`: bảng được lưu ở Markdown, CSV và PNG nếu parser cung cấp.
+- `assets/charts/`: chart candidate được lưu như raw image khi Docling gắn label
+  phù hợp.
+
+`Chunk.metadata` chỉ lưu reference như `asset_ids`, `has_image`, `has_table`,
+`has_chart`; không nhúng binary image, DataFrame hoặc table object vào `Chunk`.
+V1 chỉ lưu raw assets và table Markdown/CSV. Captioning hình ảnh và chart
+extraction bằng model nặng sẽ được xử lý ở phase tối ưu sau.
+
 ## Benchmark tự động
 
 OmniDocBench là nguồn benchmark lập trình được cho phase tối ưu parser. Repo này
