@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from langchain_community.vectorstores import FAISS
 from rank_bm25 import BM25Okapi
+from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 
@@ -39,7 +39,7 @@ class Store:
 
         return result
 
-    def _build_vector_index(self, chunks: list[Chunk]) -> FAISS:
+    def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
         from dotenv import load_dotenv
         from langchain_openai import OpenAIEmbeddings
@@ -52,7 +52,9 @@ class Store:
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
 
-        store = FAISS.from_texts(texts=chunks_list, embedding=embedding, metadatas=metadatas)
+        store = TurboQuantVectorStore.from_texts(
+            texts=chunks_list, embedding=embedding, metadatas=metadatas
+        )
 
         return store
 
@@ -83,4 +85,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.bm25_search("pin cao ap"))
+    print(store.dense_search("pin cao ap"))
