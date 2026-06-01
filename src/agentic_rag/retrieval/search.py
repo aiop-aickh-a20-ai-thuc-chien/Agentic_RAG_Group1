@@ -67,11 +67,7 @@ class Store:
         for i, (doc, score) in enumerate(search_result):
             result.append(
                 SearchResult(
-                    chunk=Chunk(
-                        chunk_id=doc.metadata["chunk_id"],
-                        text=doc.page_content,
-                        metadata=doc.metadata["metadata"],
-                    ),
+                    chunk=self._chunks[self._vector_index._str_to_u64[doc.id]-1],
                     score=score,
                     rank=i + 1,
                     retriever="dense",
@@ -85,4 +81,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.dense_search("pin cao ap"))
+    print(store.dense_search("chinh sach bao hanh"))
