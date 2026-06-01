@@ -2,7 +2,7 @@
 
 Ngày tạo: 31/05/2026
 
-Tài liệu này mô tả phần việc của `hotrandinhnguyen` trong issue #149. Phạm vi chỉ gồm generation, citation, guardrails, backend endpoint phục vụ UI và Next.js frontend. Các phần PDF ingestion, URL/text ingestion, retrieval và fusion không nằm trong phạm vi này.
+Tài liệu này mô tả phần việc của `hotrandinhnguyen` trong issue #149. Phạm vi chính gồm generation, citation, guardrails, backend endpoint phục vụ UI và Next.js frontend. PDF/URL/text ingestion tự build của nhóm vẫn thuộc phần trước; trong phần này chỉ có source import tạm qua RAGFlow để demo không bị block.
 
 ## Tech stack
 
@@ -128,10 +128,11 @@ UI hiện tại thuộc phạm vi #149:
 
 - Source panel cho PDF/URL/Text.
 - PDF upload có thể nạp tài liệu thật vào RAGFlow qua `/sources/upload`.
+- URL import fetch nội dung trang trong backend, rồi upload text vào RAGFlow qua `/sources/url`.
+- Text import upload văn bản người dùng vào RAGFlow qua `/sources/text`.
 - Chat panel để gửi question.
 - Answer panel.
 - Citation panel.
-- Không fetch URL.
 - Không tự build parse/chunk/retrieval khi chưa có phần #145-#148.
 - Không fusion/rerank.
 
@@ -142,16 +143,23 @@ Khi các phần #145-#148 hoàn thành, chỉ cần thay `EVIDENCE_PROVIDER=ragf
 RAGFlow được dùng theo từng tầng, không gọi all-in-one chat answer:
 
 ```text
-PDF upload -> RAGFlow parse/chunk/index
+PDF/Text import -> RAGFlow parse/chunk/index
+URL import -> backend fetch/normalize URL -> RAGFlow chunk/index
 question -> RAGFlow retrieval chunks
 retrieval chunks -> SearchResult
 SearchResult -> generate_answer() của project
 ```
 
+Ghi chú: RAGFlow docs mới có endpoint URL runtime attachment
+`/v1/document/upload_info?url=...`, nhưng RAGFlow self-host `v0.25.6` trong môi trường
+demo hiện trả `404`, nên URL dùng fallback backend fetch để không block demo.
+
 Backend endpoints:
 
 ```text
 POST /sources/upload
+POST /sources/url
+POST /sources/text
 GET  /sources/{document_id}/chunks
 POST /answer
 POST /answer/stream

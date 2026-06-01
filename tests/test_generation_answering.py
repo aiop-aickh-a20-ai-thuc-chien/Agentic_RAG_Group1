@@ -14,6 +14,14 @@ from agentic_rag.generation.answering import (
 from agentic_rag.testing.fixtures import sample_answer, sample_search_results
 
 
+class FakeClientWithReferenceList:
+    def complete(self, prompt: str) -> str:
+        return "Pin bao hanh 8 nam. [1]\n\n[1] vinfast_warranty.pdf\n[2] vinfast_warranty.pdf"
+
+    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
+        yield self.complete(prompt)
+
+
 def test_generate_answer_returns_not_found_without_evidence() -> None:
     answer = generate_answer(
         question="Pin bao hanh bao lau?",
@@ -28,6 +36,10 @@ def test_generate_answer_uses_evidence_fallback_without_openai_key(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: None,
+    )
     evidence_chunks = sample_search_results()
 
     answer = generate_answer(
@@ -38,8 +50,27 @@ def test_generate_answer_uses_evidence_fallback_without_openai_key(
 
     assert answer.status == "answered"
     assert answer.answer.startswith(evidence_chunks[0].chunk.text)
-    assert answer.answer.endswith("[1][2]")
+    assert f"{evidence_chunks[0].chunk.text} [1]" in answer.answer
+    assert "[2]" in answer.answer
     assert answer.citations[0].chunk_id == evidence_chunks[0].chunk.chunk_id
+
+
+def test_generate_answer_removes_llm_reference_list(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: FakeClientWithReferenceList(),
+    )
+
+    answer = generate_answer(
+        question="Pin bao hanh bao lau?",
+        evidence_context=format_evidence_context(sample_search_results()),
+        evidence_chunks=sample_search_results(),
+    )
+
+    assert answer.answer == "Pin bao hanh 8 nam. [1]"
+    assert "vinfast_warranty.pdf" not in answer.answer
 
 
 def test_validate_answer_accepts_citations_from_evidence() -> None:
@@ -92,7 +123,7 @@ def test_format_evidence_context_includes_source_and_chunk_id() -> None:
     assert "vinfast_warranty.pdf" in context
 
 
-def test_apply_citation_markers_appends_numbered_markers() -> None:
+def test_apply_citation_markers_adds_marker_to_supported_sentence() -> None:
     citations = sample_answer().citations
 
     marked_answer = apply_citation_markers("Pin bao hanh 8 nam.", citations)
@@ -100,10 +131,29 @@ def test_apply_citation_markers_appends_numbered_markers() -> None:
     assert marked_answer == "Pin bao hanh 8 nam. [1]"
 
 
+def test_apply_citation_markers_distributes_markers_across_sentences() -> None:
+    citations = sample_search_results()[:2]
+    citation_models = [
+        sample_answer().citations[0],
+        sample_answer().citations[0].model_copy(update={"chunk_id": citations[1].chunk.chunk_id}),
+    ]
+
+    marked_answer = apply_citation_markers(
+        "Pin bao hanh 8 nam. Dieu kien bao hanh nam trong tai lieu.",
+        citation_models,
+    )
+
+    assert marked_answer == ("Pin bao hanh 8 nam. [1] Dieu kien bao hanh nam trong tai lieu. [2]")
+
+
 def test_stream_answer_yields_deltas_and_final_answer_without_llm_key(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: None,
+    )
     evidence_chunks = sample_search_results()
 
     events = list(
@@ -117,7 +167,10 @@ def test_stream_answer_yields_deltas_and_final_answer_without_llm_key(
     deltas = [event.text for event in events if isinstance(event, AnswerDelta)]
     done_events = [event for event in events if isinstance(event, AnswerDone)]
 
-    assert "".join(deltas).endswith("[1][2]")
+    streamed_text = "".join(deltas)
+    assert "[1]" in streamed_text
+    assert "[2]" in streamed_text
     assert len(done_events) == 1
     assert done_events[0].answer.status == "answered"
-    assert done_events[0].answer.answer.endswith("[1][2]")
+    assert "[1]" in done_events[0].answer.answer
+    assert "[2]" in done_events[0].answer.answer
