@@ -18,7 +18,12 @@ EvidenceProviderName = Literal["mock", "request", "ragflow", "local_pdf"]
 
 
 def configured_evidence_provider_name() -> EvidenceProviderName:
-    """Return the configured evidence provider name."""
+    """Return the active evidence provider from the EVIDENCE_PROVIDER env var.
+
+    Recognised values: ``ragflow``, ``local_pdf``, ``request``.
+    Anything else (including unset) falls back to ``mock`` - suitable for
+    local development only.  Production deployments must set this variable.
+    """
 
     raw = os.getenv("EVIDENCE_PROVIDER", "mock").strip().lower()
     if raw == "request":
@@ -37,9 +42,16 @@ def evidence_for_question(
     evidence_chunks: list[SearchResult] | None = None,
     provider: EvidenceProviderName | None = None,
     document_ids: list[str] | None = None,
-    use_mock_evidence: bool = True,
+    use_mock_evidence: bool = False,
 ) -> tuple[list[SearchResult], str]:
-    """Resolve evidence chunks/context for a generation request."""
+    """Resolve evidence chunks and context for a generation request.
+
+    Priority: explicit ``evidence_chunks`` > real provider retrieval >
+    mock fixture data (only when ``use_mock_evidence=True``) > empty.
+    Returns an empty evidence list when no source is available, which
+    causes the generator to produce a ``not_found`` answer rather than
+    hallucinating.
+    """
 
     selected_provider = provider or configured_evidence_provider_name()
     if evidence_chunks is not None:

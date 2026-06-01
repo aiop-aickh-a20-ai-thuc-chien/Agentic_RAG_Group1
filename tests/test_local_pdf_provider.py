@@ -54,6 +54,82 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     assert (tmp_path / "chunks" / f"{uploaded.document_id}.jsonl").exists()
 
 
+def test_local_pdf_provider_uploads_url_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_url_chunks",
+        lambda url, **kwargs: [
+            Chunk(
+                chunk_id="url_doc_c0001",
+                text="Noi dung URL ve chinh sach mua nha.",
+                metadata={
+                    "source": url,
+                    "source_type": "url",
+                    "url": url,
+                    "title": "Trang chinh sach",
+                    "section": "Chinh sach",
+                    "chunking_method": "deterministic-character-overlap",
+                    "chunking_provider": None,
+                    "chunking_model": None,
+                },
+            )
+        ],
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    uploaded = provider.upload_url(url="https://example.com/chinh-sach")
+    document_chunks = provider.document_chunks(document_id=uploaded.document_id)
+
+    assert uploaded.dataset_id == "local_pdf"
+    assert uploaded.name == "example.com-chinh-sach.txt"
+    assert uploaded.parse_started is True
+    trace = cast(dict[str, dict[str, Any]], uploaded.trace)
+    assert trace["source_upload"]["source_type"] == "url"
+    assert trace["source_upload"]["requested_url"] == "https://example.com/chinh-sach"
+    assert trace["source_upload"]["final_url"] == "https://example.com/chinh-sach"
+    assert trace["parse"]["parser"] == "url.load_url_chunks"
+    assert trace["parse"]["title"] == "Trang chinh sach"
+    assert trace["parse"]["section_count"] == 1
+    assert trace["parse"]["sections"] == ["Chinh sach"]
+    assert trace["chunking"]["chunk_count"] == 1
+    assert trace["chunking"]["chunking_methods"] == ["deterministic-character-overlap"]
+    assert document_chunks.total_chunks == 1
+    chunk = document_chunks.chunks[0]
+    assert chunk.metadata["document_id"] == uploaded.document_id
+    assert chunk.metadata["source_type"] == "url"
+    assert chunk.metadata["source"] == "https://example.com/chinh-sach"
+    assert chunk.metadata["url"] == "https://example.com/chinh-sach"
+
+
+def test_local_pdf_provider_uploads_text_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+    document_chunks = provider.document_chunks(document_id=uploaded.document_id)
+
+    assert uploaded.name == "Ghi-chu.txt"
+    assert document_chunks.total_chunks == 1
+    chunk = document_chunks.chunks[0]
+    assert chunk.metadata["document_id"] == uploaded.document_id
+    assert chunk.metadata["source_type"] == "text"
+    assert chunk.text == "Noi dung tu nguoi dung"
+
+
 def test_local_pdf_provider_retrieves_matching_chunks(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -104,7 +180,7 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert results[0].rank == 1
     assert (
         results[0].chunk.metadata["retrieval_pipeline"]
-        == "pdf_ingestion -> bm25 + dense -> rrf -> rerank"
+        == "source_ingestion -> bm25 + dense -> rrf -> rerank"
     )
     assert results[0].chunk.metadata["bm25"] is not None
     assert results[0].chunk.metadata["dense"] is not None

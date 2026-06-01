@@ -1,10 +1,11 @@
-"""Local PDF ingestion and retrieval provider.
+"""Local source ingestion and retrieval provider.
 
 This provider lets the API run the same Module 5 generation/citation flow
-without RAGFlow for PDF documents. It is intentionally lightweight: PDF parsing
-uses the existing ingestion module, chunks are stored as JSONL, and retrieval is
-hybrid. Dense retrieval is traced when OpenAI embeddings are configured, and the
-provider falls back to BM25-only fusion when embeddings are unavailable.
+without RAGFlow for PDF, URL, and text documents. It is intentionally
+lightweight: source-specific ingestion modules produce shared chunks, chunks are
+stored as JSONL, and retrieval is hybrid. Dense retrieval is traced when OpenAI
+embeddings are configured, and the provider falls back to BM25-only fusion when
+embeddings are unavailable.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import load_pdf_chunks
+from agentic_rag.ingestion.url import load_text_chunks, load_url_chunks
 from agentic_rag.retrieval.fusion import RRF_K, rerank_with_metadata, rrf_fusion
 from agentic_rag.retrieval.search import Store, dense_embedding_metadata
 
@@ -51,8 +53,12 @@ class LocalPdfEvidenceProvider:
         self._store_dir = store_dir
         self._files_dir = store_dir / "files"
         self._chunks_dir = store_dir / "chunks"
+        self._debug_dir = store_dir / "debug"
+        self._artifacts_dir = store_dir / "artifacts"
         self._files_dir.mkdir(parents=True, exist_ok=True)
         self._chunks_dir.mkdir(parents=True, exist_ok=True)
+        self._debug_dir.mkdir(parents=True, exist_ok=True)
+        self._artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_env(cls) -> LocalPdfEvidenceProvider:
@@ -86,7 +92,8 @@ class LocalPdfEvidenceProvider:
             _chunk_with_local_metadata(
                 chunk=chunk,
                 document_id=document_id,
-                filename=safe_filename,
+                name=safe_filename,
+                source_type="pdf",
             )
             for chunk in chunks
         ]
@@ -112,6 +119,149 @@ class LocalPdfEvidenceProvider:
                     "parser": "docling",
                     "started": start_parse,
                     "latency_ms": parse_latency_ms,
+                },
+                "chunking": {
+                    "chunk_count": len(chunks),
+                    "chunk_ids": [chunk.chunk_id for chunk in chunks],
+                    "chunks": [_trace_chunk(chunk) for chunk in chunks],
+                    "latency_ms": chunk_latency_ms,
+                },
+                "index_write": {
+                    "type": "jsonl",
+                    "path": str(self._chunk_path(document_id)),
+                    "latency_ms": write_latency_ms,
+                },
+                "total_latency_ms": _latency_ms(started_at),
+            },
+        )
+
+    def upload_url(self, *, url: str) -> LocalPdfUploadedDocument:
+        """Fetch, parse, chunk, and index one URL through the URL ingestion module."""
+
+        started_at = time.perf_counter()
+        document_id = f"local_url_{uuid.uuid4().hex}"
+        safe_name = _safe_url_filename(url)
+
+        ingest_started_at = time.perf_counter()
+        chunks = load_url_chunks(
+            url,
+            debug_artifact_dir=self._debug_dir / document_id,
+            data_artifact_dir=self._artifacts_dir,
+            run_id=document_id,
+        )
+        ingest_latency_ms = _latency_ms(ingest_started_at)
+
+        chunk_started_at = time.perf_counter()
+        chunks = [
+            _chunk_with_local_metadata(
+                chunk=chunk,
+                document_id=document_id,
+                name=safe_name,
+                source_type="url",
+                source=url,
+            )
+            for chunk in chunks
+        ]
+        chunk_latency_ms = _latency_ms(chunk_started_at)
+        write_started_at = time.perf_counter()
+        self._write_chunks(document_id=document_id, chunks=chunks)
+        write_latency_ms = _latency_ms(write_started_at)
+        url_trace = _url_ingestion_trace(requested_url=url, chunks=chunks)
+
+        return LocalPdfUploadedDocument(
+            document_id=document_id,
+            name=safe_name,
+            dataset_id=self.dataset_id,
+            parse_started=True,
+            trace={
+                "source_upload": {
+                    "provider": self.dataset_id,
+                    "document_id": document_id,
+                    "filename": safe_name,
+                    "source": url,
+                    "source_type": "url",
+                    "requested_url": url,
+                    "final_url": url_trace["final_url"],
+                },
+                "parse": {
+                    "parser": "url.load_url_chunks",
+                    "started": True,
+                    "source_type": "url",
+                    "requested_url": url,
+                    "final_url": url_trace["final_url"],
+                    "title": url_trace["title"],
+                    "section_count": url_trace["section_count"],
+                    "sections": url_trace["sections"],
+                    "latency_ms": ingest_latency_ms,
+                },
+                "chunking": {
+                    "chunk_count": len(chunks),
+                    "chunk_ids": [chunk.chunk_id for chunk in chunks],
+                    "chunking_methods": url_trace["chunking_methods"],
+                    "chunking_providers": url_trace["chunking_providers"],
+                    "chunking_models": url_trace["chunking_models"],
+                    "chunks": [_trace_chunk(chunk) for chunk in chunks],
+                    "latency_ms": chunk_latency_ms,
+                },
+                "index_write": {
+                    "type": "jsonl",
+                    "path": str(self._chunk_path(document_id)),
+                    "latency_ms": write_latency_ms,
+                },
+                "total_latency_ms": _latency_ms(started_at),
+            },
+        )
+
+    def upload_text(self, *, title: str, text: str) -> LocalPdfUploadedDocument:
+        """Chunk and index user-provided text through the URL/text ingestion module."""
+
+        started_at = time.perf_counter()
+        document_id = f"local_text_{uuid.uuid4().hex}"
+        safe_name = _safe_text_filename(title)
+
+        ingest_started_at = time.perf_counter()
+        chunks = load_text_chunks(
+            text,
+            source=safe_name,
+            debug_artifact_dir=self._debug_dir / document_id,
+            data_artifact_dir=self._artifacts_dir,
+            run_id=document_id,
+        )
+        ingest_latency_ms = _latency_ms(ingest_started_at)
+
+        chunk_started_at = time.perf_counter()
+        chunks = [
+            _chunk_with_local_metadata(
+                chunk=chunk,
+                document_id=document_id,
+                name=safe_name,
+                source_type="text",
+            )
+            for chunk in chunks
+        ]
+        chunk_latency_ms = _latency_ms(chunk_started_at)
+        write_started_at = time.perf_counter()
+        self._write_chunks(document_id=document_id, chunks=chunks)
+        write_latency_ms = _latency_ms(write_started_at)
+
+        return LocalPdfUploadedDocument(
+            document_id=document_id,
+            name=safe_name,
+            dataset_id=self.dataset_id,
+            parse_started=True,
+            trace={
+                "source_upload": {
+                    "provider": self.dataset_id,
+                    "document_id": document_id,
+                    "filename": safe_name,
+                    "source": safe_name,
+                    "source_type": "text",
+                    "size_chars": len(text),
+                },
+                "parse": {
+                    "parser": "url.load_text_chunks",
+                    "started": True,
+                    "latency_ms": ingest_latency_ms,
                 },
                 "chunking": {
                     "chunk_count": len(chunks),
@@ -263,18 +413,23 @@ def _chunk_with_local_metadata(
     *,
     chunk: Chunk,
     document_id: str,
-    filename: str,
+    name: str,
+    source_type: str,
+    source: str | None = None,
 ) -> Chunk:
+    resolved_source = source or str(chunk.metadata.get("source") or name)
     metadata = {
         **chunk.metadata,
         "document_id": document_id,
         "dataset_id": LocalPdfEvidenceProvider.dataset_id,
-        "source": filename,
-        "document_name": filename,
-        "file_name": filename,
-        "source_type": "pdf",
+        "source": resolved_source,
+        "document_name": name,
+        "file_name": name,
+        "source_type": source_type,
         "provider": "local_pdf",
     }
+    if source_type == "url":
+        metadata["url"] = source or chunk.metadata.get("url")
     return Chunk(chunk_id=chunk.chunk_id, text=chunk.text, metadata=metadata)
 
 
@@ -430,7 +585,7 @@ def _with_pipeline_metadata(
         chunk_id = result.chunk.chunk_id
         metadata = {
             **result.chunk.metadata,
-            "retrieval_pipeline": "pdf_ingestion -> bm25 + dense -> rrf -> rerank",
+            "retrieval_pipeline": "source_ingestion -> bm25 + dense -> rrf -> rerank",
             "pipeline_trace": pipeline_trace,
             "preprocessed_query": preprocessed_query,
             "bm25": _stage_debug(bm25_by_chunk_id.get(chunk_id)),
@@ -550,6 +705,37 @@ def _trace_chunk(chunk: Chunk) -> dict[str, object]:
     }
 
 
+def _url_ingestion_trace(*, requested_url: str, chunks: list[Chunk]) -> dict[str, object]:
+    return {
+        "requested_url": requested_url,
+        "final_url": _first_metadata_value(chunks, "url") or requested_url,
+        "title": _first_metadata_value(chunks, "title"),
+        "section_count": len(_unique_metadata_values(chunks, "section")),
+        "sections": _unique_metadata_values(chunks, "section"),
+        "chunking_methods": _unique_metadata_values(chunks, "chunking_method"),
+        "chunking_providers": _unique_metadata_values(chunks, "chunking_provider"),
+        "chunking_models": _unique_metadata_values(chunks, "chunking_model"),
+    }
+
+
+def _first_metadata_value(chunks: list[Chunk], key: str) -> object | None:
+    for chunk in chunks:
+        value = chunk.metadata.get(key)
+        if value not in {None, ""}:
+            return value
+    return None
+
+
+def _unique_metadata_values(chunks: list[Chunk], key: str) -> list[object]:
+    values: list[object] = []
+    for chunk in chunks:
+        value = chunk.metadata.get(key)
+        if value in {None, ""} or value in values:
+            continue
+        values.append(value)
+    return values
+
+
 def _preview(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
@@ -563,6 +749,17 @@ def _latency_ms(started_at: float) -> int:
 def _safe_filename(filename: str) -> str:
     name = Path(filename).name.strip()
     return name if name else "document.pdf"
+
+
+def _safe_url_filename(url: str) -> str:
+    cleaned = re.sub(r"^https?://", "", url.strip(), flags=re.IGNORECASE)
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", cleaned).strip("-._")
+    return f"{cleaned[:96] or 'url-source'}.txt"
+
+
+def _safe_text_filename(title: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", title.strip()).strip("-._")
+    return f"{cleaned[:96] or 'text-source'}.txt"
 
 
 def _safe_document_id(document_id: str) -> str:

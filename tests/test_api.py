@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pytest import MonkeyPatch
 
 from agentic_rag.api import (
@@ -12,7 +14,9 @@ from agentic_rag.api import (
     upload_text_source,
     upload_url_source,
 )
+from agentic_rag.core.contracts import Chunk
 from agentic_rag.generation.answering import format_evidence_context
+from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.testing.fixtures import sample_search_results
 
 
@@ -40,29 +44,34 @@ class FakeUploadProvider:
         )()
 
 
-def test_health_endpoint_shape() -> None:
-    assert health() == {"status": "ok"}
+def test_health_endpoint_shape(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    result = health()
+    assert result["status"] == "ok"
+    assert result["evidence_provider"] == "local_pdf"
 
 
-def test_answer_endpoint_uses_mock_evidence_by_default(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_answer_endpoint_returns_not_found_without_evidence(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("EVIDENCE_PROVIDER", "mock")
 
     answer = answer_question(AnswerRequest(question="Pin bao hanh bao lau?"))
 
-    assert answer.status == "answered"
-    assert answer.citations
+    assert answer.status == "not_found"
+    assert answer.citations == []
 
 
-def test_answer_endpoint_can_disable_mock_evidence(monkeypatch: MonkeyPatch) -> None:
+def test_answer_endpoint_uses_mock_evidence_when_explicitly_enabled(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("EVIDENCE_PROVIDER", "mock")
 
     answer = answer_question(
-        AnswerRequest(question="Pin bao hanh bao lau?", use_mock_evidence=False)
+        AnswerRequest(question="Pin bao hanh bao lau?", use_mock_evidence=True)
     )
 
-    assert answer.status == "not_found"
-    assert answer.citations == []
+    assert answer.status == "answered"
+    assert answer.citations
 
 
 def test_answer_endpoint_handles_small_talk_without_evidence(
@@ -111,6 +120,7 @@ def test_stream_direct_answer_events_do_not_emit_citations() -> None:
 
 def test_text_source_uploads_plain_text_to_ragflow(monkeypatch: MonkeyPatch) -> None:
     provider = FakeUploadProvider()
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "ragflow")
     monkeypatch.setattr("agentic_rag.api.ragflow_provider_from_env", lambda: provider)
 
     response = upload_text_source(
@@ -127,6 +137,7 @@ def test_text_source_uploads_plain_text_to_ragflow(monkeypatch: MonkeyPatch) -> 
 
 def test_url_source_fetches_text_and_uploads_to_ragflow(monkeypatch: MonkeyPatch) -> None:
     provider = FakeUploadProvider()
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "ragflow")
     monkeypatch.setattr("agentic_rag.api.ragflow_provider_from_env", lambda: provider)
     monkeypatch.setattr(
         "agentic_rag.api._fetch_url_text",
@@ -143,3 +154,53 @@ def test_url_source_fetches_text_and_uploads_to_ragflow(monkeypatch: MonkeyPatch
     assert b"Tieu de" in content
     assert b"Noi dung URL" in content
     assert content_type == "text/plain; charset=utf-8"
+
+
+def test_url_source_uses_local_provider_when_configured(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_url_chunks",
+        lambda url, **kwargs: [
+            Chunk(
+                chunk_id="url_doc_c0001",
+                text="Noi dung URL",
+                metadata={"source": url, "source_type": "url", "url": url},
+            )
+        ],
+    )
+
+    response = upload_url_source(SourceUrlRequest(url="https://example.com/docs/page"))
+
+    assert response.provider == "local_pdf"
+    assert response.dataset_id == "local_pdf"
+    assert response.name == "example.com-docs-page.txt"
+
+
+def test_text_source_uses_local_provider_when_configured(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+
+    response = upload_text_source(SourceTextRequest(title="Ghi chu", text="Noi dung"))
+
+    assert response.provider == "local_pdf"
+    assert response.dataset_id == "local_pdf"
+    assert response.name == "Ghi-chu.txt"

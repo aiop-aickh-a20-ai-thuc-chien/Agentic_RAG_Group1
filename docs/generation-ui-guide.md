@@ -174,11 +174,11 @@ RAGFLOW_API_KEY=...
 RAGFLOW_DATASET_ID=...
 ```
 
-## Local PDF provider
+## Local source provider
 
-When the PDF modules are ready to run without RAGFlow, switch only the evidence
-provider. The API endpoints stay the same, so the frontend does not need a
-separate flow:
+When the PDF/URL/text modules are ready to run without RAGFlow, switch only the
+evidence provider. The API endpoints stay the same, so the frontend does not
+need a separate flow:
 
 ```bash
 EVIDENCE_PROVIDER=local_pdf
@@ -191,6 +191,8 @@ Flow:
 
 ```text
 PDF upload -> local PDF parser -> local chunks JSONL
+URL import -> URL ingestion module -> local chunks JSONL
+Text import -> text ingestion module -> local chunks JSONL
 question -> query preprocessing
 chunks + query -> BM25 retrieval + dense retrieval
 BM25 + dense -> RRF fusion
