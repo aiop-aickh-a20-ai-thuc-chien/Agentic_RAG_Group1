@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 
@@ -10,7 +11,7 @@ from pydantic import ValidationError
 from agentic_rag.core.contracts import Answer, Citation, SearchResult
 from agentic_rag.generation.llm import configured_llm_client
 
-NOT_FOUND_ANSWER = "Khong co trong tai lieu duoc cung cap."
+NOT_FOUND_ANSWER = "Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp."
 MIN_EVIDENCE_TEXT_LENGTH = 12
 
 
@@ -72,12 +73,19 @@ def stream_answer(
 
     prompt = build_grounded_prompt(question=question, evidence_context=context)
     client = configured_llm_client()
-    answer_text = ""
-    deltas = (
-        client.stream_complete(prompt) if client else _chunk_text(_fallback_answer(usable_evidence))
-    )
+    if client is None:
+        final_answer = _answer_from_text(
+            answer_text=_fallback_answer(usable_evidence),
+            usable_evidence=usable_evidence,
+        )
+        for delta in _chunk_text(final_answer.answer):
+            yield AnswerDelta(delta)
+        yield AnswerDone(final_answer)
+        return
 
-    for delta in deltas:
+    answer_text = ""
+
+    for delta in client.stream_complete(prompt):
         answer_text += delta
         yield AnswerDelta(delta)
 
@@ -93,34 +101,50 @@ def stream_answer(
 
 
 def apply_citation_markers(answer: str, citations: list[Citation]) -> str:
-    """Attach stable citation markers like [1][2] to user-facing answers."""
+    """Attach stable citation markers next to supported answer sentences."""
 
     if not citations:
         return answer
 
-    marker_suffix = "".join(f"[{index}]" for index in range(1, len(citations) + 1))
-    if marker_suffix in answer:
+    if _has_citation_marker(answer):
         return answer
 
-    stripped_answer = answer.rstrip()
-    if not stripped_answer:
+    stripped = answer.strip()
+    if not stripped:
         return answer
 
-    if stripped_answer.endswith((".", "!", "?")):
-        return f"{stripped_answer} {marker_suffix}"
-    return f"{stripped_answer}. {marker_suffix}"
+    markers = [f"[{index}]" for index in range(1, len(citations) + 1)]
+    paragraphs = [paragraph.strip() for paragraph in stripped.splitlines() if paragraph.strip()]
+    if len(paragraphs) >= len(markers):
+        marked_paragraphs = [
+            _append_marker(paragraph, markers[index]) if index < len(markers) else paragraph
+            for index, paragraph in enumerate(paragraphs)
+        ]
+        return "\n\n".join(marked_paragraphs)
+
+    sentences = _split_sentences(stripped)
+    if len(sentences) >= len(markers):
+        marked_sentences = [
+            _append_marker(sentence, markers[index]) if index < len(markers) else sentence
+            for index, sentence in enumerate(sentences)
+        ]
+        return " ".join(marked_sentences)
+
+    marker_suffix = "".join(markers)
+    return _append_marker(stripped, marker_suffix)
 
 
 def _answer_from_text(answer_text: str, usable_evidence: list[SearchResult]) -> Answer:
-    if not answer_text or _is_not_found_answer(answer_text):
+    cleaned_answer_text = _strip_trailing_citation_list(answer_text)
+    if not cleaned_answer_text or _is_not_found_answer(cleaned_answer_text):
         return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
 
     citations = _citations_from_evidence(usable_evidence)
     citation_payload = [citation.model_dump() for citation in citations]
-    if not validate_answer_with_citations(answer_text, citation_payload, usable_evidence):
+    if not validate_answer_with_citations(cleaned_answer_text, citation_payload, usable_evidence):
         return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
 
-    marked_answer = apply_citation_markers(answer_text, citations)
+    marked_answer = apply_citation_markers(cleaned_answer_text, citations)
     return Answer(answer=marked_answer, status="answered", citations=citations)
 
 
@@ -178,7 +202,12 @@ def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
         "- Answer in Vietnamese.\n"
         "- Use only the evidence context.\n"
         "- Do not invent facts or citations.\n"
-        "- Do not invent citation markers; the application will attach them.\n"
+        "- Put citation markers like [1] or [2] immediately after the sentence or "
+        "clause supported by that evidence.\n"
+        "- Do not put all citation markers at the end of the whole answer.\n"
+        "- Do not add a references, sources, bibliography, or citation list at the end.\n"
+        "- Every factual sentence must include at least one evidence marker.\n"
+        "- Use only marker numbers that appear in the evidence context.\n"
         f"- If the evidence is insufficient, answer exactly: {NOT_FOUND_ANSWER}\n"
     )
 
@@ -215,10 +244,12 @@ def _chunk_text(text: str, chunk_size: int = 28) -> Iterator[str]:
 
 
 def _fallback_answer(evidence_chunks: list[SearchResult]) -> str:
-    top_evidence = evidence_chunks[0].chunk.text.strip()
-    if not top_evidence:
+    evidence_texts = [
+        result.chunk.text.strip() for result in evidence_chunks[:3] if result.chunk.text.strip()
+    ]
+    if not evidence_texts:
         return NOT_FOUND_ANSWER
-    return top_evidence
+    return "\n\n".join(evidence_texts)
 
 
 def _citations_from_evidence(evidence_chunks: list[SearchResult]) -> list[Citation]:
@@ -295,7 +326,61 @@ def _is_not_found_answer(answer: str) -> bool:
     normalized = answer.strip().lower().rstrip(".")
     return normalized in {
         NOT_FOUND_ANSWER.lower().rstrip("."),
+        "không có trong tài liệu được cung cấp",
+        "không tìm thấy trong tài liệu",
+        "không có thông tin trong tài liệu được cung cấp",
+        "mình chưa tìm thấy thông tin này trong tài liệu được cung cấp",
         "khong co trong tai lieu",
         "khong tim thay trong tai lieu",
         "khong co thong tin trong tai lieu duoc cung cap",
+    }
+
+
+def _has_citation_marker(answer: str) -> bool:
+    return re.search(r"\[\d+\]", answer) is not None
+
+
+def _split_sentences(answer: str) -> list[str]:
+    return [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", answer) if sentence.strip()]
+
+
+def _append_marker(text: str, marker: str) -> str:
+    stripped = text.rstrip()
+    if not stripped:
+        return text
+    return f"{stripped} {marker}"
+
+
+def _strip_trailing_citation_list(answer: str) -> str:
+    lines = answer.strip().splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    strip_from = len(lines)
+    for index in range(len(lines) - 1, -1, -1):
+        line = lines[index].strip()
+        if _is_reference_list_item(line) or _is_reference_heading(line):
+            strip_from = index
+            continue
+        break
+
+    return "\n".join(lines[:strip_from]).strip()
+
+
+def _is_reference_list_item(line: str) -> bool:
+    return re.match(r"^\[\d+\]\s+\S+", line) is not None
+
+
+def _is_reference_heading(line: str) -> bool:
+    normalized = line.lower().rstrip(":")
+    return normalized in {
+        "references",
+        "reference",
+        "sources",
+        "source",
+        "citations",
+        "citation",
+        "trich dan",
+        "nguon",
+        "tai lieu tham khao",
     }

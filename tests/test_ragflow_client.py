@@ -26,7 +26,22 @@ class RecordingRAGFlowClient(RAGFlowClient):
         self.calls.append((method, path, body))
         if path.endswith("/documents"):
             return {"code": 0, "data": [{"id": "doc-1", "name": "warranty.pdf"}]}
+        if path.startswith("/v1/document/upload_info"):
+            return {"code": 0, "data": {"id": "attachment-1", "name": "page.md"}}
         return {"code": 0, "data": {"chunks": []}}
+
+    def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: Mapping[str, object] | None = None,
+    ) -> bytes:
+        query_suffix = ""
+        if query:
+            query_suffix = "?" + "&".join(f"{key}={value}" for key, value in query.items())
+        self.calls.append((method, f"{path}{query_suffix}", None))
+        return b"# Parsed by RAGFlow\n\nNoi dung URL"
 
 
 def test_upload_document_targets_dataset_documents_endpoint() -> None:
@@ -65,4 +80,29 @@ def test_list_chunks_targets_document_chunks_endpoint() -> None:
     assert client.calls[0][0] == "GET"
     assert client.calls[0][1] == (
         "/api/v1/datasets/dataset-1/documents/doc-1/chunks?page=1&page_size=20"
+    )
+
+
+def test_upload_runtime_url_uses_ragflow_url_attachment_endpoint() -> None:
+    client = RecordingRAGFlowClient()
+
+    attachment = client.upload_runtime_url(url="https://example.com/docs/page")
+
+    assert attachment["id"] == "attachment-1"
+    assert client.calls[0][0] == "POST"
+    assert client.calls[0][1] == (
+        "/v1/document/upload_info?url=https%3A%2F%2Fexample.com%2Fdocs%2Fpage"
+    )
+
+
+def test_download_runtime_attachment_returns_parsed_bytes() -> None:
+    client = RecordingRAGFlowClient()
+
+    content = client.download_runtime_attachment(attachment_id="attachment-1")
+
+    assert content.startswith(b"# Parsed by RAGFlow")
+    assert client.calls[0] == (
+        "GET",
+        "/v1/document/download/attachment-1?ext=markdown",
+        None,
     )

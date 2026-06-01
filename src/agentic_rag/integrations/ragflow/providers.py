@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from agentic_rag.core.contracts import Chunk, SearchResult
@@ -20,6 +21,14 @@ class RAGFlowUploadedDocument:
     name: str
     dataset_id: str
     parse_started: bool
+
+
+@dataclass(frozen=True)
+class RAGFlowDocumentChunks:
+    """One page of normalized chunks plus RAGFlow's full chunk count."""
+
+    chunks: list[Chunk]
+    total_chunks: int
 
 
 class RAGFlowEvidenceProvider:
@@ -61,6 +70,32 @@ class RAGFlowEvidenceProvider:
             parse_started=parse_started,
         )
 
+    def import_url_document(
+        self,
+        *,
+        url: str,
+        start_parse: bool = True,
+    ) -> RAGFlowUploadedDocument:
+        """Let RAGFlow fetch a URL, then index the parsed markdown in the dataset."""
+
+        raw_attachment = self._client.upload_runtime_url(url=url)
+        attachment_id = _required_text(raw_attachment, "id")
+        parsed_markdown = self._client.download_runtime_attachment(
+            attachment_id=attachment_id,
+            ext="markdown",
+        )
+        if not parsed_markdown.strip():
+            raise ValueError("RAGFlow parsed the URL but returned empty markdown.")
+
+        filename = _markdown_filename(_optional_text(raw_attachment, "name") or url)
+        content = _markdown_with_source_url(url=url, parsed_markdown=parsed_markdown)
+        return self.upload_document(
+            filename=filename,
+            content=content,
+            content_type="text/markdown; charset=utf-8",
+            start_parse=start_parse,
+        )
+
     def list_document_chunks(
         self,
         *,
@@ -71,6 +106,23 @@ class RAGFlowEvidenceProvider:
     ) -> list[Chunk]:
         """Return RAGFlow chunks normalized to the shared `Chunk` contract."""
 
+        return self.document_chunks(
+            document_id=document_id,
+            page=page,
+            page_size=page_size,
+            keywords=keywords,
+        ).chunks
+
+    def document_chunks(
+        self,
+        *,
+        document_id: str,
+        page: int = 1,
+        page_size: int | None = None,
+        keywords: str | None = None,
+    ) -> RAGFlowDocumentChunks:
+        """Return normalized chunks and the full chunk count for one document."""
+
         payload = self._client.list_chunks(
             document_id=document_id,
             dataset_id=self._dataset_id,
@@ -80,13 +132,14 @@ class RAGFlowEvidenceProvider:
         )
         data = payload.get("data")
         if not isinstance(data, dict):
-            return []
+            return RAGFlowDocumentChunks(chunks=[], total_chunks=0)
 
         raw_doc = data.get("doc")
         doc_metadata = _document_metadata(raw_doc)
         raw_chunks = data.get("chunks")
         if not isinstance(raw_chunks, list):
-            return []
+            total_chunks = _chunk_count_from_payload(data=data, raw_doc=raw_doc, fallback=0)
+            return RAGFlowDocumentChunks(chunks=[], total_chunks=total_chunks)
 
         chunks: list[Chunk] = []
         for raw_chunk in raw_chunks:
@@ -94,7 +147,13 @@ class RAGFlowEvidenceProvider:
                 continue
             merged_payload = {**raw_chunk, "metadata": {**doc_metadata, **raw_chunk}}
             chunks.append(chunk_from_ragflow_payload(merged_payload))
-        return chunks
+
+        total_chunks = _chunk_count_from_payload(
+            data=data,
+            raw_doc=raw_doc,
+            fallback=len(chunks),
+        )
+        return RAGFlowDocumentChunks(chunks=chunks, total_chunks=total_chunks)
 
     def retrieve(
         self,
@@ -157,6 +216,39 @@ def _optional_text(payload: dict[str, object], key: str) -> str | None:
     return str(value)
 
 
+def _optional_int(payload: dict[str, object], key: str) -> int | None:
+    value = payload.get(key)
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return max(value, 0)
+    if isinstance(value, float) and value.is_integer():
+        return max(int(value), 0)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _chunk_count_from_payload(
+    *,
+    data: dict[str, object],
+    raw_doc: object,
+    fallback: int,
+) -> int:
+    for key in ("total", "total_chunks", "chunk_count"):
+        value = _optional_int(data, key)
+        if value is not None:
+            return value
+
+    if isinstance(raw_doc, dict):
+        for key in ("chunk_count", "chunk_num", "total_chunks"):
+            value = _optional_int(raw_doc, key)
+            if value is not None:
+                return value
+
+    return fallback
+
+
 def _document_metadata(raw_doc: object) -> dict[str, object]:
     if not isinstance(raw_doc, dict):
         return {}
@@ -186,3 +278,17 @@ def _document_names_by_id(raw_doc_aggs: object) -> dict[str, str]:
         if doc_id and doc_name:
             names[doc_id] = doc_name
     return names
+
+
+def _markdown_filename(name: str) -> str:
+    stem = name.rsplit(".", 1)[0]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem.strip()).strip("-._")
+    if not stem:
+        stem = "ragflow-url-source"
+    return f"{stem[:96]}.md"
+
+
+def _markdown_with_source_url(*, url: str, parsed_markdown: bytes) -> bytes:
+    if parsed_markdown.startswith(b"Source URL:"):
+        return parsed_markdown
+    return f"Source URL: {url}\n\n".encode() + parsed_markdown
