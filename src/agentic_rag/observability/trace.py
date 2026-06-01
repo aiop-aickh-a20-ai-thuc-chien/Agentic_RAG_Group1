@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from agentic_rag.core.contracts import Answer, SearchResult
+from agentic_rag.generation.llm import DEFAULT_OLLAMA_MODEL, DEFAULT_OPENAI_MODEL
 from agentic_rag.runtime_env import load_local_env
 
 TRACE_PROVIDER_JSONL = "jsonl"
@@ -687,8 +688,8 @@ def _langsmith_configured() -> bool:
 def _configured_generation_model() -> str:
     provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
     if provider == "ollama":
-        return os.getenv("OLLAMA_MODEL", "ollama")
-    return os.getenv("OPENAI_MODEL", "openai")
+        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
 
 
 def _stable_run_uuid(value: str) -> uuid.UUID:
