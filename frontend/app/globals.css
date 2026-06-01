@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f6f7f2;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(15, 143, 114, 0.14), transparent 30rem),
+    radial-gradient(circle at 8% 92%, rgba(79, 127, 99, 0.12), transparent 28rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(246, 247, 242, 0.96)),
+    #f6f7f2;
+  font-family:
+    Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(15, 143, 114, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -18,6 +18,12 @@ site/
 .eggs/
 pip-wheel-metadata/
 
+# Frontend dependencies and build artifacts
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+
 # Test, coverage, and type-check caches
 .pytest_cache/
 .coverage

@@ -1,0 +1,6 @@
+# Development tools for venv/pip users.
+-r requirements.txt
+
+mypy>=1.13.0
+pytest>=8.3.0
+ruff>=0.8.0

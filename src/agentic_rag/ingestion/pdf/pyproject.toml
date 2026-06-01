@@ -1,0 +1,48 @@
+[project]
+name = "agentic-rag-pdf-ingestion"
+version = "0.1.0"
+description = "PDF ingestion and parser benchmark subproject for Agentic RAG."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2,<3",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13.0",
+    "pytest>=8.3.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "RUF",
+]
+ignore = []
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+pythonpath = ["../../.."]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+mypy_path = "../../.."
+files = ["../../../agentic_rag/ingestion/pdf"]
