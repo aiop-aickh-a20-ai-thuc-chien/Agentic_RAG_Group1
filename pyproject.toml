@@ -5,11 +5,21 @@ description = "Stack-neutral scaffold for the Agentic RAG Group 1 implementation
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "docling>=2,<3",
+    "faiss-cpu==1.13.2",
     "fastapi>=0.115.0,<1",
+    "langchain-community==0.4.1",
+    "langchain-openai>=1.1.9",
     "openai>=1.0.0,<2",
     "pydantic>=2,<3",
     "python-multipart>=0.0.20,<1",
+    "rank-bm25==0.2.2",
     "uvicorn>=0.30.0,<1",
+]
+
+[project.optional-dependencies]
+rerank = [
+    "sentence-transformers>=5,<6",
 ]
 
 [build-system]
@@ -52,3 +62,7 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 strict = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["rank_bm25.*"]
+follow_untyped_imports = true
