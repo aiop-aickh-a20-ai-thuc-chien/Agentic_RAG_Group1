@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from agentic_rag.core.contracts import Chunk, SearchResult
-from rank_bm25 import BM25Okapi
 from langchain_community.vectorstores import FAISS
+from rank_bm25 import BM25Okapi
+
+from agentic_rag.core.contracts import Chunk, SearchResult
+
 
 class Store:
     def __init__(self, chunks: list[Chunk]):
@@ -47,8 +49,8 @@ class Store:
 
     def _build_vector_index(self, chunks: list[Chunk]) -> FAISS:
         """Build or refresh a dense vector index from shared chunks."""
-        from langchain_openai import OpenAIEmbeddings
         from dotenv import load_dotenv
+        from langchain_openai import OpenAIEmbeddings
         load_dotenv()
 
         dimensions = 1536
