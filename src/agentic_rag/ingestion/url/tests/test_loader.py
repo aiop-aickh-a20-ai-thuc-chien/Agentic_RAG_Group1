@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,47 @@ def test_load_html_chunks_writes_debug_artifacts(tmp_path: Path) -> None:
     assert chunks
     assert any(name.endswith("_raw.html") for name in artifact_names)
     assert any(name.endswith("_parsed.txt") for name in artifact_names)
+
+
+def test_load_html_chunks_writes_data_artifacts(tmp_path: Path) -> None:
+    chunks = load_html_chunks(
+        """
+        <html>
+          <head><title>Example Page</title></head>
+          <body><main><h1>Overview</h1><p>Stored content.</p></main></body>
+        </html>
+        """,
+        source="https://example.edu/page",
+        source_url="https://example.edu/page",
+        data_artifact_dir=tmp_path,
+        run_id="sample_run",
+    )
+
+    run_dirs = list((tmp_path / "artifacts").glob("*/sample-run"))
+    assert len(run_dirs) == 1
+    run_dir = run_dirs[0]
+    markdown_path = run_dir / "parsed.md"
+    chunks_path = run_dir / "chunks.jsonl"
+    manifest_path = run_dir / "manifest.json"
+
+    assert markdown_path.read_text(encoding="utf-8") == (
+        "# Example Page\n\n## Overview\n\nOverview Stored content.\n"
+    )
+    chunk_lines = chunks_path.read_text(encoding="utf-8").splitlines()
+    assert len(chunk_lines) == len(chunks)
+    assert json.loads(chunk_lines[0])["chunk_id"] == chunks[0].chunk_id
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["artifact_schema_version"] == 1
+    assert manifest["input_type"] == "url"
+    assert manifest["input_source"] == "https://example.edu/page"
+    assert manifest["input_url"] == "https://example.edu/page"
+    assert manifest["parser"] == "builtin-html-parser"
+    assert manifest["run_id"] == "sample_run"
+    assert manifest["markdown_path"].endswith("/parsed.md")
+    assert manifest["chunks_path"].endswith("/chunks.jsonl")
+    assert manifest["manifest_path"].endswith("/manifest.json")
+    assert manifest["chunk_count"] == len(chunks)
 
 
 def test_load_text_chunks_returns_text_source_metadata() -> None:

@@ -10,11 +10,22 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.url.artifact import DebugArtifact, persist_debug_artifacts
-from agentic_rag.ingestion.url.chunking import build_chunks, normalize_space, short_hash
-from agentic_rag.ingestion.url.parser import parse_html
+from agentic_rag.ingestion.url.artifact import (
+    DebugArtifact,
+    persist_debug_artifacts,
+    persist_ingestion_artifacts,
+)
+from agentic_rag.ingestion.url.chunking import (
+    TextChunkingStrategy,
+    build_chunks,
+    normalize_space,
+    short_hash,
+)
+from agentic_rag.ingestion.url.parser import ParsedHtml, parse_html
 
 _USER_AGENT = "AgenticRAGGroup1/0.1"
+_PARSER_NAME = "builtin-html-parser"
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 @dataclass(frozen=True)
@@ -23,7 +34,13 @@ class _FetchedPage:
     url: str
 
 
-def load_url_chunks(url: str, debug_artifact_dir: str | Path | None = None) -> list[Chunk]:
+def load_url_chunks(
+    url: str,
+    debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str = "url_ingestion",
+    chunking_strategy: TextChunkingStrategy | None = None,
+) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
     page = _fetch_url(url)
@@ -32,6 +49,9 @@ def load_url_chunks(url: str, debug_artifact_dir: str | Path | None = None) -> l
         source=page.url,
         source_url=page.url,
         debug_artifact_dir=debug_artifact_dir,
+        data_artifact_dir=data_artifact_dir,
+        run_id=run_id,
+        chunking_strategy=chunking_strategy,
     )
 
 
@@ -40,11 +60,15 @@ def load_html_chunks(
     source: str,
     source_url: str | None = None,
     debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str = "html_ingestion",
+    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk one HTML document into shared Chunk objects."""
 
     parsed = parse_html(html)
     fetched_at = _utc_now()
+    parsed_markdown = _parsed_markdown(parsed)
     _persist_html_debug_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         source=source,
@@ -63,8 +87,20 @@ def load_html_chunks(
                 url=source_url,
                 title=parsed.title,
                 fetched_at=fetched_at,
+                chunking_strategy=chunking_strategy,
             )
         )
+    persist_ingestion_artifacts(
+        data_dir=data_artifact_dir,
+        input_type="url" if source_url else "html",
+        source=source,
+        source_url=source_url,
+        parser=_PARSER_NAME,
+        run_id=run_id,
+        created_at=fetched_at,
+        markdown=parsed_markdown,
+        chunks=chunks,
+    )
     return chunks
 
 
@@ -72,6 +108,9 @@ def load_text_chunks(
     text: str,
     source: str,
     debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str = "text_ingestion",
+    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk plain text into shared Chunk objects."""
 
@@ -83,15 +122,29 @@ def load_text_chunks(
         source=source,
         text=cleaned_text,
     )
-    return build_chunks(
+    fetched_at = _utc_now()
+    chunks = build_chunks(
         text=cleaned_text,
         source=source,
         source_type="text",
         section="main",
         url=None,
         title=None,
-        fetched_at=_utc_now(),
+        fetched_at=fetched_at,
+        chunking_strategy=chunking_strategy,
     )
+    persist_ingestion_artifacts(
+        data_dir=data_artifact_dir,
+        input_type="text",
+        source=source,
+        source_url=None,
+        parser="plain-text",
+        run_id=run_id,
+        created_at=fetched_at,
+        markdown=cleaned_text,
+        chunks=chunks,
+    )
+    return chunks
 
 
 def _fetch_url(url: str) -> _FetchedPage:
@@ -116,6 +169,17 @@ def _fetch_url(url: str) -> _FetchedPage:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _parsed_markdown(parsed: ParsedHtml) -> str:
+    lines: list[str] = []
+    if parsed.title:
+        lines.extend([f"# {parsed.title}", ""])
+    for section in parsed.sections:
+        if section.heading != "main":
+            lines.extend([f"## {section.heading}", ""])
+        lines.extend([section.text, ""])
+    return "\n".join(lines).strip()
 
 
 def _persist_html_debug_artifacts(
