@@ -41,7 +41,7 @@ ignore = []
 
 [tool.pytest.ini_options]
 addopts = "-ra"
-testpaths = ["tests", "src/agentic_rag/tests"]
+testpaths = ["tests", "src/agentic_rag/ingestion/url/tests"]
 
 [tool.mypy]
 python_version = "3.12"
