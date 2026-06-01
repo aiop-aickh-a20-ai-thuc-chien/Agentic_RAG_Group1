@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agentic_rag.core.contracts import Chunk
@@ -37,6 +39,21 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
     assert "Applications require transcripts." in chunks[0].text
     assert "Home Login Pricing" not in chunks[0].text
     assert "tracking" not in chunks[0].text
+
+
+def test_load_html_chunks_writes_debug_artifacts(tmp_path: Path) -> None:
+    chunks = load_html_chunks(
+        "<html><body><h1>Overview</h1><p>Debug content.</p></body></html>",
+        source="https://example.edu/debug",
+        source_url="https://example.edu/debug",
+        debug_artifact_dir=tmp_path,
+    )
+
+    artifact_names = {path.name for path in tmp_path.iterdir()}
+
+    assert chunks
+    assert any(name.endswith("_raw.html") for name in artifact_names)
+    assert any(name.endswith("_parsed.txt") for name in artifact_names)
 
 
 def test_load_text_chunks_returns_text_source_metadata() -> None:

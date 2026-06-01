@@ -12,6 +12,14 @@ Public helpers:
 - `load_html_chunks(html: str, source: str, source_url: str | None = None) -> list[Chunk]`
 - `load_text_chunks(text: str, source: str) -> list[Chunk]`
 
+## Module Layout
+
+- `loader.py`: ingestion and chunking boundary.
+- `parser.py`: parser adapters for HTML cleanup and section extraction.
+- `chunking.py`: deterministic Markdown/text chunking and chunk metadata construction.
+- `artifact.py`: optional debug artifact persistence.
+- `benchmarking/`: local benchmark CLI and parser benchmark helpers.
+
 ## Behavior
 
 `load_url_chunks` fetches an absolute `http` or `https` URL, cleans HTML boilerplate, chunks
