@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from agentic_rag.ingestion.pdf.benchmarking import cli
 
 

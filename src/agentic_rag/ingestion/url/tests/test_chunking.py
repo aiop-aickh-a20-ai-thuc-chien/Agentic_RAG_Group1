@@ -1,5 +1,4 @@
 import pytest
-
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import (
     build_chunk_id,

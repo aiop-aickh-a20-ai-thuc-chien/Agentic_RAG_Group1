@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.loader import _load_pdf_chunks, load_pdf_chunks
 

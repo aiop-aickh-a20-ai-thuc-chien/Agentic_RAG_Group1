@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from agentic_rag.ingestion.url.artifact import DebugArtifact, persist_debug_artifacts
 
 

@@ -1,13 +1,12 @@
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from agentic_rag.ingestion.pdf.benchmarking.omnidocbench import (
     OmniDocBenchRunConfig,
     build_omnidocbench_command,
     write_omnidocbench_config,
 )
+from pydantic import ValidationError
 
 
 def _run_config(tmp_path: Path, *, backend: str = "docker") -> OmniDocBenchRunConfig:
