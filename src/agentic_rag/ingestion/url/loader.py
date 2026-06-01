@@ -22,13 +22,26 @@ def load_url_chunks(url: str) -> list[Chunk]:
     raise NotImplementedError("load_url_chunks is scaffolded for URL ingestion.")
 
 
-def load_html_chunks(html: str) -> list[Chunk]:
+def load_html_chunks(
+    html: str,
+    *,
+    source: str,
+    source_url: str | None = None,
+    chunking_strategy: TextChunkingStrategy | None = None,
+    debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str | None = None,
+) -> list[Chunk]:
     """Parse and chunk raw HTML string."""
 
     raise NotImplementedError("load_html_chunks is scaffolded for URL ingestion.")
 
 
-def load_text_chunks(text: str) -> list[Chunk]:
+def load_text_chunks(
+    text: str,
+    *,
+    source: str,
+) -> list[Chunk]:
     """Chunk raw text or Markdown string."""
 
     raise NotImplementedError("load_text_chunks is scaffolded for URL ingestion.")
