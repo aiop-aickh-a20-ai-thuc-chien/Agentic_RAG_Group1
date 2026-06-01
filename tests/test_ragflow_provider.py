@@ -1,0 +1,162 @@
+from agentic_rag.core.contracts import Chunk, SearchResult
+from agentic_rag.integrations.ragflow.client import RAGFlowClient
+from agentic_rag.integrations.ragflow.config import RAGFlowConfig
+from agentic_rag.integrations.ragflow.providers import RAGFlowEvidenceProvider
+
+
+class FakeRAGFlowClient(RAGFlowClient):
+    def __init__(self) -> None:
+        super().__init__(
+            RAGFlowConfig(
+                base_url="http://ragflow.local",
+                api_key="test-key",
+                dataset_id="dataset-1",
+            )
+        )
+        self.parsed_document_ids: list[str] = []
+
+    def upload_document(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str | None = None,
+        dataset_id: str | None = None,
+    ) -> dict[str, object]:
+        return {"id": "doc-1", "name": filename, "dataset_id": dataset_id}
+
+    def parse_documents(
+        self,
+        *,
+        document_ids: list[str],
+        dataset_id: str | None = None,
+    ) -> dict[str, object]:
+        self.parsed_document_ids = document_ids
+        return {"code": 0}
+
+    def list_chunks(
+        self,
+        *,
+        document_id: str,
+        dataset_id: str | None = None,
+        keywords: str | None = None,
+        page: int = 1,
+        page_size: int | None = None,
+        chunk_id: str | None = None,
+    ) -> dict[str, object]:
+        return {
+            "data": {
+                "doc": {"id": document_id, "name": "warranty.pdf", "dataset_id": dataset_id},
+                "chunks": [
+                    {
+                        "id": "chunk-1",
+                        "content": "Pin cao ap duoc bao hanh 8 nam.",
+                        "positions": [[12, 1, 2]],
+                    }
+                ],
+            }
+        }
+
+    def retrieve(
+        self,
+        *,
+        question: str,
+        dataset_ids: list[str] | None = None,
+        document_ids: list[str] | None = None,
+        page: int = 1,
+        page_size: int | None = None,
+    ) -> dict[str, object]:
+        return {
+            "data": {
+                "doc_aggs": [{"doc_id": "doc-1", "doc_name": "warranty.pdf"}],
+                "chunks": [
+                    {
+                        "id": "chunk-1",
+                        "document_id": "doc-1",
+                        "content": "Pin cao ap duoc bao hanh 8 nam.",
+                        "similarity": 0.91,
+                        "positions": [[12, 1, 2]],
+                    }
+                ],
+            }
+        }
+
+
+def test_provider_uploads_document_and_starts_parse() -> None:
+    client = FakeRAGFlowClient()
+    provider = RAGFlowEvidenceProvider(client, dataset_id="dataset-1")
+
+    uploaded = provider.upload_document(
+        filename="warranty.pdf",
+        content=b"%PDF",
+        content_type="application/pdf",
+    )
+
+    assert uploaded.document_id == "doc-1"
+    assert uploaded.parse_started is True
+    assert client.parsed_document_ids == ["doc-1"]
+
+
+def test_provider_lists_chunks_as_shared_chunks() -> None:
+    provider = RAGFlowEvidenceProvider(FakeRAGFlowClient(), dataset_id="dataset-1")
+
+    chunks = provider.list_document_chunks(document_id="doc-1")
+
+    assert chunks == [
+        Chunk(
+            chunk_id="chunk-1",
+            text="Pin cao ap duoc bao hanh 8 nam.",
+            metadata={
+                "document_id": "doc-1",
+                "dataset_id": "dataset-1",
+                "source": "warranty.pdf",
+                "document_name": "warranty.pdf",
+                "file_name": "warranty.pdf",
+                "source_type": "ragflow",
+                "id": "chunk-1",
+                "content": "Pin cao ap duoc bao hanh 8 nam.",
+                "positions": [[12, 1, 2]],
+                "url": None,
+                "page": 12,
+                "section": None,
+                "similarity": None,
+                "vector_similarity": None,
+                "term_similarity": None,
+            },
+        )
+    ]
+
+
+def test_provider_retrieves_search_results_without_generating_answer() -> None:
+    provider = RAGFlowEvidenceProvider(FakeRAGFlowClient(), dataset_id="dataset-1")
+
+    results = provider.retrieve(question="Pin bao hanh bao lau?", document_ids=["doc-1"])
+
+    assert results == [
+        SearchResult(
+            chunk=Chunk(
+                chunk_id="chunk-1",
+                text="Pin cao ap duoc bao hanh 8 nam.",
+                metadata={
+                    "source": "warranty.pdf",
+                    "document_name": "warranty.pdf",
+                    "dataset_id": "dataset-1",
+                    "id": "chunk-1",
+                    "document_id": "doc-1",
+                    "content": "Pin cao ap duoc bao hanh 8 nam.",
+                    "similarity": 0.91,
+                    "positions": [[12, 1, 2]],
+                    "source_type": "ragflow",
+                    "file_name": None,
+                    "url": None,
+                    "page": 12,
+                    "section": None,
+                    "vector_similarity": None,
+                    "term_similarity": None,
+                },
+            ),
+            score=0.91,
+            rank=1,
+            retriever="ragflow",
+        )
+    ]
