@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from langchain_community.vectorstores import FAISS
-from rank_bm25 import BM25Okapi
+from rank_bm25 import BM25Okapi 
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 
@@ -22,12 +22,12 @@ class Store:
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
         """Build or refresh a BM25 index from shared chunks."""
         corpus = [chunk.text.split() for chunk in chunks]
-        store = BM25Okapi(corpus=corpus)
+        store = BM25Okapi(corpus=corpus) # type: ignore
         return store
 
     def bm25_search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """Return top-k BM25 retrieval results."""
-        scores = self._bm25_index.get_scores(query=query.split())
+        scores = self._bm25_index.get_scores(query=query.split()) # type: ignore
 
         top = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
 

@@ -62,3 +62,7 @@ python_version = "3.12"
 plugins = ["pydantic.mypy"]
 strict = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["rank_bm25.*"]
+follow_untyped_imports = true
