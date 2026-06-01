@@ -14,6 +14,8 @@ class FakeRAGFlowClient(RAGFlowClient):
             )
         )
         self.parsed_document_ids: list[str] = []
+        self.uploaded_documents: list[tuple[str, bytes, str | None]] = []
+        self.uploaded_runtime_urls: list[str] = []
 
     def upload_document(
         self,
@@ -23,7 +25,22 @@ class FakeRAGFlowClient(RAGFlowClient):
         content_type: str | None = None,
         dataset_id: str | None = None,
     ) -> dict[str, object]:
+        self.uploaded_documents.append((filename, content, content_type))
         return {"id": "doc-1", "name": filename, "dataset_id": dataset_id}
+
+    def upload_runtime_url(self, *, url: str) -> dict[str, object]:
+        self.uploaded_runtime_urls.append(url)
+        return {"id": "runtime-1", "name": "example-page.html"}
+
+    def download_runtime_attachment(
+        self,
+        *,
+        attachment_id: str,
+        ext: str = "markdown",
+    ) -> bytes:
+        assert attachment_id == "runtime-1"
+        assert ext == "markdown"
+        return b"# Parsed URL\n\nNoi dung do RAGFlow parse."
 
     def parse_documents(
         self,
@@ -46,7 +63,12 @@ class FakeRAGFlowClient(RAGFlowClient):
     ) -> dict[str, object]:
         return {
             "data": {
-                "doc": {"id": document_id, "name": "warranty.pdf", "dataset_id": dataset_id},
+                "doc": {
+                    "id": document_id,
+                    "name": "warranty.pdf",
+                    "dataset_id": dataset_id,
+                    "chunk_count": 14,
+                },
                 "chunks": [
                     {
                         "id": "chunk-1",
@@ -97,6 +119,28 @@ def test_provider_uploads_document_and_starts_parse() -> None:
     assert client.parsed_document_ids == ["doc-1"]
 
 
+def test_provider_imports_url_with_ragflow_parser_then_indexes_markdown() -> None:
+    client = FakeRAGFlowClient()
+    provider = RAGFlowEvidenceProvider(client, dataset_id="dataset-1")
+
+    uploaded = provider.import_url_document(url="https://example.com/docs/page")
+
+    assert uploaded.document_id == "doc-1"
+    assert uploaded.parse_started is True
+    assert client.uploaded_runtime_urls == ["https://example.com/docs/page"]
+    assert client.parsed_document_ids == ["doc-1"]
+    expected_content = (
+        b"Source URL: https://example.com/docs/page\n\n# Parsed URL\n\nNoi dung do RAGFlow parse."
+    )
+    assert client.uploaded_documents == [
+        (
+            "example-page.md",
+            expected_content,
+            "text/markdown; charset=utf-8",
+        )
+    ]
+
+
 def test_provider_lists_chunks_as_shared_chunks() -> None:
     provider = RAGFlowEvidenceProvider(FakeRAGFlowClient(), dataset_id="dataset-1")
 
@@ -125,6 +169,15 @@ def test_provider_lists_chunks_as_shared_chunks() -> None:
             },
         )
     ]
+
+
+def test_provider_returns_full_document_chunk_count() -> None:
+    provider = RAGFlowEvidenceProvider(FakeRAGFlowClient(), dataset_id="dataset-1")
+
+    document_chunks = provider.document_chunks(document_id="doc-1", page_size=5)
+
+    assert document_chunks.total_chunks == 14
+    assert len(document_chunks.chunks) == 1
 
 
 def test_provider_retrieves_search_results_without_generating_answer() -> None:

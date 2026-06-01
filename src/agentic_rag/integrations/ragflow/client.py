@@ -6,7 +6,7 @@ import json
 import mimetypes
 import uuid
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -53,6 +53,33 @@ class RAGFlowClient:
         if not documents:
             raise RAGFlowClientError("RAGFlow upload response did not include a document.")
         return documents[0]
+
+    def upload_runtime_url(self, *, url: str) -> JsonObject:
+        """Ask RAGFlow to fetch and parse a URL into a runtime attachment."""
+
+        payload = self._request_json(
+            "POST",
+            "/v1/document/upload_info",
+            query={"url": url},
+        )
+        attachment = payload.get("data")
+        if not isinstance(attachment, dict):
+            raise RAGFlowClientError("RAGFlow URL upload response did not include data.")
+        return attachment
+
+    def download_runtime_attachment(
+        self,
+        *,
+        attachment_id: str,
+        ext: str = "markdown",
+    ) -> bytes:
+        """Download a RAGFlow runtime attachment, usually as parsed markdown."""
+
+        return self._request_bytes(
+            "GET",
+            f"/v1/document/download/{attachment_id}",
+            query={"ext": ext},
+        )
 
     def parse_documents(
         self,
@@ -140,6 +167,30 @@ class RAGFlowClient:
             path = f"{path}?{urlencode(query)}"
 
         return self._request(method, path, body=request_body, headers=headers)
+
+    def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: Mapping[str, object] | None = None,
+    ) -> bytes:
+        if query:
+            path = f"{path}?{urlencode(query)}"
+
+        request = Request(
+            f"{self._config.base_url}{path}",
+            headers={"Authorization": f"Bearer {self._config.api_key}"},
+            method=method,
+        )
+        try:
+            with urlopen(request, timeout=self._config.timeout_seconds) as response:
+                return cast(bytes, response.read())
+        except HTTPError as exc:
+            message = exc.read().decode(errors="replace")
+            raise RAGFlowClientError(f"RAGFlow HTTP {exc.code}: {message}") from exc
+        except URLError as exc:
+            raise RAGFlowClientError(f"Cannot connect to RAGFlow: {exc.reason}") from exc
 
     def _request(
         self,
