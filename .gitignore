@@ -50,6 +50,8 @@ logs/
 
 # Common local RAG/vector store artifacts
 .cache/
+.uv-cache/
+.codegraph/
 artifacts/
 chroma/
 .chroma/

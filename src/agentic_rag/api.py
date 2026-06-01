@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agentic_rag.core.contracts import Answer, SearchResult
+from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider
 from agentic_rag.generation.answering import (
     AnswerDelta,
     AnswerDone,
@@ -29,14 +30,11 @@ from agentic_rag.generation.evidence import (
     configured_evidence_provider_name,
     evidence_for_question,
     ragflow_provider_from_env,
+    source_provider_from_env,
 )
 from agentic_rag.integrations.ragflow.client import RAGFlowClientError
 from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError
-from agentic_rag.integrations.ragflow.providers import (
-    RAGFlowDocumentChunks,
-    RAGFlowEvidenceProvider,
-)
-from agentic_rag.observability.trace import new_run_id, write_rag_trace
+from agentic_rag.observability.trace import new_run_id, write_rag_trace, write_source_trace
 from agentic_rag.runtime_env import load_local_env
 
 load_local_env()
@@ -149,9 +147,12 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
 async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
     """Upload a real PDF/source file to RAGFlow and start parsing/chunking."""
 
+    started_at = time.perf_counter()
+    run_id = new_run_id()
     content = await file.read()
     try:
-        provider = ragflow_provider_from_env()
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
         uploaded = provider.upload_document(
             filename=file.filename or "document.pdf",
             content=content,
@@ -161,9 +162,19 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    provider_label = _source_provider_label(provider_name)
+    write_source_trace(
+        run_id=run_id,
+        provider=provider_label,
+        source_type="pdf",
+        trace=uploaded.trace or {},
+        latency_ms=_latency_ms(started_at),
+    )
     return SourceUploadResponse(
-        provider="ragflow",
+        provider=provider_label,
         dataset_id=uploaded.dataset_id,
         document_id=uploaded.document_id,
         name=uploaded.name,
@@ -213,23 +224,25 @@ def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
 
 @api.get("/sources/{document_id}/chunks", response_model=SourceChunksResponse)
 def source_chunks(document_id: str) -> SourceChunksResponse:
-    """Return normalized RAGFlow chunks for one uploaded document."""
+    """Return normalized chunks for one uploaded document."""
 
     try:
-        provider = ragflow_provider_from_env()
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
     except RAGFlowConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    provider_label = _source_provider_label(provider_name)
     document_chunks = _document_chunks(provider, document_id)
     chunks = [
-        SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever="ragflow")
+        SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever=provider_label)
         for rank, chunk in enumerate(
             document_chunks.chunks,
             start=1,
         )
     ]
     return SourceChunksResponse(
-        provider="ragflow",
+        provider=provider_label,
         document_id=document_id,
         total_chunks=document_chunks.total_chunks,
         chunks=chunks,
@@ -237,13 +250,19 @@ def source_chunks(document_id: str) -> SourceChunksResponse:
 
 
 def _document_chunks(
-    provider: RAGFlowEvidenceProvider,
+    provider: SourceEvidenceProvider,
     document_id: str,
-) -> RAGFlowDocumentChunks:
+) -> SourceDocumentChunks:
     try:
         return provider.document_chunks(document_id=document_id)
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _source_provider_label(provider_name: str) -> str:
+    return "local_pdf" if provider_name == "local_pdf" else "ragflow"
 
 
 def _upload_text_document(

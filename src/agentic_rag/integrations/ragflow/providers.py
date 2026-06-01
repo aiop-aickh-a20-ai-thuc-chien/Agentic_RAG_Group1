@@ -21,6 +21,7 @@ class RAGFlowUploadedDocument:
     name: str
     dataset_id: str
     parse_started: bool
+    trace: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

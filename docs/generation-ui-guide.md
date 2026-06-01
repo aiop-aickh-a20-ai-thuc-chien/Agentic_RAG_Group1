@@ -174,11 +174,63 @@ RAGFLOW_API_KEY=...
 RAGFLOW_DATASET_ID=...
 ```
 
-Log trace JSONL:
+## Local PDF provider
+
+When the PDF modules are ready to run without RAGFlow, switch only the evidence
+provider. The API endpoints stay the same, so the frontend does not need a
+separate flow:
+
+```bash
+EVIDENCE_PROVIDER=local_pdf
+LOCAL_PDF_STORE_DIR=storage/local_pdf
+LOCAL_PDF_RETRIEVAL_TOP_K=5
+LOCAL_PDF_RETRIEVAL_CANDIDATE_K=20
+```
+
+Flow:
+
+```text
+PDF upload -> local PDF parser -> local chunks JSONL
+question -> query preprocessing
+chunks + query -> BM25 retrieval + dense retrieval
+BM25 + dense -> RRF fusion
+RRF candidates -> rerank
+final SearchResult -> build_evidence_context()
+SearchResult + evidence context -> generate_answer() of module #149
+```
+
+Use `EVIDENCE_PROVIDER=ragflow` again when comparing against the RAGFlow
+baseline.
+
+Trace log:
 
 ```bash
 RAG_TRACE_ENABLED=true
+RAG_TRACE_PROVIDER=jsonl
 RAG_TRACE_PATH=logs/rag_runs.jsonl
+```
+
+Optional LangSmith tracing:
+
+```bash
+pip install -e ".[observability]"
+RAG_TRACE_PROVIDER=langsmith
+LANGSMITH_API_KEY=...
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_PROJECT=agentic-rag-group1
+```
+
+Use `RAG_TRACE_PROVIDER=both` to keep local JSONL logs while also sending runs
+to LangSmith.
+
+Trace events:
+
+```text
+source_ingestion:
+  source_upload -> parse -> chunking -> index_write
+
+rag_answer:
+  retrieve-evidence -> generate-grounded-answer -> citation-validation
 ```
 
 ## Verification

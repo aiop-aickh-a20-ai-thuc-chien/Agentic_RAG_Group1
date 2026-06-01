@@ -60,6 +60,75 @@ class HybridFusion(Protocol):
         """Fuse sparse and dense results using Reciprocal Rank Fusion or equivalent."""
 
 
+class SourceDocumentUpload(Protocol):
+    """Result returned after a source document is accepted for indexing."""
+
+    @property
+    def document_id(self) -> str:
+        """Stable document identifier used by follow-up chunk/retrieval calls."""
+
+    @property
+    def name(self) -> str:
+        """Display name for the uploaded document."""
+
+    @property
+    def dataset_id(self) -> str:
+        """Provider dataset or namespace identifier."""
+
+    @property
+    def parse_started(self) -> bool:
+        """Whether ingestion/chunking was started by the provider."""
+
+    @property
+    def trace(self) -> dict[str, object] | None:
+        """Provider-specific ingestion trace payload."""
+
+
+class SourceDocumentChunks(Protocol):
+    """Chunks for one source document plus its full chunk count."""
+
+    @property
+    def chunks(self) -> list[Chunk]:
+        """The returned page or collection of normalized chunks."""
+
+    @property
+    def total_chunks(self) -> int:
+        """Total chunks available for this document before pagination."""
+
+
+class SourceEvidenceProvider(Protocol):
+    """Combined source upload, chunk inspection, and retrieval provider."""
+
+    def upload_document(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str | None = None,
+        start_parse: bool = True,
+    ) -> SourceDocumentUpload:
+        """Upload or ingest a source document."""
+
+    def document_chunks(
+        self,
+        *,
+        document_id: str,
+        page: int = 1,
+        page_size: int | None = None,
+        keywords: str | None = None,
+    ) -> SourceDocumentChunks:
+        """Return chunks for one source document."""
+
+    def retrieve(
+        self,
+        *,
+        question: str,
+        document_ids: list[str] | None = None,
+        page_size: int | None = None,
+    ) -> list[SearchResult]:
+        """Retrieve evidence chunks for generation."""
+
+
 class Reranker(Protocol):
     """Optional reranking over fused candidates."""
 
