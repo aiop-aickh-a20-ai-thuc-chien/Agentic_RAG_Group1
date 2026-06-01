@@ -36,7 +36,9 @@ def test_answer_supports_found_and_not_found_statuses() -> None:
     citation = Citation(source="vinfast_warranty.pdf", chunk_id="pdf_001_p12_c01", page=12)
     answered = Answer(answer="Pin duoc bao hanh 8 nam.", citations=[citation], status="answered")
     not_found = Answer(
-        answer="Khong co trong tai lieu duoc cung cap.", citations=[], status="not_found"
+        answer="Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp.",
+        citations=[],
+        status="not_found",
     )
 
     assert answered.citations == [citation]

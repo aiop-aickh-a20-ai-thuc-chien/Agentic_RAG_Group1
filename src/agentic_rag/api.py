@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Iterator
+from html.parser import HTMLParser
+from urllib.error import HTTPError as UrlHTTPError
+from urllib.error import URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult
+from agentic_rag.core.contracts import Answer, SearchResult
 from agentic_rag.generation.answering import (
     AnswerDelta,
     AnswerDone,
@@ -26,7 +32,10 @@ from agentic_rag.generation.evidence import (
 )
 from agentic_rag.integrations.ragflow.client import RAGFlowClientError
 from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError
-from agentic_rag.integrations.ragflow.providers import RAGFlowEvidenceProvider
+from agentic_rag.integrations.ragflow.providers import (
+    RAGFlowDocumentChunks,
+    RAGFlowEvidenceProvider,
+)
 from agentic_rag.observability.trace import new_run_id, write_rag_trace
 from agentic_rag.runtime_env import load_local_env
 
@@ -56,11 +65,25 @@ class SourceUploadResponse(BaseModel):
     parse_started: bool
 
 
+class SourceUrlRequest(BaseModel):
+    """Request body for importing a URL as a RAGFlow source document."""
+
+    url: str = Field(min_length=1, max_length=2048)
+
+
+class SourceTextRequest(BaseModel):
+    """Request body for importing raw text as a RAGFlow source document."""
+
+    title: str | None = Field(default=None, max_length=160)
+    text: str = Field(min_length=1)
+
+
 class SourceChunksResponse(BaseModel):
     """Normalized chunks for one uploaded source."""
 
     provider: str
     document_id: str
+    total_chunks: int
     chunks: list[SearchResult]
 
 
@@ -96,6 +119,17 @@ def answer_question(request: AnswerRequest) -> Answer:
 @api.post("/answer/stream")
 def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
     """Stream generated answer text and citations as server-sent events."""
+
+    small_talk_answer = _small_talk_answer(request.question)
+    if small_talk_answer is not None:
+        return StreamingResponse(
+            _stream_direct_answer_events(
+                question=request.question,
+                answer=small_talk_answer,
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
 
     evidence_chunks, evidence_context = _evidence_for_request(request)
     provider = _provider_name(request)
@@ -137,6 +171,46 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
     )
 
 
+@api.post("/sources/url", response_model=SourceUploadResponse)
+def upload_url_source(request: SourceUrlRequest) -> SourceUploadResponse:
+    """Fetch a URL, normalize its text, and upload it to RAGFlow as a source."""
+
+    url = _validated_http_url(request.url)
+    try:
+        html = _fetch_url_text(url)
+    except (UrlHTTPError, URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot fetch URL: {exc}") from exc
+
+    text = _html_to_text(html)
+    if not text:
+        raise HTTPException(status_code=422, detail="URL did not contain readable text.")
+
+    filename = _filename_for_url(url)
+    content = f"Source URL: {url}\n\n{text}".encode()
+    return _upload_text_document(
+        filename=filename,
+        content=content,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+@api.post("/sources/text", response_model=SourceUploadResponse)
+def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
+    """Upload raw user-provided text to RAGFlow as a source document."""
+
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Text source cannot be empty.")
+
+    title = request.title.strip() if request.title else "van-ban-nguoi-dung"
+    filename = _safe_text_filename(title)
+    return _upload_text_document(
+        filename=filename,
+        content=text.encode(),
+        content_type="text/plain; charset=utf-8",
+    )
+
+
 @api.get("/sources/{document_id}/chunks", response_model=SourceChunksResponse)
 def source_chunks(document_id: str) -> SourceChunksResponse:
     """Return normalized RAGFlow chunks for one uploaded document."""
@@ -146,29 +220,75 @@ def source_chunks(document_id: str) -> SourceChunksResponse:
     except RAGFlowConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    document_chunks = _document_chunks(provider, document_id)
     chunks = [
         SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever="ragflow")
         for rank, chunk in enumerate(
-            _list_document_chunks(provider, document_id),
+            document_chunks.chunks,
             start=1,
         )
     ]
-    return SourceChunksResponse(provider="ragflow", document_id=document_id, chunks=chunks)
+    return SourceChunksResponse(
+        provider="ragflow",
+        document_id=document_id,
+        total_chunks=document_chunks.total_chunks,
+        chunks=chunks,
+    )
 
 
-def _list_document_chunks(
+def _document_chunks(
     provider: RAGFlowEvidenceProvider,
     document_id: str,
-) -> list[Chunk]:
+) -> RAGFlowDocumentChunks:
     try:
-        return provider.list_document_chunks(document_id=document_id)
+        return provider.document_chunks(document_id=document_id)
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _upload_text_document(
+    *,
+    filename: str,
+    content: bytes,
+    content_type: str,
+) -> SourceUploadResponse:
+    try:
+        provider = ragflow_provider_from_env()
+        uploaded = provider.upload_document(
+            filename=filename,
+            content=content,
+            content_type=content_type,
+        )
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RAGFlowClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return SourceUploadResponse(
+        provider="ragflow",
+        dataset_id=uploaded.dataset_id,
+        document_id=uploaded.document_id,
+        name=uploaded.name,
+        parse_started=uploaded.parse_started,
+    )
 
 
 def _answer_for_request(request: AnswerRequest) -> Answer:
     started_at = time.perf_counter()
     run_id = new_run_id()
+    small_talk_answer = _small_talk_answer(request.question)
+    if small_talk_answer is not None:
+        write_rag_trace(
+            run_id=run_id,
+            provider="small_talk",
+            question=request.question,
+            evidence_chunks=[],
+            evidence_context="",
+            answer=small_talk_answer,
+            latency_ms=_latency_ms(started_at),
+        )
+        return small_talk_answer
+
     evidence_chunks, evidence_context = _evidence_for_request(request)
     answer = generate_answer(
         question=request.question,
@@ -185,6 +305,144 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         latency_ms=_latency_ms(started_at),
     )
     return answer
+
+
+def _small_talk_answer(question: str) -> Answer | None:
+    normalized = _normalized_small_talk_text(question)
+    if not normalized:
+        return None
+
+    greeting_phrases = {
+        "alo",
+        "chao",
+        "chao ban",
+        "hello",
+        "hey",
+        "hi",
+        "xin chao",
+        "xin chao ban",
+    }
+    thanks_phrases = {
+        "cam on",
+        "cam on ban",
+        "ok cam on",
+        "thanks",
+        "thank you",
+    }
+    help_phrases = {
+        "ban co the lam gi",
+        "ban giup duoc gi",
+        "ban la ai",
+        "help",
+        "huong dan",
+        "tro giup",
+    }
+
+    if normalized in greeting_phrases:
+        return Answer(
+            answer=(
+                "Xin chào! Bạn có thể tải tài liệu lên, chọn nguồn rồi đặt câu hỏi. "
+                "Mình sẽ trả lời dựa trên tài liệu và kèm trích dẫn khi có bằng chứng."
+            ),
+            citations=[],
+            status="answered",
+        )
+
+    if normalized in thanks_phrases:
+        return Answer(
+            answer="Rất vui được hỗ trợ. Khi cần, bạn cứ đặt câu hỏi về tài liệu đã chọn.",
+            citations=[],
+            status="answered",
+        )
+
+    if normalized in help_phrases:
+        return Answer(
+            answer=(
+                "Mình là trợ lý hỏi đáp tài liệu. Bạn có thể tải PDF, nhập URL hoặc văn bản, "
+                "sau đó hỏi về nội dung nguồn đã chọn để nhận câu trả lời có trích dẫn."
+            ),
+            citations=[],
+            status="answered",
+        )
+
+    return None
+
+
+def _normalized_small_talk_text(text: str) -> str:
+    replacements = str.maketrans(
+        {
+            "à": "a",
+            "á": "a",
+            "ả": "a",
+            "ã": "a",
+            "ạ": "a",
+            "ă": "a",
+            "ằ": "a",
+            "ắ": "a",
+            "ẳ": "a",
+            "ẵ": "a",
+            "ặ": "a",
+            "â": "a",
+            "ầ": "a",
+            "ấ": "a",
+            "ẩ": "a",
+            "ẫ": "a",
+            "ậ": "a",
+            "è": "e",
+            "é": "e",
+            "ẻ": "e",
+            "ẽ": "e",
+            "ẹ": "e",
+            "ê": "e",
+            "ề": "e",
+            "ế": "e",
+            "ể": "e",
+            "ễ": "e",
+            "ệ": "e",
+            "ì": "i",
+            "í": "i",
+            "ỉ": "i",
+            "ĩ": "i",
+            "ị": "i",
+            "ò": "o",
+            "ó": "o",
+            "ỏ": "o",
+            "õ": "o",
+            "ọ": "o",
+            "ô": "o",
+            "ồ": "o",
+            "ố": "o",
+            "ổ": "o",
+            "ỗ": "o",
+            "ộ": "o",
+            "ơ": "o",
+            "ờ": "o",
+            "ớ": "o",
+            "ở": "o",
+            "ỡ": "o",
+            "ợ": "o",
+            "ù": "u",
+            "ú": "u",
+            "ủ": "u",
+            "ũ": "u",
+            "ụ": "u",
+            "ư": "u",
+            "ừ": "u",
+            "ứ": "u",
+            "ử": "u",
+            "ữ": "u",
+            "ự": "u",
+            "ỳ": "y",
+            "ý": "y",
+            "ỷ": "y",
+            "ỹ": "y",
+            "ỵ": "y",
+            "đ": "d",
+        }
+    )
+    normalized = text.strip().lower().translate(replacements)
+    normalized = re.sub(r"[^a-z0-9\s]+", " ", normalized)
+    return _collapse_whitespace(normalized)
 
 
 def _evidence_for_request(request: AnswerRequest) -> tuple[list[SearchResult], str]:
@@ -239,6 +497,22 @@ def _stream_answer_events(
             )
 
 
+def _stream_direct_answer_events(*, question: str, answer: Answer) -> Iterator[str]:
+    started_at = time.perf_counter()
+    run_id = new_run_id()
+    yield _sse_event("answer_delta", {"text": answer.answer})
+    yield _sse_event("done", answer.model_dump())
+    write_rag_trace(
+        run_id=run_id,
+        provider="small_talk",
+        question=question,
+        evidence_chunks=[],
+        evidence_context="",
+        answer=answer,
+        latency_ms=_latency_ms(started_at),
+    )
+
+
 def _sse_event(event: str, data: dict[str, object]) -> str:
     payload = json.dumps(data, ensure_ascii=False)
     return f"event: {event}\ndata: {payload}\n\n"
@@ -246,3 +520,87 @@ def _sse_event(event: str, data: dict[str, object]) -> str:
 
 def _latency_ms(started_at: float) -> int:
     return int((time.perf_counter() - started_at) * 1000)
+
+
+def _validated_http_url(raw_url: str) -> str:
+    url = raw_url.strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
+    return url
+
+
+def _fetch_url_text(url: str) -> str:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "AgenticRAG/1.0 (+https://local.agentic-rag)",
+            "Accept": "text/html,text/plain;q=0.9,*/*;q=0.8",
+        },
+        method="GET",
+    )
+    with urlopen(request, timeout=20) as response:
+        raw: bytes = response.read()
+        content_type: str = response.headers.get_content_charset() or "utf-8"
+    return raw.decode(content_type, errors="replace")
+
+
+def _html_to_text(raw: str) -> str:
+    parser = _ReadableHTMLParser()
+    parser.feed(raw)
+    text = parser.text()
+    return text or _collapse_whitespace(raw)
+
+
+def _filename_for_url(url: str) -> str:
+    parsed = urlparse(url)
+    host = parsed.netloc.replace(":", "-")
+    path = parsed.path.strip("/").replace("/", "-")
+    stem = f"{host}-{path}" if path else host
+    return _safe_text_filename(stem)
+
+
+def _safe_text_filename(title: str) -> str:
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", title.strip()).strip("-._")
+    if not stem:
+        stem = "source"
+    return f"{stem[:96]}.txt"
+
+
+def _collapse_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+class _ReadableHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: list[str] = []
+        self._ignored_depth = 0
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        if tag in {"script", "style", "noscript", "svg"}:
+            self._ignored_depth += 1
+        if tag in {"p", "br", "li", "h1", "h2", "h3", "h4", "tr", "section", "article"}:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "noscript", "svg"} and self._ignored_depth:
+            self._ignored_depth -= 1
+        if tag in {"p", "li", "h1", "h2", "h3", "h4", "tr", "section", "article"}:
+            self._parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored_depth:
+            return
+        stripped = _collapse_whitespace(data)
+        if stripped:
+            self._parts.append(stripped)
+            self._parts.append(" ")
+
+    def text(self) -> str:
+        lines = [_collapse_whitespace(line) for line in "".join(self._parts).splitlines()]
+        return "\n".join(line for line in lines if line)
