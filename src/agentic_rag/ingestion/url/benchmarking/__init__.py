@@ -1,13 +1,13 @@
 """Benchmark helpers for URL and HTML ingestion."""
 
-from agentic_rag.ingestion.url.benchmarking.famous_benchmark import (
+from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     BenchmarkCase,
     BenchmarkReport,
     BenchmarkResult,
     ParserOutput,
     parse_html_builtin,
     report_to_dict,
-    run_famous_benchmark,
+    run_custom_benchmark,
 )
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "ParserOutput",
     "parse_html_builtin",
     "report_to_dict",
-    "run_famous_benchmark",
+    "run_custom_benchmark",
 ]

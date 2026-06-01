@@ -108,7 +108,7 @@ class _MainContentParser(HTMLParser):
         return _normalize_space(" ".join(self._text_parts))
 
 
-FAMOUS_HTML_CASES: tuple[BenchmarkCase, ...] = (
+CUSTOM_HTML_CASES: tuple[BenchmarkCase, ...] = (
     BenchmarkCase(
         case_id="article_with_navigation_noise",
         html="""
@@ -159,9 +159,9 @@ def parse_html_builtin(html: str) -> ParserOutput:
     )
 
 
-def run_famous_benchmark(
+def run_custom_benchmark(
     parser_name: str = "builtin",
-    cases: tuple[BenchmarkCase, ...] = FAMOUS_HTML_CASES,
+    cases: tuple[BenchmarkCase, ...] = CUSTOM_HTML_CASES,
 ) -> BenchmarkReport:
     """Run local benchmark cases for the selected parser."""
 
@@ -199,14 +199,14 @@ def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the famous local HTML parser benchmark from the command line."""
+    """Run the custom local HTML parser benchmark from the command line."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parser", default="builtin", choices=["builtin"])
     parser.add_argument("--output", type=Path, help="Optional JSON output file.")
     args = parser.parse_args(argv)
 
-    report = run_famous_benchmark(parser_name=args.parser)
+    report = run_custom_benchmark(parser_name=args.parser)
     payload = json.dumps(report_to_dict(report), ensure_ascii=False, indent=2)
     if args.output is not None:
         args.output.write_text(payload + "\n", encoding="utf-8")

@@ -37,10 +37,10 @@ def test_parse_html_cli_emits_parser_output(
     assert "Navigation noise" not in payload["text"]
 
 
-def test_famous_cli_writes_json_output_file(tmp_path: Path) -> None:
+def test_custom_cli_writes_json_output_file(tmp_path: Path) -> None:
     output_file = tmp_path / "benchmark.json"
 
-    exit_code = cli.main(["famous", "--output", str(output_file)])
+    exit_code = cli.main(["custom", "--output", str(output_file)])
 
     assert exit_code == 0
     payload = json.loads(output_file.read_text(encoding="utf-8"))

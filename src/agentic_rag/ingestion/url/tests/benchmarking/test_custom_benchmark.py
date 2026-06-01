@@ -1,9 +1,9 @@
 import json
 
-from agentic_rag.ingestion.url.benchmarking.famous_benchmark import (
+from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     parse_html_builtin,
     report_to_dict,
-    run_famous_benchmark,
+    run_custom_benchmark,
 )
 
 
@@ -30,8 +30,8 @@ def test_builtin_html_parser_removes_noise_and_keeps_sections() -> None:
     assert "Footer links" not in output.text
 
 
-def test_famous_benchmark_report_is_json_serializable() -> None:
-    report = run_famous_benchmark()
+def test_custom_benchmark_report_is_json_serializable() -> None:
+    report = run_custom_benchmark()
     payload = report_to_dict(report)
 
     assert report.average_score == 1.0

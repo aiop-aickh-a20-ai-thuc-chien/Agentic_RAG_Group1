@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agentic_rag.ingestion.url.benchmarking.famous_benchmark import (
+from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     parse_html_builtin,
     report_to_dict,
-    run_famous_benchmark,
+    run_custom_benchmark,
 )
 
 
@@ -20,12 +20,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    famous_parser = subparsers.add_parser(
-        "famous",
-        help="Run built-in famous-style HTML parser benchmark cases.",
+    custom_parser = subparsers.add_parser(
+        "custom",
+        help="Run built-in custom HTML parser benchmark cases.",
     )
-    famous_parser.add_argument("--parser", default="builtin", choices=["builtin"])
-    famous_parser.add_argument("--output", type=Path, help="Optional JSON output file.")
+    custom_parser.add_argument("--parser", default="builtin", choices=["builtin"])
+    custom_parser.add_argument("--output", type=Path, help="Optional JSON output file.")
 
     parse_parser = subparsers.add_parser(
         "parse-html",
@@ -36,8 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     parse_parser.add_argument("--output", type=Path, help="Optional JSON output file.")
 
     args = parser.parse_args(argv)
-    if args.command == "famous":
-        payload = report_to_dict(run_famous_benchmark(parser_name=args.parser))
+    if args.command == "custom":
+        payload = report_to_dict(run_custom_benchmark(parser_name=args.parser))
     elif args.command == "parse-html":
         payload = _parse_html_file(args.html_file, args.source_url)
     else:

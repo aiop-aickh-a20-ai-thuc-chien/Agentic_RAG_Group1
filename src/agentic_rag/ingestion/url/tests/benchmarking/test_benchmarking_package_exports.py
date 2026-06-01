@@ -1,12 +1,12 @@
 import agentic_rag.ingestion.url.benchmarking as benchmarking_package
-from agentic_rag.ingestion.url.benchmarking.famous_benchmark import (
+from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     BenchmarkCase,
     BenchmarkReport,
     BenchmarkResult,
     ParserOutput,
     parse_html_builtin,
     report_to_dict,
-    run_famous_benchmark,
+    run_custom_benchmark,
 )
 
 
@@ -18,7 +18,7 @@ def test_benchmarking_package_re_exports_public_helpers() -> None:
         "ParserOutput",
         "parse_html_builtin",
         "report_to_dict",
-        "run_famous_benchmark",
+        "run_custom_benchmark",
     ]
     assert benchmarking_package.BenchmarkCase is BenchmarkCase
     assert benchmarking_package.BenchmarkReport is BenchmarkReport
@@ -26,4 +26,4 @@ def test_benchmarking_package_re_exports_public_helpers() -> None:
     assert benchmarking_package.ParserOutput is ParserOutput
     assert benchmarking_package.parse_html_builtin is parse_html_builtin
     assert benchmarking_package.report_to_dict is report_to_dict
-    assert benchmarking_package.run_famous_benchmark is run_famous_benchmark
+    assert benchmarking_package.run_custom_benchmark is run_custom_benchmark

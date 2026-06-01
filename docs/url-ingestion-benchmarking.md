@@ -11,13 +11,13 @@ src/agentic_rag/ingestion/url/benchmarking
 Run deterministic local HTML parser benchmark cases:
 
 ```bash
-uv run python -m agentic_rag.ingestion.url.benchmarking.famous_benchmark
+uv run python -m agentic_rag.ingestion.url.benchmarking.custom_benchmark
 ```
 
 Write the benchmark output to JSON:
 
 ```bash
-uv run python -m agentic_rag.ingestion.url.benchmarking.famous_benchmark --output benchmark.json
+uv run python -m agentic_rag.ingestion.url.benchmarking.custom_benchmark --output benchmark.json
 ```
 
 ## Local HTML Parser Output
