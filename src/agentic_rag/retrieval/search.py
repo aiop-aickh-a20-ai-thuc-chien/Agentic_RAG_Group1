@@ -67,7 +67,7 @@ class Store:
         for i, (doc, score) in enumerate(search_result):
             result.append(
                 SearchResult(
-                    chunk=self._chunks[self._vector_index._str_to_u64[doc.id]-1],
+                    chunk=self._chunks[self._vector_index._str_to_u64[doc.id] - 1],  # type: ignore
                     score=score,
                     rank=i + 1,
                     retriever="dense",
