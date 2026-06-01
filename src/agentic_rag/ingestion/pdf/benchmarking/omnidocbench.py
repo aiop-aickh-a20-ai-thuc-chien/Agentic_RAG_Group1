@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,10 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 OmniDocBenchBackend = Literal["docker", "local"]
 OmniDocBenchMatchMethod = Literal["quick_match", "simple_match", "no_split"]
 
-_DOCKER_GT_DIR = Path("/workspace/input/ground_truth")
-_DOCKER_PREDICTIONS_DIR = Path("/workspace/input/predictions")
-_DOCKER_CONFIG_DIR = Path("/workspace/config")
-_DOCKER_RESULT_DIR = Path("/workspace/OmniDocBench/result")
+_DOCKER_GT_DIR = PurePosixPath("/workspace/input/ground_truth")
+_DOCKER_PREDICTIONS_DIR = PurePosixPath("/workspace/input/predictions")
+_DOCKER_CONFIG_DIR = PurePosixPath("/workspace/config")
+_DOCKER_RESULT_DIR = PurePosixPath("/workspace/OmniDocBench/result")
 
 
 class _OmniDocBenchModel(BaseModel):
@@ -148,13 +148,13 @@ def _render_end2end_config(run_config: OmniDocBenchRunConfig) -> str:
     )
 
 
-def _ground_truth_path_for_config(run_config: OmniDocBenchRunConfig) -> Path:
+def _ground_truth_path_for_config(run_config: OmniDocBenchRunConfig) -> Path | PurePosixPath:
     if run_config.backend == "docker":
         return _DOCKER_GT_DIR / run_config.ground_truth_path.name
     return run_config.ground_truth_path
 
 
-def _predictions_dir_for_config(run_config: OmniDocBenchRunConfig) -> Path:
+def _predictions_dir_for_config(run_config: OmniDocBenchRunConfig) -> Path | PurePosixPath:
     if run_config.backend == "docker":
         return _DOCKER_PREDICTIONS_DIR
     return run_config.predictions_dir
@@ -214,5 +214,5 @@ def _absolute(path: Path) -> Path:
     return path.resolve(strict=False)
 
 
-def _yaml_string(path: Path) -> str:
+def _yaml_string(path: Path | PurePosixPath) -> str:
     return json.dumps(str(path), ensure_ascii=False)
