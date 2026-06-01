@@ -59,3 +59,49 @@ def sample_answer() -> Answer:
         ],
         status="answered",
     )
+
+
+def sample_ragflow_chunk_payload() -> dict[str, object]:
+    """Return a RAGFlow-like chunk payload for adapter tests and demos."""
+
+    return {
+        "id": "ragflow_pdf_001_p12_c01",
+        "content": "Pin cao ap duoc bao hanh 8 nam hoac 160.000 km.",
+        "document_name": "vinfast_warranty.pdf",
+        "page": 12,
+        "metadata": {
+            "source": "vinfast_warranty.pdf",
+            "source_type": "ragflow",
+            "file_name": "vinfast_warranty.pdf",
+            "url": None,
+            "page": 12,
+            "section": "warranty",
+        },
+    }
+
+
+def sample_ragflow_hit_payload() -> dict[str, object]:
+    """Return a RAGFlow-like retrieval hit payload."""
+
+    return {
+        "rank": 1,
+        "score": 0.93,
+        "chunk": sample_ragflow_chunk_payload(),
+    }
+
+
+def sample_ragflow_answer_payload() -> dict[str, object]:
+    """Return a RAGFlow-like answer payload."""
+
+    return {
+        "answer": "Pin cao ap duoc bao hanh 8 nam hoac 160.000 km.",
+        "citations": [
+            {
+                "source": "vinfast_warranty.pdf",
+                "chunk_id": "ragflow_pdf_001_p12_c01",
+                "page": 12,
+                "section": "warranty",
+            }
+        ],
+        "status": "answered",
+    }

@@ -1,0 +1,3 @@
+# Runtime install path for venv/pip users.
+# The actual project dependencies are declared in pyproject.toml.
+-e .
