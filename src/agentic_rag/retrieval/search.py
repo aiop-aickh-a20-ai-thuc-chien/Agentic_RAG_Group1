@@ -15,10 +15,9 @@ class Store:
         self._bm25_index = self._build_bm25_index(chunks)
 
     def _preprocess_query(self, query: str) -> dict[str, str]:
-        """Normalize a raw user query before retrieval.""" 
-    
-        raise NotImplementedError("preprocess_query is scaffolded for retrieval.")
+        """Normalize a raw user query before retrieval."""
 
+        raise NotImplementedError("preprocess_query is scaffolded for retrieval.")
 
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
         """Build or refresh a BM25 index from shared chunks."""
@@ -30,20 +29,13 @@ class Store:
         """Return top-k BM25 retrieval results."""
         scores = self._bm25_index.get_scores(query=query.split())
 
-        top = sorted(
-            range(len(scores)),
-            key=lambda i: scores[i],
-            reverse=True
-        )[:top_k]
+        top = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
 
         result = []
         for i, idx in enumerate(top):
-            result.append(SearchResult(
-                chunk=self._chunks[i],
-                score=scores[idx],
-                rank=i+1,
-                retriever="bm25"
-            ))
+            result.append(
+                SearchResult(chunk=self._chunks[i], score=scores[idx], rank=i + 1, retriever="bm25")
+            )
 
         return result
 
@@ -51,22 +43,16 @@ class Store:
         """Build or refresh a dense vector index from shared chunks."""
         from dotenv import load_dotenv
         from langchain_openai import OpenAIEmbeddings
+
         load_dotenv()
 
         dimensions = 1536
-        embedding = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            dimensions=dimensions
-        )
+        embedding = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=dimensions)
 
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
 
-        store = FAISS.from_texts(
-            texts=chunks_list,
-            embedding=embedding,
-            metadatas=metadatas
-        )
+        store = FAISS.from_texts(texts=chunks_list, embedding=embedding, metadatas=metadatas)
 
         return store
 
@@ -77,18 +63,21 @@ class Store:
 
         result = []
         for i, (doc, score) in enumerate(search_result):
-            result.append(SearchResult(
-                chunk=Chunk(
-                    chunk_id=doc.metadata["chunk_id"],
-                    text=doc.page_content,
-                    metadata=doc.metadata["metadata"]
-                ),
-                score=score,
-                rank=i+1,
-                retriever="dense"
-            ))
+            result.append(
+                SearchResult(
+                    chunk=Chunk(
+                        chunk_id=doc.metadata["chunk_id"],
+                        text=doc.page_content,
+                        metadata=doc.metadata["metadata"],
+                    ),
+                    score=score,
+                    rank=i + 1,
+                    retriever="dense",
+                )
+            )
 
         return result
+
 
 if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
