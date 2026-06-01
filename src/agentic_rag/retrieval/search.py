@@ -2,52 +2,76 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 
+DEFAULT_DENSE_EMBEDDING_MODEL = "text-embedding-3-small"
+DEFAULT_DENSE_EMBEDDING_DIMENSIONS = 1536
+
 
 class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
-        self._vector_index = self._build_vector_index(chunks)
         self._bm25_index = self._build_bm25_index(chunks)
+        self._vector_index: TurboQuantVectorStore | None = None
 
-    def _preprocess_query(self, query: str) -> dict[str, str]:
+    def preprocess_query(self, query: str) -> dict[str, str]:
         """Normalize a raw user query before retrieval."""
 
-        raise NotImplementedError("preprocess_query is scaffolded for retrieval.")
+        normalized = _normalize_text(query)
+        return {
+            "raw": query,
+            "normalized": normalized,
+            "tokens": " ".join(_tokenize(normalized)),
+        }
 
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
         """Build or refresh a BM25 index from shared chunks."""
-        corpus = [chunk.text.split() for chunk in chunks]
-        store = BM25Okapi(corpus=corpus)  # type: ignore
+        corpus = [_tokenize(chunk.text) for chunk in chunks]
+        store = BM25Okapi(corpus=corpus)  # type: ignore[no-untyped-call]
         return store
 
     def bm25_search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """Return top-k BM25 retrieval results."""
-        scores = self._bm25_index.get_scores(query=query.split())  # type: ignore
+        if top_k <= 0 or not self._chunks:
+            return []
 
-        top = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return []
 
-        result = []
-        for i, idx in enumerate(top):
-            result.append(
-                SearchResult(chunk=self._chunks[i], score=scores[idx], rank=i + 1, retriever="bm25")
+        scores = self._bm25_index.get_scores(query_tokens)  # type: ignore[no-untyped-call]
+        top_indexes = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)[
+            :top_k
+        ]
+
+        results = []
+        for rank, chunk_index in enumerate(top_indexes, start=1):
+            score = float(scores[chunk_index])
+            results.append(
+                SearchResult(
+                    chunk=self._chunks[chunk_index],
+                    score=score,
+                    rank=rank,
+                    retriever="bm25",
+                )
             )
 
-        return result
+        return results
 
     def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
-        from dotenv import load_dotenv
         from langchain_openai import OpenAIEmbeddings
 
-        load_dotenv()
-
-        dimensions = 1536
-        embedding = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=dimensions)
+        embedding = OpenAIEmbeddings(
+            model=DEFAULT_DENSE_EMBEDDING_MODEL,
+            dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
+        )
 
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
@@ -60,14 +84,23 @@ class Store:
 
     def dense_search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """Return top-k dense retrieval results."""
-        # query = self._preprocess_query(query)
+        if top_k <= 0 or not self._chunks:
+            return []
+
+        if self._vector_index is None:
+            self._vector_index = self._build_vector_index(self._chunks)
+
         search_result = self._vector_index.similarity_search_with_score(query=query, k=top_k)
 
         result = []
         for i, (doc, score) in enumerate(search_result):
             result.append(
                 SearchResult(
-                    chunk=self._chunks[self._vector_index._str_to_u64[doc.id] - 1],  # type: ignore
+                    chunk=_chunk_from_dense_document(
+                        doc=doc,
+                        vector_index=self._vector_index,
+                        chunks=self._chunks,
+                    ),
                     score=score,
                     rank=i + 1,
                     retriever="dense",
@@ -75,6 +108,58 @@ class Store:
             )
 
         return result
+
+
+def dense_embedding_metadata() -> dict[str, object]:
+    """Return the dense retrieval embedding configuration used by Store."""
+
+    return {
+        "provider": "openai",
+        "library": "langchain-openai",
+        "model": DEFAULT_DENSE_EMBEDDING_MODEL,
+        "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
+        "vector_store": "turbovec",
+    }
+
+
+def _chunk_from_dense_document(
+    *,
+    doc: object,
+    vector_index: TurboQuantVectorStore,
+    chunks: list[Chunk],
+) -> Chunk:
+    metadata = getattr(doc, "metadata", {})
+    if isinstance(metadata, dict) and "chunk_id" in metadata:
+        nested_metadata = metadata.get("metadata")
+        return Chunk(
+            chunk_id=str(metadata["chunk_id"]),
+            text=str(getattr(doc, "page_content", "")),
+            metadata=nested_metadata if isinstance(nested_metadata, dict) else {},
+        )
+
+    doc_id = getattr(doc, "id", None)
+    str_to_u64 = getattr(vector_index, "_str_to_u64", {})
+    if doc_id is not None and doc_id in str_to_u64:
+        chunk_index = int(str_to_u64[doc_id]) - 1
+        if 0 <= chunk_index < len(chunks):
+            return chunks[chunk_index]
+
+    return Chunk(
+        chunk_id=str(doc_id or "dense_unknown"),
+        text=str(getattr(doc, "page_content", "")),
+        metadata={},
+    )
+
+
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"\w+", _normalize_text(text))
+
+
+def _normalize_text(text: str) -> str:
+    lowered = text.lower().replace("\u0111", "d").replace("\u0110", "d")
+    normalized = unicodedata.normalize("NFKD", lowered)
+    without_accents = "".join(char for char in normalized if not unicodedata.combining(char))
+    return " ".join(without_accents.split())
 
 
 if __name__ == "__main__":

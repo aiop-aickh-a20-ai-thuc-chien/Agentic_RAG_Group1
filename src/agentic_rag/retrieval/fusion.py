@@ -76,19 +76,68 @@ def rerank(
 ) -> list[SearchResult]:
     """Rerank fused candidates with a cross-encoder when configured."""
 
+    results, _metadata = rerank_with_metadata(query=query, candidates=candidates, top_k=top_k)
+    return results
+
+
+def rerank_with_metadata(
+    query: str,
+    candidates: list[SearchResult],
+    top_k: int = 5,
+) -> tuple[list[SearchResult], dict[str, object]]:
+    """Rerank fused candidates and return the actual strategy used."""
+
     if top_k < 0:
         raise ValueError("top_k must be >= 0 for rerank.")
     if top_k == 0:
-        return []
+        return [], rerank_metadata()
 
     unique_candidates = list(_deduplicate_by_best_rank(candidates).values())
-    if _configured_rerank_provider() == RERANK_PROVIDER_CROSS_ENCODER and query.strip():
+    provider = _configured_rerank_provider()
+    if provider == RERANK_PROVIDER_CROSS_ENCODER and query.strip():
+        model_name = _configured_cross_encoder_model_name()
         try:
-            return _cross_encoder_rerank(query=query, candidates=unique_candidates, top_k=top_k)
-        except (ImportError, RuntimeError, OSError):
-            return _score_based_rerank(unique_candidates, top_k=top_k)
+            return _cross_encoder_rerank(
+                query=query,
+                candidates=unique_candidates,
+                top_k=top_k,
+            ), {
+                "configured_provider": provider,
+                "used_provider": RERANK_PROVIDER_CROSS_ENCODER,
+                "model": model_name,
+                "library": "sentence-transformers",
+            }
+        except (ImportError, RuntimeError, OSError) as exc:
+            return _score_based_rerank(unique_candidates, top_k=top_k), {
+                "configured_provider": provider,
+                "used_provider": RERANK_PROVIDER_SCORE,
+                "fallback_reason": f"{type(exc).__name__}: {exc}",
+                "fallback_provider": RERANK_PROVIDER_SCORE,
+                "requested_model": model_name,
+                "method": "score_based_sort",
+            }
 
-    return _score_based_rerank(unique_candidates, top_k=top_k)
+    return _score_based_rerank(unique_candidates, top_k=top_k), {
+        "configured_provider": provider,
+        "used_provider": RERANK_PROVIDER_SCORE,
+        "method": "score_based_sort",
+    }
+
+
+def rerank_metadata() -> dict[str, object]:
+    """Return the rerank strategy currently selected by environment config."""
+
+    provider = _configured_rerank_provider()
+    metadata: dict[str, object] = {
+        "provider": provider,
+        "fallback_provider": RERANK_PROVIDER_SCORE,
+    }
+    if provider == RERANK_PROVIDER_CROSS_ENCODER:
+        metadata["model"] = _configured_cross_encoder_model_name()
+        metadata["library"] = "sentence-transformers"
+    else:
+        metadata["method"] = "score_based_sort"
+    return metadata
 
 
 def _score_based_rerank(candidates: list[SearchResult], *, top_k: int) -> list[SearchResult]:

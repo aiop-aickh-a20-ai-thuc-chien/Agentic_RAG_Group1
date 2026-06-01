@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agentic_rag.core.contracts import Answer, SearchResult
+from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider
 from agentic_rag.generation.answering import (
     AnswerDelta,
     AnswerDone,
@@ -29,14 +30,12 @@ from agentic_rag.generation.evidence import (
     configured_evidence_provider_name,
     evidence_for_question,
     ragflow_provider_from_env,
+    source_provider_from_env,
 )
+from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.integrations.ragflow.client import RAGFlowClientError
 from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError
-from agentic_rag.integrations.ragflow.providers import (
-    RAGFlowDocumentChunks,
-    RAGFlowEvidenceProvider,
-)
-from agentic_rag.observability.trace import new_run_id, write_rag_trace
+from agentic_rag.observability.trace import new_run_id, write_rag_trace, write_source_trace
 from agentic_rag.runtime_env import load_local_env
 
 load_local_env()
@@ -52,7 +51,14 @@ class AnswerRequest(BaseModel):
     evidence_chunks: list[SearchResult] | None = None
     evidence_provider: EvidenceProviderName | None = None
     document_ids: list[str] | None = None
-    use_mock_evidence: bool = True
+    use_mock_evidence: bool = Field(
+        default=False,
+        description=(
+            "Return sample fixture data instead of real retrieval. "
+            "Intended for local development and demos only. "
+            "Never set this in production."
+        ),
+    )
 
 
 class SourceUploadResponse(BaseModel):
@@ -104,14 +110,21 @@ api.add_middleware(
 
 @api.get("/health")
 def health() -> dict[str, str]:
-    """Return API health for the frontend."""
+    """Return API health and active configuration for the frontend."""
 
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "evidence_provider": configured_evidence_provider_name(),
+    }
 
 
 @api.post("/answer", response_model=Answer)
 def answer_question(request: AnswerRequest) -> Answer:
-    """Generate an answer using provided evidence or mock evidence."""
+    """Generate an answer grounded in retrieved evidence.
+
+    Returns ``status="not_found"`` when no evidence is available rather than
+    fabricating an answer.  Set ``use_mock_evidence=true`` only for local demos.
+    """
 
     return _answer_for_request(request)
 
@@ -149,9 +162,12 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
 async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
     """Upload a real PDF/source file to RAGFlow and start parsing/chunking."""
 
+    started_at = time.perf_counter()
+    run_id = new_run_id()
     content = await file.read()
     try:
-        provider = ragflow_provider_from_env()
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
         uploaded = provider.upload_document(
             filename=file.filename or "document.pdf",
             content=content,
@@ -161,9 +177,19 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    provider_label = _source_provider_label(provider_name)
+    write_source_trace(
+        run_id=run_id,
+        provider=provider_label,
+        source_type="pdf",
+        trace=uploaded.trace or {},
+        latency_ms=_latency_ms(started_at),
+    )
     return SourceUploadResponse(
-        provider="ragflow",
+        provider=provider_label,
         dataset_id=uploaded.dataset_id,
         document_id=uploaded.document_id,
         name=uploaded.name,
@@ -173,9 +199,12 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
 
 @api.post("/sources/url", response_model=SourceUploadResponse)
 def upload_url_source(request: SourceUrlRequest) -> SourceUploadResponse:
-    """Fetch a URL, normalize its text, and upload it to RAGFlow as a source."""
+    """Ingest one URL through the configured source provider."""
 
     url = _validated_http_url(request.url)
+    if configured_evidence_provider_name() == "local_pdf":
+        return _upload_local_url_document(url)
+
     try:
         html = _fetch_url_text(url)
     except (UrlHTTPError, URLError, TimeoutError) as exc:
@@ -196,13 +225,16 @@ def upload_url_source(request: SourceUrlRequest) -> SourceUploadResponse:
 
 @api.post("/sources/text", response_model=SourceUploadResponse)
 def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
-    """Upload raw user-provided text to RAGFlow as a source document."""
+    """Ingest raw user-provided text through the configured source provider."""
 
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=422, detail="Text source cannot be empty.")
 
     title = request.title.strip() if request.title else "van-ban-nguoi-dung"
+    if configured_evidence_provider_name() == "local_pdf":
+        return _upload_local_text_document(title=title, text=text)
+
     filename = _safe_text_filename(title)
     return _upload_text_document(
         filename=filename,
@@ -213,23 +245,25 @@ def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
 
 @api.get("/sources/{document_id}/chunks", response_model=SourceChunksResponse)
 def source_chunks(document_id: str) -> SourceChunksResponse:
-    """Return normalized RAGFlow chunks for one uploaded document."""
+    """Return normalized chunks for one uploaded document."""
 
     try:
-        provider = ragflow_provider_from_env()
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
     except RAGFlowConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    provider_label = _source_provider_label(provider_name)
     document_chunks = _document_chunks(provider, document_id)
     chunks = [
-        SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever="ragflow")
+        SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever=provider_label)
         for rank, chunk in enumerate(
             document_chunks.chunks,
             start=1,
         )
     ]
     return SourceChunksResponse(
-        provider="ragflow",
+        provider=provider_label,
         document_id=document_id,
         total_chunks=document_chunks.total_chunks,
         chunks=chunks,
@@ -237,13 +271,19 @@ def source_chunks(document_id: str) -> SourceChunksResponse:
 
 
 def _document_chunks(
-    provider: RAGFlowEvidenceProvider,
+    provider: SourceEvidenceProvider,
     document_id: str,
-) -> RAGFlowDocumentChunks:
+) -> SourceDocumentChunks:
     try:
         return provider.document_chunks(document_id=document_id)
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _source_provider_label(provider_name: str) -> str:
+    return "local_pdf" if provider_name == "local_pdf" else "ragflow"
 
 
 def _upload_text_document(
@@ -266,6 +306,68 @@ def _upload_text_document(
 
     return SourceUploadResponse(
         provider="ragflow",
+        dataset_id=uploaded.dataset_id,
+        document_id=uploaded.document_id,
+        name=uploaded.name,
+        parse_started=uploaded.parse_started,
+    )
+
+
+def _upload_local_url_document(url: str) -> SourceUploadResponse:
+    started_at = time.perf_counter()
+    run_id = new_run_id()
+    try:
+        provider = source_provider_from_env()
+        if not isinstance(provider, LocalPdfEvidenceProvider):
+            raise RuntimeError("Configured provider does not support local URL ingestion.")
+        uploaded = provider.upload_url(url=url)
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    write_source_trace(
+        run_id=run_id,
+        provider="local_pdf",
+        source_type="url",
+        trace=uploaded.trace or {},
+        latency_ms=_latency_ms(started_at),
+    )
+    return SourceUploadResponse(
+        provider="local_pdf",
+        dataset_id=uploaded.dataset_id,
+        document_id=uploaded.document_id,
+        name=uploaded.name,
+        parse_started=uploaded.parse_started,
+    )
+
+
+def _upload_local_text_document(*, title: str, text: str) -> SourceUploadResponse:
+    started_at = time.perf_counter()
+    run_id = new_run_id()
+    try:
+        provider = source_provider_from_env()
+        if not isinstance(provider, LocalPdfEvidenceProvider):
+            raise RuntimeError("Configured provider does not support local text ingestion.")
+        uploaded = provider.upload_text(title=title, text=text)
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    write_source_trace(
+        run_id=run_id,
+        provider="local_pdf",
+        source_type="text",
+        trace=uploaded.trace or {},
+        latency_ms=_latency_ms(started_at),
+    )
+    return SourceUploadResponse(
+        provider="local_pdf",
         dataset_id=uploaded.dataset_id,
         document_id=uploaded.document_id,
         name=uploaded.name,

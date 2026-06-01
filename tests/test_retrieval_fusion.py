@@ -2,7 +2,12 @@ import pytest
 
 import agentic_rag.retrieval.fusion as fusion_module
 from agentic_rag.core.contracts import Chunk, SearchResult
-from agentic_rag.retrieval.fusion import build_evidence_context, rerank, rrf_fusion
+from agentic_rag.retrieval.fusion import (
+    build_evidence_context,
+    rerank,
+    rerank_with_metadata,
+    rrf_fusion,
+)
 
 
 def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
@@ -66,7 +71,10 @@ def test_rrf_fusion_rejects_non_positive_input_ranks() -> None:
         )
 
 
-def test_rerank_orders_by_candidate_score_and_reassigns_rerank_ranks() -> None:
+def test_rerank_orders_by_candidate_score_and_reassigns_rerank_ranks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "score")
     candidates = [
         _result(_chunk("chunk-a", "A"), score=0.2, rank=1, retriever="hybrid"),
         _result(_chunk("chunk-b", "B"), score=0.9, rank=2, retriever="hybrid"),
@@ -80,7 +88,8 @@ def test_rerank_orders_by_candidate_score_and_reassigns_rerank_ranks() -> None:
     assert [result.retriever for result in reranked] == ["rerank", "rerank"]
 
 
-def test_rerank_deduplicates_candidates_by_best_rank() -> None:
+def test_rerank_deduplicates_candidates_by_best_rank(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "score")
     chunk = _chunk("chunk-a", "Repeated candidate.")
 
     reranked = rerank(
@@ -126,6 +135,31 @@ def test_rerank_uses_cross_encoder_when_configured(monkeypatch: pytest.MonkeyPat
     assert [result.retriever for result in reranked] == ["rerank", "rerank"]
 
 
+def test_rerank_with_metadata_reports_actual_cross_encoder_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeCrossEncoder:
+        def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
+            return [0.8, 0.1]
+
+    candidates = [
+        _result(_chunk("chunk-a", "A"), score=0.2, rank=1, retriever="hybrid"),
+        _result(_chunk("chunk-b", "B"), score=0.9, rank=2, retriever="hybrid"),
+    ]
+    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setattr(
+        fusion_module,
+        "_load_cross_encoder_model",
+        lambda model_name: FakeCrossEncoder(),
+    )
+
+    reranked, metadata = rerank_with_metadata("warranty question", candidates, top_k=2)
+
+    assert [result.chunk.chunk_id for result in reranked] == ["chunk-a", "chunk-b"]
+    assert metadata["configured_provider"] == "cross-encoder"
+    assert metadata["used_provider"] == "cross-encoder"
+
+
 def test_rerank_falls_back_to_score_based_when_cross_encoder_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -139,9 +173,12 @@ def test_rerank_falls_back_to_score_based_when_cross_encoder_is_unavailable(
     monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
     monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", raise_import_error)
 
-    reranked = rerank("warranty question", candidates)
+    reranked, metadata = rerank_with_metadata("warranty question", candidates)
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-a", "chunk-b"]
+    assert metadata["configured_provider"] == "cross-encoder"
+    assert metadata["used_provider"] == "score"
+    assert "fallback_reason" in metadata
 
 
 def test_build_evidence_context_formats_rank_source_location_chunk_and_text() -> None:
