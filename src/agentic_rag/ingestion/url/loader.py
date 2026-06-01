@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agentic_rag.core.contracts import Chunk
+
+if TYPE_CHECKING:
+    from agentic_rag.ingestion.url.chunking import TextChunkingStrategy
 
 
 @dataclass(frozen=True)
@@ -12,7 +17,7 @@ class _FetchedPage:
     """Internal container for fetched URL content."""
 
     url: str
-    content: str
+    html: str
     content_type: str
 
 
