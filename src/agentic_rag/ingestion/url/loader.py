@@ -36,6 +36,7 @@ class _FetchedPage:
 
 def load_url_chunks(
     url: str,
+    *,
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
@@ -57,6 +58,7 @@ def load_url_chunks(
 
 def load_html_chunks(
     html: str,
+    *,
     source: str,
     source_url: str | None = None,
     debug_artifact_dir: str | Path | None = None,
@@ -106,6 +108,7 @@ def load_html_chunks(
 
 def load_text_chunks(
     text: str,
+    *,
     source: str,
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
@@ -179,7 +182,7 @@ def _parsed_markdown(parsed: ParsedHtml) -> str:
         if section.heading != "main":
             lines.extend([f"## {section.heading}", ""])
         lines.extend([section.text, ""])
-    return "\n".join(lines).strip()
+    return "\n".join(lines)
 
 
 def _persist_html_debug_artifacts(

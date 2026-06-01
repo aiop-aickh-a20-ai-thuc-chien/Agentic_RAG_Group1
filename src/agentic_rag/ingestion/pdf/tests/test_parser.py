@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from agentic_rag.ingestion.pdf import parser
 
 
