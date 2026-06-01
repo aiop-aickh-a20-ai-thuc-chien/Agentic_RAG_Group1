@@ -6,14 +6,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "docling>=2,<3",
-    "faiss-cpu==1.13.2",
     "fastapi>=0.115.0,<1",
-    "langchain-community==0.4.1",
     "langchain-openai>=1.1.9",
     "openai>=1.0.0,<2",
     "pydantic>=2,<3",
     "python-multipart>=0.0.20,<1",
     "rank-bm25==0.2.2",
+    "turbovec>=0.7.0",
     "uvicorn>=0.30.0,<1",
 ]
 
@@ -67,5 +66,5 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["rank_bm25.*"]
+module = ["rank_bm25.*", "turbovec.*"]
 follow_untyped_imports = true

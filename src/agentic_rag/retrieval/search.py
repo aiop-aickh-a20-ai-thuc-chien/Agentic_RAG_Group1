@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from langchain_community.vectorstores import FAISS
 from rank_bm25 import BM25Okapi
+from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 
@@ -18,7 +18,7 @@ class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
         self._bm25_index = self._build_bm25_index(chunks)
-        self._vector_index: FAISS | None = None
+        self._vector_index: TurboQuantVectorStore | None = None
 
     def preprocess_query(self, query: str) -> dict[str, str]:
         """Normalize a raw user query before retrieval."""
@@ -64,7 +64,7 @@ class Store:
 
         return results
 
-    def _build_vector_index(self, chunks: list[Chunk]) -> FAISS:
+    def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
         from langchain_openai import OpenAIEmbeddings
 
@@ -76,7 +76,9 @@ class Store:
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
 
-        store = FAISS.from_texts(texts=chunks_list, embedding=embedding, metadatas=metadatas)
+        store = TurboQuantVectorStore.from_texts(
+            texts=chunks_list, embedding=embedding, metadatas=metadatas
+        )
 
         return store
 
@@ -94,10 +96,10 @@ class Store:
         for i, (doc, score) in enumerate(search_result):
             result.append(
                 SearchResult(
-                    chunk=Chunk(
-                        chunk_id=doc.metadata["chunk_id"],
-                        text=doc.page_content,
-                        metadata=doc.metadata["metadata"],
+                    chunk=_chunk_from_dense_document(
+                        doc=doc,
+                        vector_index=self._vector_index,
+                        chunks=self._chunks,
                     ),
                     score=score,
                     rank=i + 1,
@@ -116,8 +118,37 @@ def dense_embedding_metadata() -> dict[str, object]:
         "library": "langchain-openai",
         "model": DEFAULT_DENSE_EMBEDDING_MODEL,
         "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        "vector_store": "faiss",
+        "vector_store": "turbovec",
     }
+
+
+def _chunk_from_dense_document(
+    *,
+    doc: object,
+    vector_index: TurboQuantVectorStore,
+    chunks: list[Chunk],
+) -> Chunk:
+    metadata = getattr(doc, "metadata", {})
+    if isinstance(metadata, dict) and "chunk_id" in metadata:
+        nested_metadata = metadata.get("metadata")
+        return Chunk(
+            chunk_id=str(metadata["chunk_id"]),
+            text=str(getattr(doc, "page_content", "")),
+            metadata=nested_metadata if isinstance(nested_metadata, dict) else {},
+        )
+
+    doc_id = getattr(doc, "id", None)
+    str_to_u64 = getattr(vector_index, "_str_to_u64", {})
+    if doc_id is not None and doc_id in str_to_u64:
+        chunk_index = int(str_to_u64[doc_id]) - 1
+        if 0 <= chunk_index < len(chunks):
+            return chunks[chunk_index]
+
+    return Chunk(
+        chunk_id=str(doc_id or "dense_unknown"),
+        text=str(getattr(doc, "page_content", "")),
+        metadata={},
+    )
 
 
 def _tokenize(text: str) -> list[str]:
@@ -135,4 +166,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.bm25_search("pin cao ap"))
+    print(store.dense_search("chinh sach bao hanh"))
