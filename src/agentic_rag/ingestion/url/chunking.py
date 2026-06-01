@@ -102,7 +102,8 @@ def split_markdown(text: str, *, chunk_size: int, chunk_overlap: int) -> list[st
             chunks.append(chunk)
         if end >= len(cleaned_text):
             break
-        start = max(end - chunk_overlap, 0)
+        next_start = max(end - chunk_overlap, 0)
+        start = end if next_start <= start else next_start
     return chunks
 
 

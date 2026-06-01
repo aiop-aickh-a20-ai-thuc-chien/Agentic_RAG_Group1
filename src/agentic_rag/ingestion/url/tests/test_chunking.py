@@ -1,5 +1,4 @@
 import pytest
-
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import (
     build_chunk_id,
@@ -17,6 +16,17 @@ def test_split_markdown_is_deterministic_and_uses_overlap() -> None:
     chunks = split_markdown(text, chunk_size=16, chunk_overlap=5)
 
     assert chunks == ["alpha beta", "beta gamma", "gamma delta", "delta epsilon"]
+
+
+def test_split_markdown_always_advances_when_split_is_near_start() -> None:
+    text = "a " + ("b" * 40)
+
+    chunks = split_markdown(text, chunk_size=10, chunk_overlap=8)
+
+    assert chunks[0] == "a"
+    assert chunks[-1]
+    assert all(chunks)
+    assert len(chunks) < len(text)
 
 
 def test_build_chunks_returns_contract_objects_with_metadata() -> None:

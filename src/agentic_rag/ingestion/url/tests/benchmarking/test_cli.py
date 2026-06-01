@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from agentic_rag.ingestion.url.benchmarking import cli
 
 
