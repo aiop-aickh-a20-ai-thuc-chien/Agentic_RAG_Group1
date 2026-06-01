@@ -15,13 +15,13 @@ from agentic_rag.ingestion.url.model_chunking import (
 )
 
 __all__ = [
-    "load_url_chunks",
-    "load_html_chunks",
-    "load_text_chunks",
+    "GeminiChunkingClient",
     "LLMChunkingConfig",
     "ModelChunkingReport",
     "ModelChunkingStrategy",
     "OpenAIChunkingClient",
-    "GeminiChunkingClient",
     "compare_model_chunking",
+    "load_html_chunks",
+    "load_text_chunks",
+    "load_url_chunks",
 ]
