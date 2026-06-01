@@ -73,9 +73,7 @@ def test_answer_endpoint_handles_small_talk_without_evidence(
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("retrieval should not run")),
     )
 
-    answer = answer_question(
-        AnswerRequest(question="Xin chào", use_mock_evidence=False)
-    )
+    answer = answer_question(AnswerRequest(question="Xin chào", use_mock_evidence=False))
 
     assert answer.status == "answered"
     assert answer.citations == []

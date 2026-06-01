@@ -130,8 +130,7 @@ def test_provider_imports_url_with_ragflow_parser_then_indexes_markdown() -> Non
     assert client.uploaded_runtime_urls == ["https://example.com/docs/page"]
     assert client.parsed_document_ids == ["doc-1"]
     expected_content = (
-        b"Source URL: https://example.com/docs/page\n\n"
-        b"# Parsed URL\n\nNoi dung do RAGFlow parse."
+        b"Source URL: https://example.com/docs/page\n\n# Parsed URL\n\nNoi dung do RAGFlow parse."
     )
     assert client.uploaded_documents == [
         (
