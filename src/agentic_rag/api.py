@@ -22,7 +22,7 @@ from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider
 from agentic_rag.generation.answering import (
     AnswerDelta,
     AnswerDone,
-    generate_answer,
+    generate_answer_with_trace,
     stream_answer,
 )
 from agentic_rag.generation.evidence import (
@@ -392,7 +392,7 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         return small_talk_answer
 
     evidence_chunks, evidence_context = _evidence_for_request(request)
-    answer = generate_answer(
+    generation = generate_answer_with_trace(
         question=request.question,
         evidence_context=evidence_context,
         evidence_chunks=evidence_chunks,
@@ -403,10 +403,11 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         question=request.question,
         evidence_chunks=evidence_chunks,
         evidence_context=evidence_context,
-        answer=answer,
+        answer=generation.answer,
         latency_ms=_latency_ms(started_at),
+        generation_trace=generation.trace,
     )
-    return answer
+    return generation.answer
 
 
 def _small_talk_answer(question: str) -> Answer | None:
@@ -596,6 +597,7 @@ def _stream_answer_events(
                 evidence_context=evidence_context,
                 answer=answer,
                 latency_ms=_latency_ms(started_at),
+                generation_trace=stream_event.trace,
             )
 
 

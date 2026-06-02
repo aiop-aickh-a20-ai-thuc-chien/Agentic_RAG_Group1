@@ -94,6 +94,15 @@ Hành vi:
 - Không có `OPENAI_API_KEY` thì fallback bằng câu trả lời grounded từ evidence đầu tiên.
 - Citation chỉ được tạo từ metadata của `evidence_chunks`.
 - Citation giả hoặc sai source/page/section/url sẽ bị reject.
+- Citation inline được giữ ngay sau câu/ý được evidence hỗ trợ. Nếu LLM dùng marker
+  không tuần tự như `[1][3]`, backend sẽ chọn đúng evidence được cite và renumber lại
+  thành marker tuần tự cho UI.
+- Backend chỉ trả các citation được dùng thật trong answer. Các evidence chunks retrieval
+  vẫn được trace riêng để debug nhưng không bị hiển thị như citation nếu answer không cite.
+- Generation hỗ trợ parse response có cấu trúc nội bộ với các key `answer`, `status`,
+  `used_citation_ids`, `reason`, nhưng API vẫn trả contract `Answer` như cũ.
+- Guardrails phân biệt câu hỏi thiếu evidence, evidence quá ngắn, citation marker sai,
+  citation validation fail và not-found từ LLM; lý do này được ghi trong trace.
 
 ## Frontend
 
@@ -133,6 +142,9 @@ UI hiện tại thuộc phạm vi #149:
 - Chat panel để gửi question.
 - Answer panel.
 - Citation panel.
+- Có thể click citation để highlight đúng evidence chunk ở panel bên phải.
+- Citation/evidence panel chỉ hiển thị citation xuất hiện trong answer, tránh lặp danh
+  sách nguồn ở cuối câu trả lời.
 - Không tự build parse/chunk/retrieval khi chưa có phần #145-#148.
 - Không fusion/rerank.
 
@@ -210,7 +222,24 @@ Trace log:
 RAG_TRACE_ENABLED=true
 RAG_TRACE_PROVIDER=jsonl
 RAG_TRACE_PATH=logs/rag_runs.jsonl
+RAG_TRACE_FULL_CONTENT=false
+RAG_TRACE_PREVIEW_CHARS=4000
 ```
+
+Với PDF local, Markdown sau parse được lưu lại để debug trước khi chunk:
+
+```text
+storage/local_pdf/parsed/{document_id}.md
+```
+
+Với URL/text local, Markdown artifact được lưu trong thư mục ingestion artifact:
+
+```text
+storage/local_pdf/artifacts/artifacts/{source_slug}/{run_id}/parsed.md
+```
+
+Trace mặc định ghi `markdown_path`, `markdown_chars` và `markdown_preview`.
+Bật `RAG_TRACE_FULL_CONTENT=true` khi cần đẩy toàn bộ Markdown vào JSONL/LangSmith.
 
 Optional LangSmith tracing:
 
@@ -232,7 +261,7 @@ source_ingestion:
   source_upload -> parse -> chunking -> index_write
 
 rag_answer:
-  retrieve-evidence -> generate-grounded-answer -> citation-validation
+  retrieve-evidence -> generate-grounded-answer -> guardrail-decision -> citation-validation
 ```
 
 ## Verification

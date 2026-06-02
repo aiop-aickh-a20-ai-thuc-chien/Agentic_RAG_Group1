@@ -96,6 +96,7 @@ def test_build_rag_trace_payload_includes_chunks_and_citations() -> None:
     )
     assert payload["generation"]["trace"]["llm_call"]["output"]["status"] == "answered"
     assert payload["generation"]["trace"]["answer_parse"]["output"]["citation_count"] == 1
+    assert payload["generation"]["trace"]["guardrail_decision"]["output"]["status"] == "answered"
     assert payload["generation"]["trace"]["citation_validation"]["output"]["valid"] is True
     assert payload["citations"][0]["chunk_id"] == "c1"
 
@@ -261,6 +262,7 @@ def test_write_rag_trace_langsmith_exporter(monkeypatch: MonkeyPatch) -> None:
         "build-grounded-prompt",
         "llm-call",
         "answer-parse",
+        "guardrail-decision",
         "citation-validation",
     ]
     assert fake_client.runs[0]["project_name"] == "agentic-rag-test"
@@ -271,6 +273,7 @@ def test_write_rag_trace_langsmith_exporter(monkeypatch: MonkeyPatch) -> None:
     rerank_run = next(run for run in fake_client.runs if run["name"] == "rerank")
     llm_run = next(run for run in fake_client.runs if run["name"] == "llm-call")
     citation_run = next(run for run in fake_client.runs if run["name"] == "citation-validation")
+    guardrail_run = next(run for run in fake_client.runs if run["name"] == "guardrail-decision")
     assert bm25_run["inputs"]["query"] == "tai lieu noi gi"
     assert bm25_run["outputs"]["results"][0]["chunk_id"] == "c1"
     assert bm25_run["extra"]["latency_ms"] == 3
@@ -279,6 +282,7 @@ def test_write_rag_trace_langsmith_exporter(monkeypatch: MonkeyPatch) -> None:
     assert rrf_run["inputs"]["bm25_results"][0]["chunk_id"] == "c1"
     assert rerank_run["inputs"]["candidates"][0]["chunk_id"] == "c1"
     assert llm_run["extra"]["tech"]["model"] == "gpt-4o-mini"
+    assert guardrail_run["outputs"]["status"] == "not_found"
     assert citation_run["outputs"]["valid"] is True
 
 

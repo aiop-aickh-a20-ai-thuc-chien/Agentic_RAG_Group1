@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.url import load_html_chunks, load_text_chunks, load_url_chunks
+from agentic_rag.ingestion.url import (
+    load_html_chunks,
+    load_html_with_artifacts,
+    load_text_chunks,
+    load_url_chunks,
+)
 from agentic_rag.ingestion.url import loader as loader_module
 
 
@@ -95,6 +100,23 @@ def test_load_html_chunks_writes_data_artifacts(tmp_path: Path) -> None:
     assert manifest["chunks_path"].endswith("/chunks.jsonl")
     assert manifest["manifest_path"].endswith("/manifest.json")
     assert manifest["chunk_count"] == len(chunks)
+
+
+def test_load_html_with_artifacts_returns_markdown_and_paths(tmp_path: Path) -> None:
+    loaded = load_html_with_artifacts(
+        "<html><head><title>Artifact Page</title></head>"
+        "<body><main><h1>Intro</h1><p>Artifact content.</p></main></body></html>",
+        source="https://example.edu/artifact",
+        source_url="https://example.edu/artifact",
+        data_artifact_dir=tmp_path,
+        run_id="artifact-run",
+    )
+
+    assert loaded.markdown == "# Artifact Page\n\n## Intro\n\nIntro Artifact content.\n"
+    assert len(loaded.chunks) == 1
+    assert loaded.artifacts is not None
+    assert loaded.artifacts.markdown_path.read_text(encoding="utf-8") == loaded.markdown
+    assert loaded.artifacts.chunks_path.exists()
 
 
 def test_load_text_chunks_returns_text_source_metadata() -> None:

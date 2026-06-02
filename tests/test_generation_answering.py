@@ -22,6 +22,26 @@ class FakeClientWithReferenceList:
         yield self.complete(prompt)
 
 
+class FakeClientWithStructuredAnswer:
+    def complete(self, prompt: str) -> str:
+        return (
+            '{"answer": "Noi dung chinh tu website ve chinh sach bao hanh.", '
+            '"status": "answered", "used_citation_ids": [2], '
+            '"reason": "supported by URL chunk"}'
+        )
+
+    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
+        yield self.complete(prompt)
+
+
+class FakeClientWithInvalidCitation:
+    def complete(self, prompt: str) -> str:
+        return "Pin bao hanh 8 nam. [99]"
+
+    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
+        yield self.complete(prompt)
+
+
 def test_generate_answer_returns_not_found_without_evidence() -> None:
     answer = generate_answer(
         question="Pin bao hanh bao lau?",
@@ -71,6 +91,69 @@ def test_generate_answer_removes_llm_reference_list(
 
     assert answer.answer == "Pin bao hanh 8 nam. [1]"
     assert "vinfast_warranty.pdf" not in answer.answer
+
+
+def test_generate_answer_accepts_structured_citation_ids(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: FakeClientWithStructuredAnswer(),
+    )
+
+    answer = generate_answer(
+        question="Website noi ve gi?",
+        evidence_context=format_evidence_context(sample_search_results()),
+        evidence_chunks=sample_search_results(),
+    )
+
+    assert answer.status == "answered"
+    assert answer.answer == "Noi dung chinh tu website ve chinh sach bao hanh. [1]"
+    assert len(answer.citations) == 1
+    assert answer.citations[0].chunk_id == "url_001_smain_c01"
+
+
+def test_generate_answer_renumbers_non_sequential_inline_citations(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeClientWithSecondCitation:
+        def complete(self, prompt: str) -> str:
+            return "Noi dung website noi ve chinh sach bao hanh. [2]"
+
+        def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
+            yield self.complete(prompt)
+
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: FakeClientWithSecondCitation(),
+    )
+
+    answer = generate_answer(
+        question="Website noi ve gi?",
+        evidence_context=format_evidence_context(sample_search_results()),
+        evidence_chunks=sample_search_results(),
+    )
+
+    assert answer.answer == "Noi dung website noi ve chinh sach bao hanh. [1]"
+    assert len(answer.citations) == 1
+    assert answer.citations[0].chunk_id == "url_001_smain_c01"
+
+
+def test_generate_answer_rejects_invalid_inline_citation_marker(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.generation.answering.configured_llm_client",
+        lambda: FakeClientWithInvalidCitation(),
+    )
+
+    answer = generate_answer(
+        question="Pin bao hanh bao lau?",
+        evidence_context=format_evidence_context(sample_search_results()),
+        evidence_chunks=sample_search_results(),
+    )
+
+    assert answer == Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
 
 
 def test_validate_answer_accepts_citations_from_evidence() -> None:

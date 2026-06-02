@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.artifact import (
     DebugArtifact,
+    IngestionArtifacts,
     persist_debug_artifacts,
     persist_ingestion_artifacts,
 )
@@ -34,6 +35,15 @@ class _FetchedPage:
     url: str
 
 
+@dataclass(frozen=True)
+class LoadedUrlDocument:
+    """Parsed URL/text Markdown, generated chunks, and optional artifact paths."""
+
+    markdown: str
+    chunks: list[Chunk]
+    artifacts: IngestionArtifacts | None
+
+
 def load_url_chunks(
     url: str,
     *,
@@ -44,8 +54,27 @@ def load_url_chunks(
 ) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
+    return load_url_with_artifacts(
+        url,
+        debug_artifact_dir=debug_artifact_dir,
+        data_artifact_dir=data_artifact_dir,
+        run_id=run_id,
+        chunking_strategy=chunking_strategy,
+    ).chunks
+
+
+def load_url_with_artifacts(
+    url: str,
+    *,
+    debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str = "url_ingestion",
+    chunking_strategy: TextChunkingStrategy | None = None,
+) -> LoadedUrlDocument:
+    """Fetch, clean, chunk, and expose URL ingestion artifacts."""
+
     page = _fetch_url(url)
-    return load_html_chunks(
+    return load_html_with_artifacts(
         page.html,
         source=page.url,
         source_url=page.url,
@@ -67,6 +96,29 @@ def load_html_chunks(
     chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk one HTML document into shared Chunk objects."""
+
+    return load_html_with_artifacts(
+        html,
+        source=source,
+        source_url=source_url,
+        debug_artifact_dir=debug_artifact_dir,
+        data_artifact_dir=data_artifact_dir,
+        run_id=run_id,
+        chunking_strategy=chunking_strategy,
+    ).chunks
+
+
+def load_html_with_artifacts(
+    html: str,
+    *,
+    source: str,
+    source_url: str | None = None,
+    debug_artifact_dir: str | Path | None = None,
+    data_artifact_dir: str | Path | None = None,
+    run_id: str = "html_ingestion",
+    chunking_strategy: TextChunkingStrategy | None = None,
+) -> LoadedUrlDocument:
+    """Clean and chunk one HTML document while exposing persisted artifacts."""
 
     parsed = parse_html(html)
     fetched_at = _utc_now()
@@ -92,7 +144,7 @@ def load_html_chunks(
                 chunking_strategy=chunking_strategy,
             )
         )
-    persist_ingestion_artifacts(
+    artifacts = persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
         input_type="url" if source_url else "html",
         source=source,
@@ -103,7 +155,7 @@ def load_html_chunks(
         markdown=parsed_markdown,
         chunks=chunks,
     )
-    return chunks
+    return LoadedUrlDocument(markdown=parsed_markdown, chunks=chunks, artifacts=artifacts)
 
 
 def load_text_chunks(

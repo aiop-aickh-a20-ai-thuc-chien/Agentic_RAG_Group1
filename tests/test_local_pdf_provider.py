@@ -4,6 +4,8 @@ from typing import Any, cast
 from pytest import MonkeyPatch
 
 from agentic_rag.core.contracts import Chunk, SearchResult
+from agentic_rag.ingestion.pdf import LoadedPdfDocument
+from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.retrieval.search import Store
 
@@ -13,19 +15,22 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_pdf_chunks",
-        lambda path: [
-            Chunk(
-                chunk_id="pdf_doc_c0001",
-                text="Pin VF8 duoc bao hanh 8 nam.",
-                metadata={"chunk_index": 1, "section": "Bao hanh"},
-            ),
-            Chunk(
-                chunk_id="pdf_doc_c0002",
-                text="Dieu kien bao hanh can co hoa don.",
-                metadata={"chunk_index": 2, "section": "Dieu kien"},
-            ),
-        ],
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        lambda path: LoadedPdfDocument(
+            markdown="# Bao hanh\nPin VF8 duoc bao hanh 8 nam.",
+            chunks=[
+                Chunk(
+                    chunk_id="pdf_doc_c0001",
+                    text="Pin VF8 duoc bao hanh 8 nam.",
+                    metadata={"chunk_index": 1, "section": "Bao hanh"},
+                ),
+                Chunk(
+                    chunk_id="pdf_doc_c0002",
+                    text="Dieu kien bao hanh can co hoa don.",
+                    metadata={"chunk_index": 2, "section": "Dieu kien"},
+                ),
+            ],
+        ),
     )
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
 
@@ -42,6 +47,9 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     trace = cast(dict[str, dict[str, Any]], uploaded.trace)
     assert trace["source_upload"]["filename"] == "warranty.pdf"
     assert trace["parse"]["parser"] == "docling"
+    assert trace["parse"]["markdown_chars"] == 39
+    assert trace["parse"]["markdown_preview"] == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
+    assert "markdown" not in trace["parse"]
     assert trace["chunking"]["chunk_count"] == 2
     assert trace["index_write"]["type"] == "jsonl"
     assert document_chunks.total_chunks == 2
@@ -52,6 +60,33 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     assert document_chunks.chunks[0].metadata["document_id"] == uploaded.document_id
     assert document_chunks.chunks[0].metadata["source"] == "warranty.pdf"
     assert (tmp_path / "chunks" / f"{uploaded.document_id}.jsonl").exists()
+    markdown_path = tmp_path / "parsed" / f"{uploaded.document_id}.md"
+    assert trace["parse"]["markdown_path"] == str(markdown_path)
+    assert markdown_path.read_text(encoding="utf-8") == ("# Bao hanh\nPin VF8 duoc bao hanh 8 nam.")
+
+
+def test_local_pdf_provider_can_include_full_markdown_in_trace(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RAG_TRACE_FULL_CONTENT", "true")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        lambda path: LoadedPdfDocument(
+            markdown="# Full\nMarkdown noi dung.",
+            chunks=[],
+        ),
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    uploaded = provider.upload_document(
+        filename="notes.pdf",
+        content=b"%PDF-1.4",
+        content_type="application/pdf",
+    )
+
+    trace = cast(dict[str, dict[str, Any]], uploaded.trace)
+    assert trace["parse"]["markdown"] == "# Full\nMarkdown noi dung."
 
 
 def test_local_pdf_provider_uploads_url_chunks(
@@ -59,23 +94,27 @@ def test_local_pdf_provider_uploads_url_chunks(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_url_chunks",
-        lambda url, **kwargs: [
-            Chunk(
-                chunk_id="url_doc_c0001",
-                text="Noi dung URL ve chinh sach mua nha.",
-                metadata={
-                    "source": url,
-                    "source_type": "url",
-                    "url": url,
-                    "title": "Trang chinh sach",
-                    "section": "Chinh sach",
-                    "chunking_method": "deterministic-character-overlap",
-                    "chunking_provider": None,
-                    "chunking_model": None,
-                },
-            )
-        ],
+        "agentic_rag.integrations.local_pdf.providers.load_url_with_artifacts",
+        lambda url, **kwargs: LoadedUrlDocument(
+            markdown="# Trang chinh sach\n\n## Chinh sach\n\nNoi dung URL ve chinh sach mua nha.",
+            chunks=[
+                Chunk(
+                    chunk_id="url_doc_c0001",
+                    text="Noi dung URL ve chinh sach mua nha.",
+                    metadata={
+                        "source": url,
+                        "source_type": "url",
+                        "url": url,
+                        "title": "Trang chinh sach",
+                        "section": "Chinh sach",
+                        "chunking_method": "deterministic-character-overlap",
+                        "chunking_provider": None,
+                        "chunking_model": None,
+                    },
+                )
+            ],
+            artifacts=None,
+        ),
     )
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
 
@@ -89,10 +128,13 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert trace["source_upload"]["source_type"] == "url"
     assert trace["source_upload"]["requested_url"] == "https://example.com/chinh-sach"
     assert trace["source_upload"]["final_url"] == "https://example.com/chinh-sach"
-    assert trace["parse"]["parser"] == "url.load_url_chunks"
+    assert trace["parse"]["parser"] == "url.load_url_with_artifacts"
     assert trace["parse"]["title"] == "Trang chinh sach"
     assert trace["parse"]["section_count"] == 1
     assert trace["parse"]["sections"] == ["Chinh sach"]
+    assert trace["parse"]["markdown_path"] is None
+    assert trace["parse"]["markdown_chars"] == 70
+    assert trace["parse"]["markdown_preview"].startswith("# Trang chinh sach")
     assert trace["chunking"]["chunk_count"] == 1
     assert trace["chunking"]["chunking_methods"] == ["deterministic-character-overlap"]
     assert document_chunks.total_chunks == 1
@@ -136,19 +178,22 @@ def test_local_pdf_provider_retrieves_matching_chunks(
 ) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "score")
     monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_pdf_chunks",
-        lambda path: [
-            Chunk(
-                chunk_id="pdf_doc_c0001",
-                text="Pin VF8 duoc bao hanh 8 nam.",
-                metadata={"chunk_index": 1},
-            ),
-            Chunk(
-                chunk_id="pdf_doc_c0002",
-                text="Lich bao duong lop xe.",
-                metadata={"chunk_index": 2},
-            ),
-        ],
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        lambda path: LoadedPdfDocument(
+            markdown="# Warranty\nPin VF8 duoc bao hanh 8 nam.",
+            chunks=[
+                Chunk(
+                    chunk_id="pdf_doc_c0001",
+                    text="Pin VF8 duoc bao hanh 8 nam.",
+                    metadata={"chunk_index": 1},
+                ),
+                Chunk(
+                    chunk_id="pdf_doc_c0002",
+                    text="Lich bao duong lop xe.",
+                    metadata={"chunk_index": 2},
+                ),
+            ],
+        ),
     )
 
     def fake_dense_search(self: Store, query: str, top_k: int = 10) -> list[SearchResult]:

@@ -5,22 +5,44 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.chunking import chunk_markdown
 from agentic_rag.ingestion.pdf.parser import DoclingMarkdownParser, PdfMarkdownParser
 
 
+class LoadedPdfDocument(BaseModel):
+    """Parsed PDF Markdown and the shared chunks derived from it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    markdown: str
+    chunks: list[Chunk]
+
+
 def load_pdf_chunks(path: str) -> list[Chunk]:
     """Load and chunk a PDF file into shared Chunk objects."""
 
+    return load_pdf_with_markdown(path).chunks
+
+
+def load_pdf_with_markdown(path: str) -> LoadedPdfDocument:
+    """Load a PDF into Markdown and shared Chunk objects."""
+
     pdf_path = Path(path)
-    return _load_pdf_chunks(pdf_path, DoclingMarkdownParser())
+    return _load_pdf_with_markdown(pdf_path, DoclingMarkdownParser())
 
 
 def _load_pdf_chunks(path: Path, parser: PdfMarkdownParser) -> list[Chunk]:
+    return _load_pdf_with_markdown(path, parser).chunks
+
+
+def _load_pdf_with_markdown(path: Path, parser: PdfMarkdownParser) -> LoadedPdfDocument:
     _validate_pdf_path(path)
     markdown = parser.parse_to_markdown(path)
-    return _chunks_from_markdown(path, markdown)
+    chunks = _chunks_from_markdown(path, markdown)
+    return LoadedPdfDocument(markdown=markdown, chunks=chunks)
 
 
 def _validate_pdf_path(path: Path) -> None:
