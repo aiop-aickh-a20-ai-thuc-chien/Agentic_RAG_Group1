@@ -6,6 +6,7 @@ import re
 import unicodedata
 from typing import Any
 
+from langchain_postgres import PGVector
 from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
@@ -30,7 +31,7 @@ class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
         self._bm25_index = self._build_bm25_index(chunks)
-        self._vector_index: TurboQuantVectorStore | None = None
+        self._vector_index: TurboQuantVectorStore | PGVector | None = None
 
     def preprocess_query(self, query: str) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
@@ -96,26 +97,35 @@ class Store:
 
         return results
 
-    def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
+    def _build_vector_index(self, chunks: list[Chunk]) -> PGVector | TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
 
         from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
         embedding = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
-        # except Exception:
-        #     from langchain_openai import OpenAIEmbeddings
-
-        #     embedding = OpenAIEmbeddings(
-        #         model=DEFAULT_DENSE_EMBEDDING_MODEL,
-        #         dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        #     )
 
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
 
-        store = TurboQuantVectorStore.from_texts(
-            texts=chunks_list, embedding=embedding, metadatas=metadatas
-        )
+        try:
+            connection_string = "postgresql+psycopg://postgres.sohcypopuryiipmlyttb:vsf-agenticrag@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
+            store = PGVector(
+                embeddings=embedding,
+                collection_name="document",
+                connection=connection_string,
+                pre_delete_collection=True,
+            ).from_texts(
+                texts=chunks_list,
+                embedding=embedding,
+                metadatas=metadatas,
+                collection_name="document",
+                connection=connection_string,
+            )
+
+        except Exception:
+            store = TurboQuantVectorStore.from_texts(
+                texts=chunks_list, embedding=embedding, metadatas=metadatas
+            )  # type: ignore[assignment]
 
         return store
 
@@ -162,14 +172,14 @@ def dense_embedding_metadata() -> dict[str, object]:
         "library": "langchain-openai",
         "model": DEFAULT_DENSE_EMBEDDING_MODEL,
         "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        "vector_store": "turbovec",
+        "vector_store": "pgvector",
     }
 
 
 def _chunk_from_dense_document(
     *,
     doc: object,
-    vector_index: TurboQuantVectorStore,
+    vector_index: TurboQuantVectorStore | PGVector,
     chunks: list[Chunk],
 ) -> Chunk:
     metadata = getattr(doc, "metadata", {})
@@ -210,4 +220,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.preprocess_query("so sánh VF8 và VF9"))
+    print(store.dense_search("pin cao áp"))

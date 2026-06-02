@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.115.0,<1",
     "langchain-huggingface>=1.2.2",
     "langchain-openai>=1.1.9",
+    "langchain-postgres>=0.0.17",
     "openai>=1.0.0,<2",
     "pydantic>=2,<3",
     "python-multipart>=0.0.20,<1",
