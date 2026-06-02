@@ -39,4 +39,6 @@ jobs:
         run: uv run mypy
 
       - name: Test
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run pytest -q
