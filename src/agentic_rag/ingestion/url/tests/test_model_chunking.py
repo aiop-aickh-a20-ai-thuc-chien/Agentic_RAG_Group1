@@ -31,6 +31,7 @@ def test_parse_model_chunks_requires_json_array_of_strings() -> None:
         "One chunk.",
         "Second chunk.",
     ]
+    assert parse_model_chunks('```json\n["Fenced chunk."]\n```') == ["Fenced chunk."]
 
     with pytest.raises(ValueError, match="valid JSON"):
         parse_model_chunks("not json")

@@ -186,8 +186,9 @@ def client_from_config(config: LLMChunkingConfig) -> TextGenerationClient:
 def parse_model_chunks(value: str) -> list[str]:
     """Parse and validate a model-returned JSON string of chunk texts."""
 
+    normalized_value = _strip_json_fence(value.strip())
     try:
-        parsed = json.loads(value)
+        parsed = json.loads(normalized_value)
     except json.JSONDecodeError as exc:
         raise ValueError("Model chunking output must be valid JSON.") from exc
     if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
@@ -196,6 +197,15 @@ def parse_model_chunks(value: str) -> list[str]:
     if not chunks:
         raise ValueError("Model chunking output must include at least one non-empty chunk.")
     return chunks
+
+
+def _strip_json_fence(value: str) -> str:
+    if not value.startswith("```"):
+        return value
+    lines = value.splitlines()
+    if len(lines) < 3 or not lines[-1].strip().startswith("```"):
+        return value
+    return "\n".join(lines[1:-1]).strip()
 
 
 def _chunking_prompt(text: str, *, max_chunk_chars: int, overlap_hint_chars: int) -> str:

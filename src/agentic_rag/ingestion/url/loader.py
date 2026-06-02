@@ -18,7 +18,9 @@ from agentic_rag.ingestion.url.artifact import (
 )
 from agentic_rag.ingestion.url.chunking import (
     TextChunkingStrategy,
+    build_chunk_id,
     build_chunks,
+    chunk_markdown_for_rag,
     normalize_space,
     short_hash,
 )
@@ -140,6 +142,9 @@ def load_html_with_artifacts(
         parsed=parsed,
         source_url=source_url or source,
     )
+    chunk_markdown = (
+        parsed_markdown if _has_markdown_headings(parsed_markdown) else _parsed_markdown(parsed)
+    )
     canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
     _persist_html_debug_artifacts(
         debug_artifact_dir=debug_artifact_dir,
@@ -148,20 +153,31 @@ def load_html_with_artifacts(
         parsed_sections="\n\n".join(section.text for section in parsed.sections),
     )
 
-    chunks: list[Chunk] = []
-    for section in parsed.sections:
-        chunks.extend(
-            build_chunks(
-                text=section.text,
-                source=source,
-                source_type="url" if source_url else "html",
-                section=section.heading,
-                url=source_url,
-                title=parsed.title,
-                fetched_at=fetched_at,
-                chunking_strategy=chunking_strategy,
-            )
+    source_type = "url" if source_url else "html"
+    if chunking_strategy is None:
+        chunks = _build_rag_markdown_chunks(
+            markdown=chunk_markdown,
+            source=source,
+            source_type=source_type,
+            url=source_url,
+            title=parsed.title,
+            fetched_at=fetched_at,
         )
+    else:
+        chunks = []
+        for section in parsed.sections:
+            chunks.extend(
+                build_chunks(
+                    text=section.text,
+                    source=source,
+                    source_type=source_type,
+                    section=section.heading,
+                    url=source_url,
+                    title=parsed.title,
+                    fetched_at=fetched_at,
+                    chunking_strategy=chunking_strategy,
+                )
+            )
     chunks = _with_html_metadata(
         chunks,
         original_url=original_url,
@@ -295,6 +311,15 @@ def _extract_markdown(
     return trafilatura_markdown, _TRAFILATURA_PARSER_NAME
 
 
+def _has_markdown_headings(markdown: str) -> bool:
+    for line in markdown.splitlines():
+        stripped = line.lstrip()
+        marker_count = len(stripped) - len(stripped.lstrip("#"))
+        if 1 <= marker_count <= 6 and stripped[marker_count : marker_count + 1] == " ":
+            return True
+    return False
+
+
 def _persist_html_debug_artifacts(
     *,
     debug_artifact_dir: str | Path | None,
@@ -322,6 +347,48 @@ def _persist_text_debug_artifacts(
         debug_artifact_dir,
         (DebugArtifact(name=f"{short_hash(source)}_text.txt", content=text),),
     )
+
+
+def _build_rag_markdown_chunks(
+    *,
+    markdown: str,
+    source: str,
+    source_type: str,
+    url: str | None,
+    title: str | None,
+    fetched_at: str,
+) -> list[Chunk]:
+    content_hash = short_hash(markdown)
+    chunks: list[Chunk] = []
+    for rag_chunk in chunk_markdown_for_rag(markdown):
+        chunk_index = rag_chunk.chunk_index + 1
+        section = " > ".join(rag_chunk.section_path) or "main"
+        chunks.append(
+            Chunk(
+                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
+                text=rag_chunk.content,
+                metadata={
+                    "source": source,
+                    "source_type": source_type,
+                    "file_name": None,
+                    "url": url,
+                    "page": None,
+                    "section": section,
+                    "section_path": list(rag_chunk.section_path),
+                    "title": title,
+                    "fetched_at": fetched_at,
+                    "content_hash": content_hash,
+                    "chunk_index": chunk_index,
+                    "chunking_method": "markdown-block-token-overlap",
+                    "chunking_provider": "tiktoken",
+                    "chunking_model": "cl100k_base",
+                    "token_count": rag_chunk.token_count,
+                    "char_count": rag_chunk.char_count,
+                    "block_kinds": list(rag_chunk.block_kinds),
+                },
+            )
+        )
+    return chunks
 
 
 def _with_html_metadata(
