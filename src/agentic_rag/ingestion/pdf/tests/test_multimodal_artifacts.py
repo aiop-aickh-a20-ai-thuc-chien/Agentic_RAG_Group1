@@ -1,12 +1,13 @@
 from pathlib import Path
 from typing import ClassVar
 
+from PIL import Image
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.artifacts import (
     PdfElementArtifact,
     _save_pdf_multimodal_artifacts_from_document,
 )
-from PIL import Image
 
 
 class FakeProvenance:

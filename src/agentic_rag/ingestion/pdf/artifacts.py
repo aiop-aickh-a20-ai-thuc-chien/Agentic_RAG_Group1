@@ -17,6 +17,7 @@ from agentic_rag.ingestion.pdf.loader import (
     _validate_pdf_path,
 )
 from agentic_rag.ingestion.pdf.parser import DoclingMarkdownParser, PdfMarkdownParser
+from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser
 
 DEFAULT_PDF_ARTIFACT_ROOT = Path(__file__).resolve().parent / ".data" / "artifacts"
 
@@ -82,12 +83,13 @@ def save_pdf_ingestion_artifacts(
     *,
     output_root: str | Path | None = None,
     run_id: str | None = None,
+    parser_name: str = "docling",
 ) -> PdfIngestionArtifactManifest:
     """Parse a PDF, chunk it, and save debug artifacts for evaluation."""
 
     return _save_pdf_ingestion_artifacts(
         Path(path),
-        DoclingMarkdownParser(),
+        resolve_pdf_parser(parser_name),
         output_root=output_root,
         run_id=run_id,
     )
@@ -122,8 +124,12 @@ def _save_pdf_ingestion_artifacts(
 ) -> PdfIngestionArtifactManifest:
     _validate_pdf_path(path)
 
-    markdown = parser.parse_to_markdown(path)
-    chunks = _chunks_from_markdown(path, markdown)
+    parse_result = parser.parse(path)
+    chunks = _chunks_from_markdown(
+        path,
+        parse_result.markdown,
+        parser_name=parse_result.parser,
+    )
 
     artifact_root = Path(output_root) if output_root is not None else DEFAULT_PDF_ARTIFACT_ROOT
     resolved_run_id = _safe_run_id(run_id)
@@ -134,12 +140,12 @@ def _save_pdf_ingestion_artifacts(
     chunks_path = run_dir / "chunks.jsonl"
     manifest_path = run_dir / "manifest.json"
 
-    markdown_path.write_text(markdown, encoding="utf-8")
+    markdown_path.write_text(parse_result.markdown, encoding="utf-8")
     _write_chunks_jsonl(chunks_path, chunks)
 
     manifest = PdfIngestionArtifactManifest(
         input_path=str(path),
-        parser="docling",
+        parser=parse_result.parser,
         run_id=resolved_run_id,
         created_at=datetime.now(UTC).isoformat(),
         artifact_root=str(artifact_root),

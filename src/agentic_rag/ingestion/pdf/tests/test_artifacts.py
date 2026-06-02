@@ -1,14 +1,30 @@
 import json
 from pathlib import Path
 
+from pytest import MonkeyPatch
+
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf.artifacts import _save_pdf_ingestion_artifacts
+from agentic_rag.ingestion.pdf.artifacts import (
+    _save_pdf_ingestion_artifacts,
+    save_pdf_ingestion_artifacts,
+)
+from agentic_rag.ingestion.pdf.models import PdfParseResult
 
 
 class FakeParser:
+    parser_name = "fake-parser"
+
     def __init__(self, markdown: str) -> None:
         self.markdown = markdown
         self.seen_path: Path | None = None
+
+    def parse(self, path: Path) -> PdfParseResult:
+        self.seen_path = path
+        return PdfParseResult(
+            parser=self.parser_name,
+            source_path=str(path),
+            markdown=self.markdown,
+        )
 
     def parse_to_markdown(self, path: Path) -> str:
         self.seen_path = path
@@ -36,7 +52,7 @@ def test_save_pdf_ingestion_artifacts_writes_markdown_chunks_and_manifest(
     assert manifest.chunks_path == str(run_dir / "chunks.jsonl")
     assert manifest.manifest_path == str(run_dir / "manifest.json")
     assert manifest.chunk_count == 2
-    assert manifest.parser == "docling"
+    assert manifest.parser == "fake-parser"
     assert parser.seen_path == pdf_path
 
     assert (run_dir / "parsed.md").read_text(encoding="utf-8") == parser.markdown
@@ -49,6 +65,30 @@ def test_save_pdf_ingestion_artifacts_writes_markdown_chunks_and_manifest(
     ]
     assert chunks[0].metadata["section"] == "Warranty"
     assert chunks[1].metadata["section"] == "Battery"
+    assert chunks[0].metadata["parser"] == "fake-parser"
 
     manifest_payload = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest_payload == manifest.model_dump(mode="json")
+
+
+def test_save_pdf_ingestion_artifacts_uses_selected_parser(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "selected.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    output_root = tmp_path / "artifacts"
+
+    monkeypatch.setattr(
+        "agentic_rag.ingestion.pdf.artifacts.resolve_pdf_parser",
+        lambda parser_name: FakeParser("# Selected\nNoi dung."),
+    )
+
+    manifest = save_pdf_ingestion_artifacts(
+        str(pdf_path),
+        output_root=output_root,
+        run_id="selected-run",
+        parser_name="docling",
+    )
+
+    assert manifest.parser == "fake-parser"

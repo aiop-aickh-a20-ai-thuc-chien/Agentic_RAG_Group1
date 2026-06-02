@@ -1,23 +1,77 @@
 from pathlib import Path
 
 import pytest
+
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.pdf.chunking import MarkdownChunk
 from agentic_rag.ingestion.pdf.loader import (
+    LoadedPdfDocument,
     _load_pdf_chunks,
     _load_pdf_with_markdown,
     load_pdf_chunks,
     load_pdf_with_markdown,
 )
+from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
+from agentic_rag.ingestion.pdf.parser import ParsedPdfDocument
 
 
 class FakeParser:
+    parser_name = "fake-parser"
+
     def __init__(self, markdown: str) -> None:
         self.markdown = markdown
         self.seen_path: Path | None = None
+        self.parse_calls = 0
+        self.parse_to_document_calls = 0
+
+    def parse(self, path: Path) -> PdfParseResult:
+        self.seen_path = path
+        self.parse_calls += 1
+        return PdfParseResult(
+            parser=self.parser_name,
+            source_path=str(path),
+            markdown=self.markdown,
+        )
 
     def parse_to_markdown(self, path: Path) -> str:
         self.seen_path = path
         return self.markdown
+
+    def parse_to_document(self, path: Path) -> ParsedPdfDocument:
+        self.seen_path = path
+        self.parse_to_document_calls += 1
+        return ParsedPdfDocument(markdown=self.markdown, document={"doc": path.name})
+
+
+class FakeChunker:
+    chunker_name = "fake-chunker"
+    requires_native_document = False
+
+    def __init__(self) -> None:
+        self.seen_markdown: str | None = None
+
+    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+        self.seen_markdown = chunking_input.markdown
+        return [MarkdownChunk(section="Forced", text="Forced chunk text.")]
+
+
+class FakeNativeChunker:
+    chunker_name = "fake-native-chunker"
+    requires_native_document = True
+
+    def __init__(self) -> None:
+        self.seen_native_document: object | None = None
+
+    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+        self.seen_native_document = chunking_input.native_document
+        return [MarkdownChunk(section="Native", text="Native chunk text.")]
+
+
+def test_loaded_pdf_document_defaults_parser_and_chunker() -> None:
+    loaded = LoadedPdfDocument(markdown="# Intro", chunks=[])
+
+    assert loaded.parser == "docling"
+    assert loaded.chunker == "deterministic"
 
 
 def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
@@ -39,11 +93,52 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
         "file_name": "VinFast Warranty.pdf",
         "page": None,
         "section": "Warranty",
-        "parser": "docling",
+        "parser": "fake-parser",
+        "chunking_method": "deterministic",
         "chunk_index": 1,
     }
     assert chunks[1].metadata["section"] == "Battery"
     assert parser.seen_path == pdf_path
+    assert parser.parse_calls == 1
+    assert parser.parse_to_document_calls == 0
+
+
+def test_load_pdf_with_markdown_uses_supplied_chunker(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    parser = FakeParser("# Intro\nOriginal markdown.")
+    chunker = FakeChunker()
+
+    loaded = _load_pdf_with_markdown(pdf_path, parser, chunker=chunker)
+
+    assert loaded.markdown == "# Intro\nOriginal markdown."
+    assert loaded.chunks[0].text == "Forced chunk text."
+    assert loaded.chunks[0].metadata["section"] == "Forced"
+    assert loaded.chunks[0].metadata["chunking_method"] == "fake-chunker"
+    assert chunker.seen_markdown == "# Intro\nOriginal markdown."
+    assert parser.parse_calls == 1
+    assert parser.parse_to_document_calls == 0
+
+
+def test_load_pdf_with_markdown_uses_document_parse_for_native_chunker(
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    parser = FakeParser("# Intro\nOriginal markdown.")
+    chunker = FakeNativeChunker()
+
+    loaded = _load_pdf_with_markdown(pdf_path, parser, chunker=chunker)
+
+    assert loaded.markdown == "# Intro\nOriginal markdown."
+    assert loaded.parser == "fake-parser"
+    assert loaded.chunker == "fake-native-chunker"
+    assert loaded.chunks[0].text == "Native chunk text."
+    assert loaded.chunks[0].metadata["section"] == "Native"
+    assert loaded.chunks[0].metadata["chunking_method"] == "fake-native-chunker"
+    assert chunker.seen_native_document == {"doc": "source.pdf"}
+    assert parser.parse_calls == 0
+    assert parser.parse_to_document_calls == 1
 
 
 def test_load_pdf_with_markdown_returns_markdown_and_chunks(tmp_path: Path) -> None:

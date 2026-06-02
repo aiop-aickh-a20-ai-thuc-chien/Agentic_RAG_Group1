@@ -1,0 +1,128 @@
+"""Markdown chunker strategies for PDF ingestion."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, Protocol
+
+from pydantic import BaseModel, ConfigDict
+
+from agentic_rag.ingestion.chunking import MarkdownChunk, chunk_markdown
+from agentic_rag.ingestion.pdf.models import PdfChunkingInput
+
+DEFAULT_MARKDOWN_CHUNKER = "deterministic"
+DOCLING_HYBRID_CHUNKER = "docling-hybrid"
+
+
+class MarkdownChunker(Protocol):
+    """Strategy interface for converting parser Markdown into chunk candidates."""
+
+    chunker_name: str
+    requires_native_document: bool
+
+    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+        """Split Markdown into chunk candidates."""
+
+
+class DeterministicMarkdownChunker:
+    """Default deterministic section-aware character chunker."""
+
+    chunker_name = DEFAULT_MARKDOWN_CHUNKER
+    requires_native_document = False
+
+    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+        """Split Markdown with the existing deterministic chunking implementation."""
+
+        return chunk_markdown(chunking_input.markdown)
+
+
+class DoclingHybridChunker:
+    """Docling-native HybridChunker adapter for parser-native PDF documents."""
+
+    chunker_name = DOCLING_HYBRID_CHUNKER
+    requires_native_document = True
+
+    def __init__(self, hybrid_chunker_factory: Callable[[], Any] | None = None) -> None:
+        self._hybrid_chunker_factory = hybrid_chunker_factory or _default_hybrid_chunker_factory
+
+    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+        """Split a Docling document with Docling HybridChunker."""
+
+        if chunking_input.native_document is None:
+            raise ValueError("Docling hybrid chunking requires parser-native document output.")
+
+        hybrid_chunker = self._hybrid_chunker_factory()
+        chunks: list[MarkdownChunk] = []
+        for docling_chunk in hybrid_chunker.chunk(chunking_input.native_document):
+            text = str(hybrid_chunker.contextualize(docling_chunk)).strip()
+            if not text:
+                text = str(getattr(docling_chunk, "text", "")).strip()
+            if text:
+                chunks.append(
+                    MarkdownChunk(
+                        section=_section_from_docling_chunk(docling_chunk),
+                        text=text,
+                    )
+                )
+        return chunks
+
+
+class MarkdownChunkerDefinition(BaseModel):
+    """Registered Markdown chunker factory."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+
+    name: str
+    factory: Callable[[], MarkdownChunker]
+
+
+_MARKDOWN_CHUNKER_REGISTRY: dict[str, MarkdownChunkerDefinition] = {
+    DEFAULT_MARKDOWN_CHUNKER: MarkdownChunkerDefinition(
+        name=DEFAULT_MARKDOWN_CHUNKER,
+        factory=DeterministicMarkdownChunker,
+    ),
+    DOCLING_HYBRID_CHUNKER: MarkdownChunkerDefinition(
+        name=DOCLING_HYBRID_CHUNKER,
+        factory=DoclingHybridChunker,
+    ),
+}
+
+
+def resolve_markdown_chunker(chunker_name: str | None = None) -> MarkdownChunker:
+    """Resolve a supported Markdown chunker name to a fresh chunker instance."""
+
+    normalized_name = _normalize_chunker_name(chunker_name)
+    definition = _MARKDOWN_CHUNKER_REGISTRY.get(normalized_name)
+    if definition is None:
+        raise ValueError(
+            "Unsupported Markdown chunker: "
+            f"{chunker_name}. Supported chunkers: {', '.join(supported_markdown_chunkers())}."
+        )
+    return definition.factory()
+
+
+def supported_markdown_chunkers() -> tuple[str, ...]:
+    """Return registered Markdown chunker names in stable order."""
+
+    return tuple(sorted(_MARKDOWN_CHUNKER_REGISTRY))
+
+
+def _normalize_chunker_name(chunker_name: str | None) -> str:
+    if chunker_name is None:
+        return DEFAULT_MARKDOWN_CHUNKER
+    return chunker_name.strip().lower().replace("_", "-")
+
+
+def _default_hybrid_chunker_factory() -> Any:
+    from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
+
+    return HybridChunker()
+
+
+def _section_from_docling_chunk(docling_chunk: Any) -> str | None:
+    meta = getattr(docling_chunk, "meta", None)
+    headings = getattr(meta, "headings", None)
+    if not headings:
+        return None
+    heading_texts = [str(heading).strip() for heading in headings if str(heading).strip()]
+    return " > ".join(heading_texts) or None

@@ -5,6 +5,7 @@ from pytest import MonkeyPatch
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import LoadedPdfDocument
+from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.retrieval.search import Store
@@ -16,7 +17,7 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
 ) -> None:
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
-        lambda path: LoadedPdfDocument(
+        lambda path, **kwargs: LoadedPdfDocument(
             markdown="# Bao hanh\nPin VF8 duoc bao hanh 8 nam.",
             chunks=[
                 Chunk(
@@ -72,7 +73,7 @@ def test_local_pdf_provider_can_include_full_markdown_in_trace(
     monkeypatch.setenv("RAG_TRACE_FULL_CONTENT", "true")
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
-        lambda path: LoadedPdfDocument(
+        lambda path, **kwargs: LoadedPdfDocument(
             markdown="# Full\nMarkdown noi dung.",
             chunks=[],
         ),
@@ -87,6 +88,48 @@ def test_local_pdf_provider_can_include_full_markdown_in_trace(
 
     trace = cast(dict[str, dict[str, Any]], uploaded.trace)
     assert trace["parse"]["markdown"] == "# Full\nMarkdown noi dung."
+
+
+def test_local_pdf_provider_passes_configured_parser_and_chunker(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen_kwargs: dict[str, str] = {}
+
+    def fake_load_pdf_with_markdown(path: str, **kwargs: str) -> LoadedPdfDocument:
+        seen_kwargs.update(kwargs)
+        return LoadedPdfDocument(
+            markdown="# Configured\nNoi dung.",
+            chunks=[],
+            parser=kwargs["parser_name"],
+            chunker=kwargs["chunker_name"],
+        )
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        fake_load_pdf_with_markdown,
+    )
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        pdf_config=PdfIngestionConfig(
+            parser_name="docling",
+            chunker_name="docling-hybrid",
+        ),
+    )
+
+    uploaded = provider.upload_document(
+        filename="configured.pdf",
+        content=b"%PDF-1.4",
+        content_type="application/pdf",
+    )
+
+    trace = cast(dict[str, dict[str, Any]], uploaded.trace)
+    assert seen_kwargs == {
+        "parser_name": "docling",
+        "chunker_name": "docling-hybrid",
+    }
+    assert trace["parse"]["parser"] == "docling"
+    assert trace["chunking"]["chunker"] == "docling-hybrid"
 
 
 def test_local_pdf_provider_uploads_url_chunks(
@@ -179,7 +222,7 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     monkeypatch.setenv("RERANK_PROVIDER", "score")
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
-        lambda path: LoadedPdfDocument(
+        lambda path, **kwargs: LoadedPdfDocument(
             markdown="# Warranty\nPin VF8 duoc bao hanh 8 nam.",
             chunks=[
                 Chunk(

@@ -1,20 +1,50 @@
 # PDF Ingestion Subproject
 
 Thư mục này là boundary riêng cho PDF ingestion. Những phần chỉ phục vụ PDF
-ingestion, bao gồm parser baseline, chunking và benchmark parser, được giữ trong
-thư mục này để không làm rò rỉ trách nhiệm sang module khác.
+ingestion, bao gồm parser baseline, PDF parser registry và benchmark parser,
+được giữ trong thư mục này để không làm rò rỉ trách nhiệm sang module khác.
+Các primitive chunking dùng chung nằm ở `agentic_rag.ingestion.chunking` để PDF
+và URL/text ingestion có thể dùng cùng một nền tảng tách nội dung.
 
 ## Mục tiêu hiện tại
 
 Phase hiện tại ưu tiên tạo baseline end-to-end để unblock các phase tiếp theo
-của RAG pipeline. Parser baseline là Docling: module PDF dùng Docling để chuyển
+của RAG pipeline. Parser mặc định là Docling: module PDF dùng Docling để chuyển
 PDF cục bộ sang Markdown, sau đó tách Markdown thành `Chunk` objects theo
-contract dùng chung.
+contract dùng chung. Chunker mặc định vẫn là deterministic để giữ behavior ổn
+định; có thể bật Docling HybridChunker bằng config khi cần chunking theo cấu
+trúc tài liệu native. Kiến trúc mới giữ parser và chunker là hai strategy riêng:
+parser chịu trách nhiệm tạo Markdown/file-backed assets/native document, còn
+chunker chịu trách nhiệm tách output parser thành chunk candidate.
 
 Benchmark workflow với OmniDocBench vẫn được giữ để so sánh và tối ưu parser ở
 các vòng sau. Nói cách khác: triển khai Docling trước để có pipeline chạy được,
 rồi dùng benchmark và review thủ công để quyết định thay thế hoặc tinh chỉnh
-parser sau.
+parser sau. Tổng quan các parser phổ biến/SOTA nằm ở
+`docs/pdf-parser-landscape.md`.
+
+## Kiến trúc parser/chunker
+
+PDF parser trong repo là Markdown-first, asset-aware và chunker-independent:
+
+- `PdfMarkdownParser`: adapter chuyển một PDF thành `PdfParseResult`.
+- `PdfParseResult`: chứa full Markdown, tên parser, source path, warnings,
+  metadata và danh sách `PdfAssetRef`.
+- `PdfAssetRef`: reference tới asset đã ghi ra file, dùng cho hậu xử lý bảng,
+  hình ảnh hoặc chart; không nhúng binary/object vào shared `Chunk`.
+- `PdfChunkingInput`: input PDF-local cho chunker, gồm Markdown và optional
+  parser-native document.
+- `MarkdownChunker`: strategy tách `PdfChunkingInput` thành `MarkdownChunk`.
+- `load_pdf_chunks()`: facade ghép parser + chunker + mapper để trả về
+  `list[Chunk]` theo contract chung.
+
+Parser comparison nên so sánh Markdown và artifact parser trước. Chunking
+comparison là tầng riêng: giữ parser output cố định rồi thay chunker. Agentic
+orchestration, nếu dùng sau này, nên nằm phía trên các tool deterministic này để
+chọn parser, chạy fallback và ghi trace; agent không thay thế parser core.
+PDF chunker strategy dùng `agentic_rag.ingestion.chunking` làm shared source of
+truth; module `agentic_rag.ingestion.pdf.chunking` chỉ là compatibility export
+cho các import cũ.
 
 ## Chạy PDF ingestion baseline
 
@@ -33,6 +63,40 @@ from agentic_rag.ingestion.pdf import load_pdf_chunks
 chunks = load_pdf_chunks("path/to/file.pdf")
 ```
 
+Chọn parser hoặc chunker khác khi registry đã có adapter tương ứng:
+
+```python
+chunks = load_pdf_chunks(
+    "path/to/file.pdf",
+    parser_name="docling",
+    chunker_name="deterministic",
+)
+```
+
+Parser registry hiện có:
+
+- `docling`: mặc định, baseline hiện tại.
+
+Chunker registry hiện có:
+
+- `deterministic`: mặc định, tách Markdown/text ổn định bằng shared ingestion
+  chunking.
+- `docling-hybrid`: opt-in, dùng `Docling HybridChunker` trên Docling native
+  document để giữ ngữ cảnh/heading tốt hơn cho PDF.
+
+Trong app local, có thể đổi parser hoặc chunker PDF bằng biến môi trường:
+
+```text
+LOCAL_PDF_PARSER=docling
+LOCAL_PDF_CHUNKER=deterministic
+```
+
+Khi muốn thử chunking native của Docling:
+
+```text
+LOCAL_PDF_CHUNKER=docling-hybrid
+```
+
 `load_pdf_chunks()` chỉ trả về `Chunk` trong memory và không tự ghi file debug.
 Nếu cần lưu output để kiểm tra parser hoặc đánh giá chunking, dùng helper riêng
 được mô tả ở phần bên dưới.
@@ -44,7 +108,8 @@ Mỗi `Chunk` trả về có metadata chính:
 - `file_name`: tên file PDF.
 - `page`: hiện là `None` trong baseline Markdown chunking.
 - `section`: heading Markdown gần nhất nếu có.
-- `parser`: `docling`.
+- `parser`: parser được chọn, mặc định là `docling`.
+- `chunking_method`: chunker được chọn, mặc định là `deterministic`.
 - `chunk_index`: thứ tự chunk bắt đầu từ 1.
 
 ## Lưu artifact để debug và đánh giá
@@ -54,6 +119,22 @@ rõ ràng thay vì thêm side effect vào loader chính:
 
 ```bash
 uv run python -c "from agentic_rag.ingestion.pdf import save_pdf_ingestion_artifacts; print(save_pdf_ingestion_artifacts('path/to/file.pdf').model_dump())"
+```
+
+Khi muốn xuất artifact bằng parser khác đã được đăng ký:
+
+```bash
+uv run python -c "from agentic_rag.ingestion.pdf import save_pdf_ingestion_artifacts; print(save_pdf_ingestion_artifacts('path/to/file.pdf', parser_name='docling').model_dump())"
+```
+
+Hoặc dùng CLI PDF-local:
+
+```bash
+uv --directory src/agentic_rag/ingestion/pdf run python -m agentic_rag.ingestion.pdf.benchmarking.cli export-artifacts \
+  --pdf path/to/file.pdf \
+  --parser docling \
+  --output-root src/agentic_rag/ingestion/pdf/.data/parser-comparison \
+  --run-id docling-baseline
 ```
 
 Mặc định helper ghi vào thư mục đã được ignore:
@@ -67,7 +148,7 @@ src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
 
 Ý nghĩa các file:
 
-- `parsed.md`: Markdown do Docling export từ PDF gốc.
+- `parsed.md`: Markdown do parser được chọn export từ PDF gốc.
 - `chunks.jsonl`: mỗi dòng là một shared `Chunk` sau bước chunking.
 - `manifest.json`: metadata của lần chạy, gồm input path, parser, run id, đường
   dẫn artifact và số lượng chunk.
