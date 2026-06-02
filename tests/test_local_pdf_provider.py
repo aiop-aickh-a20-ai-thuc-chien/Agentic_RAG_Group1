@@ -171,29 +171,30 @@ def test_local_pdf_provider_uploads_text_chunks(
     assert chunk.metadata["source_type"] == "text"
     assert chunk.text == "Noi dung tu nguoi dung"
 
-    def test_local_pdf_provider_retrieves_matching_chunks(
-        tmp_path: Path,
-        monkeypatch: MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("RERANK_PROVIDER", "score")
-        monkeypatch.setattr(
-            "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
-            lambda path: LoadedPdfDocument(
-                markdown="# Warranty\nPin VF8 duoc bao hanh 8 nam.",
-                chunks=[
-                    Chunk(
-                        chunk_id="pdf_doc_c0001",
-                        text="Pin VF8 duoc bao hanh 8 nam.",
-                        metadata={"chunk_index": 1},
-                    ),
-                    Chunk(
-                        chunk_id="pdf_doc_c0002",
-                        text="Lich bao duong lop xe.",
-                        metadata={"chunk_index": 2},
-                    ),
-                ],
-            ),
-        )
+
+def test_local_pdf_provider_retrieves_matching_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "score")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        lambda path: LoadedPdfDocument(
+            markdown="# Warranty\nPin VF8 duoc bao hanh 8 nam.",
+            chunks=[
+                Chunk(
+                    chunk_id="pdf_doc_c0001",
+                    text="Pin VF8 duoc bao hanh 8 nam.",
+                    metadata={"chunk_index": 1},
+                ),
+                Chunk(
+                    chunk_id="pdf_doc_c0002",
+                    text="Lich bao duong lop xe.",
+                    metadata={"chunk_index": 2},
+                ),
+            ],
+        ),
+    )
 
     def fake_dense_search(self: Store, query: str, top_k: int = 10) -> list[SearchResult]:
         return [
