@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf.loader import _load_pdf_chunks, load_pdf_chunks
+from agentic_rag.ingestion.pdf.loader import (
+    _load_pdf_chunks,
+    _load_pdf_with_markdown,
+    load_pdf_chunks,
+    load_pdf_with_markdown,
+)
 
 
 class FakeParser:
@@ -41,6 +46,19 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
     assert parser.seen_path == pdf_path
 
 
+def test_load_pdf_with_markdown_returns_markdown_and_chunks(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    parser = FakeParser("# Intro\nNoi dung.")
+
+    loaded = _load_pdf_with_markdown(pdf_path, parser)
+
+    assert loaded.markdown == "# Intro\nNoi dung."
+    assert len(loaded.chunks) == 1
+    assert loaded.chunks[0].text == "Noi dung."
+    assert parser.seen_path == pdf_path
+
+
 def test_load_pdf_chunks_returns_empty_list_for_empty_markdown(tmp_path: Path) -> None:
     pdf_path = tmp_path / "empty.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
@@ -69,3 +87,6 @@ def test_load_pdf_chunks_rejects_non_pdf_file(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="PDF"):
         load_pdf_chunks(str(text_path))
+
+    with pytest.raises(ValueError, match="PDF"):
+        load_pdf_with_markdown(str(text_path))

@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agentic_rag.core.contracts import Chunk, SearchResult
-from agentic_rag.ingestion.pdf import load_pdf_chunks
-from agentic_rag.ingestion.url import load_text_chunks, load_url_chunks
+from agentic_rag.ingestion.pdf import load_pdf_with_markdown
+from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
 from agentic_rag.retrieval.fusion import RRF_K, rerank_with_metadata, rrf_fusion
 from agentic_rag.retrieval.search import Store, dense_embedding_metadata
 
@@ -53,10 +53,12 @@ class LocalPdfEvidenceProvider:
         self._store_dir = store_dir
         self._files_dir = store_dir / "files"
         self._chunks_dir = store_dir / "chunks"
+        self._parsed_dir = store_dir / "parsed"
         self._debug_dir = store_dir / "debug"
         self._artifacts_dir = store_dir / "artifacts"
         self._files_dir.mkdir(parents=True, exist_ok=True)
         self._chunks_dir.mkdir(parents=True, exist_ok=True)
+        self._parsed_dir.mkdir(parents=True, exist_ok=True)
         self._debug_dir.mkdir(parents=True, exist_ok=True)
         self._artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,8 +87,18 @@ class LocalPdfEvidenceProvider:
         pdf_path.write_bytes(content)
 
         parse_started_at = time.perf_counter()
-        chunks = load_pdf_chunks(str(pdf_path)) if start_parse else []
+        parsed_markdown = ""
+        if start_parse:
+            parsed_pdf = load_pdf_with_markdown(str(pdf_path))
+            parsed_markdown = parsed_pdf.markdown
+            chunks = parsed_pdf.chunks
+        else:
+            chunks = []
         parse_latency_ms = _latency_ms(parse_started_at)
+        markdown_path = self._write_markdown(
+            document_id=document_id,
+            markdown=parsed_markdown,
+        )
         chunk_started_at = time.perf_counter()
         chunks = [
             _chunk_with_local_metadata(
@@ -118,6 +130,10 @@ class LocalPdfEvidenceProvider:
                 "parse": {
                     "parser": "docling",
                     "started": start_parse,
+                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_chars": len(parsed_markdown),
+                    "markdown_preview": _preview(parsed_markdown, _trace_preview_chars()),
+                    **_full_trace_content("markdown", parsed_markdown),
                     "latency_ms": parse_latency_ms,
                 },
                 "chunking": {
@@ -143,13 +159,17 @@ class LocalPdfEvidenceProvider:
         safe_name = _safe_url_filename(url)
 
         ingest_started_at = time.perf_counter()
-        chunks = load_url_chunks(
+        loaded_url = load_url_with_artifacts(
             url,
             debug_artifact_dir=self._debug_dir / document_id,
             data_artifact_dir=self._artifacts_dir,
             run_id=document_id,
         )
+        chunks = loaded_url.chunks
         ingest_latency_ms = _latency_ms(ingest_started_at)
+        markdown_path = (
+            loaded_url.artifacts.markdown_path if loaded_url.artifacts is not None else None
+        )
 
         chunk_started_at = time.perf_counter()
         chunks = [
@@ -184,7 +204,7 @@ class LocalPdfEvidenceProvider:
                     "final_url": url_trace["final_url"],
                 },
                 "parse": {
-                    "parser": "url.load_url_chunks",
+                    "parser": "url.load_url_with_artifacts",
                     "started": True,
                     "source_type": "url",
                     "requested_url": url,
@@ -192,6 +212,10 @@ class LocalPdfEvidenceProvider:
                     "title": url_trace["title"],
                     "section_count": url_trace["section_count"],
                     "sections": url_trace["sections"],
+                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_chars": len(loaded_url.markdown),
+                    "markdown_preview": _preview(loaded_url.markdown, _trace_preview_chars()),
+                    **_full_trace_content("markdown", loaded_url.markdown),
                     "latency_ms": ingest_latency_ms,
                 },
                 "chunking": {
@@ -373,6 +397,14 @@ class LocalPdfEvidenceProvider:
         payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
         chunk_path.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
 
+    def _write_markdown(self, *, document_id: str, markdown: str) -> Path | None:
+        if not markdown:
+            return None
+
+        markdown_path = self._markdown_path(document_id)
+        markdown_path.write_text(markdown, encoding="utf-8")
+        return markdown_path
+
     def _read_chunks(self, document_id: str) -> list[Chunk]:
         chunk_path = self._chunk_path(document_id)
         if not chunk_path.exists():
@@ -400,6 +432,10 @@ class LocalPdfEvidenceProvider:
     def _chunk_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
         return self._chunks_dir / f"{safe_document_id}.jsonl"
+
+    def _markdown_path(self, document_id: str) -> Path:
+        safe_document_id = _safe_document_id(document_id)
+        return self._parsed_dir / f"{safe_document_id}.md"
 
 
 def _validate_pdf_upload(*, filename: str, content_type: str | None) -> None:
@@ -737,9 +773,29 @@ def _unique_metadata_values(chunks: list[Chunk], key: str) -> list[object]:
 
 
 def _preview(text: str, limit: int) -> str:
+    if limit <= 0:
+        return ""
     if len(text) <= limit:
         return text
     return f"{text[:limit]}..."
+
+
+def _trace_preview_chars() -> int:
+    raw = os.getenv("RAG_TRACE_PREVIEW_CHARS", "4000")
+    try:
+        return max(int(raw), 0)
+    except ValueError:
+        return 4000
+
+
+def _full_trace_content(key: str, value: str) -> dict[str, str]:
+    if _env_flag("RAG_TRACE_FULL_CONTENT"):
+        return {key: value}
+    return {}
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _latency_ms(started_at: float) -> int:

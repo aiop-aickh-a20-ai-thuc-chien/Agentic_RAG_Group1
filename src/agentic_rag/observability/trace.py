@@ -48,6 +48,7 @@ def write_rag_trace(
     evidence_context: str,
     answer: Answer,
     latency_ms: int,
+    generation_trace: dict[str, Any] | None = None,
 ) -> None:
     """Write one RAG run to the configured trace sink."""
 
@@ -63,6 +64,7 @@ def write_rag_trace(
         evidence_context=evidence_context,
         answer=answer,
         latency_ms=latency_ms,
+        generation_trace=generation_trace,
     )
 
     trace_provider = configured_trace_provider()
@@ -119,6 +121,7 @@ def build_rag_trace_payload(
     evidence_context: str,
     answer: Answer,
     latency_ms: int,
+    generation_trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a serializable RAG trace payload shared by JSONL and LangSmith."""
 
@@ -143,7 +146,8 @@ def build_rag_trace_payload(
         "generation": {
             "answer": answer.answer,
             "status": answer.status,
-            "trace": _generation_trace(
+            "trace": generation_trace
+            or _generation_trace(
                 question=question,
                 evidence_chunks=evidence_chunks,
                 evidence_context=evidence_context,
@@ -515,6 +519,7 @@ def _emit_langsmith_generation(
         ("build-grounded-prompt", "prompt_build", "tool"),
         ("llm-call", "llm_call", "llm"),
         ("answer-parse", "answer_parse", "tool"),
+        ("guardrail-decision", "guardrail_decision", "tool"),
     ]:
         stage_timestamp = _emit_langsmith_generation_stage(
             client=client,
@@ -805,6 +810,23 @@ def _generation_trace(
                 "answer": answer.answer,
                 "status": answer.status,
                 "citation_count": len(answer.citations),
+            },
+        },
+        "guardrail_decision": {
+            "tech": {
+                "method": "question/evidence/citation grounded boundary checks",
+            },
+            "latency_ms": 1,
+            "input": {
+                "has_question": bool(question.strip()),
+                "evidence_count": len(evidence_chunks),
+                "evidence_context_chars": len(evidence_context),
+            },
+            "output": {
+                "status": answer.status,
+                "reason": "answered_with_valid_citations"
+                if answer.status == "answered"
+                else "not_found",
             },
         },
         "citation_validation": {

@@ -7,13 +7,19 @@ from agentic_rag.ingestion.pdf.artifacts import (
     save_pdf_ingestion_artifacts,
     save_pdf_multimodal_artifacts,
 )
-from agentic_rag.ingestion.pdf.loader import load_pdf_chunks
+from agentic_rag.ingestion.pdf.loader import (
+    LoadedPdfDocument,
+    load_pdf_chunks,
+    load_pdf_with_markdown,
+)
 
 __all__ = [
+    "LoadedPdfDocument",
     "PdfElementArtifact",
     "PdfIngestionArtifactManifest",
     "PdfMultimodalArtifactManifest",
     "load_pdf_chunks",
+    "load_pdf_with_markdown",
     "save_pdf_ingestion_artifacts",
     "save_pdf_multimodal_artifacts",
 ]

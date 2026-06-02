@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
-from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
 from agentic_rag.core.contracts import Answer, Citation, SearchResult
-from agentic_rag.generation.llm import configured_llm_client
+from agentic_rag.generation.llm import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    configured_llm_client,
+)
 
 NOT_FOUND_ANSWER = "Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp."
 MIN_EVIDENCE_TEXT_LENGTH = 12
+MAX_AUTO_CITATIONS = 3
 
 
 @dataclass(frozen=True)
@@ -27,6 +34,26 @@ class AnswerDone:
     """The final validated answer for a streamed generation."""
 
     answer: Answer
+    trace: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class GenerationResult:
+    """Final answer plus internal trace details for observability."""
+
+    answer: Answer
+    trace: dict[str, object]
+
+
+@dataclass(frozen=True)
+class ParsedGenerationText:
+    """Normalized answer text parsed from a raw LLM response."""
+
+    answer_text: str
+    status: str | None
+    requested_citation_ids: list[int]
+    reason: str | None
+    structured: bool
 
 
 AnswerStreamEvent = AnswerDelta | AnswerDone
@@ -39,19 +66,82 @@ def generate_answer(
 ) -> Answer:
     """Generate a grounded answer from retrieved evidence."""
 
+    return generate_answer_with_trace(
+        question=question,
+        evidence_context=evidence_context,
+        evidence_chunks=evidence_chunks,
+    ).answer
+
+
+def generate_answer_with_trace(
+    question: str,
+    evidence_context: str,
+    evidence_chunks: list[SearchResult],
+) -> GenerationResult:
+    """Generate a grounded answer and return trace details for debugging."""
+
     usable_evidence = _usable_evidence(evidence_chunks)
     if not question.strip() or not usable_evidence:
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        return GenerationResult(
+            answer=answer,
+            trace=_build_generation_trace(
+                question=question,
+                evidence_chunks=usable_evidence,
+                evidence_context=evidence_context,
+                prompt="",
+                raw_answer="",
+                answer=answer,
+                parse_trace={},
+                guardrail_reason="missing_question_or_evidence",
+                llm_source="skipped",
+                streaming=False,
+            ),
+        )
 
     context = evidence_context.strip() or format_evidence_context(usable_evidence)
     if len(context) < MIN_EVIDENCE_TEXT_LENGTH:
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        return GenerationResult(
+            answer=answer,
+            trace=_build_generation_trace(
+                question=question,
+                evidence_chunks=usable_evidence,
+                evidence_context=context,
+                prompt="",
+                raw_answer="",
+                answer=answer,
+                parse_trace={},
+                guardrail_reason="evidence_context_too_short",
+                llm_source="skipped",
+                streaming=False,
+            ),
+        )
 
     prompt = build_grounded_prompt(question=question, evidence_context=context)
     client = configured_llm_client()
+    llm_source = "configured_llm" if client else "deterministic_fallback"
     answer_text = client.complete(prompt).strip() if client else _fallback_answer(usable_evidence)
+    answer, parse_trace = _answer_from_text_with_trace(
+        answer_text=answer_text,
+        usable_evidence=usable_evidence,
+    )
 
-    return _answer_from_text(answer_text=answer_text, usable_evidence=usable_evidence)
+    return GenerationResult(
+        answer=answer,
+        trace=_build_generation_trace(
+            question=question,
+            evidence_chunks=usable_evidence,
+            evidence_context=context,
+            prompt=prompt,
+            raw_answer=answer_text,
+            answer=answer,
+            parse_trace=parse_trace,
+            guardrail_reason=_guardrail_reason(answer=answer, parse_trace=parse_trace),
+            llm_source=llm_source,
+            streaming=False,
+        ),
+    )
 
 
 def stream_answer(
@@ -63,24 +153,67 @@ def stream_answer(
 
     usable_evidence = _usable_evidence(evidence_chunks)
     if not question.strip() or not usable_evidence:
-        yield AnswerDone(Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]))
+        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        yield AnswerDone(
+            answer,
+            _build_generation_trace(
+                question=question,
+                evidence_chunks=usable_evidence,
+                evidence_context=evidence_context,
+                prompt="",
+                raw_answer="",
+                answer=answer,
+                parse_trace={},
+                guardrail_reason="missing_question_or_evidence",
+                llm_source="skipped",
+                streaming=True,
+            ),
+        )
         return
 
     context = evidence_context.strip() or format_evidence_context(usable_evidence)
     if len(context) < MIN_EVIDENCE_TEXT_LENGTH:
-        yield AnswerDone(Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]))
+        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        yield AnswerDone(
+            answer,
+            _build_generation_trace(
+                question=question,
+                evidence_chunks=usable_evidence,
+                evidence_context=context,
+                prompt="",
+                raw_answer="",
+                answer=answer,
+                parse_trace={},
+                guardrail_reason="evidence_context_too_short",
+                llm_source="skipped",
+                streaming=True,
+            ),
+        )
         return
 
     prompt = build_grounded_prompt(question=question, evidence_context=context)
     client = configured_llm_client()
     if client is None:
-        final_answer = _answer_from_text(
-            answer_text=_fallback_answer(usable_evidence),
+        raw_answer = _fallback_answer(usable_evidence)
+        final_answer, parse_trace = _answer_from_text_with_trace(
+            answer_text=raw_answer,
             usable_evidence=usable_evidence,
+        )
+        trace = _build_generation_trace(
+            question=question,
+            evidence_chunks=usable_evidence,
+            evidence_context=context,
+            prompt=prompt,
+            raw_answer=raw_answer,
+            answer=final_answer,
+            parse_trace=parse_trace,
+            guardrail_reason=_guardrail_reason(answer=final_answer, parse_trace=parse_trace),
+            llm_source="deterministic_fallback",
+            streaming=True,
         )
         for delta in _chunk_text(final_answer.answer):
             yield AnswerDelta(delta)
-        yield AnswerDone(final_answer)
+        yield AnswerDone(final_answer, trace)
         return
 
     answer_text = ""
@@ -89,7 +222,7 @@ def stream_answer(
         answer_text += delta
         yield AnswerDelta(delta)
 
-    final_answer = _answer_from_text(
+    final_answer, parse_trace = _answer_from_text_with_trace(
         answer_text=answer_text.strip(), usable_evidence=usable_evidence
     )
     if final_answer.status == "answered" and final_answer.answer.startswith(answer_text):
@@ -97,7 +230,21 @@ def stream_answer(
         if marker_delta:
             yield AnswerDelta(marker_delta)
 
-    yield AnswerDone(final_answer)
+    yield AnswerDone(
+        final_answer,
+        _build_generation_trace(
+            question=question,
+            evidence_chunks=usable_evidence,
+            evidence_context=context,
+            prompt=prompt,
+            raw_answer=answer_text.strip(),
+            answer=final_answer,
+            parse_trace=parse_trace,
+            guardrail_reason=_guardrail_reason(answer=final_answer, parse_trace=parse_trace),
+            llm_source="configured_llm",
+            streaming=True,
+        ),
+    )
 
 
 def apply_citation_markers(answer: str, citations: list[Citation]) -> str:
@@ -135,17 +282,53 @@ def apply_citation_markers(answer: str, citations: list[Citation]) -> str:
 
 
 def _answer_from_text(answer_text: str, usable_evidence: list[SearchResult]) -> Answer:
-    cleaned_answer_text = _strip_trailing_citation_list(answer_text)
-    if not cleaned_answer_text or _is_not_found_answer(cleaned_answer_text):
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+    return _answer_from_text_with_trace(
+        answer_text=answer_text,
+        usable_evidence=usable_evidence,
+    )[0]
+
+
+def _answer_from_text_with_trace(
+    answer_text: str,
+    usable_evidence: list[SearchResult],
+) -> tuple[Answer, dict[str, object]]:
+    parsed = _parse_generation_text(answer_text)
+    cleaned_answer_text = _strip_trailing_citation_list(parsed.answer_text)
+    parse_trace: dict[str, object] = {
+        "structured": parsed.structured,
+        "requested_citation_ids": parsed.requested_citation_ids,
+        "declared_status": parsed.status,
+        "reason": parsed.reason,
+        "cleaned_answer_preview": cleaned_answer_text[:1000],
+    }
+    if (
+        not cleaned_answer_text
+        or parsed.status == "not_found"
+        or _is_not_found_answer(cleaned_answer_text)
+    ):
+        parse_trace["decision"] = "not_found_text"
+        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
 
     citations = _citations_from_evidence(usable_evidence)
-    citation_payload = [citation.model_dump() for citation in citations]
-    if not validate_answer_with_citations(cleaned_answer_text, citation_payload, usable_evidence):
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+    marked_answer, selected_citations, citation_trace = _select_answer_citations(
+        answer_text=cleaned_answer_text,
+        citations=citations,
+        requested_citation_ids=parsed.requested_citation_ids,
+    )
+    parse_trace["citation_selection"] = citation_trace
+    if not selected_citations:
+        parse_trace["decision"] = "no_valid_citation"
+        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
 
-    marked_answer = apply_citation_markers(cleaned_answer_text, citations)
-    return Answer(answer=marked_answer, status="answered", citations=citations)
+    citation_payload = [citation.model_dump() for citation in selected_citations]
+    if not validate_answer_with_citations(marked_answer, citation_payload, usable_evidence):
+        parse_trace["decision"] = "citation_validation_failed"
+        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
+
+    parse_trace["decision"] = "answered"
+    return Answer(
+        answer=marked_answer, status="answered", citations=selected_citations
+    ), parse_trace
 
 
 def validate_answer_with_citations(
@@ -208,6 +391,8 @@ def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
         "- Do not add a references, sources, bibliography, or citation list at the end.\n"
         "- Every factual sentence must include at least one evidence marker.\n"
         "- Use only marker numbers that appear in the evidence context.\n"
+        "- If you return JSON for internal parsing, use keys answer, status, "
+        "used_citation_ids, and reason; otherwise return only the user-facing answer.\n"
         f"- If the evidence is insufficient, answer exactly: {NOT_FOUND_ANSWER}\n"
     )
 
@@ -250,6 +435,148 @@ def _fallback_answer(evidence_chunks: list[SearchResult]) -> str:
     if not evidence_texts:
         return NOT_FOUND_ANSWER
     return "\n\n".join(evidence_texts)
+
+
+def _parse_generation_text(answer_text: str) -> ParsedGenerationText:
+    raw = answer_text.strip()
+    payload = _extract_json_object(raw)
+    if payload is None:
+        return ParsedGenerationText(
+            answer_text=raw,
+            status=None,
+            requested_citation_ids=[],
+            reason=None,
+            structured=False,
+        )
+
+    answer_value = payload.get("answer")
+    if not isinstance(answer_value, str):
+        answer_value = raw
+    status_value = payload.get("status")
+    status = status_value if isinstance(status_value, str) else None
+    reason_value = payload.get("reason")
+    reason = reason_value if isinstance(reason_value, str) else None
+    return ParsedGenerationText(
+        answer_text=answer_value,
+        status=status,
+        requested_citation_ids=_citation_ids_from_payload(payload),
+        reason=reason,
+        structured=True,
+    )
+
+
+def _extract_json_object(text: str) -> dict[str, object] | None:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+
+    candidates = [stripped]
+    first_brace = stripped.find("{")
+    last_brace = stripped.rfind("}")
+    if first_brace >= 0 and last_brace > first_brace:
+        candidates.append(stripped[first_brace : last_brace + 1])
+
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _citation_ids_from_payload(payload: Mapping[str, object]) -> list[int]:
+    raw_ids = payload.get("used_citation_ids") or payload.get("used_citations")
+    if not isinstance(raw_ids, list):
+        return []
+
+    ids: list[int] = []
+    for raw_id in raw_ids:
+        if isinstance(raw_id, bool):
+            continue
+        if isinstance(raw_id, int):
+            ids.append(raw_id)
+        elif isinstance(raw_id, str) and raw_id.strip().isdigit():
+            ids.append(int(raw_id.strip()))
+    return _unique_preserving_order(ids)
+
+
+def _select_answer_citations(
+    *,
+    answer_text: str,
+    citations: list[Citation],
+    requested_citation_ids: list[int],
+) -> tuple[str, list[Citation], dict[str, object]]:
+    marker_numbers = citation_markers(answer_text)
+    trace: dict[str, object] = {
+        "answer_marker_numbers": marker_numbers,
+        "requested_citation_ids": requested_citation_ids,
+        "available_citation_count": len(citations),
+    }
+
+    if marker_numbers:
+        if not _valid_citation_numbers(marker_numbers, citations):
+            trace["decision"] = "invalid_answer_markers"
+            return answer_text, [], trace
+        selected = [citations[number - 1] for number in marker_numbers]
+        trace["decision"] = "answer_markers"
+        trace["selected_citation_ids"] = [citation.chunk_id for citation in selected]
+        return _renumber_citation_markers(answer_text, marker_numbers), selected, trace
+
+    if requested_citation_ids:
+        if not _valid_citation_numbers(requested_citation_ids, citations):
+            trace["decision"] = "invalid_structured_citation_ids"
+            return answer_text, [], trace
+        selected = [citations[number - 1] for number in requested_citation_ids]
+        trace["decision"] = "structured_citation_ids"
+        trace["selected_citation_ids"] = [citation.chunk_id for citation in selected]
+        return apply_citation_markers(answer_text, selected), selected, trace
+
+    selected = citations[: _auto_citation_count(answer_text, citations)]
+    trace["decision"] = "auto_top_evidence"
+    trace["selected_citation_ids"] = [citation.chunk_id for citation in selected]
+    return apply_citation_markers(answer_text, selected), selected, trace
+
+
+def citation_markers(answer_text: str) -> list[int]:
+    return _unique_preserving_order(
+        int(match.group(1)) for match in re.finditer(r"\[(\d+)\]", answer_text)
+    )
+
+
+def _valid_citation_numbers(numbers: list[int], citations: list[Citation]) -> bool:
+    return bool(numbers) and all(1 <= number <= len(citations) for number in numbers)
+
+
+def _renumber_citation_markers(answer_text: str, selected_numbers: list[int]) -> str:
+    mapping = {old_number: index for index, old_number in enumerate(selected_numbers, start=1)}
+
+    def replace_marker(match: re.Match[str]) -> str:
+        number = int(match.group(1))
+        replacement = mapping.get(number)
+        return f"[{replacement}]" if replacement is not None else ""
+
+    return re.sub(r"\[(\d+)\]", replace_marker, answer_text)
+
+
+def _auto_citation_count(answer_text: str, citations: list[Citation]) -> int:
+    if not citations:
+        return 0
+    sentence_count = max(len(_split_sentences(answer_text)), 1)
+    return min(len(citations), sentence_count, MAX_AUTO_CITATIONS)
+
+
+def _unique_preserving_order(values: Iterable[int]) -> list[int]:
+    seen: set[int] = set()
+    unique: list[int] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        unique.append(value)
+    return unique
 
 
 def _citations_from_evidence(evidence_chunks: list[SearchResult]) -> list[Citation]:
@@ -336,6 +663,13 @@ def _is_not_found_answer(answer: str) -> bool:
     }
 
 
+def _guardrail_reason(*, answer: Answer, parse_trace: Mapping[str, object]) -> str:
+    if answer.status == "answered":
+        return "answered_with_valid_citations"
+    decision = parse_trace.get("decision")
+    return decision if isinstance(decision, str) else "not_found"
+
+
 def _has_citation_marker(answer: str) -> bool:
     return re.search(r"\[\d+\]", answer) is not None
 
@@ -384,3 +718,128 @@ def _is_reference_heading(line: str) -> bool:
         "nguon",
         "tai lieu tham khao",
     }
+
+
+def _build_generation_trace(
+    *,
+    question: str,
+    evidence_chunks: list[SearchResult],
+    evidence_context: str,
+    prompt: str,
+    raw_answer: str,
+    answer: Answer,
+    parse_trace: dict[str, object],
+    guardrail_reason: str,
+    llm_source: str,
+    streaming: bool,
+) -> dict[str, object]:
+    evidence_ids = [result.chunk.chunk_id for result in evidence_chunks]
+    citations = [citation.model_dump() for citation in answer.citations]
+    return {
+        "prompt_build": {
+            "tech": {
+                "prompt": "grounded_evidence_prompt",
+                "citation_style": "inline_numeric_markers",
+                "output_contract": "internal_parse_answer_status_used_citation_ids",
+            },
+            "latency_ms": 1,
+            "input": {
+                "question": question,
+                "evidence_chunk_ids": evidence_ids,
+                "evidence_context_chars": len(evidence_context),
+            },
+            "output": {
+                "prompt_preview": prompt[:2000],
+                "instruction_summary": [
+                    "answer in Vietnamese",
+                    "use only evidence context for document questions",
+                    "do not invent facts or citations",
+                    "place citation markers next to supported claims",
+                    "do not append a separate citation list",
+                    "return not_found when evidence is insufficient",
+                ],
+            },
+        },
+        "llm_call": {
+            "tech": {
+                "provider": _configured_llm_provider(),
+                "model": _configured_generation_model(),
+                "temperature": 0,
+                "streaming": streaming,
+                "source": llm_source,
+            },
+            "latency_ms": 5,
+            "input": {
+                "question": question,
+                "prompt_preview": prompt[:2000],
+            },
+            "output": {
+                "raw_answer": raw_answer,
+                "raw_answer_preview": raw_answer[:2000],
+            },
+        },
+        "answer_parse": {
+            "tech": {
+                "steps": [
+                    "parse optional JSON answer payload",
+                    "strip trailing reference list",
+                    "select only citations used by inline markers or structured ids",
+                    "renumber citations to match returned citation array",
+                ],
+            },
+            "latency_ms": 5,
+            "input": {
+                "raw_answer_preview": raw_answer[:2000],
+                "evidence_chunk_ids": evidence_ids,
+            },
+            "output": {
+                **parse_trace,
+                "answer": answer.answer,
+                "status": answer.status,
+                "citation_count": len(answer.citations),
+            },
+        },
+        "guardrail_decision": {
+            "tech": {
+                "method": "question/evidence/citation grounded boundary checks",
+            },
+            "latency_ms": 1,
+            "input": {
+                "has_question": bool(question.strip()),
+                "evidence_count": len(evidence_chunks),
+                "evidence_context_chars": len(evidence_context),
+            },
+            "output": {
+                "status": answer.status,
+                "reason": guardrail_reason,
+                "not_found_answer": NOT_FOUND_ANSWER if answer.status == "not_found" else None,
+            },
+        },
+        "citation_validation": {
+            "tech": {
+                "method": "validate citation source/page/section/url against retrieved chunks",
+            },
+            "latency_ms": 5,
+            "input": {
+                "citations": citations,
+                "evidence_chunk_ids": evidence_ids,
+            },
+            "output": {
+                "valid": answer.status == "not_found" or bool(citations),
+                "used_citation_count": len(citations),
+                "citations": citations,
+            },
+        },
+    }
+
+
+def _configured_generation_model() -> str:
+    provider = _configured_llm_provider()
+    if provider == "ollama":
+        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+
+
+def _configured_llm_provider() -> str:
+    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    return provider or "openai"

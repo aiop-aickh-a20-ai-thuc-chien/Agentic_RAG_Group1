@@ -16,6 +16,7 @@ from agentic_rag.api import (
 )
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.generation.answering import format_evidence_context
+from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.testing.fixtures import sample_search_results
 
@@ -164,14 +165,18 @@ def test_url_source_uses_local_provider_when_configured(
     monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
     monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
     monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_url_chunks",
-        lambda url, **kwargs: [
-            Chunk(
-                chunk_id="url_doc_c0001",
-                text="Noi dung URL",
-                metadata={"source": url, "source_type": "url", "url": url},
-            )
-        ],
+        "agentic_rag.integrations.local_pdf.providers.load_url_with_artifacts",
+        lambda url, **kwargs: LoadedUrlDocument(
+            markdown="# URL\nNoi dung URL",
+            chunks=[
+                Chunk(
+                    chunk_id="url_doc_c0001",
+                    text="Noi dung URL",
+                    metadata={"source": url, "source_type": "url", "url": url},
+                )
+            ],
+            artifacts=None,
+        ),
     )
 
     response = upload_url_source(SourceUrlRequest(url="https://example.com/docs/page"))
