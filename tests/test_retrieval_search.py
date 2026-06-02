@@ -1,12 +1,13 @@
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.retrieval.search import Store
 
-# def test_preprocess_query_normalizes_vietnamese_text() -> None:
-#     store = Store([Chunk(chunk_id="c1", text="Pin cao ap", metadata={})])
 
-#     preprocessed = store.preprocess_query("  Bảo hành PIN  ")
+def test_preprocess_query_normalizes_vietnamese_text() -> None:
+    store = Store([Chunk(chunk_id="c1", text="Pin cao ap", metadata={})])
 
-#     assert len(preprocessed) == 4
+    preprocessed = store.preprocess_query("  Bảo hành PIN  ")
+
+    assert len(preprocessed) == 4
 
 
 def test_bm25_search_returns_matching_chunk_not_loop_index() -> None:
