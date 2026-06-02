@@ -21,7 +21,17 @@ from pathlib import Path
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
-from agentic_rag.retrieval.fusion import RRF_K, rerank_with_metadata, rrf_fusion
+from agentic_rag.retrieval.fusion import (
+    RRF_K,
+    ThresholdConfig,
+    apply_fusion_threshold,
+    apply_pre_fusion_thresholds,
+    apply_rerank_threshold,
+    normalized_score_fusion,
+    rerank_with_metadata,
+    rrf_fusion,
+    weighted_rrf_fusion,
+)
 from agentic_rag.retrieval.search import Store, dense_embedding_metadata
 
 
@@ -359,11 +369,21 @@ class LocalPdfEvidenceProvider:
             top_k=candidate_k,
         )
         dense_latency_ms = _latency_ms(dense_started_at)
-        fusion_started_at = time.perf_counter()
-        fused_results = rrf_fusion(
+        threshold_config = _threshold_config_from_env()
+        bm25_results, dense_results, pre_fusion_threshold_trace = apply_pre_fusion_thresholds(
             bm25_results=bm25_results,
             dense_results=dense_results,
-            top_k=candidate_k,
+            config=threshold_config,
+        )
+        fusion_started_at = time.perf_counter()
+        fused_results, fusion_method_trace = _fuse_results(
+            bm25_results=bm25_results,
+            dense_results=dense_results,
+            candidate_k=candidate_k,
+        )
+        fused_results, fusion_threshold_trace = apply_fusion_threshold(
+            fused_results,
+            config=threshold_config,
         )
         fusion_latency_ms = _latency_ms(fusion_started_at)
         rerank_started_at = time.perf_counter()
@@ -371,6 +391,10 @@ class LocalPdfEvidenceProvider:
             query=normalized_query,
             candidates=fused_results,
             top_k=top_k,
+        )
+        final_results, rerank_threshold_trace = apply_rerank_threshold(
+            final_results,
+            config=threshold_config,
         )
         rerank_latency_ms = _latency_ms(rerank_started_at)
         return _with_pipeline_metadata(
@@ -384,6 +408,10 @@ class LocalPdfEvidenceProvider:
             dense_latency_ms=dense_latency_ms,
             fusion_latency_ms=fusion_latency_ms,
             rerank_latency_ms=rerank_latency_ms,
+            pre_fusion_threshold_trace=pre_fusion_threshold_trace,
+            fusion_method_trace=fusion_method_trace,
+            fusion_threshold_trace=fusion_threshold_trace,
+            rerank_threshold_trace=rerank_threshold_trace,
             rerank_trace=rerank_trace,
             preprocessed_query=preprocessed_query,
             bm25_results=bm25_results,
@@ -508,6 +536,91 @@ def _default_candidate_count() -> int:
         return 20
 
 
+def _fuse_results(
+    *,
+    bm25_results: list[SearchResult],
+    dense_results: list[SearchResult],
+    candidate_k: int,
+) -> tuple[list[SearchResult], dict[str, object]]:
+    method = os.getenv("FUSION_METHOD", "rrf").strip().lower()
+    if method == "weighted_rrf":
+        rrf_k = _env_int("FUSION_RRF_K", RRF_K)
+        bm25_weight = _env_float("FUSION_BM25_WEIGHT", 0.55)
+        dense_weight = _env_float("FUSION_DENSE_WEIGHT", 0.45)
+        return weighted_rrf_fusion(
+            bm25_results=bm25_results,
+            dense_results=dense_results,
+            top_k=candidate_k,
+            rrf_k=rrf_k,
+            bm25_weight=bm25_weight,
+            dense_weight=dense_weight,
+        ), {
+            "method": "weighted_rrf",
+            "rrf_k": rrf_k,
+            "bm25_weight": bm25_weight,
+            "dense_weight": dense_weight,
+        }
+    if method == "normalized_score":
+        alpha = _env_float("FUSION_NORMALIZED_ALPHA", 0.55)
+        return normalized_score_fusion(
+            bm25_results=bm25_results,
+            dense_results=dense_results,
+            top_k=candidate_k,
+            alpha=alpha,
+        ), {
+            "method": "normalized_score_fusion",
+            "alpha": alpha,
+        }
+    rrf_k = _env_int("FUSION_RRF_K", RRF_K)
+    return rrf_fusion(
+        bm25_results=bm25_results,
+        dense_results=dense_results,
+        top_k=candidate_k,
+        rrf_k=rrf_k,
+    ), {
+        "method": "reciprocal_rank_fusion",
+        "rrf_k": rrf_k,
+    }
+
+
+def _threshold_config_from_env() -> ThresholdConfig:
+    return ThresholdConfig(
+        bm25_min_score=_env_optional_float("BM25_MIN_SCORE"),
+        dense_min_score=_env_optional_float("DENSE_MIN_SCORE"),
+        bm25_min_norm_score=_env_optional_float("BM25_MIN_NORM_SCORE"),
+        dense_min_norm_score=_env_optional_float("DENSE_MIN_NORM_SCORE"),
+        fusion_min_score=_env_optional_float("FUSION_MIN_SCORE"),
+        rerank_min_score=_env_optional_float("RERANK_MIN_SCORE"),
+        min_evidence_count=_env_int("MIN_EVIDENCE_COUNT", 0),
+    )
+
+
+def _env_optional_float(name: str) -> float | None:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, str(default))
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default))
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _dense_search_safely(
     store: Store,
     query: str,
@@ -532,6 +645,10 @@ def _with_pipeline_metadata(
     dense_latency_ms: int,
     fusion_latency_ms: int,
     rerank_latency_ms: int,
+    pre_fusion_threshold_trace: dict[str, object],
+    fusion_method_trace: dict[str, object],
+    fusion_threshold_trace: dict[str, object],
+    rerank_threshold_trace: dict[str, object],
     rerank_trace: dict[str, object],
     preprocessed_query: dict[str, str],
     bm25_results: list[SearchResult],
@@ -584,9 +701,9 @@ def _with_pipeline_metadata(
         },
         "rrf_fusion": {
             "tech": {
-                "method": "reciprocal_rank_fusion",
                 "rrf_k": RRF_K,
                 "candidate_k": candidate_k,
+                **fusion_method_trace,
             },
             "latency_ms": fusion_latency_ms,
             "input": {
@@ -601,6 +718,11 @@ def _with_pipeline_metadata(
                 )
                 for result in fused_results
             ],
+        },
+        "thresholds": {
+            "pre_fusion": pre_fusion_threshold_trace,
+            "fusion": fusion_threshold_trace,
+            "rerank": rerank_threshold_trace,
         },
         "rerank": {
             "tech": {
