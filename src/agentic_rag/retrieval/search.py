@@ -119,7 +119,7 @@ class Store:
 
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        def _transform_query(query: str, method: str):
+        def _transform_query(query: str, method: str | None) -> Any:
             if method == "decompose":
                 tprompt = DECOMPOSITION_PROMPT
             elif method == "expand":
@@ -133,7 +133,7 @@ class Store:
                 ],
             )
 
-            return json.loads(response.choices[0].message.content)
+            return json.loads(response.choices[0].message.content)  # type: ignore[arg-type]
 
         normalized = _normalize_text(query)
 
@@ -144,8 +144,8 @@ class Store:
                 {"role": "user", "content": query},
             ],
         )
-        requery_method = router_response.choices[0].message.content  # type: ignore[arg-type]
-        requery = _transform_query(query, requery_method)
+        requery_method = router_response.choices[0].message.content
+        requery = _transform_query(query=query, method=requery_method)
 
         return {
             "raw": query,
