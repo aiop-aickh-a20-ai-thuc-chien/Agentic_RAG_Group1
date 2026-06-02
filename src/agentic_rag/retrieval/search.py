@@ -19,11 +19,85 @@ REQUERY_ROUTER_PROMPT = """
 You're a good at understanding user's query. \
     Your task is to analyze the user's query and choose a method to clarify the query.
 Chose:
-- Decompose: If the query mentions two or more components at same time. \
-    You need to break down this complex query by entities into 2-3 simpler sub-queries
-- Expand: If the query contains an entity, the name of the entity. \
-    You need to Generate 2-3 alternative phrasings or related terms.
-Ouput in Vietnamse only. follow this JSON format: {"method": two of these methods, "answer": ...}
+- Decompose: If the query mentions two or more components at same time.
+- Expand: If the query contains an entity, the name of the entity. 
+Ouput is one of these: "decompose", "expand"
+"""
+
+DECOMPOSITION_PROMPT = """
+You are a Query Decomposition Expert for a Retrieval-Augmented Generation (RAG) system.
+Your mission is to analyze the user's input query and break it down into smaller, simpler, and\
+    independent sub-queries. Each sub-query must focus on retrieving ONE specific\
+          aspect of information.
+
+INSTRUCTIONS:
+1. If the query is complex (contains conjunctions like "and", "as well as", "along with", or\
+    requires comparison/synthesis of multiple entities), split it into distinct queries to\
+          enable parallel retrieval.
+2. Ensure each sub-query is self-contained with a clear subject and context.\
+    Do not use ambiguous pronouns like "it", "they", or "this algorithm"; replace them with\
+          the explicit entity names.
+3. If the query is already simple and atomic, return an array containing only the original query.
+
+OUTPUT FORMAT:
+You MUST return the output as a raw JSON object. Follow this schema:
+{
+  "method": "decompose",
+  "transformed_queries": [
+    "First sub-query?",
+    "Second sub-query?"
+  ]
+}
+
+EXAMPLE:
+User: "So sánh hiệu năng huấn luyện của mô hình Transformer và\
+      LSTM khi xử lý dữ liệu tiếng Việt ngắn."
+Output:
+{
+  "method": "decompose",
+  "transformed_queries": [
+    "Hiệu năng huấn luyện của mô hình Transformer khi xử lý dữ liệu tiếng Việt ngắn là bao nhiêu?",
+    "Hiệu năng huấn luyện của mô hình LSTM khi xử lý dữ liệu tiếng Việt ngắn là bao nhiêu?"
+  ]
+}
+"""
+
+EXPANSION_PROMPT = """
+You are an AI assistant specializing in search optimization through Query Expansion.
+Your task is to help the system retrieve documents more accurately by generating alternative\
+      variations (synonyms or different phrasings) of the user's original query.
+
+INSTRUCTIONS:
+1. Generate exactly 3 rewritten versions of the original query from different angles or\
+      using alternative terminology.
+2. Diversify the queries by: utilizing synonyms, converting informal conversational terms into\
+      technical documentation language, and incorporating equivalent English/Vietnamese\
+          technical terms where appropriate.
+3. Maintain the core intent of the original query. Do not broaden the scope to unrelated topics or\
+      alter the search objective.
+
+OUTPUT FORMAT:
+You MUST return the output as a raw JSON object. Follow this schema:
+{
+  "medthod": "expand",
+  "transformed_queries": [
+    "Rewritten version 1",
+    "Rewritten version 2",
+    "Rewritten version 3"
+  ]
+}
+
+EXAMPLE:
+User: "cách sửa lỗi văng ram khi train model AI trên colab"
+Output:
+{
+  "method": "expand",
+  "transformed_queries": [
+    "Khắc phục lỗi sập nguồn sập bộ nhớ OOM Out of Memory khi huấn luyện mô hình trên Google Colab",
+    "Làm sao để tối ưu hóa bộ nhớ RAM và tránh bị crash khi train deep learning trên Colab?",
+    "Biện pháp xử lý Google Colab bị mất kết nối do tràn RAM khi chạy các mô hình học máy"
+  ]
+}
 """
 
 
@@ -45,6 +119,22 @@ class Store:
 
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+        def _transform_query(query: str, method: str):
+            if method == "decompose":
+                tprompt = DECOMPOSITION_PROMPT
+            elif method == "expand":
+                tprompt = EXPANSION_PROMPT
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": tprompt},
+                    {"role": "user", "content": query},
+                ],
+            )
+
+            return json.loads(response.choices[0].message.content)
+
         normalized = _normalize_text(query)
 
         router_response = client.chat.completions.create(
@@ -54,7 +144,8 @@ class Store:
                 {"role": "user", "content": query},
             ],
         )
-        requery = json.loads(router_response.choices[0].message.content)  # type: ignore[arg-type]
+        requery_method = router_response.choices[0].message.content  # type: ignore[arg-type]
+        requery = _transform_query(query, requery_method)
 
         return {
             "raw": query,
@@ -158,8 +249,9 @@ class Store:
 
     def search(self, query: str, top_k: int = 10) -> tuple[list[SearchResult], list[SearchResult]]:
         nquery = self.preprocess_query(query=query)
-        bm25_result = self.bm25_search(nquery["requery"]["answer"], top_k=top_k)
-        dense_result = self.dense_search(nquery["requery"]["answer"], top_k=top_k)
+        transformed_query = " ".join(nquery["requery"]["transformed_queries"])
+        bm25_result = self.bm25_search(transformed_query, top_k=top_k)
+        dense_result = self.dense_search(transformed_query, top_k=top_k)
 
         return bm25_result, dense_result
 
@@ -220,4 +312,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.dense_search("pin cao áp"))
+    print(store.preprocess_query("so sánh VF8 và VF9"))
