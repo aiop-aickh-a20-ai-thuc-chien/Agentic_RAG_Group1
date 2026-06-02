@@ -9,6 +9,7 @@ def test_preprocess_query_normalizes_vietnamese_text() -> None:
 
     assert len(preprocessed) == 4
 
+
 def test_bm25_search_returns_matching_chunk_not_loop_index() -> None:
     chunks = [
         Chunk(chunk_id="c1", text="lich bao duong lop xe", metadata={}),
