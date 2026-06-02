@@ -1,5 +1,6 @@
 """URL ingestion package."""
 
+from agentic_rag.ingestion.url.chunking import TiktokenChunkingStrategy
 from agentic_rag.ingestion.url.loader import (
     LoadedUrlDocument,
     load_html_chunks,
@@ -24,6 +25,7 @@ __all__ = [
     "ModelChunkingReport",
     "ModelChunkingStrategy",
     "OpenAIChunkingClient",
+    "TiktokenChunkingStrategy",
     "compare_model_chunking",
     "load_html_chunks",
     "load_html_with_artifacts",

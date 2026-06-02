@@ -47,6 +47,7 @@ htmlcov/
 # Logs and local runtime output
 *.log
 logs/
+.tmp/
 
 # Common local RAG/vector store artifacts
 .cache/
@@ -70,4 +71,3 @@ index/
 *.swo
 .DS_Store
 Thumbs.db
-

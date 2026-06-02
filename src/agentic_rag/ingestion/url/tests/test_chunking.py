@@ -1,6 +1,7 @@
 import pytest
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import (
+    TiktokenChunkingStrategy,
     build_chunk_id,
     build_chunks,
     normalize_space,
@@ -75,6 +76,26 @@ def test_build_chunks_validates_chunk_settings() -> None:
             chunk_size=10,
             chunk_overlap=10,
         )
+
+
+def test_build_chunks_can_use_tiktoken_strategy() -> None:
+    strategy = TiktokenChunkingStrategy(max_tokens=4, overlap_tokens=1)
+
+    chunks = build_chunks(
+        text="alpha beta gamma delta epsilon zeta",
+        source="https://example.edu/token",
+        source_type="url",
+        section="Overview",
+        url="https://example.edu/token",
+        title="Token Page",
+        fetched_at="2026-06-01T00:00:00+00:00",
+        chunking_strategy=strategy,
+    )
+
+    assert len(chunks) > 1
+    assert chunks[0].metadata["chunking_method"] == "deterministic-token-overlap"
+    assert chunks[0].metadata["chunking_provider"] == "tiktoken"
+    assert chunks[0].metadata["chunking_model"] == "cl100k_base"
 
 
 def test_chunking_helpers_normalize_ids_and_text() -> None:
