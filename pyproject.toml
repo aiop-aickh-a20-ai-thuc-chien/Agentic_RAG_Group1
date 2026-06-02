@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "docling>=2,<3",
     "fastapi>=0.115.0,<1",
+    "langchain-huggingface>=1.2.2",
     "langchain-openai>=1.1.9",
     "openai>=1.0.0,<2",
     "pydantic>=2,<3",
@@ -68,5 +69,5 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["rank_bm25.*", "turbovec.*"]
+module = ["rank_bm25.*", "turbovec.*", "langchain_huggingface.*"]
 follow_untyped_imports = true
