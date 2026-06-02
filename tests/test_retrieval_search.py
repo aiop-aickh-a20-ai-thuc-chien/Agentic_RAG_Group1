@@ -1,7 +1,6 @@
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.retrieval.search import Store
 
-
 # def test_preprocess_query_normalizes_vietnamese_text() -> None:
 #     store = Store([Chunk(chunk_id="c1", text="Pin cao ap", metadata={})])
 
