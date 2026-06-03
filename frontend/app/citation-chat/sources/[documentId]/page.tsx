@@ -151,7 +151,8 @@ export default function SourceDebugPage() {
 
   const title = debug?.name ?? "Debug ingestion";
   const sourceType = debug?.source_type ?? "";
-  const labels = debugLabelsForSource(sourceType);
+  const chunkInputType = debug?.chunk_input_type ?? "";
+  const labels = debugLabelsForSource(sourceType, chunkInputType);
   const chunkingNotice = debug ? chunkingNoticeForDebug(debug) : null;
   const chunkInput = debug ? debug.chunk_input || debug.markdown : "";
   const chunkHighlights = useMemo(
@@ -340,6 +341,18 @@ function ChunksList({
   );
 }
 
+function SectionBadge({ metadata }: { metadata: Record<string, unknown> }) {
+  const sectionPath = metadata.section_path;
+  if (Array.isArray(sectionPath) && sectionPath.length > 0) {
+    return (
+      <Badge className="max-w-[200px] truncate" title={sectionPath.join(" > ")}>
+        {sectionPath.join(" > ")}
+      </Badge>
+    );
+  }
+  return <Badge>{metadataValue(metadata, "section") ?? "main"}</Badge>;
+}
+
 function ChunkCard({
   highlight,
   index,
@@ -385,7 +398,7 @@ function ChunkCard({
             {result.chunk.chunk_id}
           </p>
         </div>
-        <Badge>{metadataValue(result.chunk.metadata, "section") ?? "main"}</Badge>
+        <SectionBadge metadata={result.chunk.metadata} />
       </div>
       <p className="break-words text-sm leading-6 text-ink/72 [overflow-wrap:anywhere] dark:text-slate-200">
         {result.chunk.text}
@@ -658,13 +671,13 @@ function chunkingNoticeForDebug(debug: SourceDebugResponse): string | null {
   if (!firstChunk) return null;
 
   const sourceType = debug.source_type.toLowerCase();
-  const method = metadataValue(firstChunk.metadata, "chunking_method");
-  const hasMarkdownSectionPath = Array.isArray(firstChunk.metadata.section_path);
-  if (sourceType === "url" && method === "deterministic-character-overlap") {
+  const chunkInputType = debug.chunk_input_type;
+
+  if (sourceType === "url" && chunkInputType === "markdown_cleaned") {
     return "URL này dùng parsed HTML sections làm đầu vào chunking; cột giữa đang hiển thị đúng nội dung trước khi tách chunk.";
   }
-  if (sourceType === "url" && hasMarkdownSectionPath) {
-    return "URL này được upload bằng logic tạm thời: chunk từ Markdown parse. Nạp lại URL để dùng parsed HTML sections.";
+  if (sourceType === "url" && chunkInputType === "parsed_sections") {
+    return "URL này được upload bằng chunker cũ. Nạp lại URL để dùng markdown-aware chunking mới.";
   }
   if (sourceType === "pdf") {
     return "PDF này dùng Markdown parse làm đầu vào chunking; section trong metadata là heading gần nhất trong Markdown.";
@@ -672,8 +685,9 @@ function chunkingNoticeForDebug(debug: SourceDebugResponse): string | null {
   return null;
 }
 
-function debugLabelsForSource(sourceType: string) {
+function debugLabelsForSource(sourceType: string, chunkInputType = "") {
   const normalizedType = sourceType.toLowerCase();
+  const isNewUrlChunking = chunkInputType === "markdown_cleaned";
   if (normalizedType === "pdf") {
     return {
       originalTitle: "PDF gốc",
@@ -689,9 +703,13 @@ function debugLabelsForSource(sourceType: string) {
       originalTitle: "Trang web gốc",
       originalDescription: "Trang chính thức trước khi extract",
       originalHint: "Nếu trang gốc chặn nhúng, dùng nút mở trực tiếp.",
-      chunkInputTitle: "Parsed HTML sections",
-      chunkInputDescription: "Nội dung HTML đã clean và chia section trước khi chunk",
-      chunksDescription: "Các đoạn được tách từ parsed HTML sections",
+      chunkInputTitle: isNewUrlChunking ? "Cleaned Markdown" : "Parsed HTML sections",
+      chunkInputDescription: isNewUrlChunking
+        ? "Markdown đã lọc boilerplate, đầu vào cho chunk_markdown_by_sections"
+        : "Nội dung HTML đã clean và chia section trước khi chunk",
+      chunksDescription: isNewUrlChunking
+        ? "Chunks theo heading structure (section_path)"
+        : "Các đoạn được tách từ parsed HTML sections",
     };
   }
   if (normalizedType === "text") {

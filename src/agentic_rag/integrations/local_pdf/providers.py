@@ -524,6 +524,27 @@ class LocalPdfEvidenceProvider:
                 documents.append(self._stored_document_from_chunks(chunk_path.stem, chunks))
         return documents
 
+    def delete_all_documents(self) -> int:
+        """Delete all source documents, chunks, files and vectors."""
+        import shutil
+
+        count = 0
+        if self._source_store is not None:
+            count = self._source_store.delete_all_documents()
+
+        for path in list(self._chunks_dir.glob("*.jsonl")):
+            path.unlink(missing_ok=True)
+            count = max(count, 1)
+        for path in list(self._parsed_dir.glob("*.md")):
+            path.unlink(missing_ok=True)
+        for path in list(self._files_dir.iterdir()):
+            path.unlink(missing_ok=True)
+        for path in list(self._debug_dir.iterdir()):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+
+        return count
+
     def delete_document(self, *, document_id: str) -> None:
         """Delete one source document and all its chunks from store and disk."""
         import shutil
@@ -765,10 +786,14 @@ class LocalPdfEvidenceProvider:
 
     def _chunks_for_documents(self, document_ids: list[str] | None) -> list[Chunk]:
         if document_ids:
-            chunks: list[Chunk] = []
+            if self._source_store is not None:
+                stored = self._source_store.read_chunks_for_documents(document_ids)
+                if stored:
+                    return stored
+            fallback: list[Chunk] = []
             for document_id in document_ids:
-                chunks.extend(self._read_chunks(document_id))
-            return chunks
+                fallback.extend(self._read_chunks(document_id))
+            return fallback
 
         if self._source_store is not None:
             chunks = self._source_store.read_all_chunks()
@@ -798,6 +823,12 @@ class LocalPdfEvidenceProvider:
     ) -> tuple[str, str]:
         normalized_source_type = source_type.lower()
         if normalized_source_type == "url":
+            first_chunk = chunks[0] if chunks else None
+            if first_chunk and "section_path" in first_chunk.metadata:
+                from agentic_rag.ingestion.url.loader import _clean_markdown_noise
+
+                cleaned = _clean_markdown_noise(markdown) if markdown else ""
+                return cleaned or _chunks_as_text(chunks), "markdown_cleaned"
             parsed_sections_path = self._url_parsed_sections_path(document_id)
             if parsed_sections_path is not None:
                 return parsed_sections_path.read_text(encoding="utf-8"), "parsed_sections"

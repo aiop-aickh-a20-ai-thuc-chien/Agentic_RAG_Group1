@@ -99,6 +99,5 @@ def test_agent_empty_provider_stops_when_transform_has_no_new_query(monkeypatch:
     assert result.answer.status in {"answered", "not_found"}
     assert provider.call_count == 1
     assert any(
-        step.get("node") == "transform_query" and step.get("skipped")
-        for step in result.steps
+        step.get("node") == "transform_query" and step.get("skipped") for step in result.steps
     )

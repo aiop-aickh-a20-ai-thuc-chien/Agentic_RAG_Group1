@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -48,11 +49,17 @@ class LocalSourceStore(Protocol):
     def read_all_chunks(self) -> list[Chunk]:
         """Return chunks for all stored documents."""
 
+    def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+        """Return chunks for multiple documents in one query."""
+
     def list_documents(self) -> list[StoredSourceDocument]:
         """Return stored source document metadata."""
 
     def delete_document(self, document_id: str) -> None:
         """Delete one source document and all its chunks."""
+
+    def delete_all_documents(self) -> int:
+        """Delete all source documents and chunks. Returns number of deleted documents."""
 
 
 class PostgresLocalSourceStore:
@@ -72,8 +79,18 @@ class PostgresLocalSourceStore:
             min_size=1,
             max_size=4,
             open=True,
+            kwargs={"prepare_threshold": None},
         )
         self._ensure_schema()
+
+    def close(self) -> None:
+        """Close the connection pool gracefully."""
+        with contextlib.suppress(Exception):
+            self._pool.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self._pool.close(timeout=1.0)
 
     def write_document(
         self,
@@ -156,11 +173,28 @@ class PostgresLocalSourceStore:
                     raise ValueError(f"Document {document_id!r} not found in store.")
             conn.commit()
 
+    def delete_all_documents(self) -> int:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"delete from {self._documents_table}")
+                count = cur.rowcount or 0
+            conn.commit()
+        return count
+
     def read_chunks(self, document_id: str) -> list[Chunk]:
         return self._read_chunks(where_sql="where document_id = %s", params=(document_id,))
 
     def read_all_chunks(self) -> list[Chunk]:
         return self._read_chunks(where_sql="", params=())
+
+    def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+        if not document_ids:
+            return []
+        placeholders = ", ".join(["%s"] * len(document_ids))
+        return self._read_chunks(
+            where_sql=f"where document_id in ({placeholders})",
+            params=tuple(document_ids),
+        )
 
     def list_documents(self) -> list[StoredSourceDocument]:
         with self._pool.connection() as conn, conn.cursor() as cur:

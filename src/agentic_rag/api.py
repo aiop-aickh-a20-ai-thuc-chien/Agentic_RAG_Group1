@@ -489,6 +489,25 @@ def source_raw(document_id: str) -> FileResponse:
     )
 
 
+@api.delete("/sources")
+def delete_all_sources() -> dict[str, object]:
+    """Delete all local source documents, chunks, files and vectors."""
+
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Delete all is only supported for local PDF sources.",
+        )
+
+    count = provider.delete_all_documents()
+    return {"status": "deleted", "deleted_count": count}
+
+
 @api.delete("/sources/{document_id}")
 def delete_source(document_id: str) -> dict[str, str]:
     """Delete a local source document and all its chunks from storage and disk."""

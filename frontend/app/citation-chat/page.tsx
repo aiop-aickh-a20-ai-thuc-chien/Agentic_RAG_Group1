@@ -1,6 +1,7 @@
 "use client";
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -153,7 +154,7 @@ type StreamEvent = {
 
 const API_URL =
   process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000";
-const URL_UPLOAD_CONCURRENCY = 3;
+const URL_UPLOAD_CONCURRENCY = 8;
 const SOURCE_CACHE_KEY = "agentic-rag:uploaded-sources:v1";
 const SOURCE_MODE_KEY = "agentic-rag:source-mode:v1";
 
@@ -211,41 +212,17 @@ export default function CitationChatPage() {
       }
 
       try {
-        const sourceList = await fetchSources();
+        const sourceList = await fetchSources(true);
         if (cancelled) return;
 
-        const metadataSources = sourceList.sources.map((source, index) =>
+        const restoredSources = sourceList.sources.map((source, index) =>
           uploadedSourceFromListItem(source, index),
         );
-        const restoredSources = mergeSourcesWithCachedChunks(metadataSources, uploadedSources);
         setUploadedSources(restoredSources);
         setSelectedDocumentIds(restoredSources.map((source) => source.documentId));
         if (restoredSources.length) {
           setSourceStatus("ready");
         }
-
-        restoredSources
-          .filter((source) => source.totalChunks > 0 && source.chunks.length === 0)
-          .forEach((source) => {
-            void fetchSourceChunks(source.documentId)
-              .then((payload) => {
-                if (cancelled) return;
-                setUploadedSources((current) =>
-                  current.map((item) =>
-                    item.documentId === payload.document_id
-                      ? {
-                          ...item,
-                          totalChunks: payload.total_chunks || payload.chunks.length,
-                          chunks: payload.chunks,
-                        }
-                      : item,
-                  ),
-                );
-              })
-              .catch(() => {
-                // Metadata is enough for selection; chunks can be retried from the debug page.
-              });
-          });
       } catch (hydrateError) {
         if (!cancelled && !uploadedSources.length) {
           setError(
@@ -545,6 +522,15 @@ export default function CitationChatPage() {
                     : [...current, source.documentId],
                 );
               }}
+              onClearAll={async () => {
+                try {
+                  await fetch(`${API_URL}/sources`, { method: "DELETE" });
+                } catch {
+                  // optimistic
+                }
+                setUploadedSources([]);
+                setSelectedDocumentIds([]);
+              }}
               selectedDocumentIds={selectedDocumentIds}
               setSourceStatus={setSourceStatus}
               setError={setError}
@@ -780,7 +766,7 @@ function ChatBubble({
               prose-table:text-sm prose-table:border-collapse
               prose-th:border prose-th:border-mint/30 prose-th:px-2 prose-th:py-1 prose-th:bg-mint/8
               prose-td:border prose-td:border-mint/20 prose-td:px-2 prose-td:py-1">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
             </div>
           )
         ) : (
@@ -883,6 +869,7 @@ function SourcePanel({
   fileName,
   onSourceRemove,
   onSourceReady,
+  onClearAll,
   selectedDocumentIds,
   setSourceStatus,
   setError,
@@ -899,6 +886,7 @@ function SourcePanel({
   fileName: string;
   onSourceRemove: (documentId: string) => void;
   onSourceReady: (source: UploadedSource) => void;
+  onClearAll: () => void;
   selectedDocumentIds: string[];
   setSourceStatus: (status: SourceProcessingStatus) => void;
   setError: (error: string) => void;
@@ -1248,9 +1236,25 @@ function SourcePanel({
       <Panel className="flex min-h-0 flex-col">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Tài liệu đang dùng</h2>
-          <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
-            {selectedDocumentIds.length} chọn
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
+              {selectedDocumentIds.length} chọn
+            </Badge>
+            {uploadedSources.length > 0 && (
+              <button
+                className="text-[11px] font-medium text-ink/40 transition hover:text-danger dark:text-slate-500 dark:hover:text-red-300"
+                onClick={() => {
+                  if (window.confirm(`Xóa tất cả ${uploadedSources.length} tài liệu khỏi vector DB?`)) {
+                    onClearAll();
+                  }
+                }}
+                title="Xóa tất cả tài liệu"
+                type="button"
+              >
+                Xóa tất cả
+              </button>
+            )}
+          </div>
         </div>
         <div className="max-h-[min(38vh,22rem)] min-h-0 space-y-2 overflow-y-auto pr-1">
           {uploadedSources.length || queuedSources.length ? (

@@ -11,9 +11,9 @@ from agentic_rag.agent.grading import (
     transform_query,
 )
 from agentic_rag.agent.state import AgentState
-from agentic_rag.core.contracts import Answer, SearchResult
+from agentic_rag.core.contracts import SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
-from agentic_rag.generation.answering import NOT_FOUND_ANSWER, generate_answer_with_trace
+from agentic_rag.generation.answering import generate_answer_with_trace
 from agentic_rag.generation.llm import configured_llm_client
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
@@ -427,10 +427,17 @@ def _retrieve_queries_parallel(
         )
 
 
-_HEAVY_METADATA_KEYS = frozenset({
-    "pipeline_trace", "bm25", "dense", "rrf", "rrf_contributions",
-    "preprocessed_query", "retrieval_pipeline",
-})
+_HEAVY_METADATA_KEYS = frozenset(
+    {
+        "pipeline_trace",
+        "bm25",
+        "dense",
+        "rrf",
+        "rrf_contributions",
+        "preprocessed_query",
+        "retrieval_pipeline",
+    }
+)
 
 
 def _with_retrieval_query_metadata(
@@ -439,10 +446,7 @@ def _with_retrieval_query_metadata(
     query_index: int,
 ) -> SearchResult:
     # Strip provider-level debug fields — they're large and only needed at retrieval time.
-    metadata = {
-        k: v for k, v in result.chunk.metadata.items()
-        if k not in _HEAVY_METADATA_KEYS
-    }
+    metadata = {k: v for k, v in result.chunk.metadata.items() if k not in _HEAVY_METADATA_KEYS}
     metadata["agent_retrieval_query"] = query
     metadata["agent_retrieval_query_index"] = query_index
     chunk = result.chunk.model_copy(update={"metadata": metadata})
@@ -492,7 +496,9 @@ def _rerank_per_query_groups(
     for query, group_candidates in query_groups.items():
         if query == "__unknown_query__":
             top = sorted(group_candidates, key=lambda r: r.score, reverse=True)[:top_k_per_group]
-            group_traces.append({"query": query, "kept": len(top), "used_provider": "score_fallback"})
+            group_traces.append(
+                {"query": query, "kept": len(top), "used_provider": "score_fallback"}
+            )
         else:
             top, meta = _rerank(query, group_candidates, top_k=top_k_per_group)
             group_traces.append({"query": query, "kept": len(top), **meta})

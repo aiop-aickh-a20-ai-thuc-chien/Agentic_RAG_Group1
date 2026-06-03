@@ -113,19 +113,15 @@ class Store:
         """Build or refresh a dense vector index from shared chunks."""
 
         embedding = _configured_embedding()
-        chunks_list = [chunk.text for chunk in chunks]
-        metadatas = _dense_metadatas(chunks)
-        ids = _dense_ids(chunks)
         if _configured_vector_store() == "pgvector":
-            pgvector_store = _build_pgvector_store(
-                texts=chunks_list,
-                embedding=embedding,
-                metadatas=metadatas,
-                ids=ids,
-            )
+            # Search-only: connect to existing pgvector index, do NOT re-embed stored texts.
+            # Embeddings were already upserted during ingest via upsert_dense_embeddings().
+            pgvector_store = _build_pgvector_store_for_search(embedding=embedding)
             if pgvector_store is not None:
                 return pgvector_store
 
+        chunks_list = [chunk.text for chunk in chunks]
+        metadatas = _dense_metadatas(chunks)
         return TurboQuantVectorStore.from_texts(
             texts=chunks_list, embedding=embedding, metadatas=metadatas
         )
@@ -281,6 +277,7 @@ def _build_pgvector_store(
     metadatas: list[dict[str, object]],
     ids: list[str],
 ) -> Any | None:
+    """Upsert texts into pgvector (used at ingest time — calls embedding API)."""
     connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
     if not connection:
         return None
@@ -298,6 +295,24 @@ def _build_pgvector_store(
         collection_name=_configured_pgvector_collection(),
         connection=connection,
         pre_delete_collection=False,
+    )
+
+
+def _build_pgvector_store_for_search(*, embedding: Any) -> Any | None:
+    """Connect to existing pgvector index for search (does NOT re-embed stored texts)."""
+    connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
+    if not connection:
+        return None
+
+    try:
+        from langchain_postgres import PGVector
+    except ImportError:
+        return None
+
+    return PGVector(
+        embeddings=embedding,
+        collection_name=_configured_pgvector_collection(),
+        connection=connection,
     )
 
 
@@ -320,8 +335,7 @@ def _dense_metadatas(chunks: list[Chunk]) -> list[dict[str, object]]:
 
 def _dense_ids(chunks: list[Chunk]) -> list[str]:
     return [
-        _dense_id(chunk=chunk, fallback_index=index)
-        for index, chunk in enumerate(chunks, start=1)
+        _dense_id(chunk=chunk, fallback_index=index) for index, chunk in enumerate(chunks, start=1)
     ]
 
 
@@ -331,6 +345,9 @@ def _dense_id(*, chunk: Chunk, fallback_index: int) -> str:
         return storage_chunk_id
     document_id = str(chunk.metadata.get("document_id") or "document")
     return f"{document_id}:{fallback_index:04d}"
+
+
+_DENSE_FILTER_MAX_IDS = 5
 
 
 def _dense_filter_for_chunks(chunks: list[Chunk]) -> dict[str, object] | None:
@@ -344,6 +361,10 @@ def _dense_filter_for_chunks(chunks: list[Chunk]) -> dict[str, object] | None:
         }
     )
     if not document_ids:
+        return None
+    # With many document_ids, a $in filter on JSONB is slower than a full collection scan.
+    # Skip the filter and let pgvector use its vector index efficiently.
+    if len(document_ids) > _DENSE_FILTER_MAX_IDS:
         return None
     if len(document_ids) == 1:
         return {"document_id": document_ids[0]}

@@ -297,11 +297,7 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
             return self.documents.get(document_id, [])
 
         def read_all_chunks(self) -> list[Chunk]:
-            return [
-                chunk
-                for chunks in self.documents.values()
-                for chunk in chunks
-            ]
+            return [chunk for chunks in self.documents.values() for chunk in chunks]
 
         def list_documents(self) -> list[StoredSourceDocument]:
             return [
@@ -321,6 +317,17 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
             if document_id not in self.documents:
                 raise ValueError(f"Document {document_id!r} not found.")
             del self.documents[document_id]
+
+        def delete_all_documents(self) -> int:
+            count = len(self.documents)
+            self.documents.clear()
+            return count
+
+        def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+            result = []
+            for doc_id in document_ids:
+                result.extend(self.documents.get(doc_id, []))
+            return result
 
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
@@ -407,8 +414,7 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert results[0].retriever == "hybrid"
     assert results[0].rank == 1
     assert (
-        results[0].chunk.metadata["retrieval_pipeline"]
-        == "source_ingestion -> bm25 + dense -> rrf"
+        results[0].chunk.metadata["retrieval_pipeline"] == "source_ingestion -> bm25 + dense -> rrf"
     )
     assert results[0].chunk.metadata["bm25"] is not None
     assert results[0].chunk.metadata["dense"] is not None

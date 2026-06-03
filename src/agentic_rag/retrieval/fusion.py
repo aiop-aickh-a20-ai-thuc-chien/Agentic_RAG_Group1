@@ -158,7 +158,11 @@ def build_evidence_context(evidence_chunks: list[SearchResult]) -> str:
         metadata = result.chunk.metadata
         source = _metadata_text(metadata, "source") or "unknown"
         page = _metadata_text(metadata, "page")
-        section = _metadata_text(metadata, "section")
+        section_path = metadata.get("section_path")
+        if isinstance(section_path, list) and section_path:
+            section: str | None = " > ".join(str(s) for s in section_path)
+        else:
+            section = _metadata_text(metadata, "section")
         location = _format_location(page=page, section=section)
         text = _normalize_text(result.chunk.text)
         lines.append(

@@ -153,9 +153,10 @@ def test_retrieve_node_appends_results() -> None:
     assert update["step_count"] == 1
     assert update["trace"][0]["query_count"] == 1
     assert update["trace"][0]["per_query"][0]["returned_chunks"] == 1
-    assert update["fused_results"][0].chunk.metadata["agent_retrieval_query"] == _base_state()[
-        "queries_tried"
-    ][0]
+    assert (
+        update["fused_results"][0].chunk.metadata["agent_retrieval_query"]
+        == _base_state()["queries_tried"][0]
+    )
 
 
 def test_retrieve_node_adds_all_chunks() -> None:
