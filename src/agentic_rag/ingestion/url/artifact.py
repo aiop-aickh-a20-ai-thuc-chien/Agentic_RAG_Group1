@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import short_hash, slugify
+from agentic_rag.ingestion.url.parser import Asset, PageMetadata
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,11 @@ def persist_ingestion_artifacts(
     created_at: str,
     markdown: str,
     chunks: Iterable[Chunk],
+    original_url: str | None = None,
+    final_url: str | None = None,
+    canonical_url: str | None = None,
+    page_metadata: PageMetadata | None = None,
+    assets: Iterable[Asset] = (),
 ) -> IngestionArtifacts | None:
     """Persist parsed Markdown, chunks JSONL, and manifest for one URL run."""
 
@@ -83,9 +90,14 @@ def persist_ingestion_artifacts(
         "input_type": input_type,
         "input_source": source,
         "input_url": source_url,
+        "original_url": original_url,
+        "final_url": final_url,
+        "canonical_url": canonical_url,
         "parser": parser,
         "run_id": run_id,
         "created_at": created_at,
+        "page_metadata": _page_metadata_dict(page_metadata),
+        "assets": [_asset_dict(asset) for asset in assets],
         "artifact_root": _path_text(artifact_root),
         "run_dir": _path_text(run_dir),
         "markdown_path": _path_text(markdown_path),
@@ -114,6 +126,16 @@ def _validate_artifact_name(name: str) -> str:
 def _serialize_chunks_jsonl(chunks: Iterable[Chunk]) -> str:
     lines = [json.dumps(chunk.model_dump(mode="json"), ensure_ascii=False) for chunk in chunks]
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+def _page_metadata_dict(metadata: PageMetadata | None) -> dict[str, str | None]:
+    if metadata is None:
+        return {}
+    return asdict(metadata)
+
+
+def _asset_dict(asset: Asset) -> dict[str, Any]:
+    return asdict(asset)
 
 
 def _source_slug(source: str) -> str:

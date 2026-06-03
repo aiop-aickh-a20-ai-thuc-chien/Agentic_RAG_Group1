@@ -82,7 +82,11 @@ def build_chunks(
 
 
 def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
-    return "deterministic-character-overlap" if chunking_strategy is None else "llm-assisted"
+    if chunking_strategy is None:
+        return "deterministic-character-overlap"
+    if chunking_strategy.provider == "tiktoken":
+        return "deterministic-token-overlap"
+    return "llm-assisted"
 
 
 def _chunking_provider(chunking_strategy: TextChunkingStrategy | None) -> str | None:

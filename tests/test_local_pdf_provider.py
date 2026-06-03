@@ -282,12 +282,18 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert pipeline_trace["bm25_search"]["output"][0]["retriever"] == "bm25"
     assert pipeline_trace["dense_search"]["tech"]["model"] == "text-embedding-3-small"
     assert pipeline_trace["dense_search"]["output"]["results"][0]["retriever"] == "dense"
+    assert pipeline_trace["rrf_fusion"]["tech"]["method"] == "reciprocal_rank_fusion"
+    assert pipeline_trace["rrf_fusion"]["tech"]["rrf_k"] == 60
     assert pipeline_trace["rrf_fusion"]["input"]["bm25_results"][0]["retriever"] == "bm25"
     assert pipeline_trace["rrf_fusion"]["output"][0]["retriever"] == "hybrid"
     rrf_contributions = pipeline_trace["rrf_fusion"]["output"][0]["contributions"]
     assert rrf_contributions["bm25"]["retriever"] == "bm25"
     assert rrf_contributions["dense"]["retriever"] == "dense"
     assert rrf_contributions["total_rrf_score"] > 0
+    assert pipeline_trace["thresholds"]["pre_fusion"]["bm25_original_count"] >= 1
+    assert pipeline_trace["thresholds"]["pre_fusion"]["thresholds_applied"] is False
+    assert pipeline_trace["thresholds"]["fusion"]["fusion_min_score"] is None
+    assert pipeline_trace["thresholds"]["rerank"]["final_evidence_count"] == len(results)
     assert results[0].chunk.metadata["rrf_contributions"]["total_rrf_score"] > 0
     assert pipeline_trace["rerank"]["tech"]["used_provider"] == "score"
     assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "hybrid"

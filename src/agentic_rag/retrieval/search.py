@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Any
 
 from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
@@ -13,6 +14,17 @@ from agentic_rag.core.contracts import Chunk, SearchResult
 DEFAULT_DENSE_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_DENSE_EMBEDDING_DIMENSIONS = 1536
 
+REQUERY_ROUTER_PROMPT = """
+You're a good at understanding user's query. \
+    Your task is to analyze the user's query and choose a method to clarify the query.
+Chose:
+- Decompose: If the query mentions two or more components at same time. \
+    You need to break down this complex query by entities into 2-3 simpler sub-queries
+- Expand: If the query contains an entity, the name of the entity. \
+    You need to Generate 2-3 alternative phrasings or related terms.
+Ouput in Vietnamse only. follow this JSON format: {"method": two of these methods, "answer": ...}
+"""
+
 
 class Store:
     def __init__(self, chunks: list[Chunk]):
@@ -20,14 +32,34 @@ class Store:
         self._bm25_index = self._build_bm25_index(chunks)
         self._vector_index: TurboQuantVectorStore | None = None
 
-    def preprocess_query(self, query: str) -> dict[str, str]:
+    def preprocess_query(self, query: str) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
+        import json
+        import os
+
+        from dotenv import load_dotenv
+        from openai import OpenAI
+
+        load_dotenv()
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         normalized = _normalize_text(query)
+
+        router_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": REQUERY_ROUTER_PROMPT},
+                {"role": "user", "content": query},
+            ],
+        )
+        requery = json.loads(router_response.choices[0].message.content)  # type: ignore[arg-type]
+
         return {
             "raw": query,
             "normalized": normalized,
             "tokens": " ".join(_tokenize(normalized)),
+            "requery": requery,
         }
 
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
@@ -66,12 +98,17 @@ class Store:
 
     def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
-        from langchain_openai import OpenAIEmbeddings
 
-        embedding = OpenAIEmbeddings(
-            model=DEFAULT_DENSE_EMBEDDING_MODEL,
-            dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        )
+        from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+
+        embedding = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+        # except Exception:
+        #     from langchain_openai import OpenAIEmbeddings
+
+        #     embedding = OpenAIEmbeddings(
+        #         model=DEFAULT_DENSE_EMBEDDING_MODEL,
+        #         dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
+        #     )
 
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
@@ -108,6 +145,13 @@ class Store:
             )
 
         return result
+
+    def search(self, query: str, top_k: int = 10) -> tuple[list[SearchResult], list[SearchResult]]:
+        nquery = self.preprocess_query(query=query)
+        bm25_result = self.bm25_search(nquery["requery"]["answer"], top_k=top_k)
+        dense_result = self.dense_search(nquery["requery"]["answer"], top_k=top_k)
+
+        return bm25_result, dense_result
 
 
 def dense_embedding_metadata() -> dict[str, object]:
@@ -166,4 +210,4 @@ if __name__ == "__main__":
     from agentic_rag.testing.fixtures import sample_chunks
 
     store = Store(sample_chunks())
-    print(store.dense_search("chinh sach bao hanh"))
+    print(store.preprocess_query("so sánh VF8 và VF9"))
