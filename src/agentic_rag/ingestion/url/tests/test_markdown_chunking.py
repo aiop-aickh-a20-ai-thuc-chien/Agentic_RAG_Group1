@@ -42,6 +42,7 @@ def test_chunk_markdown_by_sections_prefers_paragraph_boundaries() -> None:
     assert chunks[0].section_level == 1
     assert chunks[0].section_path == ("Section",)
     assert chunks[0].text == "# Section\n\nDoan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].chunk_token_count is not None
     assert chunks[0].chunk_token_count > 0
     assert chunks[0].semantic_unit == "markdown_section_paragraph_sentence"
 
