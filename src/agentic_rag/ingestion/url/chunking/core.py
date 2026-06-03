@@ -2,18 +2,43 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from importlib import import_module
 from typing import Any, cast
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.chunking import (
+    build_chunk_id,
+    normalize_space,
+    short_hash,
+    slugify,
+)
+from agentic_rag.ingestion.chunking import (
+    split_markdown as split_shared_markdown,
+)
 
 DEFAULT_CHUNK_SIZE = 512
 DEFAULT_CHUNK_OVERLAP = 1
 DEFAULT_PARAGRAPH_MAX_TOKENS = 512
 DEFAULT_PARAGRAPH_OVERLAP = 1
 _VIETNAMESE_MARKERS = set("ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
+
+__all__ = [
+    "DEFAULT_CHUNK_OVERLAP",
+    "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_PARAGRAPH_MAX_TOKENS",
+    "DEFAULT_PARAGRAPH_OVERLAP",
+    "build_chunk_id",
+    "build_chunks",
+    "detect_lang",
+    "normalize_space",
+    "paragraph_chunk",
+    "short_hash",
+    "slugify",
+    "split_markdown",
+    "split_markdown_paragraphs",
+    "split_sentences",
+]
 
 
 def build_chunks(
@@ -37,11 +62,7 @@ def build_chunks(
 
     chunks: list[Chunk] = []
     content_hash = short_hash(text)
-    text_chunks = _split_text(
-        text,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-    )
+    text_chunks = _split_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     for index, chunk_text in enumerate(text_chunks, start=1):
         chunks.append(
             Chunk(
@@ -67,28 +88,7 @@ def build_chunks(
 def split_markdown(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
     """Split Markdown/text deterministically with word-boundary preference."""
 
-    cleaned_text = normalize_space(text)
-    if not cleaned_text:
-        return []
-    if len(cleaned_text) <= chunk_size:
-        return [cleaned_text]
-
-    chunks: list[str] = []
-    start = 0
-    while start < len(cleaned_text):
-        end = min(start + chunk_size, len(cleaned_text))
-        if end < len(cleaned_text):
-            split_at = cleaned_text.rfind(" ", start, end)
-            if split_at > start:
-                end = split_at
-        chunk = cleaned_text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(cleaned_text):
-            break
-        next_start = max(end - chunk_overlap, 0)
-        start = end if next_start <= start else next_start
-    return chunks
+    return split_shared_markdown(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
 def paragraph_chunk(
@@ -112,12 +112,7 @@ def paragraph_chunk(
     for paragraph in paragraphs:
         paragraph_tokens = _count_tokens(paragraph)
         if buffer and buffer_tokens + paragraph_tokens > max_tokens:
-            chunks.append(
-                {
-                    "text": "\n\n".join(buffer),
-                    "token_count": buffer_tokens,
-                }
-            )
+            chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
             buffer = buffer[-overlap_paragraphs:] if overlap_paragraphs else []
             buffer_tokens = sum(_count_tokens(item) for item in buffer)
 
@@ -125,12 +120,7 @@ def paragraph_chunk(
         buffer_tokens += paragraph_tokens
 
     if buffer:
-        chunks.append(
-            {
-                "text": "\n\n".join(buffer),
-                "token_count": buffer_tokens,
-            }
-        )
+        chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
 
     return chunks
 
@@ -187,37 +177,7 @@ def split_markdown_paragraphs(
     ]
 
 
-def build_chunk_id(source_type: str, source: str, section: str, index: int) -> str:
-    """Build a deterministic chunk ID from source and section metadata."""
-
-    return f"{source_type}_{short_hash(source)}_{slugify(section)}_c{index:03d}"
-
-
-def short_hash(value: str) -> str:
-    """Return a stable short SHA-256 digest."""
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-
-
-def slugify(value: str) -> str:
-    """Normalize a section name for use inside a chunk ID."""
-
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "main"
-
-
-def normalize_space(value: str) -> str:
-    """Collapse repeated whitespace into single spaces."""
-
-    return " ".join(value.split())
-
-
-def _split_text(
-    text: str,
-    *,
-    chunk_size: int,
-    chunk_overlap: int,
-) -> list[str]:
+def _split_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
     return split_markdown_paragraphs(
         text,
         max_tokens=chunk_size,

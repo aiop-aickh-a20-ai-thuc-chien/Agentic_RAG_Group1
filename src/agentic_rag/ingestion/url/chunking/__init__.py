@@ -1,5 +1,6 @@
 """Chunking helpers for URL ingestion."""
 
+from agentic_rag.ingestion.chunking import ChunkCandidate, Chunker, ChunkingInput
 from agentic_rag.ingestion.url.chunking.core import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
@@ -28,6 +29,9 @@ __all__ = [
     "DEFAULT_CHUNK_SIZE",
     "DEFAULT_PARAGRAPH_MAX_TOKENS",
     "DEFAULT_PARAGRAPH_OVERLAP",
+    "ChunkCandidate",
+    "Chunker",
+    "ChunkingInput",
     "MarkdownChunk",
     "MarkdownSection",
     "build_chunk_id",

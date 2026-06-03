@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url import (
     load_html_chunks,

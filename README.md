@@ -60,7 +60,7 @@ uv run pytest -q
 Khi CI chạy hoặc khi `uv.lock` đã tồn tại, dùng lệnh cài đặt khóa phiên bản:
 
 ```bash
-uv sync --locked
+uv sync 
 ```
 
 ## Phát triển với AI Coding Assistant

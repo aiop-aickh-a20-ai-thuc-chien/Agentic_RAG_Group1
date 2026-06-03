@@ -7,7 +7,10 @@ from typing import Any, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict
 
+from agentic_rag.ingestion.pdf.models import PdfParseResult
+
 DocumentConverter: Any | None = None
+DEFAULT_PDF_PARSER = "docling"
 
 
 class ParsedPdfDocument(BaseModel):
@@ -22,6 +25,11 @@ class ParsedPdfDocument(BaseModel):
 class PdfMarkdownParser(Protocol):
     """Parser interface that hides concrete PDF parser dependencies."""
 
+    parser_name: str
+
+    def parse(self, path: Path) -> PdfParseResult:
+        """Convert a local PDF file into a normalized PDF-local parse result."""
+
     def parse_to_markdown(self, path: Path) -> str:
         """Convert a local PDF file into Markdown text."""
 
@@ -35,6 +43,18 @@ class PdfDocumentParser(Protocol):
 
 class DoclingMarkdownParser:
     """Docling-backed baseline parser for local PDF files."""
+
+    parser_name = DEFAULT_PDF_PARSER
+
+    def parse(self, path: Path) -> PdfParseResult:
+        """Convert a PDF file into the normalized PDF-local parse result."""
+
+        markdown = self.parse_to_markdown(path)
+        return PdfParseResult(
+            parser=self.parser_name,
+            source_path=str(path),
+            markdown=markdown,
+        )
 
     def parse_to_markdown(self, path: Path) -> str:
         """Convert a PDF file into Markdown using Docling."""
@@ -79,3 +99,11 @@ def _get_document_converter() -> Any:
 
         DocumentConverter = docling_document_converter
     return DocumentConverter
+
+
+def resolve_pdf_parser(parser_name: str | None = None) -> PdfMarkdownParser:
+    """Resolve a parser name through the PDF-local registry."""
+
+    from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser as resolve_registered_parser
+
+    return resolve_registered_parser(parser_name)

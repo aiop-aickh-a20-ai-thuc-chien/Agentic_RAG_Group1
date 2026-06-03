@@ -95,7 +95,7 @@ Dùng `agentic_rag.core.ports` cho protocol boundaries.
 Chạy trước khi gửi review:
 
 ```bash
-uv sync --locked
+uv sync 
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy
