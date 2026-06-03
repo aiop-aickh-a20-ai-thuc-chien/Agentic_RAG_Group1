@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 
 import pytest
+
 from agentic_rag.ingestion.url import load_html_chunks
 from agentic_rag.ingestion.url.model_chunking import (
     LLMChunkingConfig,

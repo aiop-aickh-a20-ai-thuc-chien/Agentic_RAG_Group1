@@ -16,6 +16,9 @@ DEFAULT_DENSE_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_DENSE_EMBEDDING_DIMENSIONS = 1536
 DEFAULT_HF_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 DENSE_EMBEDDING_PROVIDER_ENV = "DENSE_EMBEDDING_PROVIDER"
+DENSE_VECTOR_STORE_ENV = "DENSE_VECTOR_STORE"
+DENSE_PGVECTOR_CONNECTION_ENV = "DENSE_PGVECTOR_CONNECTION"
+DENSE_PGVECTOR_COLLECTION_ENV = "DENSE_PGVECTOR_COLLECTION"
 HF_EMBEDDING_MODEL_ENV = "HF_EMBEDDING_MODEL"
 
 REQUERY_ROUTER_PROMPT = """
@@ -42,7 +45,7 @@ class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
         self._bm25_index = self._build_bm25_index(chunks)
-        self._vector_index: TurboQuantVectorStore | None = None
+        self._vector_index: Any = None
 
     def preprocess_query(self, query: str, llm_client: object = None) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
@@ -106,12 +109,21 @@ class Store:
 
         return results
 
-    def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
+    def _build_vector_index(self, chunks: list[Chunk]) -> Any:
         """Build or refresh a dense vector index from shared chunks."""
 
         embedding = _configured_embedding()
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
+        if _configured_vector_store() == "pgvector":
+            pgvector_store = _build_pgvector_store(
+                texts=chunks_list,
+                embedding=embedding,
+                metadatas=metadatas,
+            )
+            if pgvector_store is not None:
+                return pgvector_store
+
         return TurboQuantVectorStore.from_texts(
             texts=chunks_list, embedding=embedding, metadatas=metadatas
         )
@@ -183,24 +195,30 @@ def dense_embedding_metadata() -> dict[str, object]:
     """Return the dense retrieval embedding configuration used by Store."""
 
     provider = _configured_embedding_provider()
+    vector_store = _configured_vector_store()
     if provider == "huggingface":
         return {
             "provider": "huggingface",
             "library": "langchain-huggingface",
             "model": os.getenv(HF_EMBEDDING_MODEL_ENV, DEFAULT_HF_EMBEDDING_MODEL),
-            "vector_store": "turbovec",
+            "vector_store": vector_store,
         }
     return {
         "provider": "openai",
         "library": "langchain-openai",
         "model": DEFAULT_DENSE_EMBEDDING_MODEL,
         "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        "vector_store": "turbovec",
+        "vector_store": vector_store,
     }
 
 
 def _configured_embedding_provider() -> str:
     return os.getenv(DENSE_EMBEDDING_PROVIDER_ENV, "openai").strip().lower()
+
+
+def _configured_vector_store() -> str:
+    raw = os.getenv(DENSE_VECTOR_STORE_ENV, "turbovec").strip().lower()
+    return "pgvector" if raw in {"pgvector", "postgres", "postgresql"} else "turbovec"
 
 
 def _configured_embedding() -> Any:
@@ -218,10 +236,36 @@ def _configured_embedding() -> Any:
     )
 
 
+def _build_pgvector_store(
+    *,
+    texts: list[str],
+    embedding: Any,
+    metadatas: list[dict[str, object]],
+) -> Any | None:
+    connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
+    if not connection:
+        return None
+
+    try:
+        from langchain_postgres import PGVector
+    except ImportError:
+        return None
+
+    collection_name = os.getenv(DENSE_PGVECTOR_COLLECTION_ENV, "document").strip() or "document"
+    return PGVector.from_texts(
+        texts=texts,
+        embedding=embedding,
+        metadatas=metadatas,
+        collection_name=collection_name,
+        connection=connection,
+        pre_delete_collection=True,
+    )
+
+
 def _chunk_from_dense_document(
     *,
     doc: object,
-    vector_index: TurboQuantVectorStore,
+    vector_index: Any,
     chunks: list[Chunk],
 ) -> Chunk:
     metadata = getattr(doc, "metadata", {})

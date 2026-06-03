@@ -1,8 +1,35 @@
+import json
+from types import SimpleNamespace
+
+from pytest import MonkeyPatch
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.retrieval.search import Store
 
 
-def test_preprocess_query_normalizes_vietnamese_text() -> None:
+def test_preprocess_query_normalizes_vietnamese_text(monkeypatch: MonkeyPatch) -> None:
+    class FakeOpenAI:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            self._call_count = 0
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+        def _create(self, *_args: object, **_kwargs: object) -> object:
+            self._call_count += 1
+            if self._call_count == 1:
+                content = "decompose"
+            else:
+                content = json.dumps(
+                    {
+                        "method": "decompose",
+                        "transformed_queries": ["bao hanh pin"],
+                    }
+                )
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+            )
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+
     store = Store([Chunk(chunk_id="c1", text="Pin cao ap", metadata={})])
 
     preprocessed = store.preprocess_query("  Bảo hành PIN  ")
