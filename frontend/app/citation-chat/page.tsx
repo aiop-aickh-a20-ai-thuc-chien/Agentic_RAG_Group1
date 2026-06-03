@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KnowledgeScene } from "@/components/knowledge-scene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,8 @@ type SourceUploadResponse = {
   document_id: string;
   name: string;
   parse_started: boolean;
+  source_type?: string | null;
+  source?: string | null;
 };
 
 type SourceChunk = {
@@ -87,6 +89,23 @@ type SourceChunksResponse = {
   chunks: SourceChunk[];
 };
 
+type SourceListItem = {
+  provider: string;
+  dataset_id: string;
+  document_id: string;
+  name: string;
+  source_type: string;
+  source: string;
+  total_chunks: number;
+  chunks: SourceChunk[];
+  metadata: Record<string, unknown>;
+};
+
+type SourceListResponse = {
+  provider: string;
+  sources: SourceListItem[];
+};
+
 type SourceDebugResponse = {
   provider: string;
   document_id: string;
@@ -105,6 +124,8 @@ type UploadedSource = {
   name: string;
   provider: string;
   mode: SourceMode;
+  source?: string;
+  sourceType?: string;
   totalChunks: number;
   chunks: SourceChunk[];
   uploadedAt: number;
@@ -133,6 +154,8 @@ type StreamEvent = {
 const API_URL =
   process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000";
 const URL_UPLOAD_CONCURRENCY = 3;
+const SOURCE_CACHE_KEY = "agentic-rag:uploaded-sources:v1";
+const SOURCE_MODE_KEY = "agentic-rag:source-mode:v1";
 
 function createWelcomeMessage(): ChatMessage {
   return {
@@ -178,6 +201,84 @@ export default function CitationChatPage() {
     () => selectedSources.flatMap((source) => source.chunks),
     [selectedSources],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateSources() {
+      if (uploadedSources.length) {
+        setSourceStatus("ready");
+      }
+
+      try {
+        const sourceList = await fetchSources();
+        if (cancelled) return;
+
+        const metadataSources = sourceList.sources.map((source, index) =>
+          uploadedSourceFromListItem(source, index),
+        );
+        const restoredSources = mergeSourcesWithCachedChunks(metadataSources, uploadedSources);
+        setUploadedSources(restoredSources);
+        setSelectedDocumentIds(restoredSources.map((source) => source.documentId));
+        if (restoredSources.length) {
+          setSourceStatus("ready");
+        }
+
+        restoredSources
+          .filter((source) => source.totalChunks > 0 && source.chunks.length === 0)
+          .forEach((source) => {
+            void fetchSourceChunks(source.documentId)
+              .then((payload) => {
+                if (cancelled) return;
+                setUploadedSources((current) =>
+                  current.map((item) =>
+                    item.documentId === payload.document_id
+                      ? {
+                          ...item,
+                          totalChunks: payload.total_chunks || payload.chunks.length,
+                          chunks: payload.chunks,
+                        }
+                      : item,
+                  ),
+                );
+              })
+              .catch(() => {
+                // Metadata is enough for selection; chunks can be retried from the debug page.
+              });
+          });
+      } catch (hydrateError) {
+        if (!cancelled && !uploadedSources.length) {
+          setError(
+            hydrateError instanceof Error
+              ? hydrateError.message
+              : "Khong tai lai duoc danh sach tai lieu.",
+          );
+        }
+      }
+    }
+
+    hydrateSources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    writeCachedSources(uploadedSources);
+  }, [uploadedSources]);
+
+  // Read stored tab after hydration (lazy init causes SSR mismatch)
+  useEffect(() => {
+    const stored = globalThis.localStorage?.getItem(SOURCE_MODE_KEY);
+    if (stored === "pdf" || stored === "url" || stored === "text") {
+      setSourceMode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    globalThis.localStorage?.setItem(SOURCE_MODE_KEY, sourceMode);
+  }, [sourceMode]);
 
   const sourcePlaceholder = useMemo(() => {
     if (sourceMode === "url") return "https://example.com/chinh-sach";
@@ -417,7 +518,15 @@ export default function CitationChatPage() {
           {showSources ? (
             <SourcePanel
               fileName={fileName}
-              onSourceRemove={(documentId) => {
+              onSourceRemove={async (documentId) => {
+                try {
+                  await fetch(
+                    `${API_URL}/sources/${encodeURIComponent(documentId)}`,
+                    { method: "DELETE" },
+                  );
+                } catch {
+                  // optimistic: xóa UI dù API fail
+                }
                 setUploadedSources((current) =>
                   current.filter((source) => source.documentId !== documentId),
                 );
@@ -828,22 +937,22 @@ function SourcePanel({
     mode: SourceMode;
     upload: () => Promise<SourceUploadResponse>;
   }) {
-    setFileName(item.name);
+    setFileName(displayQueuedSourceName(item));
     setSourceStatus("uploading");
     updateQueuedSource(item.id, {
       status: "uploading",
       progress: 35,
-      label: "Đang tải lên RAGFlow",
+      label: "Đang tải tài liệu",
     });
 
     const uploaded = await upload();
-    setFileName(uploaded.name);
+    setFileName(mode === "url" ? displayUrlName(uploaded.source ?? item.name) : uploaded.name);
     setSourceStatus("processing");
     updateQueuedSource(item.id, {
       name: uploaded.name,
       status: "processing",
       progress: 72,
-      label: "RAGFlow đang tách chunk",
+      label: "Đang tách chunk",
     });
 
     const sourceChunks = await waitForSourceChunks(uploaded.document_id);
@@ -855,6 +964,8 @@ function SourcePanel({
       name: uploaded.name,
       provider: uploaded.provider,
       mode,
+      source: uploaded.source ?? undefined,
+      sourceType: uploaded.source_type ?? undefined,
       totalChunks,
       chunks: sourceChunks.chunks,
       uploadedAt: Date.now(),
@@ -1174,7 +1285,7 @@ function SourcePanel({
                     <div className="min-w-0 flex-1">
                       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
                         <p className="min-w-0 truncate text-sm font-medium" title={source.name}>
-                          {source.name}
+                          {displayQueuedSourceName(source)}
                         </p>
                         <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] text-ink/54 dark:bg-slate-800 dark:text-slate-300">
                           {sourceLabel(source.mode)}
@@ -1239,8 +1350,11 @@ function SourcePanel({
                       onClick={() => toggleSourceSelection(source.documentId)}
                       type="button"
                     >
-                      <span className="block truncate text-sm font-medium" title={source.name}>
-                        {source.name}
+                      <span
+                        className="block truncate text-sm font-medium"
+                        title={source.source || source.name}
+                      >
+                        {displaySourceName(source)}
                       </span>
                       <span className="mt-1 block text-xs text-ink/52 dark:text-slate-300">
                         {formatChunkCount(source.totalChunks)} · {sourceLabel(source.mode)}
@@ -1757,23 +1871,149 @@ async function uploadTextSource({
   return (await response.json()) as SourceUploadResponse;
 }
 
+async function fetchSources(includeChunks = false): Promise<SourceListResponse> {
+  const response = await fetch(`${API_URL}/sources?include_chunks=${includeChunks ? "true" : "false"}`);
+  if (!response.ok) {
+    throw new Error(`Khong lay duoc danh sach tai lieu: ${response.status}`);
+  }
+  return (await response.json()) as SourceListResponse;
+}
+
+function uploadedSourceFromListItem(
+  source: SourceListItem,
+  index: number,
+): UploadedSource {
+  return {
+    datasetId: source.dataset_id,
+    documentId: source.document_id,
+    name: source.name,
+    provider: source.provider,
+    mode: sourceModeFromSourceType(source.source_type),
+    source: source.source,
+    sourceType: source.source_type,
+    totalChunks: source.total_chunks || source.chunks.length,
+    chunks: source.chunks,
+    uploadedAt: Date.now() - index,
+  };
+}
+
+function mergeSourcesWithCachedChunks(
+  sources: UploadedSource[],
+  cachedSources: UploadedSource[],
+): UploadedSource[] {
+  const cacheById = new Map(cachedSources.map((source) => [source.documentId, source]));
+  return sources.map((source) => {
+    const cached = cacheById.get(source.documentId);
+    if (!cached?.chunks.length || source.chunks.length) {
+      return source;
+    }
+    return {
+      ...source,
+      chunks: cached.chunks,
+    };
+  });
+}
+
+function readCachedSources(): UploadedSource[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(SOURCE_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as UploadedSource[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((source) => source?.documentId && source?.name)
+      .map((source, index) => ({
+        datasetId: source.datasetId || "local_pdf",
+        documentId: source.documentId,
+        name: source.name,
+        provider: source.provider || "local_pdf",
+        mode: source.mode || sourceModeFromSourceType(source.sourceType || ""),
+        source: source.source,
+        sourceType: source.sourceType,
+        totalChunks: Number(source.totalChunks) || source.chunks?.length || 0,
+        chunks: Array.isArray(source.chunks) ? source.chunks : [],
+        uploadedAt: Number(source.uploadedAt) || Date.now() - index,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedSources(sources: UploadedSource[]) {
+  if (typeof window === "undefined") return;
+
+  if (!sources.length) {
+    window.localStorage.removeItem(SOURCE_CACHE_KEY);
+    return;
+  }
+
+  const cachePayload = sources.map((source) => ({
+    ...source,
+    chunks: [],
+  }));
+  window.localStorage.setItem(SOURCE_CACHE_KEY, JSON.stringify(cachePayload));
+}
+
+function sourceModeFromSourceType(sourceType: string): SourceMode {
+  if (sourceType === "url") return "url";
+  if (sourceType === "text") return "text";
+  return "pdf";
+}
+
+function displayQueuedSourceName(source: QueuedSource): string {
+  if (source.mode === "url") {
+    return displayUrlName(source.name);
+  }
+  return source.name;
+}
+
+function displaySourceName(source: UploadedSource): string {
+  if (source.mode === "url") {
+    return displayUrlName(source.source || source.name);
+  }
+  return source.name;
+}
+
+function displayUrlName(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.hostname}${parsed.pathname}`.replace(/\/$/, "") || parsed.hostname;
+  } catch {
+    return value
+      .replace(/^https?:\/\//, "")
+      .replace(/\.html\.txt$/, "")
+      .replace(/\.txt$/, "");
+  }
+}
+
 async function waitForSourceChunks(
   documentId: string,
   attempts = 20,
   delayMs = 3000,
 ): Promise<SourceChunksResponse> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(`${API_URL}/sources/${documentId}/chunks`);
-    if (response.ok) {
-      const payload = (await response.json()) as SourceChunksResponse;
+    try {
+      const payload = await fetchSourceChunks(documentId);
       if (payload.chunks.length > 0) {
         return payload;
       }
+    } catch {
+      // The source may still be parsing; keep polling until the caller's timeout.
     }
     await delay(delayMs);
   }
 
-  throw new Error("RAGFlow đã nhận tài liệu nhưng chưa tạo chunk. Chờ thêm rồi thử lại.");
+  throw new Error("Tài liệu đã được nhận nhưng chưa tạo chunk. Chờ thêm rồi thử lại.");
+}
+
+async function fetchSourceChunks(documentId: string): Promise<SourceChunksResponse> {
+  const response = await fetch(`${API_URL}/sources/${documentId}/chunks`);
+  if (!response.ok) {
+    throw new Error(`Khong lay duoc chunk source: ${response.status}`);
+  }
+  return (await response.json()) as SourceChunksResponse;
 }
 
 async function fetchSourceDebug(documentId: string): Promise<SourceDebugResponse> {
@@ -1789,17 +2029,17 @@ function delay(ms: number): Promise<void> {
 }
 
 function sourceStatusText(status: SourceProcessingStatus, chunkCount: number): string {
-  if (status === "uploading") return "Đang tải tài liệu lên RAGFlow";
-  if (status === "processing") return "RAGFlow đang tách đoạn tài liệu";
+  if (status === "uploading") return "Đang tải tài liệu";
+  if (status === "processing") return "Đang tách đoạn tài liệu";
   if (status === "ready") return `Sẵn sàng hỏi đáp (${chunkCount} chunk)`;
   if (status === "error") return "Chưa nạp được tài liệu";
-  return "Tệp sẽ được nạp vào RAGFlow";
+  return "Tệp sẽ được nạp vào phiên chat";
 }
 
 function sourceErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
-    : "Không nạp được tài liệu vào RAGFlow. Kiểm tra cấu hình API.";
+    : "Không nạp được tài liệu. Kiểm tra cấu hình API.";
 }
 
 function isSmallTalkQuestion(text: string): boolean {

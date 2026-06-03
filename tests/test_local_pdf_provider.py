@@ -10,6 +10,7 @@ from agentic_rag.ingestion.pdf import LoadedPdfDocument
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
+from agentic_rag.integrations.local_pdf.storage import StoredSourceDocument
 from agentic_rag.retrieval.search import Store
 
 
@@ -265,6 +266,92 @@ def test_local_pdf_provider_uploads_text_chunks(
     assert chunk.metadata["document_id"] == uploaded.document_id
     assert chunk.metadata["source_type"] == "text"
     assert chunk.text == "Noi dung tu nguoi dung"
+
+
+def test_local_pdf_provider_can_persist_chunks_with_source_store(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+            self.seen_metadata: dict[str, object] | None = None
+
+        def write_document(
+            self,
+            *,
+            document_id: str,
+            dataset_id: str,
+            name: str,
+            source_type: str,
+            source: str,
+            raw_path: Path | None,
+            markdown_path: Path | None,
+            metadata: dict[str, object],
+            chunks: list[Chunk],
+        ) -> None:
+            self.seen_metadata = metadata
+            self.documents[document_id] = chunks
+
+        def read_chunks(self, document_id: str) -> list[Chunk]:
+            return self.documents.get(document_id, [])
+
+        def read_all_chunks(self) -> list[Chunk]:
+            return [
+                chunk
+                for chunks in self.documents.values()
+                for chunk in chunks
+            ]
+
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return [
+                StoredSourceDocument(
+                    document_id=document_id,
+                    dataset_id="local_pdf",
+                    name="Ghi-chu.txt",
+                    source_type="text",
+                    source="Ghi-chu.txt",
+                    total_chunks=len(chunks),
+                    metadata={"title": "Ghi chu"},
+                )
+                for document_id, chunks in self.documents.items()
+            ]
+
+        def delete_document(self, document_id: str) -> None:
+            if document_id not in self.documents:
+                raise ValueError(f"Document {document_id!r} not found.")
+            del self.documents[document_id]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+    document_chunks = provider.document_chunks(document_id=uploaded.document_id)
+
+    assert uploaded.document_id in source_store.documents
+    assert source_store.seen_metadata == {"title": "Ghi chu"}
+    assert document_chunks.total_chunks == 1
+    assert document_chunks.chunks[0].metadata["storage_chunk_id"] == (
+        f"{uploaded.document_id}:0001"
+    )
+    documents = provider.list_documents()
+    assert len(documents) == 1
+    assert documents[0].document_id == uploaded.document_id
+    assert documents[0].chunks[0].text == "Noi dung tu nguoi dung"
 
 
 def test_local_pdf_provider_retrieves_matching_chunks(

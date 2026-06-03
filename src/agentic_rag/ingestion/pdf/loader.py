@@ -11,6 +11,7 @@ from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
     DETERMINISTIC_MARKDOWN_CHUNKER,
+    DOCLING_HYBRID_CHUNKER,
     MarkdownChunker,
     resolve_markdown_chunker,
 )
@@ -28,6 +29,8 @@ class LoadedPdfDocument(BaseModel):
     chunks: list[Chunk]
     parser: str = DEFAULT_PDF_PARSER
     chunker: str = DEFAULT_MARKDOWN_CHUNKER
+    requested_chunker: str | None = None
+    chunking_fallback_reason: str | None = None
 
 
 def load_pdf_chunks(
@@ -85,16 +88,36 @@ def _load_pdf_with_markdown(
         source_path=parse_result.source_path,
         native_document=native_document,
     )
-    chunks = _chunks_from_chunking_input(
-        path,
-        chunking_input,
-        chunker=resolved_chunker,
-    )
+    chunker_name = resolved_chunker.chunker_name
+    fallback_reason = None
+    try:
+        chunks = _chunks_from_chunking_input(
+            path,
+            chunking_input,
+            chunker=resolved_chunker,
+        )
+    except Exception as exc:
+        if not _should_fallback_pdf_chunking(resolved_chunker, exc):
+            raise
+        fallback_chunker = resolve_markdown_chunker(DETERMINISTIC_MARKDOWN_CHUNKER)
+        chunks = _chunks_from_chunking_input(
+            path,
+            chunking_input,
+            chunker=fallback_chunker,
+        )
+        chunker_name = fallback_chunker.chunker_name
+        fallback_reason = _fallback_reason(
+            requested_chunker=resolved_chunker.chunker_name,
+            fallback_chunker=fallback_chunker.chunker_name,
+            exc=exc,
+        )
     return LoadedPdfDocument(
         markdown=parse_result.markdown,
         chunks=chunks,
         parser=parse_result.parser,
-        chunker=resolved_chunker.chunker_name,
+        chunker=chunker_name,
+        requested_chunker=resolved_chunker.chunker_name,
+        chunking_fallback_reason=fallback_reason,
     )
 
 
@@ -185,3 +208,40 @@ def _chunks_from_chunking_input(
 def _safe_chunk_id_part(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower()).strip("_")
     return normalized or "document"
+
+
+def _should_fallback_pdf_chunking(chunker: MarkdownChunker, exc: Exception) -> bool:
+    if chunker.chunker_name != DOCLING_HYBRID_CHUNKER:
+        return False
+    if not isinstance(exc, OSError | RuntimeError):
+        return False
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "huggingface",
+            "cached files",
+            "local_files_only",
+            "couldn't connect",
+            "offline mode",
+        )
+    )
+
+
+def _fallback_reason(
+    *,
+    requested_chunker: str,
+    fallback_chunker: str,
+    exc: Exception,
+) -> str:
+    return (
+        f"{requested_chunker} unavailable ({exc.__class__.__name__}: "
+        f"{_single_line(str(exc), max_chars=240)}); used {fallback_chunker}"
+    )
+
+
+def _single_line(value: str, *, max_chars: int) -> str:
+    compact = re.sub(r"\s+", " ", value).strip()
+    if len(compact) <= max_chars:
+        return compact
+    return f"{compact[: max_chars - 3]}..."

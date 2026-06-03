@@ -11,6 +11,7 @@ from agentic_rag.api import (
     _stream_direct_answer_events,
     answer_question,
     health,
+    list_sources,
     source_debug,
     source_raw,
     upload_text_source,
@@ -240,3 +241,35 @@ def test_text_source_uses_local_provider_when_configured(
     assert response.provider == "local_pdf"
     assert response.dataset_id == "local_pdf"
     assert response.name == "Ghi-chu.txt"
+
+
+def test_list_sources_returns_local_documents(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+
+    uploaded = upload_text_source(SourceTextRequest(title="Ghi chu", text="Noi dung"))
+    response = list_sources()
+
+    assert response.provider == "local_pdf"
+    assert len(response.sources) == 1
+    assert response.sources[0].document_id == uploaded.document_id
+    assert response.sources[0].source_type == "text"
+    assert response.sources[0].total_chunks == 1
+    assert response.sources[0].chunks == []
+
+    response_with_chunks = list_sources(include_chunks=True)
+    assert response_with_chunks.sources[0].chunks[0].chunk.text == "Noi dung"

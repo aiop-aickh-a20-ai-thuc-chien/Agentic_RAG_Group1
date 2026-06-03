@@ -80,6 +80,17 @@ class FakeNativeChunker:
         return [MarkdownChunk(section="Native", text="Native chunk text.")]
 
 
+class FakeOfflineDoclingHybridChunker:
+    chunker_name = "docling-hybrid"
+    requires_native_document = True
+
+    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
+        raise OSError(
+            "We couldn't connect to 'https://huggingface.co' and couldn't find "
+            "the requested files in the cached files. local_files_only=True"
+        )
+
+
 def test_loaded_pdf_document_defaults_parser_and_chunker() -> None:
     loaded = LoadedPdfDocument(markdown="# Intro", chunks=[])
 
@@ -155,6 +166,29 @@ def test_load_pdf_with_markdown_uses_document_parse_for_native_chunker(
     assert loaded.chunks[0].metadata["section"] == "Native"
     assert loaded.chunks[0].metadata["chunking_method"] == "fake-native-chunker"
     assert chunker.seen_native_document == {"doc": "source.pdf"}
+    assert parser.parse_calls == 0
+    assert parser.parse_to_document_calls == 1
+
+
+def test_load_pdf_with_markdown_falls_back_when_docling_hybrid_tokenizer_is_offline(
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    parser = FakeParser("# Warranty\nPin duoc bao hanh 8 nam.")
+
+    loaded = _load_pdf_with_markdown(
+        pdf_path,
+        parser,
+        chunker=FakeOfflineDoclingHybridChunker(),
+    )
+
+    assert loaded.chunker == "deterministic"
+    assert loaded.requested_chunker == "docling-hybrid"
+    assert loaded.chunking_fallback_reason is not None
+    assert "docling-hybrid unavailable" in loaded.chunking_fallback_reason
+    assert loaded.chunks[0].text == "Pin duoc bao hanh 8 nam."
+    assert loaded.chunks[0].metadata["chunking_method"] == "deterministic"
     assert parser.parse_calls == 0
     assert parser.parse_to_document_calls == 1
 

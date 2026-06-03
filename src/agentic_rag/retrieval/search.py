@@ -114,12 +114,14 @@ class Store:
 
         embedding = _configured_embedding()
         chunks_list = [chunk.text for chunk in chunks]
-        metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
+        metadatas = _dense_metadatas(chunks)
+        ids = _dense_ids(chunks)
         if _configured_vector_store() == "pgvector":
             pgvector_store = _build_pgvector_store(
                 texts=chunks_list,
                 embedding=embedding,
                 metadatas=metadatas,
+                ids=ids,
             )
             if pgvector_store is not None:
                 return pgvector_store
@@ -136,7 +138,15 @@ class Store:
         if self._vector_index is None:
             self._vector_index = self._build_vector_index(self._chunks)
 
-        search_result = self._vector_index.similarity_search_with_score(query=query, k=top_k)
+        filter_value = _dense_filter_for_chunks(self._chunks)
+        if filter_value is None:
+            search_result = self._vector_index.similarity_search_with_score(query=query, k=top_k)
+        else:
+            search_result = self._vector_index.similarity_search_with_score(
+                query=query,
+                k=top_k,
+                filter=filter_value,
+            )
 
         result = []
         for i, (doc, score) in enumerate(search_result):
@@ -212,6 +222,34 @@ def dense_embedding_metadata() -> dict[str, object]:
     }
 
 
+def upsert_dense_embeddings(chunks: list[Chunk]) -> dict[str, object]:
+    """Upsert chunk embeddings into the configured persistent vector store."""
+
+    vector_store = _configured_vector_store()
+    if vector_store != "pgvector":
+        return {
+            "enabled": False,
+            "vector_store": vector_store,
+            "reason": "only pgvector persists dense embeddings",
+        }
+    if not chunks:
+        return {"enabled": True, "vector_store": vector_store, "chunk_count": 0}
+
+    embedding = _configured_embedding()
+    pgvector_store = _build_pgvector_store(
+        texts=[chunk.text for chunk in chunks],
+        embedding=embedding,
+        metadatas=_dense_metadatas(chunks),
+        ids=_dense_ids(chunks),
+    )
+    return {
+        "enabled": pgvector_store is not None,
+        "vector_store": vector_store,
+        "chunk_count": len(chunks) if pgvector_store is not None else 0,
+        "collection": _configured_pgvector_collection(),
+    }
+
+
 def _configured_embedding_provider() -> str:
     return os.getenv(DENSE_EMBEDDING_PROVIDER_ENV, "openai").strip().lower()
 
@@ -241,6 +279,7 @@ def _build_pgvector_store(
     texts: list[str],
     embedding: Any,
     metadatas: list[dict[str, object]],
+    ids: list[str],
 ) -> Any | None:
     connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
     if not connection:
@@ -251,15 +290,64 @@ def _build_pgvector_store(
     except ImportError:
         return None
 
-    collection_name = os.getenv(DENSE_PGVECTOR_COLLECTION_ENV, "document").strip() or "document"
     return PGVector.from_texts(
         texts=texts,
         embedding=embedding,
         metadatas=metadatas,
-        collection_name=collection_name,
+        ids=ids,
+        collection_name=_configured_pgvector_collection(),
         connection=connection,
-        pre_delete_collection=True,
+        pre_delete_collection=False,
     )
+
+
+def _configured_pgvector_collection() -> str:
+    return os.getenv(DENSE_PGVECTOR_COLLECTION_ENV, "document").strip() or "document"
+
+
+def _dense_metadatas(chunks: list[Chunk]) -> list[dict[str, object]]:
+    return [
+        {
+            "chunk_id": chunk.chunk_id,
+            "storage_chunk_id": _dense_id(chunk=chunk, fallback_index=index),
+            "document_id": str(chunk.metadata.get("document_id") or ""),
+            "source_type": str(chunk.metadata.get("source_type") or ""),
+            "metadata": chunk.metadata,
+        }
+        for index, chunk in enumerate(chunks, start=1)
+    ]
+
+
+def _dense_ids(chunks: list[Chunk]) -> list[str]:
+    return [
+        _dense_id(chunk=chunk, fallback_index=index)
+        for index, chunk in enumerate(chunks, start=1)
+    ]
+
+
+def _dense_id(*, chunk: Chunk, fallback_index: int) -> str:
+    storage_chunk_id = chunk.metadata.get("storage_chunk_id")
+    if isinstance(storage_chunk_id, str) and storage_chunk_id:
+        return storage_chunk_id
+    document_id = str(chunk.metadata.get("document_id") or "document")
+    return f"{document_id}:{fallback_index:04d}"
+
+
+def _dense_filter_for_chunks(chunks: list[Chunk]) -> dict[str, object] | None:
+    if _configured_vector_store() != "pgvector":
+        return None
+    document_ids = sorted(
+        {
+            str(chunk.metadata.get("document_id"))
+            for chunk in chunks
+            if chunk.metadata.get("document_id")
+        }
+    )
+    if not document_ids:
+        return None
+    if len(document_ids) == 1:
+        return {"document_id": document_ids[0]}
+    return {"document_id": {"$in": document_ids}}
 
 
 def _chunk_from_dense_document(

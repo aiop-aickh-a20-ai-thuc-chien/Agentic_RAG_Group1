@@ -107,6 +107,8 @@ class SourceUploadResponse(BaseModel):
     document_id: str
     name: str
     parse_started: bool
+    source_type: str | None = None
+    source: str | None = None
 
 
 class SourceUrlRequest(BaseModel):
@@ -129,6 +131,27 @@ class SourceChunksResponse(BaseModel):
     document_id: str
     total_chunks: int
     chunks: list[SearchResult]
+
+
+class SourceListItem(BaseModel):
+    """One persisted source document for frontend hydration."""
+
+    provider: str
+    dataset_id: str
+    document_id: str
+    name: str
+    source_type: str
+    source: str
+    total_chunks: int
+    chunks: list[SearchResult]
+    metadata: dict[str, object]
+
+
+class SourceListResponse(BaseModel):
+    """Persisted source documents available to the current provider."""
+
+    provider: str
+    sources: list[SourceListItem]
 
 
 class SourceDebugResponse(BaseModel):
@@ -271,6 +294,8 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="pdf",
+        source=file.filename or uploaded.name,
     )
 
 
@@ -318,6 +343,43 @@ def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
         content=text.encode(),
         content_type="text/plain; charset=utf-8",
     )
+
+
+@api.get("/sources", response_model=SourceListResponse)
+def list_sources(
+    include_chunks: bool = False,
+) -> SourceListResponse:
+    """Return persisted sources for frontend hydration after reload."""
+
+    try:
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    provider_label = _source_provider_label(provider_name)
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        return SourceListResponse(provider=provider_label, sources=[])
+
+    sources = [
+        SourceListItem(
+            provider=provider_label,
+            dataset_id=document.dataset_id,
+            document_id=document.document_id,
+            name=document.name,
+            source_type=document.source_type,
+            source=document.source,
+            total_chunks=document.total_chunks,
+            chunks=(
+                _search_results_for_chunks(document.chunks, provider_label)
+                if include_chunks
+                else []
+            ),
+            metadata=document.metadata,
+        )
+        for document in provider.list_documents(include_chunks=include_chunks)
+    ]
+    return SourceListResponse(provider=provider_label, sources=sources)
 
 
 @api.get("/sources/{document_id}/chunks", response_model=SourceChunksResponse)
@@ -427,6 +489,29 @@ def source_raw(document_id: str) -> FileResponse:
     )
 
 
+@api.delete("/sources/{document_id}")
+def delete_source(document_id: str) -> dict[str, str]:
+    """Delete a local source document and all its chunks from storage and disk."""
+
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Delete is only supported for local PDF sources.",
+        )
+
+    try:
+        provider.delete_document(document_id=document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {"status": "deleted", "document_id": document_id}
+
+
 def _search_results_for_chunks(chunks: list[Chunk], provider_label: str) -> list[SearchResult]:
     return [
         SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever=provider_label)
@@ -474,6 +559,8 @@ def _upload_text_document(
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="text",
+        source=filename,
     )
 
 
@@ -505,6 +592,8 @@ def _upload_local_url_document(url: str) -> SourceUploadResponse:
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="url",
+        source=url,
     )
 
 
@@ -536,6 +625,8 @@ def _upload_local_text_document(*, title: str, text: str) -> SourceUploadRespons
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="text",
+        source=title,
     )
 
 
