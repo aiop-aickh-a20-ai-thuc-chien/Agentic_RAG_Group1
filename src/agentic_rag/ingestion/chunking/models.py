@@ -25,6 +25,7 @@ class ChunkCandidate(_IngestionChunkingModel):
 
     section: str | None
     text: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 MarkdownChunk = ChunkCandidate

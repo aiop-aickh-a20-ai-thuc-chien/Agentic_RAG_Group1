@@ -11,11 +11,12 @@ và URL/text ingestion có thể dùng cùng một nền tảng tách nội dung
 Phase hiện tại ưu tiên tạo baseline end-to-end để unblock các phase tiếp theo
 của RAG pipeline. Parser mặc định là Docling: module PDF dùng Docling để chuyển
 PDF cục bộ sang Markdown, sau đó tách Markdown thành `Chunk` objects theo
-contract dùng chung. Chunker mặc định vẫn là deterministic để giữ behavior ổn
-định; có thể bật Docling HybridChunker bằng config khi cần chunking theo cấu
-trúc tài liệu native. Kiến trúc mới giữ parser và chunker là hai strategy riêng:
-parser chịu trách nhiệm tạo Markdown/file-backed assets/native document, còn
-chunker chịu trách nhiệm tách output parser thành chunk candidate.
+contract dùng chung. Chunker mặc định là Docling HybridChunker để tận dụng cấu
+trúc tài liệu native, heading metadata và contextualized text cho retrieval;
+chunker deterministic vẫn được giữ làm fallback/baseline. Kiến trúc mới giữ
+parser và chunker là hai strategy riêng: parser chịu trách nhiệm tạo
+Markdown/file-backed assets/native document, còn chunker chịu trách nhiệm tách
+output parser thành chunk candidate.
 
 Benchmark workflow với OmniDocBench vẫn được giữ để so sánh và tối ưu parser ở
 các vòng sau. Nói cách khác: triển khai Docling trước để có pipeline chạy được,
@@ -70,7 +71,7 @@ Chọn parser hoặc chunker khác khi registry đã có adapter tương ứng:
 chunks = load_pdf_chunks(
     "path/to/file.pdf",
     parser_name="docling",
-    chunker_name="deterministic",
+    chunker_name="docling-hybrid",
 )
 ```
 
@@ -80,22 +81,22 @@ Parser registry hiện có:
 
 Chunker registry hiện có:
 
-- `deterministic`: mặc định, tách Markdown/text ổn định bằng shared ingestion
-  chunking.
-- `docling-hybrid`: opt-in, dùng `Docling HybridChunker` trên Docling native
+- `docling-hybrid`: mặc định, dùng `Docling HybridChunker` trên Docling native
   document để giữ ngữ cảnh/heading tốt hơn cho PDF.
+- `deterministic`: fallback/baseline, tách Markdown/text ổn định bằng shared
+  ingestion chunking.
 
 Trong app local, có thể đổi parser hoặc chunker PDF bằng biến môi trường:
 
 ```text
 LOCAL_PDF_PARSER=docling
-LOCAL_PDF_CHUNKER=deterministic
+LOCAL_PDF_CHUNKER=docling-hybrid
 ```
 
-Khi muốn thử chunking native của Docling:
+Khi cần fallback hoặc so sánh regression với chunker deterministic:
 
 ```text
-LOCAL_PDF_CHUNKER=docling-hybrid
+LOCAL_PDF_CHUNKER=deterministic
 ```
 
 `load_pdf_chunks()` chỉ trả về `Chunk` trong memory và không tự ghi file debug.
@@ -108,9 +109,12 @@ Mỗi `Chunk` trả về có metadata chính:
 - `source_type`: luôn là `pdf`.
 - `file_name`: tên file PDF.
 - `page`: hiện là `None` trong baseline Markdown chunking.
-- `section`: heading Markdown gần nhất nếu có.
+- `section`: heading path dạng chuỗi nếu parser/chunker cung cấp.
+- `section_path`: danh sách heading đầy đủ nếu dùng Docling HybridChunker.
+- `raw_text`: nội dung gốc của Docling chunk trước khi contextualize, nếu dùng
+  Docling HybridChunker.
 - `parser`: parser được chọn, mặc định là `docling`.
-- `chunking_method`: chunker được chọn, mặc định là `deterministic`.
+- `chunking_method`: chunker được chọn, mặc định là `docling-hybrid`.
 - `chunk_index`: thứ tự chunk bắt đầu từ 1.
 
 ## Lưu artifact để debug và đánh giá
