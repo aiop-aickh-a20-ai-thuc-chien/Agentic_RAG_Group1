@@ -5,9 +5,11 @@ from agentic_rag.ingestion.url.chunking import (
     build_chunk_id,
     build_chunks,
     normalize_space,
+    paragraph_chunk,
     short_hash,
     slugify,
     split_markdown,
+    split_markdown_paragraphs,
 )
 
 
@@ -30,6 +32,37 @@ def test_split_markdown_always_advances_when_split_is_near_start() -> None:
     assert len(chunks) < len(text)
 
 
+def test_split_markdown_paragraphs_uses_markdown_boundaries_and_overlap() -> None:
+    text = "\n\n".join(
+        [
+            "Alpha one two three.",
+            "Beta one two three.",
+            "Gamma one two three.",
+        ]
+    )
+
+    chunks = split_markdown_paragraphs(text, max_tokens=7, overlap_paragraphs=1)
+
+    assert chunks == [
+        "Alpha one two three.",
+        "Alpha one two three.\n\nBeta one two three.",
+        "Beta one two three.\n\nGamma one two three.",
+    ]
+
+
+def test_paragraph_chunk_returns_token_counts() -> None:
+    chunks = paragraph_chunk(
+        "First paragraph.\n\nSecond paragraph.",
+        max_tokens=512,
+        overlap_paragraphs=1,
+    )
+
+    assert chunks
+    assert chunks[0]["text"] == "First paragraph.\n\nSecond paragraph."
+    assert isinstance(chunks[0]["token_count"], int)
+    assert chunks[0]["token_count"] > 0
+
+
 def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     chunks = build_chunks(
         text="Overview content",
@@ -46,7 +79,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].chunk_id == build_chunk_id("url", "https://example.edu", "Overview", 1)
     assert chunks[0].metadata["content_hash"] == short_hash("Overview content")
     assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
-    assert chunks[0].metadata["chunking_method"] == "deterministic-character-overlap"
+    assert chunks[0].metadata["chunking_method"] == "paragraph-token-overlap"
     assert chunks[0].metadata["chunking_provider"] is None
     assert chunks[0].metadata["chunking_model"] is None
 

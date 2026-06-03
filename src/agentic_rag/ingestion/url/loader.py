@@ -153,7 +153,7 @@ def load_html_with_artifacts(
     for section in parsed.sections:
         chunks.extend(
             build_chunks(
-                text=section.text,
+                text=section.markdown or section.text,
                 source=source,
                 source_type=source_type,
                 section=section.heading,

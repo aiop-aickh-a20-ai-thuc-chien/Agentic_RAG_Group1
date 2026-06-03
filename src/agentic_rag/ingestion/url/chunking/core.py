@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Protocol
+from importlib import import_module
+from typing import Any, Protocol, cast
 
 from agentic_rag.core.contracts import Chunk
 
-DEFAULT_CHUNK_SIZE = 1_200
-DEFAULT_CHUNK_OVERLAP = 150
+DEFAULT_CHUNK_SIZE = 512
+DEFAULT_CHUNK_OVERLAP = 1
+DEFAULT_PARAGRAPH_MAX_TOKENS = 512
+DEFAULT_PARAGRAPH_OVERLAP = 1
 
 
 class TextChunkingStrategy(Protocol):
@@ -107,6 +110,69 @@ def split_markdown(text: str, *, chunk_size: int, chunk_overlap: int) -> list[st
     return chunks
 
 
+def paragraph_chunk(
+    md_text: str,
+    *,
+    max_tokens: int = DEFAULT_PARAGRAPH_MAX_TOKENS,
+    overlap_paragraphs: int = DEFAULT_PARAGRAPH_OVERLAP,
+) -> list[dict[str, int | str]]:
+    """Split Markdown by paragraph boundaries using a token budget."""
+
+    if max_tokens <= 0:
+        raise ValueError("max_tokens must be greater than 0.")
+    if overlap_paragraphs < 0:
+        raise ValueError("overlap_paragraphs must be greater than or equal to 0.")
+
+    paragraphs = [paragraph.strip() for paragraph in md_text.split("\n\n") if paragraph.strip()]
+    chunks: list[dict[str, int | str]] = []
+    buffer: list[str] = []
+    buffer_tokens = 0
+
+    for paragraph in paragraphs:
+        paragraph_tokens = _count_tokens(paragraph)
+        if buffer and buffer_tokens + paragraph_tokens > max_tokens:
+            chunks.append(
+                {
+                    "text": "\n\n".join(buffer),
+                    "token_count": buffer_tokens,
+                }
+            )
+            buffer = buffer[-overlap_paragraphs:] if overlap_paragraphs else []
+            buffer_tokens = sum(_count_tokens(item) for item in buffer)
+
+        buffer.append(paragraph)
+        buffer_tokens += paragraph_tokens
+
+    if buffer:
+        chunks.append(
+            {
+                "text": "\n\n".join(buffer),
+                "token_count": buffer_tokens,
+            }
+        )
+
+    return chunks
+
+
+def split_markdown_paragraphs(
+    md_text: str,
+    *,
+    max_tokens: int = DEFAULT_PARAGRAPH_MAX_TOKENS,
+    overlap_paragraphs: int = DEFAULT_PARAGRAPH_OVERLAP,
+) -> list[str]:
+    """Return paragraph-based Markdown chunks."""
+
+    return [
+        str(chunk["text"])
+        for chunk in paragraph_chunk(
+            md_text,
+            max_tokens=max_tokens,
+            overlap_paragraphs=overlap_paragraphs,
+        )
+        if str(chunk["text"]).strip()
+    ]
+
+
 def build_chunk_id(source_type: str, source: str, section: str, index: int) -> str:
     """Build a deterministic chunk ID from source and section metadata."""
 
@@ -140,7 +206,11 @@ def _split_text(
     chunking_strategy: TextChunkingStrategy | None,
 ) -> list[str]:
     if chunking_strategy is None:
-        return split_markdown(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        return split_markdown_paragraphs(
+            text,
+            max_tokens=chunk_size,
+            overlap_paragraphs=chunk_overlap,
+        )
     return [
         normalize_space(chunk) for chunk in chunking_strategy.split(text) if normalize_space(chunk)
     ]
@@ -148,7 +218,7 @@ def _split_text(
 
 def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
     if chunking_strategy is None:
-        return "deterministic-character-overlap"
+        return "paragraph-token-overlap"
     if chunking_strategy.provider == "tiktoken":
         return "deterministic-token-overlap"
     if chunking_strategy.provider == "ragflow":
@@ -162,3 +232,12 @@ def _chunking_provider(chunking_strategy: TextChunkingStrategy | None) -> str | 
 
 def _chunking_model(chunking_strategy: TextChunkingStrategy | None) -> str | None:
     return None if chunking_strategy is None else chunking_strategy.model
+
+
+def _count_tokens(text: str) -> int:
+    try:
+        tiktoken = cast(Any, import_module("tiktoken"))
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except (ImportError, ModuleNotFoundError, RuntimeError, AttributeError):
+        return len(text.split())

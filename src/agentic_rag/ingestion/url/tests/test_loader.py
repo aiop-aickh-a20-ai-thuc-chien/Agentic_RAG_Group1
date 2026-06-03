@@ -41,7 +41,7 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
     assert chunks[0].metadata["source_type"] == "url"
     assert chunks[0].metadata["url"] == "https://example.edu/admissions"
     assert chunks[0].metadata["title"] == "Admissions Page"
-    assert chunks[0].metadata["chunking_method"] == "deterministic-character-overlap"
+    assert chunks[0].metadata["chunking_method"] == "paragraph-token-overlap"
     assert "Applications require transcripts." in chunks[0].text
     assert "Home Login Pricing" not in chunks[0].text
     assert "tracking" not in chunks[0].text
@@ -220,7 +220,7 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     chunks = load_url_chunks("https://example.edu")
 
     assert len(chunks) == 1
-    assert chunks[0].text == "Overview Fetched content."
+    assert chunks[0].text == "# Overview\n\nFetched content."
     assert chunks[0].metadata["source"] == "https://example.edu/final"
     assert chunks[0].metadata["url"] == "https://example.edu/final"
     assert chunks[0].metadata["original_url"] == "https://example.edu"
