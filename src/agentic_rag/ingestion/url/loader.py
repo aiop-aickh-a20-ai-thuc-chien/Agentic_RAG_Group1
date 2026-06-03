@@ -19,7 +19,6 @@ from agentic_rag.ingestion.url.artifact import (
     persist_ingestion_artifacts,
 )
 from agentic_rag.ingestion.url.chunking import (
-    TextChunkingStrategy,
     build_chunk_id,
     build_chunks,
     chunk_markdown_by_sections,
@@ -29,7 +28,17 @@ from agentic_rag.ingestion.url.chunking import (
 from agentic_rag.ingestion.url.extractor import extract_markdown_with_trafilatura
 from agentic_rag.ingestion.url.parser import ParsedHtml, parse_html
 
-_USER_AGENT = "AgenticRAGGroup1/0.1"
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0 Safari/537.36 AgenticRAGGroup1/0.1"
+)
+_REQUEST_HEADERS = {
+    "User-Agent": _USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://vinfastauto.com/",
+}
 _PARSER_NAME = "builtin-html-parser"
 _TRAFILATURA_PARSER_NAME = "trafilatura-markdown+builtin-html-parser"
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -57,7 +66,6 @@ def load_url_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
@@ -66,7 +74,6 @@ def load_url_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     ).chunks
 
 
@@ -76,7 +83,6 @@ def load_url_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> LoadedUrlDocument:
     """Fetch, clean, chunk, and expose URL ingestion artifacts."""
 
@@ -92,7 +98,6 @@ def load_url_with_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     )
 
 
@@ -106,7 +111,6 @@ def load_html_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "html_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk one HTML document into shared Chunk objects."""
 
@@ -119,7 +123,6 @@ def load_html_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     ).chunks
 
 
@@ -133,7 +136,6 @@ def load_html_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "html_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> LoadedUrlDocument:
     """Clean and chunk one HTML document while exposing persisted artifacts."""
 
@@ -154,30 +156,14 @@ def load_html_with_artifacts(
 
     source_type = "url" if source_url else "html"
     cleaned_markdown = _clean_markdown_noise(parsed_markdown)
-    if chunking_strategy is None:
-        chunks = _build_markdown_aware_chunks(
-            markdown=cleaned_markdown,
-            source=source,
-            source_type=source_type,
-            url=source_url,
-            title=parsed.title,
-            fetched_at=fetched_at,
-        )
-    else:
-        chunks = []
-        for section in parsed.sections:
-            chunks.extend(
-                build_chunks(
-                    text=section.markdown or section.text,
-                    source=source,
-                    source_type=source_type,
-                    section=section.heading,
-                    url=source_url,
-                    title=parsed.title,
-                    fetched_at=fetched_at,
-                    chunking_strategy=chunking_strategy,
-                )
-            )
+    chunks = _build_markdown_aware_chunks(
+        markdown=cleaned_markdown,
+        source=source,
+        source_type=source_type,
+        url=source_url,
+        title=parsed.title,
+        fetched_at=fetched_at,
+    )
     chunks = _with_html_metadata(
         chunks,
         original_url=original_url,
@@ -211,7 +197,6 @@ def load_text_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "text_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk plain text into shared Chunk objects."""
 
@@ -232,7 +217,6 @@ def load_text_chunks(
         url=None,
         title=None,
         fetched_at=fetched_at,
-        chunking_strategy=chunking_strategy,
     )
     persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
@@ -254,7 +238,7 @@ def _fetch_url(url: str) -> _FetchedPage:
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
         raise ValueError("URL ingestion requires an absolute http or https URL.")
 
-    request = Request(normalized_url, headers={"User-Agent": _USER_AGENT})
+    request = Request(normalized_url, headers=_REQUEST_HEADERS)
     try:
         with urlopen(request, timeout=20) as response:
             content_type = response.headers.get_content_type()
@@ -352,8 +336,6 @@ def _build_markdown_aware_chunks(
                     "chunk_index": chunk_index,
                     "chunk_token_count": markdown_chunk.chunk_token_count,
                     "chunking_method": "hybrid-markdown-aware-token-overlap",
-                    "chunking_provider": None,
-                    "chunking_model": None,
                     "semantic_unit": markdown_chunk.semantic_unit,
                 },
             )

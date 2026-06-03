@@ -1,7 +1,6 @@
 import pytest
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import (
-    TiktokenChunkingStrategy,
     build_chunk_id,
     build_chunks,
     detect_lang,
@@ -108,9 +107,6 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].chunk_id == build_chunk_id("url", "https://example.edu", "Overview", 1)
     assert chunks[0].metadata["content_hash"] == short_hash("Overview content")
     assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
-    assert chunks[0].metadata["chunking_method"] == "paragraph-token-overlap"
-    assert chunks[0].metadata["chunking_provider"] is None
-    assert chunks[0].metadata["chunking_model"] is None
 
 
 def test_build_chunks_validates_chunk_settings() -> None:
@@ -138,26 +134,6 @@ def test_build_chunks_validates_chunk_settings() -> None:
             chunk_size=10,
             chunk_overlap=10,
         )
-
-
-def test_build_chunks_can_use_tiktoken_strategy() -> None:
-    strategy = TiktokenChunkingStrategy(max_tokens=4, overlap_tokens=1)
-
-    chunks = build_chunks(
-        text="alpha beta gamma delta epsilon zeta",
-        source="https://example.edu/token",
-        source_type="url",
-        section="Overview",
-        url="https://example.edu/token",
-        title="Token Page",
-        fetched_at="2026-06-01T00:00:00+00:00",
-        chunking_strategy=strategy,
-    )
-
-    assert len(chunks) > 1
-    assert chunks[0].metadata["chunking_method"] == "deterministic-token-overlap"
-    assert chunks[0].metadata["chunking_provider"] == "tiktoken"
-    assert chunks[0].metadata["chunking_model"] == "cl100k_base"
 
 
 def test_chunking_helpers_normalize_ids_and_text() -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from importlib import import_module
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
 from agentic_rag.core.contracts import Chunk
 
@@ -14,21 +14,6 @@ DEFAULT_CHUNK_OVERLAP = 1
 DEFAULT_PARAGRAPH_MAX_TOKENS = 512
 DEFAULT_PARAGRAPH_OVERLAP = 1
 _VIETNAMESE_MARKERS = set("ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
-
-
-class TextChunkingStrategy(Protocol):
-    """Strategy that splits normalized Markdown/text into chunk strings."""
-
-    @property
-    def provider(self) -> str:
-        """Provider name used by the strategy."""
-
-    @property
-    def model(self) -> str:
-        """Model name used by the strategy."""
-
-    def split(self, text: str) -> list[str]:
-        """Return chunk strings for the provided text."""
 
 
 def build_chunks(
@@ -42,7 +27,6 @@ def build_chunks(
     fetched_at: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Build shared Chunk objects from normalized Markdown/text."""
 
@@ -57,7 +41,6 @@ def build_chunks(
         text,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        chunking_strategy=chunking_strategy,
     )
     for index, chunk_text in enumerate(text_chunks, start=1):
         chunks.append(
@@ -75,9 +58,6 @@ def build_chunks(
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "chunk_index": index,
-                    "chunking_method": _chunking_method(chunking_strategy),
-                    "chunking_provider": _chunking_provider(chunking_strategy),
-                    "chunking_model": _chunking_model(chunking_strategy),
                 },
             )
         )
@@ -237,35 +217,12 @@ def _split_text(
     *,
     chunk_size: int,
     chunk_overlap: int,
-    chunking_strategy: TextChunkingStrategy | None,
 ) -> list[str]:
-    if chunking_strategy is None:
-        return split_markdown_paragraphs(
-            text,
-            max_tokens=chunk_size,
-            overlap_paragraphs=chunk_overlap,
-        )
-    return [
-        normalize_space(chunk) for chunk in chunking_strategy.split(text) if normalize_space(chunk)
-    ]
-
-
-def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
-    if chunking_strategy is None:
-        return "paragraph-token-overlap"
-    if chunking_strategy.provider == "tiktoken":
-        return "deterministic-token-overlap"
-    if chunking_strategy.provider == "ragflow":
-        return "ragflow-assisted"
-    return "llm-assisted"
-
-
-def _chunking_provider(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.provider
-
-
-def _chunking_model(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.model
+    return split_markdown_paragraphs(
+        text,
+        max_tokens=chunk_size,
+        overlap_paragraphs=chunk_overlap,
+    )
 
 
 def _count_tokens(text: str) -> int:

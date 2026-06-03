@@ -13,7 +13,6 @@ PDF responses are rejected here and should be routed to the PDF ingestion module
   links, images, and other page assets.
 - `extractor.py`: Trafilatura adapter for main-content Markdown extraction.
 - `chunking/`: deterministic Markdown chunking strategies.
-- `model_chunking.py`: optional LLM-assisted chunking strategy adapters.
 - `artifact.py`: persistence for `parsed.md`, `chunks.jsonl`, and
   `manifest.json`.
 - `benchmarking/`: small local parser benchmark helpers.
@@ -64,14 +63,6 @@ The strategy is designed for Markdown:
 
 This keeps chunks more useful for RAG than character slicing because headings,
 section paths, paragraphs, and sentence boundaries are less likely to be broken.
-
-Optional strategies:
-
-- `TiktokenChunkingStrategy`: deterministic token-window splitting.
-- `RAGFlowChunkingStrategy`: optional RAGFlow-backed chunking.
-- `ModelChunkingStrategy`: optional OpenAI/Gemini-assisted splitting.
-- RAGFlow-assisted strategy can be selected by strategy object, while keeping
-  integration code outside this module.
 
 ## Artifacts
 
