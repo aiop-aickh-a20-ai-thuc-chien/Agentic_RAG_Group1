@@ -19,6 +19,9 @@ TRACE_PROVIDER_JSONL = "jsonl"
 TRACE_PROVIDER_LANGSMITH = "langsmith"
 TRACE_PROVIDER_BOTH = "both"
 
+LANGSMITH_TRACE_MODE_CUSTOM = "custom"
+LANGSMITH_TRACE_MODE_LANGGRAPH = "langgraph"
+
 
 def trace_enabled() -> bool:
     """Return whether RAG trace logging is enabled."""
@@ -70,7 +73,10 @@ def write_rag_trace(
     trace_provider = configured_trace_provider()
     if trace_provider in {TRACE_PROVIDER_JSONL, TRACE_PROVIDER_BOTH}:
         _write_jsonl_trace(payload)
-    if trace_provider in {TRACE_PROVIDER_LANGSMITH, TRACE_PROVIDER_BOTH}:
+    if (
+        trace_provider in {TRACE_PROVIDER_LANGSMITH, TRACE_PROVIDER_BOTH}
+        and _langsmith_mode() != LANGSMITH_TRACE_MODE_LANGGRAPH
+    ):
         _write_langsmith_trace(payload)
 
 
@@ -688,6 +694,14 @@ def _coerce_latency_ms(value: object, *, default: int) -> int:
 
 def _langsmith_configured() -> bool:
     return bool(os.getenv("LANGSMITH_API_KEY"))
+
+
+def _langsmith_mode() -> str:
+    """Return configured LangSmith trace mode: 'langgraph' or 'custom' (default)."""
+    raw = os.getenv("LANGSMITH_TRACE_MODE", LANGSMITH_TRACE_MODE_CUSTOM).strip().lower()
+    if raw == LANGSMITH_TRACE_MODE_LANGGRAPH:
+        return LANGSMITH_TRACE_MODE_LANGGRAPH
+    return LANGSMITH_TRACE_MODE_CUSTOM
 
 
 def _configured_generation_model() -> str:

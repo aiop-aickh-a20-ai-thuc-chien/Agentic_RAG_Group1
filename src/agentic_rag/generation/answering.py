@@ -7,6 +7,7 @@ import os
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -14,8 +15,22 @@ from agentic_rag.core.contracts import Answer, Citation, SearchResult
 from agentic_rag.generation.llm import (
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OPENAI_MODEL,
+    LLMClient,
     configured_llm_client,
 )
+
+
+def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
+    def _noop(func: Any) -> Any:
+        return func
+
+    return _noop
+
+
+try:
+    from langsmith import traceable as _ls_traceable
+except ImportError:
+    _ls_traceable = _noop_traceable  # type: ignore[assignment]
 
 NOT_FOUND_ANSWER = "Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp."
 MIN_EVIDENCE_TEXT_LENGTH = 12
@@ -57,6 +72,19 @@ class ParsedGenerationText:
 
 
 AnswerStreamEvent = AnswerDelta | AnswerDone
+
+
+@_ls_traceable(name="llm-call", run_type="llm")
+def _traced_complete(prompt: str, client: LLMClient) -> str:
+    return client.complete(prompt).strip()
+
+
+@_ls_traceable(name="answer-parse", run_type="tool")
+def _traced_parse(
+    answer_text: str,
+    usable_evidence: list[SearchResult],
+) -> tuple[Answer, dict[str, object]]:
+    return _answer_from_text_with_trace(answer_text=answer_text, usable_evidence=usable_evidence)
 
 
 def generate_answer(
@@ -121,11 +149,8 @@ def generate_answer_with_trace(
     prompt = build_grounded_prompt(question=question, evidence_context=context)
     client = configured_llm_client()
     llm_source = "configured_llm" if client else "deterministic_fallback"
-    answer_text = client.complete(prompt).strip() if client else _fallback_answer(usable_evidence)
-    answer, parse_trace = _answer_from_text_with_trace(
-        answer_text=answer_text,
-        usable_evidence=usable_evidence,
-    )
+    answer_text = _traced_complete(prompt, client) if client else _fallback_answer(usable_evidence)
+    answer, parse_trace = _traced_parse(answer_text, usable_evidence)
 
     return GenerationResult(
         answer=answer,
@@ -377,12 +402,24 @@ def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
     """Build a prompt that constrains the LLM to retrieved evidence."""
 
     return (
-        "Question:\n"
-        f"{question.strip()}\n\n"
-        "Evidence context:\n"
-        f"{evidence_context.strip()}\n\n"
-        "Instructions:\n"
+        "<task>\n"
+        "Answer the user's question using only the supplied evidence.\n"
+        "</task>\n\n"
+        "<context>\n"
+        "<question>\n"
+        f"{question.strip()}\n"
+        "</question>\n\n"
+        "<evidence_context>\n"
+        f"{evidence_context.strip()}\n"
+        "</evidence_context>\n"
+        "</context>\n\n"
+        "<instructions>\n"
         "- Answer in Vietnamese.\n"
+        "- Be thorough and complete: cover all entities, aspects, or items mentioned "
+        "in the question. Do not stop after the first relevant fact.\n"
+        "- For comparison or multi-entity questions, address each entity separately "
+        "and include all relevant details from the evidence.\n"
+        "- Use bullet points or a table when listing specs or comparing multiple items.\n"
         "- Use only the evidence context.\n"
         "- Do not invent facts or citations.\n"
         "- Put citation markers like [1] or [2] immediately after the sentence or "
@@ -394,6 +431,7 @@ def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
         "- If you return JSON for internal parsing, use keys answer, status, "
         "used_citation_ids, and reason; otherwise return only the user-facing answer.\n"
         f"- If the evidence is insufficient, answer exactly: {NOT_FOUND_ANSWER}\n"
+        "</instructions>\n"
     )
 
 

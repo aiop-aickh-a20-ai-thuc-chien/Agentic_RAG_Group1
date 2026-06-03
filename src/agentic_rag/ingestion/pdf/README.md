@@ -289,7 +289,7 @@ bộ mà không cần thao tác ở root project.
 Từ root repository:
 
 ```bash
-uv --directory src/agentic_rag/ingestion/pdf sync 
+uv --directory src/agentic_rag/ingestion/pdf sync
 uv --directory src/agentic_rag/ingestion/pdf run ruff format --check .
 uv --directory src/agentic_rag/ingestion/pdf run ruff check .
 uv --directory src/agentic_rag/ingestion/pdf run mypy
