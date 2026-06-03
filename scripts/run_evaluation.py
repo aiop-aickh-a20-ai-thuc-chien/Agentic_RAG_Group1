@@ -9,6 +9,7 @@ from agentic_rag.evaluation.runner import EvaluationRunner
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run RAG evaluation pipeline.")
     parser.add_argument(
@@ -32,9 +33,7 @@ def main() -> int:
 
     try:
         runner = EvaluationRunner(
-            input_file=args.input, 
-            output_file=args.output,
-            run_ragas=args.ragas
+            input_file=args.input, output_file=args.output, run_ragas=args.ragas
         )
         runner.run()
         logger.info("Evaluation completed successfully.")
@@ -42,6 +41,7 @@ def main() -> int:
     except Exception as e:
         logger.error(f"Evaluation failed: {e}")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

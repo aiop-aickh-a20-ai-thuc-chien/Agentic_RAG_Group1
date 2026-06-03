@@ -51,7 +51,9 @@ class EvaluationRunner:
 
             logger.info(f"Evaluating row {row_idx}: {question}")
 
-            is_out_of_scope = ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+            is_out_of_scope = (
+                ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+            )
 
             # 1. Run Pipeline
             try:
@@ -94,7 +96,9 @@ class EvaluationRunner:
             top5_ids = [chunk.chunk.chunk_id for chunk in evidence_chunks[:5]]
             ws.cell(row=row_idx, column=header["retrieved_top5_ids"]).value = ", ".join(top5_ids)
 
-            gt_chunks_raw = ws.cell(row=row_idx, column=header.get("ground_truth_chunk_ids", -1)).value
+            gt_chunks_raw = ws.cell(
+                row=row_idx, column=header.get("ground_truth_chunk_ids", -1)
+            ).value
 
             if is_out_of_scope:
                 is_not_found = generation.answer.status == "not_found"
@@ -127,24 +131,30 @@ class EvaluationRunner:
         # 3. RAGAS Evaluation
         if self.run_ragas:
             from agentic_rag.evaluation.ragas_eval import run_ragas_evaluation
-            
+
             logger.info("Preparing data for RAGAS evaluation...")
             eval_data = []
             row_mapping = []
-            
+
             for row_idx in range(3, ws.max_row + 1):
-                is_out_of_scope = ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+                is_out_of_scope = (
+                    ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+                )
                 if is_out_of_scope:
                     continue
-                    
+
                 question = str(ws.cell(row=row_idx, column=header.get("question", -1)).value or "")
-                answer = str(ws.cell(row=row_idx, column=header.get("bot_response", -1)).value or "")
-                expected_answer = str(ws.cell(row=row_idx, column=header.get("expected_answer", -1)).value or "")
+                answer = str(
+                    ws.cell(row=row_idx, column=header.get("bot_response", -1)).value or ""
+                )
+                expected_answer = str(
+                    ws.cell(row=row_idx, column=header.get("expected_answer", -1)).value or ""
+                )
                 rag_context_raw = ws.cell(row=row_idx, column=header.get("rag_context", -1)).value
-                
+
                 if not question or not answer:
                     continue
-                    
+
                 contexts = []
                 if rag_context_raw:
                     try:
@@ -152,22 +162,32 @@ class EvaluationRunner:
                         contexts = [item.get("text", "") for item in ctx_list]
                     except Exception:
                         pass
-                        
-                eval_data.append({
-                    "question": question,
-                    "answer": answer,
-                    "contexts": contexts,
-                    "ground_truth": expected_answer,
-                })
+
+                eval_data.append(
+                    {
+                        "question": question,
+                        "answer": answer,
+                        "contexts": contexts,
+                        "ground_truth": expected_answer,
+                    }
+                )
                 row_mapping.append(row_idx)
-                
+
             if eval_data:
                 ragas_results = run_ragas_evaluation(eval_data)
-                for row_idx, scores in zip(row_mapping, ragas_results):
-                    ws.cell(row=row_idx, column=header.get("ragas_faithfulness", -1)).value = scores.get("ragas_faithfulness", 0.0)
-                    ws.cell(row=row_idx, column=header.get("ragas_answer_relevancy", -1)).value = scores.get("ragas_answer_relevancy", 0.0)
-                    ws.cell(row=row_idx, column=header.get("ragas_context_precision", -1)).value = scores.get("ragas_context_precision", 0.0)
-                    ws.cell(row=row_idx, column=header.get("ragas_context_recall", -1)).value = scores.get("ragas_context_recall", 0.0)
+                for row_idx, scores in zip(row_mapping, ragas_results, strict=False):
+                    ws.cell(
+                        row=row_idx, column=header.get("ragas_faithfulness", -1)
+                    ).value = scores.get("ragas_faithfulness", 0.0)
+                    ws.cell(
+                        row=row_idx, column=header.get("ragas_answer_relevancy", -1)
+                    ).value = scores.get("ragas_answer_relevancy", 0.0)
+                    ws.cell(
+                        row=row_idx, column=header.get("ragas_context_precision", -1)
+                    ).value = scores.get("ragas_context_precision", 0.0)
+                    ws.cell(
+                        row=row_idx, column=header.get("ragas_context_recall", -1)
+                    ).value = scores.get("ragas_context_recall", 0.0)
 
         # Save workbook
         logger.info(f"Saving evaluation results to {self.output_file}")
