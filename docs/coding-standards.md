@@ -9,7 +9,7 @@ Tài liệu bổ sung cho `docs/git-workflow.md`.
 - Không commit virtual environment, cache, local index, file upload hoặc secret.
 - Chỉ thêm runtime dependency khi module thật sự cần.
 - Thêm development tool vào dependency group `dev`.
-- Commit `uv.lock` và dùng `uv sync --locked` trong CI.
+- Commit `uv.lock` và dùng `uv sync ` trong CI.
 
 ## Style Python
 
