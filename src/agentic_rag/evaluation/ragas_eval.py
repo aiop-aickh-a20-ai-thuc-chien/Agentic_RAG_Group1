@@ -23,7 +23,7 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
     """
     try:
         from datasets import Dataset  # type: ignore[import-not-found]
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings  # type: ignore[import-not-found]
+        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
         from ragas import evaluate  # type: ignore[import-not-found]
         from ragas.metrics import (  # type: ignore[import-not-found]
             answer_relevancy,
@@ -55,7 +55,7 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
         logger.warning("No OpenAI API key found for RAGAS. Evaluation might fail.")
 
     llm = ChatOpenAI(model=model_name, api_key=api_key)
-    embeddings = OpenAIEmbeddings(api_key=api_key)
+    embeddings = OpenAIEmbeddings(api_key=api_key)  # type: ignore[call-arg]
 
     metrics = [
         faithfulness,
