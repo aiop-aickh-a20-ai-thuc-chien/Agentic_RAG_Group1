@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 from pytest import MonkeyPatch
@@ -9,6 +11,30 @@ from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.retrieval.search import Store
+
+
+def _mock_openai_client(monkeypatch: MonkeyPatch) -> None:
+    class FakeOpenAI:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            self._call_count = 0
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+        def _create(self, *_args: object, **_kwargs: object) -> object:
+            self._call_count += 1
+            if self._call_count == 1:
+                content = "decompose"
+            else:
+                content = json.dumps(
+                    {
+                        "method": "decompose",
+                        "transformed_queries": ["pin bao hanh bao lau"],
+                    }
+                )
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+            )
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
 
 
 def test_local_pdf_provider_uploads_chunks_and_lists_them(
@@ -220,6 +246,7 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "score")
+    _mock_openai_client(monkeypatch)
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
         lambda path, **kwargs: LoadedPdfDocument(

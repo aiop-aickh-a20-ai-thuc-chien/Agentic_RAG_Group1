@@ -170,7 +170,9 @@ class Store:
             return []
 
         scores = self._bm25_index.get_scores(query_tokens)  # type: ignore[no-untyped-call]
-        top_indexes = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)[:top_k]
+        top_indexes = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)[
+            :top_k
+        ]
 
         results = []
         for rank, chunk_index in enumerate(top_indexes, start=1):
@@ -212,7 +214,9 @@ class Store:
             )
 
         except Exception:
-            store = TurboQuantVectorStore.from_texts(texts=chunks_list, embedding=embedding, metadatas=metadatas)  # type: ignore[assignment]
+            store = TurboQuantVectorStore.from_texts(
+                texts=chunks_list, embedding=embedding, metadatas=metadatas
+            )  # type: ignore[assignment]
 
         return store
 
