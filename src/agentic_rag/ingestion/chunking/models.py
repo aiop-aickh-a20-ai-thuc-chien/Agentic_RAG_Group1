@@ -17,6 +17,8 @@ class MarkdownSection(_IngestionChunkingModel):
     """A Markdown section associated with the nearest heading."""
 
     title: str | None
+    level: int = 0
+    path: tuple[str, ...] = ()
     text: str
 
 
@@ -26,6 +28,10 @@ class ChunkCandidate(_IngestionChunkingModel):
     section: str | None
     text: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    section_level: int = 0
+    section_path: tuple[str, ...] = ()
+    chunk_token_count: int | None = None
+    semantic_unit: str | None = None
 
 
 MarkdownChunk = ChunkCandidate
