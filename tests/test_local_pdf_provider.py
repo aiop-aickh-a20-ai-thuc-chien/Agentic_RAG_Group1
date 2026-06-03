@@ -60,7 +60,9 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
                     metadata={"chunk_index": 2, "section": "Dieu kien"},
                 ),
             ],
-            parser=kwargs["parser_name"],
+            parser=kwargs["strategy_name"],
+            pipeline=kwargs["pipeline_name"],
+            strategy=kwargs["strategy_name"],
             chunker=kwargs["chunker_name"],
         )
 
@@ -87,11 +89,14 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     assert trace["parse"]["markdown_preview"] == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
     assert "markdown" not in trace["parse"]
     assert seen_kwargs == {
-        "parser_name": "docling",
-        "chunker_name": "docling-hybrid",
+        "pipeline_name": "ocr",
+        "strategy_name": "docling",
+        "chunker_name": "deterministic",
     }
     assert trace["chunking"]["chunk_count"] == 2
-    assert trace["chunking"]["chunker"] == "docling-hybrid"
+    assert trace["parse"]["pipeline"] == "ocr"
+    assert trace["parse"]["strategy"] == "docling"
+    assert trace["chunking"]["chunker"] == "deterministic"
     assert trace["index_write"]["type"] == "jsonl"
     assert document_chunks.total_chunks == 2
     assert [chunk.chunk_id for chunk in document_chunks.chunks] == [
@@ -147,7 +152,9 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
         return LoadedPdfDocument(
             markdown="# Configured\nNoi dung.",
             chunks=[],
-            parser=kwargs["parser_name"],
+            parser=kwargs["strategy_name"],
+            pipeline=kwargs["pipeline_name"],
+            strategy=kwargs["strategy_name"],
             chunker=kwargs["chunker_name"],
         )
 
@@ -158,8 +165,9 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
     provider = LocalPdfEvidenceProvider(
         store_dir=tmp_path,
         pdf_config=PdfIngestionConfig(
-            parser_name="docling",
-            chunker_name="docling-hybrid",
+            pipeline_name="vlm",
+            strategy_name="mineru",
+            chunker_name="deterministic",
         ),
     )
 
@@ -171,11 +179,14 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
 
     trace = cast(dict[str, dict[str, Any]], uploaded.trace)
     assert seen_kwargs == {
-        "parser_name": "docling",
-        "chunker_name": "docling-hybrid",
+        "pipeline_name": "vlm",
+        "strategy_name": "mineru",
+        "chunker_name": "deterministic",
     }
-    assert trace["parse"]["parser"] == "docling"
-    assert trace["chunking"]["chunker"] == "docling-hybrid"
+    assert trace["parse"]["parser"] == "mineru"
+    assert trace["parse"]["pipeline"] == "vlm"
+    assert trace["parse"]["strategy"] == "mineru"
+    assert trace["chunking"]["chunker"] == "deterministic"
 
 
 def test_local_pdf_provider_uploads_url_chunks(

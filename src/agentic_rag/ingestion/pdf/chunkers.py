@@ -17,7 +17,7 @@ from agentic_rag.ingestion.chunking import (
 
 DETERMINISTIC_MARKDOWN_CHUNKER = "deterministic"
 DOCLING_HYBRID_CHUNKER = "docling-hybrid"
-DEFAULT_MARKDOWN_CHUNKER = DOCLING_HYBRID_CHUNKER
+DEFAULT_MARKDOWN_CHUNKER = DETERMINISTIC_MARKDOWN_CHUNKER
 
 
 class MarkdownChunker(Protocol):

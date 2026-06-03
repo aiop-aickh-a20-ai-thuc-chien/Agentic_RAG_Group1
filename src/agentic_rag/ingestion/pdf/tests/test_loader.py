@@ -95,7 +95,9 @@ def test_loaded_pdf_document_defaults_parser_and_chunker() -> None:
     loaded = LoadedPdfDocument(markdown="# Intro", chunks=[])
 
     assert loaded.parser == "docling"
-    assert loaded.chunker == "docling-hybrid"
+    assert loaded.pipeline == "ocr"
+    assert loaded.strategy == "docling"
+    assert loaded.chunker == "deterministic"
 
 
 def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
@@ -161,6 +163,8 @@ def test_load_pdf_with_markdown_uses_document_parse_for_native_chunker(
 
     assert loaded.markdown == "# Intro\nOriginal markdown."
     assert loaded.parser == "fake-parser"
+    assert loaded.pipeline == "ocr"
+    assert loaded.strategy == "docling"
     assert loaded.chunker == "fake-native-chunker"
     assert loaded.chunks[0].text == "Native chunk text."
     assert loaded.chunks[0].metadata["section"] == "Native"
@@ -214,6 +218,80 @@ def test_load_pdf_chunks_returns_empty_list_for_empty_markdown(tmp_path: Path) -
         _load_pdf_chunks(pdf_path, FakeParser(" \n\n"), chunker=DeterministicMarkdownChunker())
         == []
     )
+
+
+def test_load_pdf_with_markdown_accepts_resolved_pipeline_strategy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+
+    monkeypatch.setattr(
+        "agentic_rag.ingestion.pdf.loader.resolve_pdf_pipeline",
+        lambda pipeline_name, strategy_name: type(
+            "Resolved",
+            (),
+            {
+                "pipeline_name": pipeline_name,
+                "strategy_name": strategy_name,
+                "parser": FakeParser("# Intro\nNoi dung."),
+            },
+        )(),
+    )
+
+    loaded = load_pdf_with_markdown(
+        str(pdf_path),
+        pipeline_name="ocr",
+        strategy_name="docling",
+        chunker_name="deterministic",
+    )
+
+    assert loaded.parser == "fake-parser"
+    assert loaded.pipeline == "ocr"
+    assert loaded.strategy == "docling"
+    assert loaded.chunker == "deterministic"
+    assert loaded.chunks[0].text == "Noi dung."
+
+
+def test_load_pdf_with_markdown_keeps_legacy_parser_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    seen: dict[str, str | None] = {}
+
+    def fake_resolve_pdf_pipeline(
+        pipeline_name: str | None,
+        strategy_name: str | None,
+    ) -> object:
+        seen["pipeline_name"] = pipeline_name
+        seen["strategy_name"] = strategy_name
+        return type(
+            "Resolved",
+            (),
+            {
+                "pipeline_name": "ocr",
+                "strategy_name": "docling",
+                "parser": FakeParser("# Intro\nNoi dung."),
+            },
+        )()
+
+    monkeypatch.setattr(
+        "agentic_rag.ingestion.pdf.loader.resolve_pdf_pipeline",
+        fake_resolve_pdf_pipeline,
+    )
+
+    loaded = load_pdf_with_markdown(
+        str(pdf_path),
+        parser_name="docling",
+        chunker_name="deterministic",
+    )
+
+    assert seen == {"pipeline_name": None, "strategy_name": "docling"}
+    assert loaded.pipeline == "ocr"
+    assert loaded.strategy == "docling"
 
 
 def test_load_pdf_chunks_does_not_write_debug_files_next_to_input(tmp_path: Path) -> None:

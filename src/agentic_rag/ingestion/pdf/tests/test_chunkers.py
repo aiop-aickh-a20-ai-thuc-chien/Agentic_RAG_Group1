@@ -59,11 +59,11 @@ def test_default_chunker_wraps_existing_markdown_chunking() -> None:
     assert chunks[0].text == "Pin duoc bao hanh 8 nam."
 
 
-def test_default_chunker_is_docling_hybrid() -> None:
+def test_default_chunker_is_deterministic() -> None:
     chunker = resolve_markdown_chunker(None)
 
-    assert isinstance(chunker, DoclingHybridChunker)
-    assert chunker.requires_native_document is True
+    assert isinstance(chunker, DeterministicMarkdownChunker)
+    assert chunker.requires_native_document is False
 
 
 def test_supported_markdown_chunkers_lists_default_and_docling_hybrid() -> None:

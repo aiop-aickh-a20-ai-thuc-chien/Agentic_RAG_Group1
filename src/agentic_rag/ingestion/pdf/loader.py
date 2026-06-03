@@ -16,8 +16,12 @@ from agentic_rag.ingestion.pdf.chunkers import (
     resolve_markdown_chunker,
 )
 from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
-from agentic_rag.ingestion.pdf.parser import DEFAULT_PDF_PARSER, PdfMarkdownParser
-from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser
+from agentic_rag.ingestion.pdf.parser import PdfMarkdownParser
+from agentic_rag.ingestion.pdf.pipelines import (
+    DEFAULT_PDF_PIPELINE,
+    DEFAULT_PDF_STRATEGY,
+    resolve_pdf_pipeline,
+)
 
 
 class LoadedPdfDocument(BaseModel):
@@ -27,7 +31,9 @@ class LoadedPdfDocument(BaseModel):
 
     markdown: str
     chunks: list[Chunk]
-    parser: str = DEFAULT_PDF_PARSER
+    parser: str = DEFAULT_PDF_STRATEGY
+    pipeline: str = DEFAULT_PDF_PIPELINE
+    strategy: str = DEFAULT_PDF_STRATEGY
     chunker: str = DEFAULT_MARKDOWN_CHUNKER
     requested_chunker: str | None = None
     chunking_fallback_reason: str | None = None
@@ -36,7 +42,9 @@ class LoadedPdfDocument(BaseModel):
 def load_pdf_chunks(
     path: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str | None = None,
+    pipeline_name: str | None = None,
+    strategy_name: str | None = None,
     chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
 ) -> list[Chunk]:
     """Load and chunk a PDF file into shared Chunk objects."""
@@ -44,6 +52,8 @@ def load_pdf_chunks(
     return load_pdf_with_markdown(
         path,
         parser_name=parser_name,
+        pipeline_name=pipeline_name,
+        strategy_name=strategy_name,
         chunker_name=chunker_name,
     ).chunks
 
@@ -51,15 +61,23 @@ def load_pdf_chunks(
 def load_pdf_with_markdown(
     path: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str | None = None,
+    pipeline_name: str | None = None,
+    strategy_name: str | None = None,
     chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
 ) -> LoadedPdfDocument:
     """Load a PDF into Markdown and shared Chunk objects."""
 
     pdf_path = Path(path)
+    resolved_pipeline = resolve_pdf_pipeline(
+        pipeline_name,
+        strategy_name if strategy_name is not None else parser_name,
+    )
     return _load_pdf_with_markdown(
         pdf_path,
-        resolve_pdf_parser(parser_name),
+        resolved_pipeline.parser,
+        pipeline_name=resolved_pipeline.pipeline_name,
+        strategy_name=resolved_pipeline.strategy_name,
         chunker=resolve_markdown_chunker(chunker_name),
     )
 
@@ -77,6 +95,8 @@ def _load_pdf_with_markdown(
     path: Path,
     parser: PdfMarkdownParser,
     *,
+    pipeline_name: str = DEFAULT_PDF_PIPELINE,
+    strategy_name: str = DEFAULT_PDF_STRATEGY,
     chunker: MarkdownChunker | None = None,
 ) -> LoadedPdfDocument:
     _validate_pdf_path(path)
@@ -115,9 +135,9 @@ def _load_pdf_with_markdown(
         markdown=parse_result.markdown,
         chunks=chunks,
         parser=parse_result.parser,
+        pipeline=pipeline_name,
+        strategy=strategy_name,
         chunker=chunker_name,
-        requested_chunker=resolved_chunker.chunker_name,
-        chunking_fallback_reason=fallback_reason,
     )
 
 
@@ -157,7 +177,7 @@ def _chunks_from_markdown(
     path: Path,
     markdown: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str = DEFAULT_PDF_STRATEGY,
     chunker: MarkdownChunker | None = None,
 ) -> list[Chunk]:
     resolved_chunker = (

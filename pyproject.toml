@@ -23,6 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+evaluation = [
+    "ragas>=0.1.0",
+    "datasets",
+    "openpyxl>=3.1.0",
+]
 observability = [
     "langsmith>=0.4,<1",
 ]

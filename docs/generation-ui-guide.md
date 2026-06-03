@@ -195,16 +195,45 @@ need a separate flow:
 ```bash
 EVIDENCE_PROVIDER=local_pdf
 LOCAL_PDF_STORE_DIR=storage/local_pdf
+LOCAL_PDF_PIPELINE=ocr
+LOCAL_PDF_STRATEGY=docling
+# Legacy alias for LOCAL_PDF_STRATEGY during transition:
 LOCAL_PDF_PARSER=docling
-LOCAL_PDF_CHUNKER=docling-hybrid
+LOCAL_PDF_CHUNKER=deterministic
 LOCAL_PDF_RETRIEVAL_TOP_K=5
 LOCAL_PDF_RETRIEVAL_CANDIDATE_K=20
+```
+
+Local parser CLI smoke test:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf --output-json
+```
+
+Override `.env` values from CLI when comparing parser settings:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --pipeline ocr \
+  --strategy docling \
+  --chunker deterministic \
+  --write-artifacts \
+  --output-root storage/local_pdf/parser-artifacts \
+  --run-id manual-check
+```
+
+Local API smoke test:
+
+```bash
+uv run uvicorn agentic_rag.api:api --reload
+curl -F "file=@path/to/file.pdf" http://127.0.0.1:8000/sources/upload
+curl http://127.0.0.1:8000/sources/<document_id>/chunks
 ```
 
 Flow:
 
 ```text
-PDF upload -> local PDF parser -> local chunks JSONL
+PDF upload -> local PDF parser pipeline/strategy -> local chunks JSONL
 URL import -> URL ingestion module -> local chunks JSONL
 Text import -> text ingestion module -> local chunks JSONL
 question -> query preprocessing
@@ -218,9 +247,12 @@ SearchResult + evidence context -> generate_answer() of module #149
 Use `EVIDENCE_PROVIDER=ragflow` again when comparing against the RAGFlow
 baseline.
 
-For PDF chunking experiments, keep `LOCAL_PDF_CHUNKER=docling-hybrid` as the
-PDF default. Use `LOCAL_PDF_CHUNKER=deterministic` to compare against the
-repo-owned Markdown fallback without changing URL/text chunking.
+For PDF parsing experiments, keep `LOCAL_PDF_PIPELINE=ocr` and
+`LOCAL_PDF_STRATEGY=docling` as the default. `vlm/mineru` is registered as an
+explicit VLM seam but requires a dedicated dependency/config wiring pass before
+selection. For PDF chunking experiments, keep `LOCAL_PDF_CHUNKER=deterministic`
+as the default and use `LOCAL_PDF_CHUNKER=docling-hybrid` to compare against
+Docling native chunking without changing URL/text chunking.
 
 Trace log:
 
@@ -237,6 +269,10 @@ Với PDF local, Markdown sau parse được lưu lại để debug trước khi
 ```text
 storage/local_pdf/parsed/{document_id}.md
 ```
+
+Với các lần chạy parser artifact rõ ràng qua `--write-artifacts`, output gồm
+`parsed.md`, `chunks.jsonl`, `chunks.md` và `manifest.json`. Giữ `chunks.jsonl`
+cho máy đọc/replay; dùng `chunks.md` để debug chunk bằng mắt.
 
 Với URL/text local, Markdown artifact được lưu trong thư mục ingestion artifact:
 
