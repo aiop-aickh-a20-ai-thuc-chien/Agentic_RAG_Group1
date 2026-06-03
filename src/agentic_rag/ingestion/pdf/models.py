@@ -10,6 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_rag.ingestion.chunking import ChunkingInput
+
 PdfAssetKind = Literal["image", "table", "chart", "other"]
 
 
@@ -41,12 +43,13 @@ class PdfParseResult(_PdfParserModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class PdfChunkingInput(_PdfParserModel):
+class PdfChunkingInput(ChunkingInput):
     """Input passed from PDF parser output into a PDF-local chunker."""
 
     markdown: str
     parser: str
     source_path: str
+    source_type: str | None = "pdf"
     native_document: Any | None = None
 
 

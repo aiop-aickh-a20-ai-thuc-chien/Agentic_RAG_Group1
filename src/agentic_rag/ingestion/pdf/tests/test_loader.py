@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.chunking import ChunkingInput
 from agentic_rag.ingestion.pdf.chunking import MarkdownChunk
 from agentic_rag.ingestion.pdf.loader import (
     LoadedPdfDocument,
@@ -11,7 +12,7 @@ from agentic_rag.ingestion.pdf.loader import (
     load_pdf_chunks,
     load_pdf_with_markdown,
 )
-from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
+from agentic_rag.ingestion.pdf.models import PdfParseResult
 from agentic_rag.ingestion.pdf.parser import ParsedPdfDocument
 
 
@@ -49,8 +50,10 @@ class FakeChunker:
 
     def __init__(self) -> None:
         self.seen_markdown: str | None = None
+        self.seen_input: ChunkingInput | None = None
 
-    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
+        self.seen_input = chunking_input
         self.seen_markdown = chunking_input.markdown
         return [MarkdownChunk(section="Forced", text="Forced chunk text.")]
 
@@ -62,7 +65,7 @@ class FakeNativeChunker:
     def __init__(self) -> None:
         self.seen_native_document: object | None = None
 
-    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
         self.seen_native_document = chunking_input.native_document
         return [MarkdownChunk(section="Native", text="Native chunk text.")]
 
@@ -115,6 +118,9 @@ def test_load_pdf_with_markdown_uses_supplied_chunker(tmp_path: Path) -> None:
     assert loaded.chunks[0].text == "Forced chunk text."
     assert loaded.chunks[0].metadata["section"] == "Forced"
     assert loaded.chunks[0].metadata["chunking_method"] == "fake-chunker"
+    assert isinstance(chunker.seen_input, ChunkingInput)
+    assert chunker.seen_input.parser == "fake-parser"
+    assert chunker.seen_input.source_path == str(pdf_path)
     assert chunker.seen_markdown == "# Intro\nOriginal markdown."
     assert parser.parse_calls == 1
     assert parser.parse_to_document_calls == 0

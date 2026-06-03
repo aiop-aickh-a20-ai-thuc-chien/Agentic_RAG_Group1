@@ -1,4 +1,4 @@
-"""Shared deterministic chunking primitives for ingestion modules."""
+"""Shared deterministic splitters and text normalization helpers."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ import hashlib
 import re
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from agentic_rag.ingestion.chunking.models import (
+    ChunkingInput,
+    MarkdownChunk,
+    MarkdownSection,
+)
 
 DEFAULT_CHUNK_SIZE = 1_200
 DEFAULT_CHUNK_OVERLAP = 150
@@ -14,38 +18,8 @@ DEFAULT_CHUNK_OVERLAP = 150
 _HEADING_RE = re.compile(r"^#{1,6}(?!#)\s*(?P<title>.+?)\s*$")
 
 
-class _IngestionChunkingModel(BaseModel):
-    """Base configuration for shared ingestion chunking models."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-
-class MarkdownSection(_IngestionChunkingModel):
-    """A Markdown section associated with the nearest heading."""
-
-    title: str | None
-    text: str
-
-
-class MarkdownChunk(_IngestionChunkingModel):
-    """A chunk of Markdown/text ready to map into a shared Chunk contract."""
-
-    section: str | None
-    text: str
-
-
-class TextChunkingStrategy(Protocol):
-    """Strategy that splits normalized Markdown/text into chunk strings."""
-
-    @property
-    def provider(self) -> str:
-        """Provider name used by the strategy."""
-
-    @property
-    def model(self) -> str:
-        """Model name used by the strategy."""
-
-    def split(self, text: str) -> list[str]:
+class _TextChunkingStrategy(Protocol):
+    def split(self, chunking_input: ChunkingInput) -> list[str]:
         """Return chunk strings for the provided text."""
 
 
@@ -163,19 +137,38 @@ def normalize_space(value: str) -> str:
 
 
 def split_text_with_strategy(
-    text: str,
+    text: str | ChunkingInput,
     *,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
-    chunking_strategy: TextChunkingStrategy | None = None,
+    chunking_strategy: _TextChunkingStrategy | None = None,
 ) -> list[str]:
     """Split text with either deterministic or injected model-assisted chunking."""
 
+    chunking_input = _coerce_chunking_input(text)
     if chunking_strategy is None:
-        return split_markdown(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        return split_markdown(
+            chunking_input.markdown,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
     return [
-        normalize_space(chunk) for chunk in chunking_strategy.split(text) if normalize_space(chunk)
+        normalize_space(chunk)
+        for chunk in chunking_strategy.split(chunking_input)
+        if normalize_space(chunk)
     ]
+
+
+def chunking_text(value: str | ChunkingInput) -> str:
+    """Return Markdown/text from either raw text or shared chunking input."""
+
+    return _coerce_chunking_input(value).markdown
+
+
+def _coerce_chunking_input(value: str | ChunkingInput) -> ChunkingInput:
+    if isinstance(value, ChunkingInput):
+        return value
+    return ChunkingInput(markdown=value)
 
 
 def _split_section_text(text: str, *, max_chars: int, overlap_chars: int) -> list[str]:

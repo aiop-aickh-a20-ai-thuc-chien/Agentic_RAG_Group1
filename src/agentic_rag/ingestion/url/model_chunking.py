@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from agentic_rag.ingestion.chunking import ChunkingInput, chunking_text
 from agentic_rag.ingestion.url.chunking import normalize_space
 
 LLMChunkingProvider = Literal["openai", "gemini"]
@@ -72,10 +73,10 @@ class ModelChunkingStrategy:
     def model(self) -> str:
         return self._client.model
 
-    def split(self, text: str) -> list[str]:
+    def split(self, chunking_input: str | ChunkingInput) -> list[str]:
         """Split text with the configured model and validate JSON output."""
 
-        cleaned_text = normalize_space(text)
+        cleaned_text = normalize_space(chunking_text(chunking_input))
         if not cleaned_text:
             return []
         prompt = _chunking_prompt(

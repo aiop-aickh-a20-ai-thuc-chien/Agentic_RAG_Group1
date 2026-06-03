@@ -16,19 +16,22 @@ Public helpers:
 
 - `loader.py`: ingestion and chunking boundary.
 - `parser.py`: parser adapters for HTML cleanup and section extraction.
-- `chunking.py`: deterministic Markdown/text chunking and chunk metadata construction.
+- `chunking.py`: URL compatibility exports plus URL-specific chunk metadata construction.
 - `artifact.py`: optional debug artifact persistence.
 - `benchmarking/`: local benchmark CLI and parser benchmark helpers.
 
 ## Behavior
 
 `load_url_chunks` fetches an absolute `http` or `https` URL, cleans HTML boilerplate, chunks
-content by detected sections, and returns shared `Chunk` objects.
+content by detected sections, and returns shared `Chunk` objects. URL parsing remains
+URL-local, but normalized text is passed through the shared chunking boundary in
+`agentic_rag.ingestion.chunking` before URL metadata is attached.
 
 The implementation uses Python standard library tools only:
 
 - `urllib` for URL fetching
 - `html.parser` for HTML cleanup and section detection
+- shared deterministic chunking primitives from `agentic_rag.ingestion.chunking`
 - deterministic SHA-256 based chunk IDs
 
 ## Metadata

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Any, Protocol, cast
 
+from agentic_rag.ingestion.chunking import ChunkingInput, chunking_text
 from agentic_rag.ingestion.url.chunking.core import normalize_space
 
 
@@ -34,7 +35,7 @@ class TiktokenChunkingStrategy:
     def model(self) -> str:
         return self.encoding_name
 
-    def split(self, text: str) -> list[str]:
+    def split(self, chunking_input: str | ChunkingInput) -> list[str]:
         """Return normalized chunks bounded by token count."""
 
         if self.max_tokens <= 0:
@@ -42,7 +43,7 @@ class TiktokenChunkingStrategy:
         if self.overlap_tokens < 0 or self.overlap_tokens >= self.max_tokens:
             raise ValueError("overlap_tokens must be non-negative and smaller than max_tokens.")
 
-        cleaned_text = normalize_space(text)
+        cleaned_text = normalize_space(chunking_text(chunking_input))
         if not cleaned_text:
             return []
 

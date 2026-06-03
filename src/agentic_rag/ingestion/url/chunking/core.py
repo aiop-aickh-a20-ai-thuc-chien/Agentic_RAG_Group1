@@ -6,6 +6,7 @@ from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
+    ChunkingInput,
     TextChunkingStrategy,
     build_chunk_id,
     normalize_space,
@@ -50,8 +51,13 @@ def build_chunks(
 
     chunks: list[Chunk] = []
     content_hash = short_hash(text)
+    chunking_input = ChunkingInput(
+        markdown=text,
+        source_type=source_type,
+        metadata={"section": section, "source": source},
+    )
     text_chunks = split_text_with_strategy(
-        text,
+        chunking_input,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         chunking_strategy=chunking_strategy,

@@ -1,5 +1,6 @@
 """Chunking helpers for URL ingestion."""
 
+from agentic_rag.ingestion.chunking import ChunkCandidate, Chunker, ChunkingInput
 from agentic_rag.ingestion.url.chunking.core import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
@@ -22,6 +23,9 @@ from agentic_rag.ingestion.url.chunking.token import TiktokenChunkingStrategy
 __all__ = [
     "DEFAULT_CHUNK_OVERLAP",
     "DEFAULT_CHUNK_SIZE",
+    "ChunkCandidate",
+    "Chunker",
+    "ChunkingInput",
     "MarkdownChunk",
     "MarkdownSection",
     "TextChunkingStrategy",

@@ -1,6 +1,13 @@
 import agentic_rag.ingestion.url as url_package
 from agentic_rag.ingestion.url.chunking import TiktokenChunkingStrategy
-from agentic_rag.ingestion.url.loader import load_html_chunks, load_text_chunks, load_url_chunks
+from agentic_rag.ingestion.url.loader import (
+    LoadedUrlDocument,
+    load_html_chunks,
+    load_html_with_artifacts,
+    load_text_chunks,
+    load_url_chunks,
+    load_url_with_artifacts,
+)
 from agentic_rag.ingestion.url.model_chunking import (
     GeminiChunkingClient,
     LLMChunkingConfig,

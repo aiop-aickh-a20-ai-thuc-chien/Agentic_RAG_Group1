@@ -32,9 +32,10 @@ PDF parser trong repo là Markdown-first, asset-aware và chunker-independent:
   metadata và danh sách `PdfAssetRef`.
 - `PdfAssetRef`: reference tới asset đã ghi ra file, dùng cho hậu xử lý bảng,
   hình ảnh hoặc chart; không nhúng binary/object vào shared `Chunk`.
-- `PdfChunkingInput`: input PDF-local cho chunker, gồm Markdown và optional
-  parser-native document.
-- `MarkdownChunker`: strategy tách `PdfChunkingInput` thành `MarkdownChunk`.
+- `PdfChunkingInput`: compatibility subclass của shared `ChunkingInput`, gồm
+  Markdown và optional parser-native document.
+- `MarkdownChunker`: PDF compatibility protocol cho shared chunking boundary,
+  tách input đã normalize thành chunk candidate.
 - `load_pdf_chunks()`: facade ghép parser + chunker + mapper để trả về
   `list[Chunk]` theo contract chung.
 

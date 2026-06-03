@@ -42,9 +42,17 @@ class Store:
 
         load_dotenv()
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
         normalized = _normalize_text(query)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {
+                "raw": query,
+                "normalized": normalized,
+                "tokens": " ".join(_tokenize(normalized)),
+                "requery": {"method": "fallback", "answer": normalized},
+            }
+
+        client = OpenAI(api_key=api_key)
 
         router_response = client.chat.completions.create(
             model="gpt-4o-mini",

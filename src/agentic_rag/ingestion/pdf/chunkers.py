@@ -7,8 +7,13 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-from agentic_rag.ingestion.chunking import MarkdownChunk, chunk_markdown
-from agentic_rag.ingestion.pdf.models import PdfChunkingInput
+from agentic_rag.ingestion.chunking import (
+    ChunkingInput,
+    MarkdownChunk,
+)
+from agentic_rag.ingestion.chunking import (
+    DeterministicMarkdownChunker as SharedDeterministicMarkdownChunker,
+)
 
 DEFAULT_MARKDOWN_CHUNKER = "deterministic"
 DOCLING_HYBRID_CHUNKER = "docling-hybrid"
@@ -20,20 +25,12 @@ class MarkdownChunker(Protocol):
     chunker_name: str
     requires_native_document: bool
 
-    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
         """Split Markdown into chunk candidates."""
 
 
-class DeterministicMarkdownChunker:
+class DeterministicMarkdownChunker(SharedDeterministicMarkdownChunker):
     """Default deterministic section-aware character chunker."""
-
-    chunker_name = DEFAULT_MARKDOWN_CHUNKER
-    requires_native_document = False
-
-    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
-        """Split Markdown with the existing deterministic chunking implementation."""
-
-        return chunk_markdown(chunking_input.markdown)
 
 
 class DoclingHybridChunker:
@@ -45,7 +42,7 @@ class DoclingHybridChunker:
     def __init__(self, hybrid_chunker_factory: Callable[[], Any] | None = None) -> None:
         self._hybrid_chunker_factory = hybrid_chunker_factory or _default_hybrid_chunker_factory
 
-    def chunk(self, chunking_input: PdfChunkingInput) -> list[MarkdownChunk]:
+    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
         """Split a Docling document with Docling HybridChunker."""
 
         if chunking_input.native_document is None:

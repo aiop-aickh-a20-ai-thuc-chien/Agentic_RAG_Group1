@@ -1,6 +1,7 @@
 import pytest
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.chunking import ChunkingInput
 from agentic_rag.ingestion.url.chunking import (
     TiktokenChunkingStrategy,
     build_chunk_id,
@@ -10,6 +11,18 @@ from agentic_rag.ingestion.url.chunking import (
     slugify,
     split_markdown,
 )
+
+
+class RecordingStrategy:
+    provider = "test-provider"
+    model = "test-model"
+
+    def __init__(self) -> None:
+        self.seen_input: ChunkingInput | None = None
+
+    def split(self, chunking_input: ChunkingInput) -> list[str]:
+        self.seen_input = chunking_input
+        return ["recorded chunk"]
 
 
 def test_split_markdown_is_deterministic_and_uses_overlap() -> None:
@@ -97,6 +110,29 @@ def test_build_chunks_can_use_tiktoken_strategy() -> None:
     assert chunks[0].metadata["chunking_method"] == "deterministic-token-overlap"
     assert chunks[0].metadata["chunking_provider"] == "tiktoken"
     assert chunks[0].metadata["chunking_model"] == "cl100k_base"
+
+
+def test_build_chunks_passes_shared_chunking_input_to_injected_strategy() -> None:
+    strategy = RecordingStrategy()
+
+    chunks = build_chunks(
+        text="Overview content",
+        source="https://example.edu/shared",
+        source_type="url",
+        section="Overview",
+        url="https://example.edu/shared",
+        title="Shared",
+        fetched_at="2026-06-01T00:00:00+00:00",
+        chunking_strategy=strategy,
+    )
+
+    assert strategy.seen_input == ChunkingInput(
+        markdown="Overview content",
+        source_type="url",
+        metadata={"section": "Overview", "source": "https://example.edu/shared"},
+    )
+    assert chunks[0].text == "recorded chunk"
+    assert chunks[0].metadata["chunking_method"] == "llm-assisted"
 
 
 def test_chunking_helpers_normalize_ids_and_text() -> None:
