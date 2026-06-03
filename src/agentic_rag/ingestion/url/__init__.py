@@ -15,6 +15,7 @@ from agentic_rag.ingestion.url.model_chunking import (
     ModelChunkingReport,
     ModelChunkingStrategy,
     OpenAIChunkingClient,
+    RAGFlowChunkingStrategy,
     compare_model_chunking,
 )
 
@@ -25,6 +26,7 @@ __all__ = [
     "ModelChunkingReport",
     "ModelChunkingStrategy",
     "OpenAIChunkingClient",
+    "RAGFlowChunkingStrategy",
     "TiktokenChunkingStrategy",
     "compare_model_chunking",
     "load_html_chunks",

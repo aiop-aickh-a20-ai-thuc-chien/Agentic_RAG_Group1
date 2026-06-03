@@ -7,6 +7,7 @@ from agentic_rag.ingestion.url.model_chunking import (
     ModelChunkingReport,
     ModelChunkingStrategy,
     OpenAIChunkingClient,
+    RAGFlowChunkingStrategy,
     compare_model_chunking,
 )
 
@@ -19,6 +20,7 @@ def test_url_package_re_exports_public_ingestion_helpers() -> None:
         "ModelChunkingReport",
         "ModelChunkingStrategy",
         "OpenAIChunkingClient",
+        "RAGFlowChunkingStrategy",
         "TiktokenChunkingStrategy",
         "compare_model_chunking",
         "load_html_chunks",
@@ -32,6 +34,7 @@ def test_url_package_re_exports_public_ingestion_helpers() -> None:
     assert url_package.ModelChunkingReport is ModelChunkingReport
     assert url_package.ModelChunkingStrategy is ModelChunkingStrategy
     assert url_package.OpenAIChunkingClient is OpenAIChunkingClient
+    assert url_package.RAGFlowChunkingStrategy is RAGFlowChunkingStrategy
     assert url_package.TiktokenChunkingStrategy is TiktokenChunkingStrategy
     assert url_package.compare_model_chunking is compare_model_chunking
     assert url_package.load_html_chunks is load_html_chunks

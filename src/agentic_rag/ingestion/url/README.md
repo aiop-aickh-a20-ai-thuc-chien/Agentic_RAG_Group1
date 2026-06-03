@@ -32,11 +32,13 @@ The default URL path is:
    the HTML.
 4. `extract_markdown_with_trafilatura()` tries to extract clean main-content
    Markdown.
-5. If Trafilatura cannot extract content, the loader falls back to Markdown
-   built from the builtin parser sections.
-6. The loader chunks section Markdown and enriches each `Chunk.metadata` with URL
-   metadata such as original URL, final URL, canonical URL, language, author,
-   description, and asset count.
+5. If Trafilatura cannot extract content, or if it drops heading structure that
+   the builtin parser can preserve, the loader falls back to Markdown built from
+   builtin parser sections.
+6. The loader removes common script/config/cookie boilerplate from Markdown.
+7. The loader chunks global Markdown with heading-aware metadata and enriches
+   each `Chunk.metadata` with URL metadata such as original URL, final URL,
+   canonical URL, language, author, description, and asset count.
 
 Trafilatura is preferred because it removes much of the boilerplate from real web
 pages and preserves useful Markdown constructs such as headings, links, lists,
@@ -45,25 +47,28 @@ HTML and test cases.
 
 ## Chunking Strategy
 
-The default chunking method is `paragraph-token-overlap`.
+The default chunking method is `hybrid-markdown-aware-token-overlap`.
 
 The strategy is designed for Markdown:
 
-1. Split by Markdown paragraph boundaries.
-2. Count tokens with `tiktoken` when available, falling back to word counts.
-3. Keep chunks within the configured token budget.
-4. Preserve a small paragraph overlap between chunks.
-5. If one paragraph is too large, split it into sentences with `pysbd`.
-6. Detect Vietnamese text with a lightweight diacritic heuristic and use the
+1. Split global Markdown into heading-scoped sections.
+2. Preserve heading context in chunk text and store `section_level` plus
+   `section_path` in chunk metadata.
+3. Pack paragraphs under each section with a token budget.
+4. Count tokens with `tiktoken` when available, falling back to word counts.
+5. Preserve a small paragraph overlap between chunks.
+6. If one paragraph is too large, split it into sentences with `pysbd`.
+7. Detect Vietnamese text with a lightweight diacritic heuristic and use the
    Vietnamese `pysbd` segmenter; otherwise use English.
-7. If sentence segmentation is unavailable, fall back to regex and word splitting.
+8. If sentence segmentation is unavailable, fall back to regex and word splitting.
 
 This keeps chunks more useful for RAG than character slicing because headings,
-paragraphs, and sentence boundaries are less likely to be broken.
+section paths, paragraphs, and sentence boundaries are less likely to be broken.
 
 Optional strategies:
 
 - `TiktokenChunkingStrategy`: deterministic token-window splitting.
+- `RAGFlowChunkingStrategy`: optional RAGFlow-backed chunking.
 - `ModelChunkingStrategy`: optional OpenAI/Gemini-assisted splitting.
 - RAGFlow-assisted strategy can be selected by strategy object, while keeping
   integration code outside this module.

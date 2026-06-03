@@ -41,16 +41,18 @@ def test_chunk_markdown_by_sections_prefers_paragraph_boundaries() -> None:
     assert [chunk.section for chunk in chunks] == ["Section"]
     assert chunks[0].section_level == 1
     assert chunks[0].section_path == ("Section",)
-    assert chunks[0].text == "Doan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].text == "# Section\n\nDoan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].chunk_token_count > 0
+    assert chunks[0].semantic_unit == "markdown_section_paragraph_sentence"
 
 
-def test_oversized_section_splits_deterministically_with_overlap() -> None:
-    markdown = "# Long\n" + ("abcdef " * 30)
+def test_oversized_section_splits_deterministically_by_token_budget() -> None:
+    markdown = "# Long\nAlpha beta gamma.\n\nDelta epsilon zeta.\n\nEta theta iota."
 
-    chunks = chunk_markdown_by_sections(markdown, max_chars=60, overlap_chars=10)
+    chunks = chunk_markdown_by_sections(markdown, max_tokens=5, overlap_paragraphs=0)
 
     assert len(chunks) > 1
     assert all(chunk.section == "Long" for chunk in chunks)
     assert all(chunk.section_path == ("Long",) for chunk in chunks)
     assert all(chunk.text for chunk in chunks)
-    assert chunks == chunk_markdown_by_sections(markdown, max_chars=60, overlap_chars=10)
+    assert chunks == chunk_markdown_by_sections(markdown, max_tokens=5, overlap_paragraphs=0)

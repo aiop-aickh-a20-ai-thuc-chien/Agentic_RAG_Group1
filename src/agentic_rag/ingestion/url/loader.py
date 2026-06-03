@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,7 +20,9 @@ from agentic_rag.ingestion.url.artifact import (
 )
 from agentic_rag.ingestion.url.chunking import (
     TextChunkingStrategy,
+    build_chunk_id,
     build_chunks,
+    chunk_markdown_by_sections,
     normalize_space,
     short_hash,
 )
@@ -149,20 +153,31 @@ def load_html_with_artifacts(
     )
 
     source_type = "url" if source_url else "html"
-    chunks: list[Chunk] = []
-    for section in parsed.sections:
-        chunks.extend(
-            build_chunks(
-                text=section.markdown or section.text,
-                source=source,
-                source_type=source_type,
-                section=section.heading,
-                url=source_url,
-                title=parsed.title,
-                fetched_at=fetched_at,
-                chunking_strategy=chunking_strategy,
-            )
+    cleaned_markdown = _clean_markdown_noise(parsed_markdown)
+    if chunking_strategy is None:
+        chunks = _build_markdown_aware_chunks(
+            markdown=cleaned_markdown,
+            source=source,
+            source_type=source_type,
+            url=source_url,
+            title=parsed.title,
+            fetched_at=fetched_at,
         )
+    else:
+        chunks = []
+        for section in parsed.sections:
+            chunks.extend(
+                build_chunks(
+                    text=section.markdown or section.text,
+                    source=source,
+                    source_type=source_type,
+                    section=section.heading,
+                    url=source_url,
+                    title=parsed.title,
+                    fetched_at=fetched_at,
+                    chunking_strategy=chunking_strategy,
+                )
+            )
     chunks = _with_html_metadata(
         chunks,
         original_url=original_url,
@@ -181,7 +196,7 @@ def load_html_with_artifacts(
         parser=parser_name,
         run_id=run_id,
         created_at=fetched_at,
-        markdown=parsed_markdown,
+        markdown=cleaned_markdown,
         chunks=chunks,
         page_metadata=parsed.metadata,
         assets=parsed.assets,
@@ -293,7 +308,101 @@ def _extract_markdown(
         return fallback_markdown, _PARSER_NAME
     if trafilatura_markdown is None:
         return fallback_markdown, _PARSER_NAME
+    if not _has_markdown_heading(trafilatura_markdown) and _has_markdown_heading(fallback_markdown):
+        return fallback_markdown, _PARSER_NAME
     return trafilatura_markdown, _TRAFILATURA_PARSER_NAME
+
+
+def _has_markdown_heading(markdown: str) -> bool:
+    return any(re.match(r"^#{1,6}(?!#)\s+\S", line.strip()) for line in markdown.splitlines())
+
+
+def _build_markdown_aware_chunks(
+    *,
+    markdown: str,
+    source: str,
+    source_type: str,
+    url: str | None,
+    title: str | None,
+    fetched_at: str,
+) -> list[Chunk]:
+    content_hash = short_hash(markdown)
+    section_indexes: dict[str, int] = defaultdict(int)
+    chunks: list[Chunk] = []
+    for markdown_chunk in chunk_markdown_by_sections(markdown):
+        section = markdown_chunk.section or "main"
+        section_indexes[section] += 1
+        chunk_index = section_indexes[section]
+        chunks.append(
+            Chunk(
+                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
+                text=markdown_chunk.text,
+                metadata={
+                    "source": source,
+                    "source_type": source_type,
+                    "file_name": None,
+                    "url": url,
+                    "page": None,
+                    "section": section,
+                    "section_level": markdown_chunk.section_level,
+                    "section_path": list(markdown_chunk.section_path),
+                    "title": title,
+                    "fetched_at": fetched_at,
+                    "content_hash": content_hash,
+                    "chunk_index": chunk_index,
+                    "chunk_token_count": markdown_chunk.chunk_token_count,
+                    "chunking_method": "hybrid-markdown-aware-token-overlap",
+                    "chunking_provider": None,
+                    "chunking_model": None,
+                    "semantic_unit": markdown_chunk.semantic_unit,
+                },
+            )
+        )
+    return chunks
+
+
+def _clean_markdown_noise(markdown: str) -> str:
+    """Strengthen noise filtering for common web UI boilerplate (config, cookies, legal)."""
+    cleaned_lines: list[str] = []
+    noise_line_patterns = (
+        r"gtm\.js",
+        r"googletagmanager",
+        r"dataLayer",
+        r"^\s*function\s*\(",
+        r"^\s*window\.",
+        r"Cookie Policy",
+        r"Privacy Policy",
+        r"Terms of Use",
+        r"Legal Disclaimer",
+    )
+    noise_line_re = re.compile("|".join(noise_line_patterns), flags=re.IGNORECASE)
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if noise_line_re.search(stripped):
+            continue
+        if _looks_like_json_config_line(stripped):
+            continue
+        cleaned_lines.append(line)
+    cleaned = "\n".join(cleaned_lines)
+    cleaned = re.sub(r"\n\s*\n", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _looks_like_json_config_line(line: str) -> bool:
+    if not (line.startswith("{") and line.endswith("}")):
+        return False
+    lowered = line.lower()
+    config_markers = (
+        '"url"',
+        '"route"',
+        '"api"',
+        '"config"',
+        '"token"',
+        '"session"',
+        '"cookie"',
+        '"data"',
+    )
+    return any(marker in lowered for marker in config_markers)
 
 
 def _persist_html_debug_artifacts(
