@@ -28,9 +28,12 @@ from agentic_rag.retrieval.thresholds import (
 
 RERANK_PROVIDER_ENV = "RERANK_PROVIDER"
 RERANK_MODEL_ENV = "RERANK_CROSS_ENCODER_MODEL"
+RERANK_PRELOAD_ENV = "RERANK_PRELOAD"
+RERANK_DEVICE_ENV = "RERANK_DEVICE"
 RERANK_PROVIDER_SCORE = "score"
 RERANK_PROVIDER_CROSS_ENCODER = "cross-encoder"
 DEFAULT_CROSS_ENCODER_MODEL = "BAAI/bge-reranker-v2-m3"
+RERANK_LOAD_ERRORS = (ImportError, RuntimeError, OSError, AssertionError)
 
 
 class _CrossEncoderModel(Protocol):
@@ -65,6 +68,7 @@ def rerank_with_metadata(
     provider = _configured_rerank_provider()
     if provider == RERANK_PROVIDER_CROSS_ENCODER and query.strip():
         model_name = _configured_cross_encoder_model_name()
+        device = _configured_rerank_device()
         try:
             return _cross_encoder_rerank(
                 query=query,
@@ -74,15 +78,17 @@ def rerank_with_metadata(
                 "configured_provider": provider,
                 "used_provider": RERANK_PROVIDER_CROSS_ENCODER,
                 "model": model_name,
+                "device": device or "auto",
                 "library": "sentence-transformers",
             }
-        except (ImportError, RuntimeError, OSError) as exc:
+        except RERANK_LOAD_ERRORS as exc:
             return _score_based_rerank(unique_candidates, top_k=top_k), {
                 "configured_provider": provider,
                 "used_provider": RERANK_PROVIDER_SCORE,
                 "fallback_reason": f"{type(exc).__name__}: {exc}",
                 "fallback_provider": RERANK_PROVIDER_SCORE,
                 "requested_model": model_name,
+                "requested_device": device or "auto",
                 "method": "score_based_sort",
             }
 
@@ -103,9 +109,44 @@ def rerank_metadata() -> dict[str, object]:
     }
     if provider == RERANK_PROVIDER_CROSS_ENCODER:
         metadata["model"] = _configured_cross_encoder_model_name()
+        metadata["device"] = _configured_rerank_device() or "auto"
         metadata["library"] = "sentence-transformers"
     else:
         metadata["method"] = "score_based_sort"
+    return metadata
+
+
+def preload_reranker() -> dict[str, object]:
+    """Load the configured reranker early when startup preload is enabled."""
+
+    provider = _configured_rerank_provider()
+    metadata: dict[str, object] = {
+        "preload": _env_flag_enabled(RERANK_PRELOAD_ENV),
+        "configured_provider": provider,
+    }
+    if not metadata["preload"]:
+        metadata["status"] = "disabled"
+        return metadata
+    if provider != RERANK_PROVIDER_CROSS_ENCODER:
+        metadata["status"] = "skipped"
+        metadata["reason"] = "provider_not_cross_encoder"
+        return metadata
+
+    model_name = _configured_cross_encoder_model_name()
+    device = _configured_rerank_device()
+    metadata["model"] = model_name
+    metadata["device"] = device or "auto"
+    metadata["library"] = "sentence-transformers"
+    try:
+        _load_cross_encoder_model(model_name, device)
+    except RERANK_LOAD_ERRORS as exc:
+        metadata["status"] = "failed"
+        metadata["fallback_provider"] = RERANK_PROVIDER_SCORE
+        metadata["fallback_reason"] = f"{type(exc).__name__}: {exc}"
+        return metadata
+
+    metadata["status"] = "loaded"
+    metadata["used_provider"] = RERANK_PROVIDER_CROSS_ENCODER
     return metadata
 
 
@@ -154,7 +195,10 @@ def _cross_encoder_rerank(
     candidates: list[SearchResult],
     top_k: int,
 ) -> list[SearchResult]:
-    model = _load_cross_encoder_model(_configured_cross_encoder_model_name())
+    model = _load_cross_encoder_model(
+        _configured_cross_encoder_model_name(),
+        _configured_rerank_device(),
+    )
     pairs = [(query, candidate.chunk.text) for candidate in candidates]
     scores = _coerce_scores(model.predict(pairs))
     if len(scores) != len(candidates):
@@ -192,11 +236,23 @@ def _configured_cross_encoder_model_name() -> str:
     )
 
 
+def _configured_rerank_device() -> str | None:
+    raw_device = os.getenv(RERANK_DEVICE_ENV, "auto").strip().lower()
+    if raw_device in {"", "auto"}:
+        return None
+    return raw_device
+
+
+def _env_flag_enabled(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @lru_cache(maxsize=1)
-def _load_cross_encoder_model(model_name: str) -> _CrossEncoderModel:
+def _load_cross_encoder_model(model_name: str, device: str | None = None) -> _CrossEncoderModel:
     sentence_transformers = importlib.import_module("sentence_transformers")
     cross_encoder = sentence_transformers.CrossEncoder
-    return cast(_CrossEncoderModel, cross_encoder(model_name))
+    kwargs = {"device": device} if device else {}
+    return cast(_CrossEncoderModel, cross_encoder(model_name, **kwargs))
 
 
 def _coerce_scores(raw_scores: object) -> list[float]:
@@ -239,6 +295,7 @@ __all__ = [
     "apply_rerank_threshold",
     "build_evidence_context",
     "normalized_score_fusion",
+    "preload_reranker",
     "rerank",
     "rerank_metadata",
     "rerank_with_metadata",

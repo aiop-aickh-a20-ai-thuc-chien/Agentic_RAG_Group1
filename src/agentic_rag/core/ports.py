@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from agentic_rag.core.contracts import Answer, Chunk, SearchResult
 
@@ -24,7 +24,7 @@ class UrlIngestor(Protocol):
 class QueryPreprocessor(Protocol):
     """Query normalization before retrieval."""
 
-    def preprocess_query(self, query: str) -> dict[str, str]:
+    def preprocess_query(self, query: str, llm_client: object = None) -> dict[str, Any]:
         """Normalize a raw user query for downstream retrieval modules."""
 
 

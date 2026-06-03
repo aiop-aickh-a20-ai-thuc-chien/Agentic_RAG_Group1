@@ -11,6 +11,8 @@ from agentic_rag.api import (
     _stream_direct_answer_events,
     answer_question,
     health,
+    source_debug,
+    source_raw,
     upload_text_source,
     upload_url_source,
 )
@@ -184,6 +186,35 @@ def test_url_source_uses_local_provider_when_configured(
     assert response.provider == "local_pdf"
     assert response.dataset_id == "local_pdf"
     assert response.name == "example.com-docs-page.txt"
+    debug = source_debug(response.document_id)
+    assert debug.provider == "local_pdf"
+    assert debug.source_type == "url"
+    assert debug.markdown == "# URL\nNoi dung URL"
+    assert debug.chunk_input == "Noi dung URL"
+    assert debug.chunk_input_type == "parsed_sections"
+    assert debug.total_chunks == 1
+    assert debug.chunks[0].chunk.text == "Noi dung URL"
+
+
+def test_raw_source_returns_local_pdf_file(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    uploaded = provider.upload_document(
+        filename="debug.pdf",
+        content=b"%PDF-1.4",
+        content_type="application/pdf",
+        start_parse=False,
+    )
+
+    response = source_raw(uploaded.document_id)
+
+    assert response.media_type == "application/pdf"
+    assert Path(str(response.path)).name == f"{uploaded.document_id}.pdf"
 
 
 def test_text_source_uses_local_provider_when_configured(

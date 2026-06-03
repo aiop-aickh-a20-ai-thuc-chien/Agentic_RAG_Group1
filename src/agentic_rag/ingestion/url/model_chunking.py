@@ -201,15 +201,24 @@ def parse_model_chunks(value: str) -> list[str]:
 def _chunking_prompt(text: str, *, max_chunk_chars: int, overlap_hint_chars: int) -> str:
     return "\n".join(
         [
-            "Split the following URL/HTML-derived Markdown or text into retrieval chunks.",
-            "Return only valid JSON: an array of strings.",
-            f"Target maximum chunk length: {max_chunk_chars} characters.",
-            f"Use about {overlap_hint_chars} characters of overlap when useful.",
-            "Keep headings with the content they describe.",
-            "Do not add facts that are not in the input.",
+            "<task>",
+            "Split URL/HTML-derived Markdown or text into retrieval chunks.",
+            "</task>",
             "",
-            "Input:",
+            "<rules>",
+            f"- Target maximum chunk length: {max_chunk_chars} characters.",
+            f"- Use about {overlap_hint_chars} characters of overlap when useful.",
+            "- Keep headings with the content they describe.",
+            "- Do not add facts that are not in the input.",
+            "</rules>",
+            "",
+            "<input>",
             text,
+            "</input>",
+            "",
+            "<output>",
+            "Return only valid JSON: an array of strings.",
+            "</output>",
         ]
     )
 

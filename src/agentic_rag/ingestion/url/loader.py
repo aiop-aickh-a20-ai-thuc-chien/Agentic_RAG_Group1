@@ -149,12 +149,13 @@ def load_html_with_artifacts(
     )
 
     chunks: list[Chunk] = []
+    source_type = "url" if source_url else "html"
     for section in parsed.sections:
         chunks.extend(
             build_chunks(
                 text=section.text,
                 source=source,
-                source_type="url" if source_url else "html",
+                source_type=source_type,
                 section=section.heading,
                 url=source_url,
                 title=parsed.title,

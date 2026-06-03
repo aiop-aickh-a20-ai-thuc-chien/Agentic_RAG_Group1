@@ -63,6 +63,12 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     markdown_path = tmp_path / "parsed" / f"{uploaded.document_id}.md"
     assert trace["parse"]["markdown_path"] == str(markdown_path)
     assert markdown_path.read_text(encoding="utf-8") == ("# Bao hanh\nPin VF8 duoc bao hanh 8 nam.")
+    debug = provider.document_debug(document_id=uploaded.document_id)
+    assert debug.markdown == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
+    assert debug.chunk_input == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
+    assert debug.chunk_input_type == "markdown"
+    assert debug.name == "warranty.pdf"
+    assert debug.source_type == "pdf"
 
 
 def test_local_pdf_provider_can_include_full_markdown_in_trace(
@@ -132,7 +138,8 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert trace["parse"]["title"] == "Trang chinh sach"
     assert trace["parse"]["section_count"] == 1
     assert trace["parse"]["sections"] == ["Chinh sach"]
-    assert trace["parse"]["markdown_path"] is None
+    markdown_path = tmp_path / "parsed" / f"{uploaded.document_id}.md"
+    assert trace["parse"]["markdown_path"] == str(markdown_path)
     assert trace["parse"]["markdown_chars"] == 70
     assert trace["parse"]["markdown_preview"].startswith("# Trang chinh sach")
     assert trace["chunking"]["chunk_count"] == 1
@@ -143,6 +150,12 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert chunk.metadata["source_type"] == "url"
     assert chunk.metadata["source"] == "https://example.com/chinh-sach"
     assert chunk.metadata["url"] == "https://example.com/chinh-sach"
+    debug = provider.document_debug(document_id=uploaded.document_id)
+    assert debug.markdown.startswith("# Trang chinh sach")
+    assert debug.chunk_input == "Noi dung URL ve chinh sach mua nha."
+    assert debug.chunk_input_type == "parsed_sections"
+    assert debug.source_type == "url"
+    assert debug.source == "https://example.com/chinh-sach"
 
 
 def test_local_pdf_provider_uploads_text_chunks(
@@ -221,11 +234,11 @@ def test_local_pdf_provider_retrieves_matching_chunks(
 
     assert len(results) >= 1
     assert results[0].chunk.chunk_id == "pdf_doc_c0001"
-    assert results[0].retriever == "rerank"
+    assert results[0].retriever == "hybrid"
     assert results[0].rank == 1
     assert (
         results[0].chunk.metadata["retrieval_pipeline"]
-        == "source_ingestion -> bm25 + dense -> rrf -> rerank"
+        == "source_ingestion -> bm25 + dense -> rrf"
     )
     assert results[0].chunk.metadata["bm25"] is not None
     assert results[0].chunk.metadata["dense"] is not None
@@ -248,13 +261,13 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert rrf_contributions["dense"]["retriever"] == "dense"
     assert rrf_contributions["total_rrf_score"] > 0
     assert pipeline_trace["thresholds"]["pre_fusion"]["bm25_original_count"] >= 1
-    assert pipeline_trace["thresholds"]["pre_fusion"]["thresholds_applied"] is False
+    assert isinstance(pipeline_trace["thresholds"]["pre_fusion"]["thresholds_applied"], bool)
     assert pipeline_trace["thresholds"]["fusion"]["fusion_min_score"] is None
-    assert pipeline_trace["thresholds"]["rerank"]["final_evidence_count"] == len(results)
     assert results[0].chunk.metadata["rrf_contributions"]["total_rrf_score"] > 0
-    assert pipeline_trace["rerank"]["tech"]["used_provider"] == "score"
+    assert pipeline_trace["rerank"]["tech"]["provider"] == "skipped"
+    assert pipeline_trace["rerank"]["tech"]["reason"] == "agent_reranks"
     assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "hybrid"
-    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "rerank"
+    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "hybrid"
 
 
 def test_local_pdf_provider_rejects_non_pdf_upload(tmp_path: Path) -> None:

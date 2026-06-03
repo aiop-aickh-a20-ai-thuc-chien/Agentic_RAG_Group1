@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from typing import Any
@@ -13,16 +14,27 @@ from agentic_rag.core.contracts import Chunk, SearchResult
 
 DEFAULT_DENSE_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_DENSE_EMBEDDING_DIMENSIONS = 1536
+DEFAULT_HF_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+DENSE_EMBEDDING_PROVIDER_ENV = "DENSE_EMBEDDING_PROVIDER"
+HF_EMBEDDING_MODEL_ENV = "HF_EMBEDDING_MODEL"
 
 REQUERY_ROUTER_PROMPT = """
-You're a good at understanding user's query. \
-    Your task is to analyze the user's query and choose a method to clarify the query.
-Chose:
-- Decompose: If the query mentions two or more components at same time. \
-    You need to break down this complex query by entities into 2-3 simpler sub-queries
-- Expand: If the query contains an entity, the name of the entity. \
-    You need to Generate 2-3 alternative phrasings or related terms.
-Ouput in Vietnamse only. follow this JSON format: {"method": two of these methods, "answer": ...}
+<task>
+Analyze the user's query and choose one retrieval query clarification method.
+</task>
+
+<methods>
+- Decompose: If the query mentions two or more distinct components simultaneously,
+  break it down into 2-3 simpler sub-queries as a JSON array of strings.
+- Expand: If the query contains a specific entity or name, generate one
+  expanded/rephrased query string with more context.
+</methods>
+
+<output>
+Return Vietnamese only. Use this exact JSON format:
+  For Decompose: {"method": "Decompose", "answer": ["sub-query 1", "sub-query 2"]}
+  For Expand:    {"method": "Expand", "answer": "expanded query string"}
+</output>
 """
 
 
@@ -32,35 +44,33 @@ class Store:
         self._bm25_index = self._build_bm25_index(chunks)
         self._vector_index: TurboQuantVectorStore | None = None
 
-    def preprocess_query(self, query: str) -> dict[str, Any]:
+    def preprocess_query(self, query: str, llm_client: object = None) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
         import json
-        import os
-
-        from dotenv import load_dotenv
-        from openai import OpenAI
-
-        load_dotenv()
-
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         normalized = _normalize_text(query)
-
-        router_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": REQUERY_ROUTER_PROMPT},
-                {"role": "user", "content": query},
-            ],
-        )
-        requery = json.loads(router_response.choices[0].message.content)  # type: ignore[arg-type]
-
-        return {
+        base: dict[str, Any] = {
             "raw": query,
             "normalized": normalized,
             "tokens": " ".join(_tokenize(normalized)),
-            "requery": requery,
         }
+
+        if llm_client is None:
+            return {**base, "requery": {"method": "Expand", "answer": query}}
+
+        try:
+            complete = getattr(llm_client, "complete", None)
+            if not callable(complete):
+                raise TypeError("llm_client must implement LLMClient protocol")
+            prompt = f"{REQUERY_ROUTER_PROMPT}\n<query>\n{query}\n</query>"
+            raw: str = complete(prompt)
+            requery = json.loads(raw)
+            if not isinstance(requery, dict) or "method" not in requery or "answer" not in requery:
+                raise ValueError("unexpected requery format")
+        except Exception:
+            return {**base, "requery": {"method": "Expand", "answer": query}}
+
+        return {**base, "requery": requery}
 
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
         """Build or refresh a BM25 index from shared chunks."""
@@ -99,25 +109,12 @@ class Store:
     def _build_vector_index(self, chunks: list[Chunk]) -> TurboQuantVectorStore:
         """Build or refresh a dense vector index from shared chunks."""
 
-        from langchain_huggingface.embeddings import HuggingFaceEmbeddings
-
-        embedding = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
-        # except Exception:
-        #     from langchain_openai import OpenAIEmbeddings
-
-        #     embedding = OpenAIEmbeddings(
-        #         model=DEFAULT_DENSE_EMBEDDING_MODEL,
-        #         dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-        #     )
-
+        embedding = _configured_embedding()
         chunks_list = [chunk.text for chunk in chunks]
         metadatas = [{"chunk_id": chunk.chunk_id, "metadata": chunk.metadata} for chunk in chunks]
-
-        store = TurboQuantVectorStore.from_texts(
+        return TurboQuantVectorStore.from_texts(
             texts=chunks_list, embedding=embedding, metadatas=metadatas
         )
-
-        return store
 
     def dense_search(self, query: str, top_k: int = 10) -> list[SearchResult]:
         """Return top-k dense retrieval results."""
@@ -146,17 +143,53 @@ class Store:
 
         return result
 
-    def search(self, query: str, top_k: int = 10) -> tuple[list[SearchResult], list[SearchResult]]:
-        nquery = self.preprocess_query(query=query)
-        bm25_result = self.bm25_search(nquery["requery"]["answer"], top_k=top_k)
-        dense_result = self.dense_search(nquery["requery"]["answer"], top_k=top_k)
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        llm_client: object = None,
+    ) -> tuple[list[SearchResult], list[SearchResult]]:
+        nquery = self.preprocess_query(query=query, llm_client=llm_client)
+        method = nquery["requery"].get("method", "Expand")
+        answer = nquery["requery"].get("answer", query)
 
-        return bm25_result, dense_result
+        if method == "Decompose" and isinstance(answer, list):
+            return self._search_decomposed(answer, top_k=top_k)
+
+        expanded = answer if isinstance(answer, str) else " ".join(str(a) for a in answer)
+        return self.bm25_search(expanded, top_k=top_k), self.dense_search(expanded, top_k=top_k)
+
+    def _search_decomposed(
+        self,
+        sub_queries: list[str],
+        top_k: int,
+    ) -> tuple[list[SearchResult], list[SearchResult]]:
+        seen: set[str] = set()
+        all_bm25: list[SearchResult] = []
+        all_dense: list[SearchResult] = []
+        for sub_query in sub_queries:
+            for result in self.bm25_search(sub_query, top_k=top_k):
+                if result.chunk.chunk_id not in seen:
+                    seen.add(result.chunk.chunk_id)
+                    all_bm25.append(result)
+            for result in self.dense_search(sub_query, top_k=top_k):
+                if result.chunk.chunk_id not in seen:
+                    seen.add(result.chunk.chunk_id)
+                    all_dense.append(result)
+        return all_bm25, all_dense
 
 
 def dense_embedding_metadata() -> dict[str, object]:
     """Return the dense retrieval embedding configuration used by Store."""
 
+    provider = _configured_embedding_provider()
+    if provider == "huggingface":
+        return {
+            "provider": "huggingface",
+            "library": "langchain-huggingface",
+            "model": os.getenv(HF_EMBEDDING_MODEL_ENV, DEFAULT_HF_EMBEDDING_MODEL),
+            "vector_store": "turbovec",
+        }
     return {
         "provider": "openai",
         "library": "langchain-openai",
@@ -164,6 +197,25 @@ def dense_embedding_metadata() -> dict[str, object]:
         "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
         "vector_store": "turbovec",
     }
+
+
+def _configured_embedding_provider() -> str:
+    return os.getenv(DENSE_EMBEDDING_PROVIDER_ENV, "openai").strip().lower()
+
+
+def _configured_embedding() -> Any:
+    provider = _configured_embedding_provider()
+    if provider == "huggingface":
+        from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+
+        model = os.getenv(HF_EMBEDDING_MODEL_ENV, DEFAULT_HF_EMBEDDING_MODEL)
+        return HuggingFaceEmbeddings(model_name=model)
+    from langchain_openai import OpenAIEmbeddings
+
+    return OpenAIEmbeddings(
+        model=DEFAULT_DENSE_EMBEDDING_MODEL,
+        dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
+    )
 
 
 def _chunk_from_dense_document(

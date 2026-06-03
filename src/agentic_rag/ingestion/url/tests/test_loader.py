@@ -14,7 +14,11 @@ from agentic_rag.ingestion.url import (
 from agentic_rag.ingestion.url import loader as loader_module
 
 
-def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None:
+def test_load_html_chunks_removes_noise_and_preserves_section_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
     chunks = load_html_chunks(
         """
         <html>
@@ -173,13 +177,17 @@ def test_load_html_chunks_prefers_trafilatura_markdown_for_artifacts(
         fake_extract_markdown_with_trafilatura,
     )
 
-    load_html_chunks(
+    loaded = load_html_with_artifacts(
         "<html><body><h1>Raw</h1><p>Raw content.</p></body></html>",
         source="https://example.edu/article",
         source_url="https://example.edu/article",
         data_artifact_dir=tmp_path,
         run_id="trafilatura_run",
     )
+
+    assert loaded.chunks[0].text == "Raw Raw content."
+    assert loaded.chunks[0].metadata["section"] == "Raw"
+    assert loaded.chunks[0].metadata["chunking_method"] == "deterministic-character-overlap"
 
     run_dirs = list((tmp_path / "artifacts").glob("*/trafilatura-run"))
     assert len(run_dirs) == 1
@@ -215,6 +223,7 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
         )
 
     monkeypatch.setattr(loader_module, "_fetch_url", fake_fetch_url)
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
 
     chunks = load_url_chunks("https://example.edu")
 

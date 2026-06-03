@@ -17,6 +17,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
@@ -26,13 +27,64 @@ from agentic_rag.retrieval.fusion import (
     ThresholdConfig,
     apply_fusion_threshold,
     apply_pre_fusion_thresholds,
-    apply_rerank_threshold,
     normalized_score_fusion,
-    rerank_with_metadata,
     rrf_fusion,
     weighted_rrf_fusion,
 )
 from agentic_rag.retrieval.search import Store, dense_embedding_metadata
+
+
+def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
+    def _noop(func: Any) -> Any:
+        return func
+
+    return _noop
+
+
+try:
+    from langsmith import traceable as _ls_traceable
+except ImportError:
+    _ls_traceable = _noop_traceable  # type: ignore[assignment]
+
+
+@_ls_traceable(name="query-normalize", run_type="tool")
+def _traced_preprocess(store: Store, question: str) -> dict[str, Any]:
+    return store.preprocess_query(question)
+
+
+@_ls_traceable(name="bm25-search", run_type="retriever")
+def _traced_bm25(store: Store, query: str, top_k: int) -> list[SearchResult]:
+    return store.bm25_search(query, top_k=top_k)
+
+
+@_ls_traceable(name="dense-search", run_type="retriever")
+def _traced_dense(
+    store: Store,
+    query: str,
+    top_k: int,
+) -> tuple[list[SearchResult], str | None]:
+    return _dense_search_safely(store, query, top_k=top_k)
+
+
+@_ls_traceable(name="pre-fusion-threshold", run_type="tool")
+def _traced_pre_fusion_threshold(
+    bm25_results: list[SearchResult],
+    dense_results: list[SearchResult],
+    config: ThresholdConfig,
+) -> tuple[list[SearchResult], list[SearchResult], dict[str, object]]:
+    return apply_pre_fusion_thresholds(
+        bm25_results=bm25_results,
+        dense_results=dense_results,
+        config=config,
+    )
+
+
+@_ls_traceable(name="post-fusion-threshold", run_type="tool")
+def _traced_post_fusion_threshold(
+    fused_results: list[SearchResult],
+    config: ThresholdConfig,
+) -> tuple[list[SearchResult], dict[str, object]]:
+    return apply_fusion_threshold(fused_results, config=config)
 
 
 @dataclass(frozen=True)
@@ -52,6 +104,22 @@ class LocalPdfDocumentChunks:
 
     chunks: list[Chunk]
     total_chunks: int
+
+
+@dataclass(frozen=True)
+class LocalPdfDocumentDebug:
+    """Debug view of one locally ingested source."""
+
+    document_id: str
+    name: str
+    source_type: str
+    source: str
+    markdown: str
+    chunk_input: str
+    chunk_input_type: str
+    chunks: list[Chunk]
+    total_chunks: int
+    metadata: dict[str, object]
 
 
 class LocalPdfEvidenceProvider:
@@ -180,6 +248,10 @@ class LocalPdfEvidenceProvider:
         markdown_path = (
             loaded_url.artifacts.markdown_path if loaded_url.artifacts is not None else None
         )
+        local_markdown_path = self._write_markdown(
+            document_id=document_id,
+            markdown=loaded_url.markdown,
+        )
 
         chunk_started_at = time.perf_counter()
         chunks = [
@@ -222,7 +294,12 @@ class LocalPdfEvidenceProvider:
                     "title": url_trace["title"],
                     "section_count": url_trace["section_count"],
                     "sections": url_trace["sections"],
-                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_path": str(local_markdown_path or markdown_path)
+                    if (local_markdown_path or markdown_path) is not None
+                    else None,
+                    "artifact_markdown_path": str(markdown_path)
+                    if markdown_path is not None
+                    else None,
                     "markdown_chars": len(loaded_url.markdown),
                     "markdown_preview": _preview(loaded_url.markdown, _trace_preview_chars()),
                     **_full_trace_content("markdown", loaded_url.markdown),
@@ -261,6 +338,7 @@ class LocalPdfEvidenceProvider:
             data_artifact_dir=self._artifacts_dir,
             run_id=document_id,
         )
+        markdown_path = self._write_markdown(document_id=document_id, markdown=text)
         ingest_latency_ms = _latency_ms(ingest_started_at)
 
         chunk_started_at = time.perf_counter()
@@ -295,6 +373,9 @@ class LocalPdfEvidenceProvider:
                 "parse": {
                     "parser": "url.load_text_chunks",
                     "started": True,
+                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_chars": len(text),
+                    "markdown_preview": _preview(text, _trace_preview_chars()),
                     "latency_ms": ingest_latency_ms,
                 },
                 "chunking": {
@@ -336,6 +417,48 @@ class LocalPdfEvidenceProvider:
 
         return LocalPdfDocumentChunks(chunks=chunks, total_chunks=total_chunks)
 
+    def document_debug(self, *, document_id: str) -> LocalPdfDocumentDebug:
+        """Return source metadata, parsed Markdown, and chunks for one local document."""
+
+        chunks = self._read_chunks(document_id)
+        if not chunks:
+            raise ValueError(f"Document not found or has no chunks: {document_id}")
+
+        first_chunk = chunks[0]
+        metadata = dict(first_chunk.metadata)
+        name = str(metadata.get("document_name") or metadata.get("file_name") or document_id)
+        source_type = str(metadata.get("source_type") or "unknown")
+        source = str(metadata.get("source") or metadata.get("url") or name)
+        markdown_path = self._markdown_path(document_id)
+        markdown = markdown_path.read_text(encoding="utf-8") if markdown_path.exists() else ""
+        chunk_input, chunk_input_type = self._debug_chunk_input(
+            document_id=document_id,
+            source_type=source_type,
+            markdown=markdown,
+            chunks=chunks,
+        )
+        return LocalPdfDocumentDebug(
+            document_id=document_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            markdown=markdown,
+            chunk_input=chunk_input,
+            chunk_input_type=chunk_input_type,
+            chunks=chunks,
+            total_chunks=len(chunks),
+            metadata=metadata,
+        )
+
+    def document_raw_path(self, *, document_id: str) -> Path:
+        """Return the locally stored raw PDF path for one document."""
+
+        safe_document_id = _safe_document_id(document_id)
+        raw_path = self._files_dir / f"{safe_document_id}.pdf"
+        if not raw_path.exists():
+            raise ValueError(f"Raw source file is not available: {document_id}")
+        return raw_path
+
     def retrieve(
         self,
         *,
@@ -351,7 +474,7 @@ class LocalPdfEvidenceProvider:
 
         store = Store(chunks)
         preprocess_started_at = time.perf_counter()
-        preprocessed_query = store.preprocess_query(question)
+        preprocessed_query = _traced_preprocess(store, question)
         preprocess_latency_ms = _latency_ms(preprocess_started_at)
         normalized_query = preprocessed_query["normalized"]
         if not normalized_query:
@@ -360,20 +483,15 @@ class LocalPdfEvidenceProvider:
         top_k = page_size or _default_page_size()
         candidate_k = max(_default_candidate_count(), top_k)
         bm25_started_at = time.perf_counter()
-        bm25_results = store.bm25_search(normalized_query, top_k=candidate_k)
+        bm25_results = _traced_bm25(store, normalized_query, candidate_k)
         bm25_latency_ms = _latency_ms(bm25_started_at)
         dense_started_at = time.perf_counter()
-        dense_results, dense_error = _dense_search_safely(
-            store,
-            normalized_query,
-            top_k=candidate_k,
-        )
+        # Dense uses original question (with diacritics) for better embedding quality
+        dense_results, dense_error = _traced_dense(store, question, candidate_k)
         dense_latency_ms = _latency_ms(dense_started_at)
         threshold_config = _threshold_config_from_env()
-        bm25_results, dense_results, pre_fusion_threshold_trace = apply_pre_fusion_thresholds(
-            bm25_results=bm25_results,
-            dense_results=dense_results,
-            config=threshold_config,
+        bm25_results, dense_results, pre_fusion_threshold_trace = _traced_pre_fusion_threshold(
+            bm25_results, dense_results, threshold_config
         )
         fusion_started_at = time.perf_counter()
         fused_results, fusion_method_trace = _fuse_results(
@@ -381,22 +499,15 @@ class LocalPdfEvidenceProvider:
             dense_results=dense_results,
             candidate_k=candidate_k,
         )
-        fused_results, fusion_threshold_trace = apply_fusion_threshold(
-            fused_results,
-            config=threshold_config,
+        fused_results, fusion_threshold_trace = _traced_post_fusion_threshold(
+            fused_results, threshold_config
         )
         fusion_latency_ms = _latency_ms(fusion_started_at)
-        rerank_started_at = time.perf_counter()
-        final_results, rerank_trace = rerank_with_metadata(
-            query=normalized_query,
-            candidates=fused_results,
-            top_k=top_k,
-        )
-        final_results, rerank_threshold_trace = apply_rerank_threshold(
-            final_results,
-            config=threshold_config,
-        )
-        rerank_latency_ms = _latency_ms(rerank_started_at)
+        # Rerank removed from provider — agent performs one final rerank with original question
+        final_results = fused_results[:top_k]
+        rerank_trace: dict[str, object] = {"provider": "skipped", "reason": "agent_reranks"}
+        rerank_threshold_trace: dict[str, object] = {}
+        rerank_latency_ms = 0
         return _with_pipeline_metadata(
             results=final_results,
             question=question,
@@ -464,6 +575,33 @@ class LocalPdfEvidenceProvider:
     def _markdown_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
         return self._parsed_dir / f"{safe_document_id}.md"
+
+    def _debug_chunk_input(
+        self,
+        *,
+        document_id: str,
+        source_type: str,
+        markdown: str,
+        chunks: list[Chunk],
+    ) -> tuple[str, str]:
+        normalized_source_type = source_type.lower()
+        if normalized_source_type == "url":
+            parsed_sections_path = self._url_parsed_sections_path(document_id)
+            if parsed_sections_path is not None:
+                return parsed_sections_path.read_text(encoding="utf-8"), "parsed_sections"
+            return _chunks_as_text(chunks), "parsed_sections"
+        if normalized_source_type == "pdf":
+            return markdown, "markdown"
+        if normalized_source_type == "text":
+            return markdown or _chunks_as_text(chunks), "text"
+        return markdown or _chunks_as_text(chunks), "unknown"
+
+    def _url_parsed_sections_path(self, document_id: str) -> Path | None:
+        safe_document_id = _safe_document_id(document_id)
+        debug_dir = self._debug_dir / safe_document_id
+        if not debug_dir.exists():
+            return None
+        return next(iter(sorted(debug_dir.glob("*_parsed.txt"))), None)
 
 
 def _validate_pdf_upload(*, filename: str, content_type: str | None) -> None:
@@ -536,6 +674,7 @@ def _default_candidate_count() -> int:
         return 20
 
 
+@_ls_traceable(name="rrf-fusion", run_type="tool")
 def _fuse_results(
     *,
     bm25_results: list[SearchResult],
@@ -743,7 +882,7 @@ def _with_pipeline_metadata(
         chunk_id = result.chunk.chunk_id
         metadata = {
             **result.chunk.metadata,
-            "retrieval_pipeline": "source_ingestion -> bm25 + dense -> rrf -> rerank",
+            "retrieval_pipeline": "source_ingestion -> bm25 + dense -> rrf",
             "pipeline_trace": pipeline_trace,
             "preprocessed_query": preprocessed_query,
             "bm25": _stage_debug(bm25_by_chunk_id.get(chunk_id)),
@@ -861,6 +1000,10 @@ def _trace_chunk(chunk: Chunk) -> dict[str, object]:
         "text": chunk.text,
         "metadata": chunk.metadata,
     }
+
+
+def _chunks_as_text(chunks: list[Chunk]) -> str:
+    return "\n\n".join(chunk.text for chunk in chunks if chunk.text.strip())
 
 
 def _url_ingestion_trace(*, requested_url: str, chunks: list[Chunk]) -> dict[str, object]:
