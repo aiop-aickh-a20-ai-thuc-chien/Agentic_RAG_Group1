@@ -20,6 +20,7 @@ from pathlib import Path
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
+from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
 from agentic_rag.retrieval.fusion import (
     RRF_K,
@@ -59,8 +60,14 @@ class LocalPdfEvidenceProvider:
 
     dataset_id = "local_pdf"
 
-    def __init__(self, *, store_dir: Path) -> None:
+    def __init__(
+        self,
+        *,
+        store_dir: Path,
+        pdf_config: PdfIngestionConfig | None = None,
+    ) -> None:
         self._store_dir = store_dir
+        self._pdf_config = pdf_config or PdfIngestionConfig()
         self._files_dir = store_dir / "files"
         self._chunks_dir = store_dir / "chunks"
         self._parsed_dir = store_dir / "parsed"
@@ -77,7 +84,7 @@ class LocalPdfEvidenceProvider:
         """Create a local PDF provider from environment variables."""
 
         store_dir = Path(os.getenv("LOCAL_PDF_STORE_DIR", "storage/local_pdf"))
-        return cls(store_dir=store_dir)
+        return cls(store_dir=store_dir, pdf_config=PdfIngestionConfig.from_env())
 
     def upload_document(
         self,
@@ -98,10 +105,18 @@ class LocalPdfEvidenceProvider:
 
         parse_started_at = time.perf_counter()
         parsed_markdown = ""
+        parser_name = self._pdf_config.parser_name
+        chunker_name = self._pdf_config.chunker_name
         if start_parse:
-            parsed_pdf = load_pdf_with_markdown(str(pdf_path))
+            parsed_pdf = load_pdf_with_markdown(
+                str(pdf_path),
+                parser_name=parser_name,
+                chunker_name=chunker_name,
+            )
             parsed_markdown = parsed_pdf.markdown
             chunks = parsed_pdf.chunks
+            parser_name = parsed_pdf.parser
+            chunker_name = parsed_pdf.chunker
         else:
             chunks = []
         parse_latency_ms = _latency_ms(parse_started_at)
@@ -138,7 +153,7 @@ class LocalPdfEvidenceProvider:
                     "stored_path": str(pdf_path),
                 },
                 "parse": {
-                    "parser": "docling",
+                    "parser": parser_name,
                     "started": start_parse,
                     "markdown_path": str(markdown_path) if markdown_path is not None else None,
                     "markdown_chars": len(parsed_markdown),
@@ -149,6 +164,7 @@ class LocalPdfEvidenceProvider:
                 "chunking": {
                     "chunk_count": len(chunks),
                     "chunk_ids": [chunk.chunk_id for chunk in chunks],
+                    "chunker": chunker_name,
                     "chunks": [_trace_chunk(chunk) for chunk in chunks],
                     "latency_ms": chunk_latency_ms,
                 },

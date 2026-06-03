@@ -195,6 +195,8 @@ need a separate flow:
 ```bash
 EVIDENCE_PROVIDER=local_pdf
 LOCAL_PDF_STORE_DIR=storage/local_pdf
+LOCAL_PDF_PARSER=docling
+LOCAL_PDF_CHUNKER=deterministic
 LOCAL_PDF_RETRIEVAL_TOP_K=5
 LOCAL_PDF_RETRIEVAL_CANDIDATE_K=20
 ```
@@ -215,6 +217,10 @@ SearchResult + evidence context -> generate_answer() of module #149
 
 Use `EVIDENCE_PROVIDER=ragflow` again when comparing against the RAGFlow
 baseline.
+
+For PDF chunking experiments, keep `LOCAL_PDF_CHUNKER=deterministic` as the
+stable default. Use `LOCAL_PDF_CHUNKER=docling-hybrid` to try Docling native
+HybridChunker on uploaded PDFs without changing URL/text chunking.
 
 Trace log:
 
@@ -281,4 +287,3 @@ Frontend:
 cd frontend
 npm run build
 ```
-

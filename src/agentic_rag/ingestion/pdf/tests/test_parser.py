@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from agentic_rag.ingestion.pdf import parser
 
 
@@ -34,6 +35,21 @@ def test_docling_parser_returns_exported_markdown(monkeypatch: pytest.MonkeyPatc
 
     assert markdown == "# Title\nContent"
     assert FakeConverter.seen_path == pdf_path
+
+
+def test_docling_parser_returns_normalized_parse_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(parser, "DocumentConverter", FakeConverter)
+    pdf_path = Path("sample.pdf")
+
+    result = parser.DoclingMarkdownParser().parse(pdf_path)
+
+    assert result.parser == "docling"
+    assert result.source_path == "sample.pdf"
+    assert result.markdown == "# Title\nContent"
+    assert result.assets == []
+    assert result.warnings == []
 
 
 def test_docling_parser_wraps_conversion_errors(monkeypatch: pytest.MonkeyPatch) -> None:

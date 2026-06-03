@@ -71,3 +71,6 @@ index/
 *.swo
 .DS_Store
 Thumbs.db
+
+# uv lock file
+uv.lock 

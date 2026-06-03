@@ -2,29 +2,31 @@
 
 from __future__ import annotations
 
-import hashlib
-import re
-from typing import Protocol
-
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.chunking import (
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
+    ChunkingInput,
+    TextChunkingStrategy,
+    build_chunk_id,
+    normalize_space,
+    short_hash,
+    slugify,
+    split_markdown,
+    split_text_with_strategy,
+)
 
-DEFAULT_CHUNK_SIZE = 1_200
-DEFAULT_CHUNK_OVERLAP = 150
-
-
-class TextChunkingStrategy(Protocol):
-    """Strategy that splits normalized Markdown/text into chunk strings."""
-
-    @property
-    def provider(self) -> str:
-        """Provider name used by the strategy."""
-
-    @property
-    def model(self) -> str:
-        """Model name used by the strategy."""
-
-    def split(self, text: str) -> list[str]:
-        """Return chunk strings for the provided text."""
+__all__ = [
+    "DEFAULT_CHUNK_OVERLAP",
+    "DEFAULT_CHUNK_SIZE",
+    "TextChunkingStrategy",
+    "build_chunk_id",
+    "build_chunks",
+    "normalize_space",
+    "short_hash",
+    "slugify",
+    "split_markdown",
+]
 
 
 def build_chunks(
@@ -49,8 +51,13 @@ def build_chunks(
 
     chunks: list[Chunk] = []
     content_hash = short_hash(text)
-    text_chunks = _split_text(
-        text,
+    chunking_input = ChunkingInput(
+        markdown=text,
+        source_type=source_type,
+        metadata={"section": section, "source": source},
+    )
+    text_chunks = split_text_with_strategy(
+        chunking_input,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         chunking_strategy=chunking_strategy,
@@ -78,72 +85,6 @@ def build_chunks(
             )
         )
     return chunks
-
-
-def split_markdown(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
-    """Split Markdown/text deterministically with word-boundary preference."""
-
-    cleaned_text = normalize_space(text)
-    if not cleaned_text:
-        return []
-    if len(cleaned_text) <= chunk_size:
-        return [cleaned_text]
-
-    chunks: list[str] = []
-    start = 0
-    while start < len(cleaned_text):
-        end = min(start + chunk_size, len(cleaned_text))
-        if end < len(cleaned_text):
-            split_at = cleaned_text.rfind(" ", start, end)
-            if split_at > start:
-                end = split_at
-        chunk = cleaned_text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(cleaned_text):
-            break
-        next_start = max(end - chunk_overlap, 0)
-        start = end if next_start <= start else next_start
-    return chunks
-
-
-def build_chunk_id(source_type: str, source: str, section: str, index: int) -> str:
-    """Build a deterministic chunk ID from source and section metadata."""
-
-    return f"{source_type}_{short_hash(source)}_{slugify(section)}_c{index:03d}"
-
-
-def short_hash(value: str) -> str:
-    """Return a stable short SHA-256 digest."""
-
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-
-
-def slugify(value: str) -> str:
-    """Normalize a section name for use inside a chunk ID."""
-
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "main"
-
-
-def normalize_space(value: str) -> str:
-    """Collapse repeated whitespace into single spaces."""
-
-    return " ".join(value.split())
-
-
-def _split_text(
-    text: str,
-    *,
-    chunk_size: int,
-    chunk_overlap: int,
-    chunking_strategy: TextChunkingStrategy | None,
-) -> list[str]:
-    if chunking_strategy is None:
-        return split_markdown(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    return [
-        normalize_space(chunk) for chunk in chunking_strategy.split(text) if normalize_space(chunk)
-    ]
 
 
 def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:

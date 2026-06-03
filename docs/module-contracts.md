@@ -95,6 +95,22 @@ instance của `Citation`.
 
 Protocol definitions nằm trong `agentic_rag.core.ports`.
 
+## Shared ingestion chunking
+
+PDF và URL/text parser không tự tách chunk trực tiếp. Parser nên normalize nội
+dung về Markdown/text, sau đó truyền qua boundary dùng chung trong
+`agentic_rag.ingestion.chunking`.
+
+Các primitive dùng chung:
+
+- `ChunkingInput`: input đã normalize trước khi chunking.
+- `ChunkCandidate`: text chunk candidate trước khi map sang shared `Chunk`.
+- `Chunker`: protocol tối thiểu với `chunk(input) -> list[ChunkCandidate]`.
+
+PDF và URL/text loader vẫn chịu trách nhiệm map `ChunkCandidate` sang `Chunk`
+với metadata riêng của từng source. Không đưa metadata đặc thù PDF/URL vào
+top-level contract mới nếu chỉ một source dùng.
+
 ## Package Layout
 
 ```text

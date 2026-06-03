@@ -8,8 +8,14 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf.chunking import chunk_markdown
-from agentic_rag.ingestion.pdf.parser import DoclingMarkdownParser, PdfMarkdownParser
+from agentic_rag.ingestion.pdf.chunkers import (
+    DEFAULT_MARKDOWN_CHUNKER,
+    MarkdownChunker,
+    resolve_markdown_chunker,
+)
+from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
+from agentic_rag.ingestion.pdf.parser import DEFAULT_PDF_PARSER, PdfMarkdownParser
+from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser
 
 
 class LoadedPdfDocument(BaseModel):
@@ -19,30 +25,101 @@ class LoadedPdfDocument(BaseModel):
 
     markdown: str
     chunks: list[Chunk]
+    parser: str = DEFAULT_PDF_PARSER
+    chunker: str = DEFAULT_MARKDOWN_CHUNKER
 
 
-def load_pdf_chunks(path: str) -> list[Chunk]:
+def load_pdf_chunks(
+    path: str,
+    *,
+    parser_name: str = DEFAULT_PDF_PARSER,
+    chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
+) -> list[Chunk]:
     """Load and chunk a PDF file into shared Chunk objects."""
 
-    return load_pdf_with_markdown(path).chunks
+    return load_pdf_with_markdown(
+        path,
+        parser_name=parser_name,
+        chunker_name=chunker_name,
+    ).chunks
 
 
-def load_pdf_with_markdown(path: str) -> LoadedPdfDocument:
+def load_pdf_with_markdown(
+    path: str,
+    *,
+    parser_name: str = DEFAULT_PDF_PARSER,
+    chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
+) -> LoadedPdfDocument:
     """Load a PDF into Markdown and shared Chunk objects."""
 
     pdf_path = Path(path)
-    return _load_pdf_with_markdown(pdf_path, DoclingMarkdownParser())
+    return _load_pdf_with_markdown(
+        pdf_path,
+        resolve_pdf_parser(parser_name),
+        chunker=resolve_markdown_chunker(chunker_name),
+    )
 
 
-def _load_pdf_chunks(path: Path, parser: PdfMarkdownParser) -> list[Chunk]:
-    return _load_pdf_with_markdown(path, parser).chunks
+def _load_pdf_chunks(
+    path: Path,
+    parser: PdfMarkdownParser,
+    *,
+    chunker: MarkdownChunker | None = None,
+) -> list[Chunk]:
+    return _load_pdf_with_markdown(path, parser, chunker=chunker).chunks
 
 
-def _load_pdf_with_markdown(path: Path, parser: PdfMarkdownParser) -> LoadedPdfDocument:
+def _load_pdf_with_markdown(
+    path: Path,
+    parser: PdfMarkdownParser,
+    *,
+    chunker: MarkdownChunker | None = None,
+) -> LoadedPdfDocument:
     _validate_pdf_path(path)
-    markdown = parser.parse_to_markdown(path)
-    chunks = _chunks_from_markdown(path, markdown)
-    return LoadedPdfDocument(markdown=markdown, chunks=chunks)
+    resolved_chunker = chunker if chunker is not None else resolve_markdown_chunker()
+    parse_result, native_document = _parse_for_chunker(path, parser, resolved_chunker)
+    chunking_input = PdfChunkingInput(
+        markdown=parse_result.markdown,
+        parser=parse_result.parser,
+        source_path=parse_result.source_path,
+        native_document=native_document,
+    )
+    chunks = _chunks_from_chunking_input(
+        path,
+        chunking_input,
+        chunker=resolved_chunker,
+    )
+    return LoadedPdfDocument(
+        markdown=parse_result.markdown,
+        chunks=chunks,
+        parser=parse_result.parser,
+        chunker=resolved_chunker.chunker_name,
+    )
+
+
+def _parse_for_chunker(
+    path: Path,
+    parser: PdfMarkdownParser,
+    chunker: MarkdownChunker,
+) -> tuple[PdfParseResult, object | None]:
+    if not chunker.requires_native_document:
+        return parser.parse(path), None
+
+    parse_to_document = getattr(parser, "parse_to_document", None)
+    if parse_to_document is None:
+        raise RuntimeError(
+            f"PDF chunker '{chunker.chunker_name}' requires parser-native document output, "
+            f"but parser '{parser.parser_name}' does not provide parse_to_document()."
+        )
+    parsed = parse_to_document(path)
+    return (
+        PdfParseResult(
+            parser=parser.parser_name,
+            source_path=str(path),
+            markdown=parsed.markdown,
+        ),
+        parsed.document,
+    )
 
 
 def _validate_pdf_path(path: Path) -> None:
@@ -52,8 +129,29 @@ def _validate_pdf_path(path: Path) -> None:
         raise ValueError(f"Expected a PDF file path, got: {path}")
 
 
-def _chunks_from_markdown(path: Path, markdown: str) -> list[Chunk]:
-    markdown_chunks = chunk_markdown(markdown)
+def _chunks_from_markdown(
+    path: Path,
+    markdown: str,
+    *,
+    parser_name: str = DEFAULT_PDF_PARSER,
+    chunker: MarkdownChunker | None = None,
+) -> list[Chunk]:
+    resolved_chunker = chunker if chunker is not None else resolve_markdown_chunker()
+    chunking_input = PdfChunkingInput(
+        markdown=markdown,
+        parser=parser_name,
+        source_path=str(path),
+    )
+    return _chunks_from_chunking_input(path, chunking_input, chunker=resolved_chunker)
+
+
+def _chunks_from_chunking_input(
+    path: Path,
+    chunking_input: PdfChunkingInput,
+    *,
+    chunker: MarkdownChunker,
+) -> list[Chunk]:
+    markdown_chunks = chunker.chunk(chunking_input)
     safe_file_stem = _safe_chunk_id_part(path.stem)
 
     chunks: list[Chunk] = []
@@ -68,7 +166,8 @@ def _chunks_from_markdown(path: Path, markdown: str) -> list[Chunk]:
                     "file_name": path.name,
                     "page": None,
                     "section": markdown_chunk.section,
-                    "parser": "docling",
+                    "parser": chunking_input.parser,
+                    "chunking_method": chunker.chunker_name,
                     "chunk_index": index,
                 },
             )
