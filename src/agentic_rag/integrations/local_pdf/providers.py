@@ -105,17 +105,22 @@ class LocalPdfEvidenceProvider:
 
         parse_started_at = time.perf_counter()
         parsed_markdown = ""
+        pipeline_name = self._pdf_config.pipeline_name
+        strategy_name = self._pdf_config.strategy_name
         parser_name = self._pdf_config.parser_name
         chunker_name = self._pdf_config.chunker_name
         if start_parse:
             parsed_pdf = load_pdf_with_markdown(
                 str(pdf_path),
-                parser_name=parser_name,
+                pipeline_name=pipeline_name,
+                strategy_name=strategy_name,
                 chunker_name=chunker_name,
             )
             parsed_markdown = parsed_pdf.markdown
             chunks = parsed_pdf.chunks
             parser_name = parsed_pdf.parser
+            pipeline_name = parsed_pdf.pipeline
+            strategy_name = parsed_pdf.strategy
             chunker_name = parsed_pdf.chunker
         else:
             chunks = []
@@ -154,6 +159,8 @@ class LocalPdfEvidenceProvider:
                 },
                 "parse": {
                     "parser": parser_name,
+                    "pipeline": pipeline_name,
+                    "strategy": strategy_name,
                     "started": start_parse,
                     "markdown_path": str(markdown_path) if markdown_path is not None else None,
                     "markdown_chars": len(parsed_markdown),

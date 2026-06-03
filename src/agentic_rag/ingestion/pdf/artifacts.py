@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.loader import (
+    LoadedPdfDocument,
     _chunks_from_markdown,
     _safe_chunk_id_part,
     _validate_pdf_path,
@@ -34,12 +35,16 @@ class PdfIngestionArtifactManifest(_PdfArtifactModel):
     artifact_schema_version: int = 1
     input_path: str
     parser: str
+    pipeline: str | None = None
+    strategy: str | None = None
+    chunker: str | None = None
     run_id: str
     created_at: str
     artifact_root: str
     run_dir: str
     markdown_path: str
     chunks_path: str
+    chunks_markdown_path: str
     manifest_path: str
     chunk_count: int
 
@@ -68,6 +73,7 @@ class PdfMultimodalArtifactManifest(_PdfArtifactModel):
     run_dir: str
     markdown_path: str
     chunks_path: str
+    chunks_markdown_path: str
     manifest_path: str
     elements_path: str
     assets_dir: str
@@ -93,6 +99,52 @@ def save_pdf_ingestion_artifacts(
         output_root=output_root,
         run_id=run_id,
     )
+
+
+def save_loaded_pdf_ingestion_artifacts(
+    path: str | Path,
+    loaded: LoadedPdfDocument,
+    *,
+    output_root: str | Path | None = None,
+    run_id: str | None = None,
+) -> PdfIngestionArtifactManifest:
+    """Save already parsed/chunked PDF output using the standard debug artifact layout."""
+
+    pdf_path = Path(path)
+    _validate_pdf_path(pdf_path)
+
+    artifact_root = Path(output_root) if output_root is not None else DEFAULT_PDF_ARTIFACT_ROOT
+    resolved_run_id = _safe_run_id(run_id)
+    run_dir = artifact_root / _safe_chunk_id_part(pdf_path.stem) / resolved_run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+
+    markdown_path = run_dir / "parsed.md"
+    chunks_path = run_dir / "chunks.jsonl"
+    chunks_markdown_path = run_dir / "chunks.md"
+    manifest_path = run_dir / "manifest.json"
+
+    markdown_path.write_text(loaded.markdown, encoding="utf-8")
+    _write_chunks_jsonl(chunks_path, loaded.chunks)
+    _write_chunks_markdown(chunks_markdown_path, loaded.chunks)
+
+    manifest = PdfIngestionArtifactManifest(
+        input_path=str(pdf_path),
+        parser=loaded.parser,
+        pipeline=loaded.pipeline,
+        strategy=loaded.strategy,
+        chunker=loaded.chunker,
+        run_id=resolved_run_id,
+        created_at=datetime.now(UTC).isoformat(),
+        artifact_root=str(artifact_root),
+        run_dir=str(run_dir),
+        markdown_path=str(markdown_path),
+        chunks_path=str(chunks_path),
+        chunks_markdown_path=str(chunks_markdown_path),
+        manifest_path=str(manifest_path),
+        chunk_count=len(loaded.chunks),
+    )
+    _write_model_json(manifest_path, manifest)
+    return manifest
 
 
 def save_pdf_multimodal_artifacts(
@@ -138,10 +190,12 @@ def _save_pdf_ingestion_artifacts(
 
     markdown_path = run_dir / "parsed.md"
     chunks_path = run_dir / "chunks.jsonl"
+    chunks_markdown_path = run_dir / "chunks.md"
     manifest_path = run_dir / "manifest.json"
 
     markdown_path.write_text(parse_result.markdown, encoding="utf-8")
     _write_chunks_jsonl(chunks_path, chunks)
+    _write_chunks_markdown(chunks_markdown_path, chunks)
 
     manifest = PdfIngestionArtifactManifest(
         input_path=str(path),
@@ -152,6 +206,7 @@ def _save_pdf_ingestion_artifacts(
         run_dir=str(run_dir),
         markdown_path=str(markdown_path),
         chunks_path=str(chunks_path),
+        chunks_markdown_path=str(chunks_markdown_path),
         manifest_path=str(manifest_path),
         chunk_count=len(chunks),
     )
@@ -182,6 +237,7 @@ def _save_pdf_multimodal_artifacts_from_document(
 
     markdown_path = run_dir / "parsed.md"
     chunks_path = run_dir / "chunks.jsonl"
+    chunks_markdown_path = run_dir / "chunks.md"
     manifest_path = run_dir / "manifest.json"
     elements_path = run_dir / "elements.jsonl"
 
@@ -200,6 +256,7 @@ def _save_pdf_multimodal_artifacts_from_document(
     enriched_chunks = _enrich_chunks_with_assets(chunks, elements)
 
     _write_chunks_jsonl(chunks_path, enriched_chunks)
+    _write_chunks_markdown(chunks_markdown_path, enriched_chunks)
     _write_elements_jsonl(elements_path, elements)
 
     manifest = PdfMultimodalArtifactManifest(
@@ -211,6 +268,7 @@ def _save_pdf_multimodal_artifacts_from_document(
         run_dir=str(run_dir),
         markdown_path=str(markdown_path),
         chunks_path=str(chunks_path),
+        chunks_markdown_path=str(chunks_markdown_path),
         manifest_path=str(manifest_path),
         elements_path=str(elements_path),
         assets_dir=str(assets_dir),
@@ -422,6 +480,33 @@ def _write_chunks_jsonl(path: Path, chunks: list[Chunk]) -> None:
         for chunk in chunks:
             chunks_file.write(json.dumps(chunk.model_dump(mode="json"), ensure_ascii=False))
             chunks_file.write("\n")
+
+
+def _write_chunks_markdown(path: Path, chunks: list[Chunk]) -> None:
+    lines = ["# PDF Chunks", ""]
+    for chunk in chunks:
+        lines.extend(
+            [
+                f"## {chunk.chunk_id}",
+                "",
+                f"- section: {_metadata_text(chunk.metadata.get('section'))}",
+                f"- page: {_metadata_text(chunk.metadata.get('page'))}",
+                f"- parser: {_metadata_text(chunk.metadata.get('parser'))}",
+                f"- chunking_method: {_metadata_text(chunk.metadata.get('chunking_method'))}",
+                "",
+                chunk.text.strip(),
+                "",
+            ]
+        )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _metadata_text(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _write_elements_jsonl(path: Path, elements: list[PdfElementArtifact]) -> None:

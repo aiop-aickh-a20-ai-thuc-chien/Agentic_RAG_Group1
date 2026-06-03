@@ -4,6 +4,7 @@ from agentic_rag.ingestion.pdf.artifacts import (
     PdfElementArtifact,
     PdfIngestionArtifactManifest,
     PdfMultimodalArtifactManifest,
+    save_loaded_pdf_ingestion_artifacts,
     save_pdf_ingestion_artifacts,
     save_pdf_multimodal_artifacts,
 )
@@ -25,6 +26,17 @@ from agentic_rag.ingestion.pdf.models import (
     PdfChunkingInput,
     PdfParserCapabilities,
     PdfParseResult,
+    PdfPipelineCapabilities,
+)
+from agentic_rag.ingestion.pdf.pipelines import (
+    DEFAULT_PDF_PIPELINE,
+    DEFAULT_PDF_STRATEGY,
+    PdfParserPipelineDefinition,
+    ResolvedPdfParserPipeline,
+    pipeline_capabilities,
+    resolve_pdf_pipeline,
+    supported_pdf_pipelines,
+    supported_pdf_strategies,
 )
 from agentic_rag.ingestion.pdf.registry import (
     parser_capabilities,
@@ -33,6 +45,8 @@ from agentic_rag.ingestion.pdf.registry import (
 )
 
 __all__ = [
+    "DEFAULT_PDF_PIPELINE",
+    "DEFAULT_PDF_STRATEGY",
     "DeterministicMarkdownChunker",
     "DoclingHybridChunker",
     "LoadedPdfDocument",
@@ -45,13 +59,21 @@ __all__ = [
     "PdfMultimodalArtifactManifest",
     "PdfParseResult",
     "PdfParserCapabilities",
+    "PdfParserPipelineDefinition",
+    "PdfPipelineCapabilities",
+    "ResolvedPdfParserPipeline",
     "load_pdf_chunks",
     "load_pdf_with_markdown",
     "parser_capabilities",
+    "pipeline_capabilities",
     "resolve_markdown_chunker",
     "resolve_pdf_parser",
+    "resolve_pdf_pipeline",
+    "save_loaded_pdf_ingestion_artifacts",
     "save_pdf_ingestion_artifacts",
     "save_pdf_multimodal_artifacts",
     "supported_markdown_chunkers",
     "supported_pdf_parsers",
+    "supported_pdf_pipelines",
+    "supported_pdf_strategies",
 ]
