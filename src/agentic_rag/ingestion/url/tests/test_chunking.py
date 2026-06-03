@@ -4,12 +4,14 @@ from agentic_rag.ingestion.url.chunking import (
     TiktokenChunkingStrategy,
     build_chunk_id,
     build_chunks,
+    detect_lang,
     normalize_space,
     paragraph_chunk,
     short_hash,
     slugify,
     split_markdown,
     split_markdown_paragraphs,
+    split_sentences,
 )
 
 
@@ -61,6 +63,33 @@ def test_paragraph_chunk_returns_token_counts() -> None:
     assert chunks[0]["text"] == "First paragraph.\n\nSecond paragraph."
     assert isinstance(chunks[0]["token_count"], int)
     assert chunks[0]["token_count"] > 0
+
+
+def test_split_sentences_detects_english_and_vietnamese() -> None:
+    english_sentences = split_sentences("Open the page. Extract clean Markdown.")
+    vietnamese_sentences = split_sentences("Mở trang URL. Trích xuất Markdown sạch.")
+
+    assert detect_lang("Open the page.") == "en"
+    assert detect_lang("Trích xuất nội dung tiếng Việt.") == "vi"
+    assert english_sentences == ["Open the page.", "Extract clean Markdown."]
+    assert vietnamese_sentences == ["Mở trang URL.", "Trích xuất Markdown sạch."]
+
+
+def test_paragraph_chunk_splits_oversized_paragraph_on_sentence_boundaries() -> None:
+    chunks = paragraph_chunk(
+        "Alpha beta gamma. Delta epsilon zeta. Eta theta iota.",
+        max_tokens=5,
+        overlap_paragraphs=0,
+    )
+
+    chunk_texts = [str(chunk["text"]) for chunk in chunks]
+
+    assert len(chunk_texts) == 3
+    assert chunk_texts == [
+        "Alpha beta gamma.",
+        "Delta epsilon zeta.",
+        "Eta theta iota.",
+    ]
 
 
 def test_build_chunks_returns_contract_objects_with_metadata() -> None:

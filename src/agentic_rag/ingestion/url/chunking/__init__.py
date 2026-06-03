@@ -8,12 +8,14 @@ from agentic_rag.ingestion.url.chunking.core import (
     TextChunkingStrategy,
     build_chunk_id,
     build_chunks,
+    detect_lang,
     normalize_space,
     paragraph_chunk,
     short_hash,
     slugify,
     split_markdown,
     split_markdown_paragraphs,
+    split_sentences,
 )
 from agentic_rag.ingestion.url.chunking.markdown import (
     MarkdownChunk,
@@ -35,6 +37,7 @@ __all__ = [
     "build_chunk_id",
     "build_chunks",
     "chunk_markdown_by_sections",
+    "detect_lang",
     "normalize_space",
     "paragraph_chunk",
     "short_hash",
@@ -42,4 +45,5 @@ __all__ = [
     "split_markdown",
     "split_markdown_into_sections",
     "split_markdown_paragraphs",
+    "split_sentences",
 ]
