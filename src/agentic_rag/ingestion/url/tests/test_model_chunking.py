@@ -9,6 +9,7 @@ from agentic_rag.ingestion.url.model_chunking import (
     LLMChunkingConfig,
     LLMChunkingProvider,
     ModelChunkingStrategy,
+    RAGFlowChunkingStrategy,
     TextGenerationClient,
     compare_model_chunking,
     parse_model_chunks,
@@ -24,6 +25,58 @@ class FakeGenerationClient:
     def generate_text(self, prompt: str) -> str:
         assert "Return only valid JSON" in prompt
         return json.dumps(list(self.chunks))
+
+
+@dataclass
+class FakeRAGFlowChunkingClient:
+    chunks: tuple[str, ...]
+    uploaded_content: bytes | None = None
+    parsed_document_ids: list[str] | None = None
+
+    def upload_document(
+        self,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: str | None = None,
+        dataset_id: str | None = None,
+    ) -> dict[str, object]:
+        assert filename == "sample-url.md"
+        assert content_type == "text/markdown; charset=utf-8"
+        assert dataset_id == "dataset-1"
+        self.uploaded_content = content
+        return {"id": "doc-1"}
+
+    def parse_documents(
+        self,
+        *,
+        document_ids: list[str],
+        dataset_id: str | None = None,
+    ) -> dict[str, object]:
+        assert dataset_id == "dataset-1"
+        self.parsed_document_ids = document_ids
+        return {"code": 0}
+
+    def list_chunks(
+        self,
+        *,
+        document_id: str,
+        dataset_id: str | None = None,
+        keywords: str | None = None,
+        page: int = 1,
+        page_size: int | None = None,
+        chunk_id: str | None = None,
+    ) -> dict[str, object]:
+        assert document_id == "doc-1"
+        assert dataset_id == "dataset-1"
+        assert page == 1
+        assert page_size == 10
+        del keywords, chunk_id
+        return {
+            "data": {
+                "chunks": [{"content": chunk} for chunk in self.chunks],
+            }
+        }
 
 
 def test_parse_model_chunks_requires_json_array_of_strings() -> None:
@@ -95,3 +148,47 @@ def test_load_html_chunks_can_use_optional_model_chunking_strategy() -> None:
     assert chunks[0].metadata["chunking_method"] == "llm-assisted"
     assert chunks[0].metadata["chunking_provider"] == "openai"
     assert chunks[0].metadata["chunking_model"] == "gpt-4.1-mini"
+
+
+def test_ragflow_chunking_strategy_delegates_markdown_chunking_to_ragflow() -> None:
+    client = FakeRAGFlowChunkingClient(
+        chunks=("RAGFlow chunk A.", "RAGFlow chunk B."),
+    )
+    strategy = RAGFlowChunkingStrategy(
+        client,
+        dataset_id="dataset-1",
+        filename="sample-url.md",
+        model="gpt-4o-mini",
+        page_size=10,
+        poll_interval_seconds=0,
+    )
+
+    assert strategy.split("# Overview\n\nBody text.") == [
+        "RAGFlow chunk A.",
+        "RAGFlow chunk B.",
+    ]
+    assert client.uploaded_content == b"# Overview\n\nBody text."
+    assert client.parsed_document_ids == ["doc-1"]
+
+
+def test_load_html_chunks_can_use_optional_ragflow_chunking_strategy() -> None:
+    strategy = RAGFlowChunkingStrategy(
+        FakeRAGFlowChunkingClient(chunks=("RAGFlow overview chunk.",)),
+        dataset_id="dataset-1",
+        filename="sample-url.md",
+        model="gpt-4o-mini",
+        page_size=10,
+        poll_interval_seconds=0,
+    )
+
+    chunks = load_html_chunks(
+        "<html><body><h1>Overview</h1><p>Long section for RAGFlow chunking.</p></body></html>",
+        source="https://example.edu/ragflow",
+        source_url="https://example.edu/ragflow",
+        chunking_strategy=strategy,
+    )
+
+    assert [chunk.text for chunk in chunks] == ["RAGFlow overview chunk."]
+    assert chunks[0].metadata["chunking_method"] == "ragflow-assisted"
+    assert chunks[0].metadata["chunking_provider"] == "ragflow"
+    assert chunks[0].metadata["chunking_model"] == "gpt-4o-mini"

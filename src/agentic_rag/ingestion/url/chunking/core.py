@@ -151,6 +151,8 @@ def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
         return "deterministic-character-overlap"
     if chunking_strategy.provider == "tiktoken":
         return "deterministic-token-overlap"
+    if chunking_strategy.provider == "ragflow":
+        return "ragflow-assisted"
     return "llm-assisted"
 
 
