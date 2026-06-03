@@ -60,6 +60,10 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].chunk_id == build_chunk_id("url", "https://example.edu", "Overview", 1)
     assert chunks[0].metadata["content_hash"] == short_hash("Overview content")
     assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
+    assert chunks[0].metadata["chunk_size"] == 1200
+    assert chunks[0].metadata["chunk_overlap"] == 150
+    assert chunks[0].metadata["chunking_input_type"] == "parsed_section"
+    assert chunks[0].metadata["chunking_library"] == "agentic_rag.ingestion.chunking"
     assert chunks[0].metadata["chunking_method"] == "deterministic-character-overlap"
     assert chunks[0].metadata["chunking_provider"] is None
     assert chunks[0].metadata["chunking_model"] is None
@@ -129,7 +133,12 @@ def test_build_chunks_passes_shared_chunking_input_to_injected_strategy() -> Non
     assert strategy.seen_input == ChunkingInput(
         markdown="Overview content",
         source_type="url",
-        metadata={"section": "Overview", "source": "https://example.edu/shared"},
+        metadata={
+            "section": "Overview",
+            "source": "https://example.edu/shared",
+            "title": "Shared",
+            "url": "https://example.edu/shared",
+        },
     )
     assert chunks[0].text == "recorded chunk"
     assert chunks[0].metadata["chunking_method"] == "llm-assisted"

@@ -54,7 +54,12 @@ def build_chunks(
     chunking_input = ChunkingInput(
         markdown=text,
         source_type=source_type,
-        metadata={"section": section, "source": source},
+        metadata={
+            "section": section,
+            "source": source,
+            "title": title,
+            "url": url,
+        },
     )
     text_chunks = split_text_with_strategy(
         chunking_input,
@@ -78,6 +83,10 @@ def build_chunks(
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "chunk_index": index,
+                    "chunk_size": chunk_size,
+                    "chunk_overlap": chunk_overlap,
+                    "chunking_input_type": "parsed_section",
+                    "chunking_library": "agentic_rag.ingestion.chunking",
                     "chunking_method": _chunking_method(chunking_strategy),
                     "chunking_provider": _chunking_provider(chunking_strategy),
                     "chunking_model": _chunking_model(chunking_strategy),

@@ -235,6 +235,8 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert chunks[0].metadata["original_url"] == "https://example.edu"
     assert chunks[0].metadata["final_url"] == "https://example.edu/final"
     assert chunks[0].metadata["section"] == "Overview"
+    assert chunks[0].metadata["chunking_library"] == "agentic_rag.ingestion.chunking"
+    assert chunks[0].metadata["chunking_input_type"] == "parsed_section"
 
 
 def test_load_url_chunks_rejects_non_http_url() -> None:
