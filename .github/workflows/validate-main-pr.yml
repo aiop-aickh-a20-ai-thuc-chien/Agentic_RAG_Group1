@@ -1,0 +1,30 @@
+name: Validate Main PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate source branch
+        run: |
+          BRANCH="${{ github.head_ref }}"
+
+          if [[ "$BRANCH" == "develop" ]]; then
+            exit 0
+          fi
+
+          if [[ "$BRANCH" == release/* ]]; then
+            exit 0
+          fi
+
+          if [[ "$BRANCH" == hotfix/* ]]; then
+            exit 0
+          fi
+
+          echo "PR vào main chỉ được phép từ develop, release/* hoặc hotfix/*"
+          exit 1
