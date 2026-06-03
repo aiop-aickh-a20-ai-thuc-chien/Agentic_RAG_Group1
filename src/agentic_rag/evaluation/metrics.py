@@ -10,9 +10,8 @@ def recall_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int = 5) ->
         return 0.0
 
     top_k = set(retrieved_ids[:k])
-    if top_k.intersection(relevant_ids):
-        return 1.0
-    return 0.0
+    retrieved_relevant_count = len(top_k.intersection(relevant_ids))
+    return retrieved_relevant_count / len(relevant_ids)
 
 
 def mrr_at_k(ranked_ids: list[str], relevant_ids: set[str], k: int = 5) -> float:

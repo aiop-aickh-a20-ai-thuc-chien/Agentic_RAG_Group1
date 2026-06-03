@@ -4,14 +4,38 @@ from __future__ import annotations
 
 import json
 import logging
-
-import openpyxl  # type: ignore[import-untyped]
+from collections.abc import Mapping
+from typing import Any
 
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
 from agentic_rag.generation.answering import generate_answer_with_trace
 from agentic_rag.generation.evidence import evidence_for_question
 
 logger = logging.getLogger(__name__)
+
+BASE_REQUIRED_COLUMNS = {
+    "question",
+    "expected_answer",
+    "ground_truth_chunk_ids",
+    "is_out_of_scope",
+    "rag_input",
+    "rag_context",
+    "bot_response",
+    "bot_citations",
+    "trace_url",
+    "retrieved_top5_ids",
+    "ground_truth_rank",
+    "recall_at_5",
+    "mrr_at_5",
+    "citation_chunk_match",
+    "guardrail_pass",
+}
+RAGAS_REQUIRED_COLUMNS = {
+    "ragas_faithfulness",
+    "ragas_answer_relevancy",
+    "ragas_context_precision",
+    "ragas_context_recall",
+}
 
 
 class EvaluationRunner:
@@ -24,7 +48,15 @@ class EvaluationRunner:
 
     def run(self) -> None:
         """Execute the evaluation pipeline."""
-        logger.info(f"Loading dataset from {self.input_file}")
+        try:
+            import openpyxl  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise RuntimeError(
+                "Evaluation runner requires openpyxl. "
+                "Install the evaluation extra with `uv sync --extra evaluation`."
+            ) from exc
+
+        logger.info("Loading dataset from %s", self.input_file)
         wb = openpyxl.load_workbook(self.input_file)
         if "Evaluation" not in wb.sheetnames:
             raise ValueError("Input file must contain an 'Evaluation' sheet.")
@@ -33,9 +65,14 @@ class EvaluationRunner:
 
         # Determine column indices from header (row 2)
         header = {cell.value: idx for idx, cell in enumerate(ws[2], start=1) if cell.value}
+        _validate_required_columns(
+            header,
+            required_columns=BASE_REQUIRED_COLUMNS
+            | (RAGAS_REQUIRED_COLUMNS if self.run_ragas else set()),
+        )
 
         for row_idx in range(3, ws.max_row + 1):
-            question_cell = ws.cell(row=row_idx, column=header.get("question", -1))
+            question_cell = ws.cell(row=row_idx, column=header["question"])
             if not question_cell.value:
                 continue
 
@@ -44,15 +81,15 @@ class EvaluationRunner:
                 continue
 
             # Skip if already evaluated
-            bot_response_cell = ws.cell(row=row_idx, column=header.get("bot_response", -1))
+            bot_response_cell = ws.cell(row=row_idx, column=header["bot_response"])
             if bot_response_cell.value:
-                logger.info(f"Skipping row {row_idx} (already evaluated)")
+                logger.info("Skipping row %s (already evaluated)", row_idx)
                 continue
 
-            logger.info(f"Evaluating row {row_idx}: {question}")
+            logger.info("Evaluating row %s: %s", row_idx, question)
 
-            is_out_of_scope = (
-                ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+            is_out_of_scope = _is_truthy_cell(
+                ws.cell(row=row_idx, column=header["is_out_of_scope"]).value
             )
 
             # 1. Run Pipeline
@@ -63,8 +100,8 @@ class EvaluationRunner:
                     evidence_context=evidence_context,
                     evidence_chunks=evidence_chunks,
                 )
-            except Exception as e:
-                logger.error(f"Error generating answer for row {row_idx}: {e}")
+            except Exception as exc:
+                logger.error("Error generating answer for row %s: %s", row_idx, exc)
                 continue
 
             # Format chunks to JSON
@@ -96,9 +133,7 @@ class EvaluationRunner:
             top5_ids = [chunk.chunk.chunk_id for chunk in evidence_chunks[:5]]
             ws.cell(row=row_idx, column=header["retrieved_top5_ids"]).value = ", ".join(top5_ids)
 
-            gt_chunks_raw = ws.cell(
-                row=row_idx, column=header.get("ground_truth_chunk_ids", -1)
-            ).value
+            gt_chunks_raw = ws.cell(row=row_idx, column=header["ground_truth_chunk_ids"]).value
 
             if is_out_of_scope:
                 is_not_found = generation.answer.status == "not_found"
@@ -106,9 +141,8 @@ class EvaluationRunner:
             else:
                 ws.cell(row=row_idx, column=header["guardrail_pass"]).value = "N/A"
 
-                if gt_chunks_raw and str(gt_chunks_raw).strip() != "NONE":
-                    relevant_ids = {c.strip() for c in str(gt_chunks_raw).split(",")}
-
+                relevant_ids = _parse_relevant_ids(gt_chunks_raw)
+                if relevant_ids:
                     # Compute ground truth rank
                     gt_rank = -1
                     for i, cid in enumerate(top5_ids, start=1):
@@ -137,31 +171,31 @@ class EvaluationRunner:
             row_mapping = []
 
             for row_idx in range(3, ws.max_row + 1):
-                is_out_of_scope = (
-                    ws.cell(row=row_idx, column=header.get("is_out_of_scope", -1)).value is True
+                is_out_of_scope = _is_truthy_cell(
+                    ws.cell(row=row_idx, column=header["is_out_of_scope"]).value
                 )
                 if is_out_of_scope:
                     continue
 
-                question = str(ws.cell(row=row_idx, column=header.get("question", -1)).value or "")
-                answer = str(
-                    ws.cell(row=row_idx, column=header.get("bot_response", -1)).value or ""
-                )
+                question = str(ws.cell(row=row_idx, column=header["question"]).value or "")
+                answer = str(ws.cell(row=row_idx, column=header["bot_response"]).value or "")
                 expected_answer = str(
-                    ws.cell(row=row_idx, column=header.get("expected_answer", -1)).value or ""
+                    ws.cell(row=row_idx, column=header["expected_answer"]).value or ""
                 )
-                rag_context_raw = ws.cell(row=row_idx, column=header.get("rag_context", -1)).value
+                rag_context_raw = ws.cell(row=row_idx, column=header["rag_context"]).value
 
                 if not question or not answer:
                     continue
 
-                contexts = []
+                contexts: list[str] = []
                 if rag_context_raw:
                     try:
                         ctx_list = json.loads(rag_context_raw)
-                        contexts = [item.get("text", "") for item in ctx_list]
-                    except Exception:
-                        pass
+                        contexts = [
+                            str(item.get("text", "")) for item in ctx_list if isinstance(item, dict)
+                        ]
+                    except json.JSONDecodeError:
+                        logger.warning("Skipping invalid rag_context JSON in row %s", row_idx)
 
                 eval_data.append(
                     {
@@ -176,19 +210,49 @@ class EvaluationRunner:
             if eval_data:
                 ragas_results = run_ragas_evaluation(eval_data)
                 for row_idx, scores in zip(row_mapping, ragas_results, strict=False):
+                    ws.cell(row=row_idx, column=header["ragas_faithfulness"]).value = scores.get(
+                        "ragas_faithfulness", 0.0
+                    )
                     ws.cell(
-                        row=row_idx, column=header.get("ragas_faithfulness", -1)
-                    ).value = scores.get("ragas_faithfulness", 0.0)
-                    ws.cell(
-                        row=row_idx, column=header.get("ragas_answer_relevancy", -1)
+                        row=row_idx, column=header["ragas_answer_relevancy"]
                     ).value = scores.get("ragas_answer_relevancy", 0.0)
                     ws.cell(
-                        row=row_idx, column=header.get("ragas_context_precision", -1)
+                        row=row_idx, column=header["ragas_context_precision"]
                     ).value = scores.get("ragas_context_precision", 0.0)
-                    ws.cell(
-                        row=row_idx, column=header.get("ragas_context_recall", -1)
-                    ).value = scores.get("ragas_context_recall", 0.0)
+                    ws.cell(row=row_idx, column=header["ragas_context_recall"]).value = scores.get(
+                        "ragas_context_recall", 0.0
+                    )
 
         # Save workbook
-        logger.info(f"Saving evaluation results to {self.output_file}")
+        logger.info("Saving evaluation results to %s", self.output_file)
         wb.save(self.output_file)
+
+
+def _validate_required_columns(
+    header: Mapping[Any, int],
+    *,
+    required_columns: set[str],
+) -> None:
+    missing_columns = sorted(column for column in required_columns if column not in header)
+    if missing_columns:
+        missing = ", ".join(missing_columns)
+        raise ValueError(f"Evaluation sheet is missing required columns: {missing}")
+
+
+def _is_truthy_cell(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return False
+
+
+def _parse_relevant_ids(value: object) -> set[str]:
+    if value is None:
+        return set()
+    raw_value = str(value).strip()
+    if not raw_value or raw_value.upper() == "NONE":
+        return set()
+    return {chunk_id.strip() for chunk_id in raw_value.split(",") if chunk_id.strip()}

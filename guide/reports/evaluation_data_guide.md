@@ -92,7 +92,7 @@ File `evaluation_dataset.xlsx` gồm 28 cột, chia 4 nhóm:
 |-----|-----|------|
 | O | `retrieved_top5_ids` | string (comma-separated) |
 | P | `ground_truth_rank` | int hoặc -1 |
-| Q | `recall_at_5` | 0 hoặc 1 |
+| Q | `recall_at_5` | 0.0 → 1.0 |
 | R | `mrr_at_5` | float (0.0 → 1.0) |
 | S | `citation_chunk_match` | TRUE / FALSE |
 | T | `guardrail_pass` | TRUE / FALSE / N/A |
@@ -233,14 +233,14 @@ File `evaluation_dataset.xlsx` gồm 28 cột, chia 4 nhóm:
   - Trống → câu out-of-scope
 
 #### `recall_at_5` (cột Q)
-- **Mô tả**: Ground truth evidence có nằm trong top 5 retrieved chunks không?
+- **Mô tả**: Tỷ lệ ground truth evidence nằm trong top 5 retrieved chunks.
 - **Tính bởi**: Code
 - **Công thức**:
   ```
-  recall_at_5 = 1  nếu BẤT KỲ ground_truth_chunk_id nào nằm trong top 5
-  recall_at_5 = 0  nếu KHÔNG chunk nào match
-  ```
+  recall_at_5 = số ground_truth_chunk_id nằm trong top 5 / tổng số ground_truth_chunk_id
+```
 - **Với câu out-of-scope**: Để trống (không tính)
+- **Ví dụ**: Nếu ground truth có 2 chunks và retrieved top 5 chỉ tìm thấy 1 chunk đúng, `recall_at_5 = 0.5`.
 
 #### `mrr_at_5` (cột R)
 - **Mô tả**: Reciprocal rank — đo ground truth nằm ở vị trí cao hay thấp
@@ -508,6 +508,7 @@ Answer accuracy = số câu check_answer_correct = "✅ PASS" / tổng số câu
 ### Mẹo review nhanh
 
 - Nếu `recall_at_5 = 0` → retrieval sai, khả năng cao answer cũng sai
+- Nếu `0 < recall_at_5 < 1` → retrieval chỉ lấy được một phần evidence, cần human review kỹ
 - Nếu `recall_at_5 = 1` nhưng answer sai → generation error
 - Nếu `citation_chunk_match = FALSE` → cần check citation kỹ
 - Nếu `guardrail_pass = FALSE` → guardrail error chắc chắn
@@ -526,6 +527,8 @@ Câu hỏi
 │
 └── is_out_of_scope = FALSE?
     ├── recall_at_5 = 0 → ❌ retrieval_error
+    │
+    ├── 0 < recall_at_5 < 1 → ⚠️ partial_retrieval / human judgment
     │
     ├── recall_at_5 = 1, ground_truth_rank ≥ 4 → ⚠️ ranking_error
     │
