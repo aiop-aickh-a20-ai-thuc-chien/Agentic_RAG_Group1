@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
+    DETERMINISTIC_MARKDOWN_CHUNKER,
     MarkdownChunker,
     resolve_markdown_chunker,
 )
@@ -136,7 +137,9 @@ def _chunks_from_markdown(
     parser_name: str = DEFAULT_PDF_PARSER,
     chunker: MarkdownChunker | None = None,
 ) -> list[Chunk]:
-    resolved_chunker = chunker if chunker is not None else resolve_markdown_chunker()
+    resolved_chunker = (
+        chunker if chunker is not None else resolve_markdown_chunker(DETERMINISTIC_MARKDOWN_CHUNKER)
+    )
     chunking_input = PdfChunkingInput(
         markdown=markdown,
         parser=parser_name,
@@ -156,20 +159,24 @@ def _chunks_from_chunking_input(
 
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
+        metadata = {
+            "source": str(path),
+            "source_type": "pdf",
+            "file_name": path.name,
+            "page": None,
+            "section": markdown_chunk.section,
+            "parser": chunking_input.parser,
+            "chunking_method": chunker.chunker_name,
+            "chunk_index": index,
+        }
+        metadata.update(
+            {key: value for key, value in markdown_chunk.metadata.items() if key not in metadata}
+        )
         chunks.append(
             Chunk(
                 chunk_id=f"pdf_{safe_file_stem}_c{index:04d}",
                 text=markdown_chunk.text,
-                metadata={
-                    "source": str(path),
-                    "source_type": "pdf",
-                    "file_name": path.name,
-                    "page": None,
-                    "section": markdown_chunk.section,
-                    "parser": chunking_input.parser,
-                    "chunking_method": chunker.chunker_name,
-                    "chunk_index": index,
-                },
+                metadata=metadata,
             )
         )
     return chunks

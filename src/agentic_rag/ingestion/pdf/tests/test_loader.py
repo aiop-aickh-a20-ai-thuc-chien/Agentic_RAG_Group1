@@ -4,6 +4,7 @@ import pytest
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import ChunkingInput
+from agentic_rag.ingestion.pdf.chunkers import DeterministicMarkdownChunker
 from agentic_rag.ingestion.pdf.chunking import MarkdownChunk
 from agentic_rag.ingestion.pdf.loader import (
     LoadedPdfDocument,
@@ -55,7 +56,16 @@ class FakeChunker:
     def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
         self.seen_input = chunking_input
         self.seen_markdown = chunking_input.markdown
-        return [MarkdownChunk(section="Forced", text="Forced chunk text.")]
+        return [
+            MarkdownChunk(
+                section="Forced",
+                text="Forced chunk text.",
+                metadata={
+                    "section_path": ["Forced"],
+                    "raw_text": "Raw forced chunk text.",
+                },
+            )
+        ]
 
 
 class FakeNativeChunker:
@@ -74,7 +84,7 @@ def test_loaded_pdf_document_defaults_parser_and_chunker() -> None:
     loaded = LoadedPdfDocument(markdown="# Intro", chunks=[])
 
     assert loaded.parser == "docling"
-    assert loaded.chunker == "deterministic"
+    assert loaded.chunker == "docling-hybrid"
 
 
 def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
@@ -82,7 +92,7 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
     pdf_path.write_bytes(b"%PDF-1.4\n")
     parser = FakeParser("# Warranty\nPin duoc bao hanh 8 nam.\n\n## Battery\nDieu kien ap dung.")
 
-    chunks = _load_pdf_chunks(pdf_path, parser)
+    chunks = _load_pdf_chunks(pdf_path, parser, chunker=DeterministicMarkdownChunker())
 
     assert all(isinstance(chunk, Chunk) for chunk in chunks)
     assert [chunk.chunk_id for chunk in chunks] == [
@@ -117,6 +127,8 @@ def test_load_pdf_with_markdown_uses_supplied_chunker(tmp_path: Path) -> None:
     assert loaded.markdown == "# Intro\nOriginal markdown."
     assert loaded.chunks[0].text == "Forced chunk text."
     assert loaded.chunks[0].metadata["section"] == "Forced"
+    assert loaded.chunks[0].metadata["section_path"] == ["Forced"]
+    assert loaded.chunks[0].metadata["raw_text"] == "Raw forced chunk text."
     assert loaded.chunks[0].metadata["chunking_method"] == "fake-chunker"
     assert isinstance(chunker.seen_input, ChunkingInput)
     assert chunker.seen_input.parser == "fake-parser"
@@ -152,7 +164,7 @@ def test_load_pdf_with_markdown_returns_markdown_and_chunks(tmp_path: Path) -> N
     pdf_path.write_bytes(b"%PDF-1.4\n")
     parser = FakeParser("# Intro\nNoi dung.")
 
-    loaded = _load_pdf_with_markdown(pdf_path, parser)
+    loaded = _load_pdf_with_markdown(pdf_path, parser, chunker=DeterministicMarkdownChunker())
 
     assert loaded.markdown == "# Intro\nNoi dung."
     assert len(loaded.chunks) == 1
@@ -164,14 +176,21 @@ def test_load_pdf_chunks_returns_empty_list_for_empty_markdown(tmp_path: Path) -
     pdf_path = tmp_path / "empty.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
 
-    assert _load_pdf_chunks(pdf_path, FakeParser(" \n\n")) == []
+    assert (
+        _load_pdf_chunks(pdf_path, FakeParser(" \n\n"), chunker=DeterministicMarkdownChunker())
+        == []
+    )
 
 
 def test_load_pdf_chunks_does_not_write_debug_files_next_to_input(tmp_path: Path) -> None:
     pdf_path = tmp_path / "source.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
 
-    chunks = _load_pdf_chunks(pdf_path, FakeParser("# Intro\nNoi dung."))
+    chunks = _load_pdf_chunks(
+        pdf_path,
+        FakeParser("# Intro\nNoi dung."),
+        chunker=DeterministicMarkdownChunker(),
+    )
 
     assert len(chunks) == 1
     assert sorted(path.name for path in tmp_path.iterdir()) == ["source.pdf"]

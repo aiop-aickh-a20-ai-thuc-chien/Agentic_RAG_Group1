@@ -15,8 +15,9 @@ from agentic_rag.ingestion.chunking import (
     DeterministicMarkdownChunker as SharedDeterministicMarkdownChunker,
 )
 
-DEFAULT_MARKDOWN_CHUNKER = "deterministic"
+DETERMINISTIC_MARKDOWN_CHUNKER = "deterministic"
 DOCLING_HYBRID_CHUNKER = "docling-hybrid"
+DEFAULT_MARKDOWN_CHUNKER = DOCLING_HYBRID_CHUNKER
 
 
 class MarkdownChunker(Protocol):
@@ -51,14 +52,20 @@ class DoclingHybridChunker:
         hybrid_chunker = self._hybrid_chunker_factory()
         chunks: list[MarkdownChunk] = []
         for docling_chunk in hybrid_chunker.chunk(chunking_input.native_document):
+            raw_text = str(getattr(docling_chunk, "text", "")).strip()
+            section_path = _section_path_from_docling_chunk(docling_chunk)
             text = str(hybrid_chunker.contextualize(docling_chunk)).strip()
             if not text:
-                text = str(getattr(docling_chunk, "text", "")).strip()
+                text = raw_text
             if text:
                 chunks.append(
                     MarkdownChunk(
-                        section=_section_from_docling_chunk(docling_chunk),
+                        section=_section_from_section_path(section_path),
                         text=text,
+                        metadata={
+                            "section_path": section_path,
+                            "raw_text": raw_text,
+                        },
                     )
                 )
         return chunks
@@ -74,8 +81,8 @@ class MarkdownChunkerDefinition(BaseModel):
 
 
 _MARKDOWN_CHUNKER_REGISTRY: dict[str, MarkdownChunkerDefinition] = {
-    DEFAULT_MARKDOWN_CHUNKER: MarkdownChunkerDefinition(
-        name=DEFAULT_MARKDOWN_CHUNKER,
+    DETERMINISTIC_MARKDOWN_CHUNKER: MarkdownChunkerDefinition(
+        name=DETERMINISTIC_MARKDOWN_CHUNKER,
         factory=DeterministicMarkdownChunker,
     ),
     DOCLING_HYBRID_CHUNKER: MarkdownChunkerDefinition(
@@ -116,10 +123,13 @@ def _default_hybrid_chunker_factory() -> Any:
     return HybridChunker()
 
 
-def _section_from_docling_chunk(docling_chunk: Any) -> str | None:
+def _section_path_from_docling_chunk(docling_chunk: Any) -> list[str]:
     meta = getattr(docling_chunk, "meta", None)
     headings = getattr(meta, "headings", None)
     if not headings:
-        return None
-    heading_texts = [str(heading).strip() for heading in headings if str(heading).strip()]
-    return " > ".join(heading_texts) or None
+        return []
+    return [str(heading).strip() for heading in headings if str(heading).strip()]
+
+
+def _section_from_section_path(section_path: list[str]) -> str | None:
+    return " > ".join(section_path) or None

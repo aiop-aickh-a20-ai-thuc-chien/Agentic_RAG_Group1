@@ -96,8 +96,9 @@ visual-heavy, nhưng cũng đắt nhất về latency, chi phí và kiểm soát
 - `load_pdf_chunks(path)` vẫn mặc định dùng Docling.
 - Parser khác dùng `load_pdf_chunks(path, parser_name="pypdf")` hoặc
   `LOCAL_PDF_PARSER=pypdf`.
-- Chunker khác dùng `load_pdf_chunks(path, chunker_name="docling-hybrid")` hoặc
-  `LOCAL_PDF_CHUNKER=docling-hybrid`; deterministic vẫn là mặc định.
+- Chunker mặc định là `docling-hybrid`. Dùng
+  `load_pdf_chunks(path, chunker_name="deterministic")` hoặc
+  `LOCAL_PDF_CHUNKER=deterministic` khi cần fallback/baseline deterministic.
 - `save_pdf_ingestion_artifacts(..., parser_name=...)` dùng để xuất artifact so
   sánh Markdown/chunk.
 - `save_pdf_multimodal_artifacts()` tạm thời Docling-only vì đang phụ thuộc
