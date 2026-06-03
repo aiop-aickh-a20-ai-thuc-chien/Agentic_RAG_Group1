@@ -2,11 +2,11 @@
 
 import os
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-def run_ragas_evaluation(eval_data: List[Dict[str, Any]]) -> List[Dict[str, float]]:
+def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, float]]:
     """
     Run RAGAS evaluation on a batch of data.
     
