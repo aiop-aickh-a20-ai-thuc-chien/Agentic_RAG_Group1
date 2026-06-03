@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 
-import openpyxl
+import openpyxl  # type: ignore[import-untyped]
 
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
 from agentic_rag.generation.answering import generate_answer_with_trace
