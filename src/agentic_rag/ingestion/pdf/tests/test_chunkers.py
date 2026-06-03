@@ -48,7 +48,7 @@ def _chunking_input(
 
 
 def test_default_chunker_wraps_existing_markdown_chunking() -> None:
-    chunker = resolve_markdown_chunker(None)
+    chunker = resolve_markdown_chunker("deterministic")
 
     chunks = chunker.chunk(_chunking_input("# Warranty\nPin duoc bao hanh 8 nam."))
 
@@ -57,6 +57,13 @@ def test_default_chunker_wraps_existing_markdown_chunking() -> None:
     assert len(chunks) == 1
     assert chunks[0].section == "Warranty"
     assert chunks[0].text == "Pin duoc bao hanh 8 nam."
+
+
+def test_default_chunker_is_docling_hybrid() -> None:
+    chunker = resolve_markdown_chunker(None)
+
+    assert isinstance(chunker, DoclingHybridChunker)
+    assert chunker.requires_native_document is True
 
 
 def test_supported_markdown_chunkers_lists_default_and_docling_hybrid() -> None:
@@ -83,6 +90,31 @@ def test_docling_hybrid_chunker_maps_contextualized_text_and_headings() -> None:
     assert len(chunks) == 1
     assert chunks[0].text == "context: raw chunk"
     assert chunks[0].section == "Warranty > Battery"
+    assert chunks[0].metadata == {
+        "section_path": ["Warranty", "Battery"],
+        "raw_text": "raw chunk",
+    }
+
+
+def test_docling_hybrid_chunker_handles_missing_headings() -> None:
+    class HeadinglessHybridChunker(FakeHybridChunker):
+        def chunk(self, native_document: object) -> list[FakeDoclingChunk]:
+            self.seen_document = native_document
+            return [FakeDoclingChunk("body only", headings=None)]
+
+        def contextualize(self, chunk: FakeDoclingChunk) -> str:
+            return chunk.text
+
+    fake_hybrid = HeadinglessHybridChunker()
+    chunker = DoclingHybridChunker(hybrid_chunker_factory=lambda: fake_hybrid)
+
+    chunks = chunker.chunk(_chunking_input("", native_document=object()))
+
+    assert chunks[0].section is None
+    assert chunks[0].metadata == {
+        "section_path": [],
+        "raw_text": "body only",
+    }
 
 
 def test_markdown_chunker_definition_is_pydantic_model() -> None:

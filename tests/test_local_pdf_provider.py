@@ -41,9 +41,11 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
-        lambda path, **kwargs: LoadedPdfDocument(
+    seen_kwargs: dict[str, str] = {}
+
+    def fake_load_pdf_with_markdown(path: str, **kwargs: str) -> LoadedPdfDocument:
+        seen_kwargs.update(kwargs)
+        return LoadedPdfDocument(
             markdown="# Bao hanh\nPin VF8 duoc bao hanh 8 nam.",
             chunks=[
                 Chunk(
@@ -57,7 +59,13 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
                     metadata={"chunk_index": 2, "section": "Dieu kien"},
                 ),
             ],
-        ),
+            parser=kwargs["parser_name"],
+            chunker=kwargs["chunker_name"],
+        )
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        fake_load_pdf_with_markdown,
     )
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
 
@@ -77,7 +85,12 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     assert trace["parse"]["markdown_chars"] == 39
     assert trace["parse"]["markdown_preview"] == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
     assert "markdown" not in trace["parse"]
+    assert seen_kwargs == {
+        "parser_name": "docling",
+        "chunker_name": "docling-hybrid",
+    }
     assert trace["chunking"]["chunk_count"] == 2
+    assert trace["chunking"]["chunker"] == "docling-hybrid"
     assert trace["index_write"]["type"] == "jsonl"
     assert document_chunks.total_chunks == 2
     assert [chunk.chunk_id for chunk in document_chunks.chunks] == [
