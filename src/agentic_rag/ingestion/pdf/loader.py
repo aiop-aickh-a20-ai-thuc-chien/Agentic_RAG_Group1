@@ -138,6 +138,8 @@ def _load_pdf_with_markdown(
         pipeline=pipeline_name,
         strategy=strategy_name,
         chunker=chunker_name,
+        requested_chunker=resolved_chunker.chunker_name,
+        chunking_fallback_reason=fallback_reason,
     )
 
 
