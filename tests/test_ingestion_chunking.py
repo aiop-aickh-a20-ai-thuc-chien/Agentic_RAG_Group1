@@ -1,7 +1,14 @@
 from agentic_rag.ingestion import chunking
 from agentic_rag.ingestion.chunking.chunkers import DeterministicMarkdownChunker
 from agentic_rag.ingestion.chunking.models import ChunkCandidate, ChunkingInput
-from agentic_rag.ingestion.chunking.splitters import split_markdown
+from agentic_rag.ingestion.chunking.splitters import (
+    chunk_markdown_by_sections,
+    detect_lang,
+    paragraph_chunk,
+    split_markdown,
+    split_markdown_paragraphs,
+    split_sentences,
+)
 from agentic_rag.ingestion.pdf import chunking as pdf_chunking
 from agentic_rag.ingestion.url import chunking as url_chunking
 
@@ -39,6 +46,11 @@ def test_chunking_package_exposes_focused_submodules_and_compat_exports() -> Non
     assert chunking.ChunkCandidate is ChunkCandidate
     assert chunking.DeterministicMarkdownChunker is DeterministicMarkdownChunker
     assert chunking.split_markdown is split_markdown
+    assert chunking.paragraph_chunk is paragraph_chunk
+    assert chunking.split_markdown_paragraphs is split_markdown_paragraphs
+    assert chunking.split_sentences is split_sentences
+    assert chunking.detect_lang is detect_lang
+    assert chunking.chunk_markdown_by_sections is chunk_markdown_by_sections
 
 
 def test_url_chunking_reuses_shared_text_helpers() -> None:
@@ -50,3 +62,57 @@ def test_url_chunking_reuses_shared_text_helpers() -> None:
     assert url_chunking.normalize_space is chunking.normalize_space
     assert url_chunking.short_hash is chunking.short_hash
     assert url_chunking.slugify is chunking.slugify
+    assert url_chunking.paragraph_chunk is chunking.paragraph_chunk
+    assert url_chunking.split_markdown_paragraphs is chunking.split_markdown_paragraphs
+    assert url_chunking.split_sentences is chunking.split_sentences
+    assert url_chunking.detect_lang is chunking.detect_lang
+    assert url_chunking.chunk_markdown_by_sections is chunking.chunk_markdown_by_sections
+
+
+def test_shared_paragraph_chunking_uses_boundaries_and_overlap() -> None:
+    text = "\n\n".join(
+        [
+            "Alpha one two three.",
+            "Beta one two three.",
+            "Gamma one two three.",
+        ]
+    )
+
+    chunks = chunking.split_markdown_paragraphs(text, max_tokens=7, overlap_paragraphs=1)
+
+    assert chunks == [
+        "Alpha one two three.",
+        "Alpha one two three.\n\nBeta one two three.",
+        "Beta one two three.\n\nGamma one two three.",
+    ]
+
+
+def test_shared_sentence_splitting_detects_english_and_vietnamese() -> None:
+    english_sentences = chunking.split_sentences("Open the page. Extract clean Markdown.")
+    vietnamese_sentences = chunking.split_sentences(
+        "M\u1edf trang URL. Tr\u00edch xu\u1ea5t Markdown s\u1ea1ch."
+    )
+
+    assert chunking.detect_lang("Open the page.") == "en"
+    assert chunking.detect_lang("Tr\u00edch xu\u1ea5t n\u1ed9i dung ti\u1ebfng Vi\u1ec7t.") == "vi"
+    assert english_sentences == ["Open the page.", "Extract clean Markdown."]
+    assert vietnamese_sentences == [
+        "M\u1edf trang URL.",
+        "Tr\u00edch xu\u1ea5t Markdown s\u1ea1ch.",
+    ]
+
+
+def test_shared_hierarchical_markdown_chunking_preserves_section_metadata() -> None:
+    chunks = chunking.chunk_markdown_by_sections(
+        "# Section\nDoan mot ngan.\n\nDoan hai ngan.",
+        max_chars=100,
+        overlap_chars=10,
+    )
+
+    assert [item.section for item in chunks] == ["Section"]
+    assert chunks[0].section_level == 1
+    assert chunks[0].section_path == ("Section",)
+    assert chunks[0].text == "# Section\n\nDoan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].chunk_token_count is not None
+    assert chunks[0].chunk_token_count > 0
+    assert chunks[0].semantic_unit == "markdown_section_paragraph_sentence"

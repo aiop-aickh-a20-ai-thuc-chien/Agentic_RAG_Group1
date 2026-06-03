@@ -1,31 +1,46 @@
-"""Deterministic Markdown/text chunking for URL ingestion."""
+"""URL-specific Chunk mapping with shared ingestion chunking helpers."""
 
 from __future__ import annotations
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import (
-    DEFAULT_CHUNK_OVERLAP,
-    DEFAULT_CHUNK_SIZE,
-    ChunkingInput,
-    TextChunkingStrategy,
+    DEFAULT_PARAGRAPH_MAX_TOKENS as SHARED_PARAGRAPH_MAX_TOKENS,
+)
+from agentic_rag.ingestion.chunking import (
+    DEFAULT_PARAGRAPH_OVERLAP as SHARED_PARAGRAPH_OVERLAP,
+)
+from agentic_rag.ingestion.chunking import (
     build_chunk_id,
+    detect_lang,
     normalize_space,
+    paragraph_chunk,
     short_hash,
     slugify,
     split_markdown,
-    split_text_with_strategy,
+    split_markdown_paragraphs,
+    split_sentences,
 )
+
+DEFAULT_CHUNK_SIZE = SHARED_PARAGRAPH_MAX_TOKENS
+DEFAULT_CHUNK_OVERLAP = SHARED_PARAGRAPH_OVERLAP
+DEFAULT_PARAGRAPH_MAX_TOKENS = SHARED_PARAGRAPH_MAX_TOKENS
+DEFAULT_PARAGRAPH_OVERLAP = SHARED_PARAGRAPH_OVERLAP
 
 __all__ = [
     "DEFAULT_CHUNK_OVERLAP",
     "DEFAULT_CHUNK_SIZE",
-    "TextChunkingStrategy",
+    "DEFAULT_PARAGRAPH_MAX_TOKENS",
+    "DEFAULT_PARAGRAPH_OVERLAP",
     "build_chunk_id",
     "build_chunks",
+    "detect_lang",
     "normalize_space",
+    "paragraph_chunk",
     "short_hash",
     "slugify",
     "split_markdown",
+    "split_markdown_paragraphs",
+    "split_sentences",
 ]
 
 
@@ -40,7 +55,6 @@ def build_chunks(
     fetched_at: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Build shared Chunk objects from normalized Markdown/text."""
 
@@ -51,21 +65,10 @@ def build_chunks(
 
     chunks: list[Chunk] = []
     content_hash = short_hash(text)
-    chunking_input = ChunkingInput(
-        markdown=text,
-        source_type=source_type,
-        metadata={
-            "section": section,
-            "source": source,
-            "title": title,
-            "url": url,
-        },
-    )
-    text_chunks = split_text_with_strategy(
-        chunking_input,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        chunking_strategy=chunking_strategy,
+    text_chunks = split_markdown_paragraphs(
+        text,
+        max_tokens=chunk_size,
+        overlap_paragraphs=chunk_overlap,
     )
     for index, chunk_text in enumerate(text_chunks, start=1):
         chunks.append(
@@ -83,30 +86,7 @@ def build_chunks(
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "chunk_index": index,
-                    "chunk_size": chunk_size,
-                    "chunk_overlap": chunk_overlap,
-                    "chunking_input_type": "parsed_section",
-                    "chunking_library": "agentic_rag.ingestion.chunking",
-                    "chunking_method": _chunking_method(chunking_strategy),
-                    "chunking_provider": _chunking_provider(chunking_strategy),
-                    "chunking_model": _chunking_model(chunking_strategy),
                 },
             )
         )
     return chunks
-
-
-def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
-    if chunking_strategy is None:
-        return "deterministic-character-overlap"
-    if chunking_strategy.provider == "tiktoken":
-        return "deterministic-token-overlap"
-    return "llm-assisted"
-
-
-def _chunking_provider(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.provider
-
-
-def _chunking_model(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.model

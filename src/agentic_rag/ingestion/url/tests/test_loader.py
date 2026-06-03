@@ -15,11 +15,7 @@ from agentic_rag.ingestion.url import (
 from agentic_rag.ingestion.url import loader as loader_module
 
 
-def test_load_html_chunks_removes_noise_and_preserves_section_metadata(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
-
+def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None:
     chunks = load_html_chunks(
         """
         <html>
@@ -46,6 +42,10 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata(
     assert chunks[0].metadata["source_type"] == "url"
     assert chunks[0].metadata["url"] == "https://example.edu/admissions"
     assert chunks[0].metadata["title"] == "Admissions Page"
+    assert chunks[0].metadata["chunking_method"] == "hybrid-markdown-aware-token-overlap"
+    assert chunks[0].metadata["section_level"] == 1
+    assert chunks[0].metadata["section_path"] == ["Admissions"]
+    assert chunks[0].metadata["semantic_unit"] == "markdown_section_paragraph_sentence"
     assert "Applications require transcripts." in chunks[0].text
     assert "Home Login Pricing" not in chunks[0].text
     assert "tracking" not in chunks[0].text
@@ -154,6 +154,7 @@ def test_load_html_with_artifacts_returns_markdown_and_paths(
 
     assert loaded.markdown == "# Artifact Page\n\n# Intro\n\nArtifact content.\n"
     assert len(loaded.chunks) == 1
+    assert loaded.chunks[0].text == "# Intro\n\nArtifact content."
     assert loaded.artifacts is not None
     assert loaded.artifacts.markdown_path.read_text(encoding="utf-8") == loaded.markdown
     assert loaded.artifacts.chunks_path.exists()
@@ -178,17 +179,13 @@ def test_load_html_chunks_prefers_trafilatura_markdown_for_artifacts(
         fake_extract_markdown_with_trafilatura,
     )
 
-    loaded = load_html_with_artifacts(
+    load_html_chunks(
         "<html><body><h1>Raw</h1><p>Raw content.</p></body></html>",
         source="https://example.edu/article",
         source_url="https://example.edu/article",
         data_artifact_dir=tmp_path,
         run_id="trafilatura_run",
     )
-
-    assert loaded.chunks[0].text == "Raw Raw content."
-    assert loaded.chunks[0].metadata["section"] == "Raw"
-    assert loaded.chunks[0].metadata["chunking_method"] == "deterministic-character-overlap"
 
     run_dirs = list((tmp_path / "artifacts").glob("*/trafilatura-run"))
     assert len(run_dirs) == 1
@@ -224,19 +221,17 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
         )
 
     monkeypatch.setattr(loader_module, "_fetch_url", fake_fetch_url)
-    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
 
     chunks = load_url_chunks("https://example.edu")
 
     assert len(chunks) == 1
-    assert chunks[0].text == "Overview Fetched content."
+    assert chunks[0].text == "# Overview\n\nFetched content."
     assert chunks[0].metadata["source"] == "https://example.edu/final"
     assert chunks[0].metadata["url"] == "https://example.edu/final"
     assert chunks[0].metadata["original_url"] == "https://example.edu"
     assert chunks[0].metadata["final_url"] == "https://example.edu/final"
     assert chunks[0].metadata["section"] == "Overview"
-    assert chunks[0].metadata["chunking_library"] == "agentic_rag.ingestion.chunking"
-    assert chunks[0].metadata["chunking_input_type"] == "parsed_section"
+    assert chunks[0].metadata["section_path"] == ["Overview"]
 
 
 def test_load_url_chunks_rejects_non_http_url() -> None:
