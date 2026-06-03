@@ -4,13 +4,18 @@ from agentic_rag.ingestion.chunking import ChunkCandidate, Chunker, ChunkingInpu
 from agentic_rag.ingestion.url.chunking.core import (
     DEFAULT_CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
-    TextChunkingStrategy,
+    DEFAULT_PARAGRAPH_MAX_TOKENS,
+    DEFAULT_PARAGRAPH_OVERLAP,
     build_chunk_id,
     build_chunks,
+    detect_lang,
     normalize_space,
+    paragraph_chunk,
     short_hash,
     slugify,
     split_markdown,
+    split_markdown_paragraphs,
+    split_sentences,
 )
 from agentic_rag.ingestion.url.chunking.markdown import (
     MarkdownChunk,
@@ -18,24 +23,27 @@ from agentic_rag.ingestion.url.chunking.markdown import (
     chunk_markdown_by_sections,
     split_markdown_into_sections,
 )
-from agentic_rag.ingestion.url.chunking.token import TiktokenChunkingStrategy
 
 __all__ = [
     "DEFAULT_CHUNK_OVERLAP",
     "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_PARAGRAPH_MAX_TOKENS",
+    "DEFAULT_PARAGRAPH_OVERLAP",
     "ChunkCandidate",
     "Chunker",
     "ChunkingInput",
     "MarkdownChunk",
     "MarkdownSection",
-    "TextChunkingStrategy",
-    "TiktokenChunkingStrategy",
     "build_chunk_id",
     "build_chunks",
     "chunk_markdown_by_sections",
+    "detect_lang",
     "normalize_space",
+    "paragraph_chunk",
     "short_hash",
     "slugify",
     "split_markdown",
     "split_markdown_into_sections",
+    "split_markdown_paragraphs",
+    "split_sentences",
 ]

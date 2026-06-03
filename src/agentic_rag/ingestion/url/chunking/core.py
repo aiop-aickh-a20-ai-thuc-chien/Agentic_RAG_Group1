@@ -2,30 +2,42 @@
 
 from __future__ import annotations
 
+import re
+from importlib import import_module
+from typing import Any, cast
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import (
-    DEFAULT_CHUNK_OVERLAP,
-    DEFAULT_CHUNK_SIZE,
-    ChunkingInput,
-    TextChunkingStrategy,
     build_chunk_id,
     normalize_space,
     short_hash,
     slugify,
-    split_markdown,
-    split_text_with_strategy,
 )
+from agentic_rag.ingestion.chunking import (
+    split_markdown as split_shared_markdown,
+)
+
+DEFAULT_CHUNK_SIZE = 512
+DEFAULT_CHUNK_OVERLAP = 1
+DEFAULT_PARAGRAPH_MAX_TOKENS = 512
+DEFAULT_PARAGRAPH_OVERLAP = 1
+_VIETNAMESE_MARKERS = set("ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
 
 __all__ = [
     "DEFAULT_CHUNK_OVERLAP",
     "DEFAULT_CHUNK_SIZE",
-    "TextChunkingStrategy",
+    "DEFAULT_PARAGRAPH_MAX_TOKENS",
+    "DEFAULT_PARAGRAPH_OVERLAP",
     "build_chunk_id",
     "build_chunks",
+    "detect_lang",
     "normalize_space",
+    "paragraph_chunk",
     "short_hash",
     "slugify",
     "split_markdown",
+    "split_markdown_paragraphs",
+    "split_sentences",
 ]
 
 
@@ -40,7 +52,6 @@ def build_chunks(
     fetched_at: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Build shared Chunk objects from normalized Markdown/text."""
 
@@ -51,17 +62,7 @@ def build_chunks(
 
     chunks: list[Chunk] = []
     content_hash = short_hash(text)
-    chunking_input = ChunkingInput(
-        markdown=text,
-        source_type=source_type,
-        metadata={"section": section, "source": source},
-    )
-    text_chunks = split_text_with_strategy(
-        chunking_input,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        chunking_strategy=chunking_strategy,
-    )
+    text_chunks = _split_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     for index, chunk_text in enumerate(text_chunks, start=1):
         chunks.append(
             Chunk(
@@ -78,26 +79,186 @@ def build_chunks(
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "chunk_index": index,
-                    "chunking_method": _chunking_method(chunking_strategy),
-                    "chunking_provider": _chunking_provider(chunking_strategy),
-                    "chunking_model": _chunking_model(chunking_strategy),
                 },
             )
         )
     return chunks
 
 
-def _chunking_method(chunking_strategy: TextChunkingStrategy | None) -> str:
-    if chunking_strategy is None:
-        return "deterministic-character-overlap"
-    if chunking_strategy.provider == "tiktoken":
-        return "deterministic-token-overlap"
-    return "llm-assisted"
+def split_markdown(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """Split Markdown/text deterministically with word-boundary preference."""
+
+    return split_shared_markdown(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
-def _chunking_provider(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.provider
+def paragraph_chunk(
+    md_text: str,
+    *,
+    max_tokens: int = DEFAULT_PARAGRAPH_MAX_TOKENS,
+    overlap_paragraphs: int = DEFAULT_PARAGRAPH_OVERLAP,
+) -> list[dict[str, int | str]]:
+    """Split Markdown by paragraph boundaries using a token budget."""
+
+    if max_tokens <= 0:
+        raise ValueError("max_tokens must be greater than 0.")
+    if overlap_paragraphs < 0:
+        raise ValueError("overlap_paragraphs must be greater than or equal to 0.")
+
+    paragraphs = _split_markdown_paragraph_units(md_text, max_tokens=max_tokens)
+    chunks: list[dict[str, int | str]] = []
+    buffer: list[str] = []
+    buffer_tokens = 0
+
+    for paragraph in paragraphs:
+        paragraph_tokens = _count_tokens(paragraph)
+        if buffer and buffer_tokens + paragraph_tokens > max_tokens:
+            chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
+            buffer = buffer[-overlap_paragraphs:] if overlap_paragraphs else []
+            buffer_tokens = sum(_count_tokens(item) for item in buffer)
+
+        buffer.append(paragraph)
+        buffer_tokens += paragraph_tokens
+
+    if buffer:
+        chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
+
+    return chunks
 
 
-def _chunking_model(chunking_strategy: TextChunkingStrategy | None) -> str | None:
-    return None if chunking_strategy is None else chunking_strategy.model
+def detect_lang(text: str) -> str:
+    """Detect whether text is likely Vietnamese or English for sentence splitting."""
+
+    lowered = text.lower()
+    return "vi" if any(marker in lowered for marker in _VIETNAMESE_MARKERS) else "en"
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split text into multilingual sentences using pysbd when available."""
+
+    stripped_text = text.strip()
+    if not stripped_text:
+        return []
+
+    language = detect_lang(stripped_text)
+    try:
+        return _segment_with_pysbd(stripped_text, language)
+    except (ImportError, ModuleNotFoundError, RuntimeError, TypeError, ValueError, AttributeError):
+        if language != "en":
+            try:
+                return _segment_with_pysbd(stripped_text, "en")
+            except (
+                ImportError,
+                ModuleNotFoundError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+                AttributeError,
+            ):
+                pass
+    return _fallback_sentence_split(stripped_text)
+
+
+def split_markdown_paragraphs(
+    md_text: str,
+    *,
+    max_tokens: int = DEFAULT_PARAGRAPH_MAX_TOKENS,
+    overlap_paragraphs: int = DEFAULT_PARAGRAPH_OVERLAP,
+) -> list[str]:
+    """Return paragraph-based Markdown chunks."""
+
+    return [
+        str(chunk["text"])
+        for chunk in paragraph_chunk(
+            md_text,
+            max_tokens=max_tokens,
+            overlap_paragraphs=overlap_paragraphs,
+        )
+        if str(chunk["text"]).strip()
+    ]
+
+
+def _split_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
+    return split_markdown_paragraphs(
+        text,
+        max_tokens=chunk_size,
+        overlap_paragraphs=chunk_overlap,
+    )
+
+
+def _count_tokens(text: str) -> int:
+    try:
+        tiktoken = cast(Any, import_module("tiktoken"))
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except (ImportError, ModuleNotFoundError, RuntimeError, AttributeError):
+        return len(text.split())
+
+
+def _split_markdown_paragraph_units(md_text: str, *, max_tokens: int) -> list[str]:
+    paragraphs = [paragraph.strip() for paragraph in md_text.split("\n\n") if paragraph.strip()]
+    units: list[str] = []
+    for paragraph in paragraphs:
+        units.extend(_split_oversized_paragraph(paragraph, max_tokens=max_tokens))
+    return units
+
+
+def _split_oversized_paragraph(paragraph: str, *, max_tokens: int) -> list[str]:
+    if _count_tokens(paragraph) <= max_tokens:
+        return [paragraph]
+
+    sentences = split_sentences(paragraph)
+    if len(sentences) <= 1:
+        return _split_by_words(paragraph, max_tokens=max_tokens)
+
+    chunks: list[str] = []
+    buffer: list[str] = []
+    buffer_tokens = 0
+    for sentence in sentences:
+        sentence_tokens = _count_tokens(sentence)
+        if sentence_tokens > max_tokens:
+            if buffer:
+                chunks.append(" ".join(buffer).strip())
+                buffer = []
+                buffer_tokens = 0
+            chunks.extend(_split_by_words(sentence, max_tokens=max_tokens))
+            continue
+        if buffer and buffer_tokens + sentence_tokens > max_tokens:
+            chunks.append(" ".join(buffer).strip())
+            buffer = []
+            buffer_tokens = 0
+        buffer.append(sentence)
+        buffer_tokens += sentence_tokens
+
+    if buffer:
+        chunks.append(" ".join(buffer).strip())
+    return [chunk for chunk in chunks if chunk]
+
+
+def _split_by_words(text: str, *, max_tokens: int) -> list[str]:
+    words = text.split()
+    chunks: list[str] = []
+    buffer: list[str] = []
+    for word in words:
+        candidate = [*buffer, word]
+        if buffer and _count_tokens(" ".join(candidate)) > max_tokens:
+            chunks.append(" ".join(buffer))
+            buffer = [word]
+            continue
+        buffer = candidate
+    if buffer:
+        chunks.append(" ".join(buffer))
+    return chunks
+
+
+def _segment_with_pysbd(text: str, language: str) -> list[str]:
+    pysbd = cast(Any, import_module("pysbd"))
+    segmenter = pysbd.Segmenter(language=language, clean=True)
+    sentences = [sentence.strip() for sentence in segmenter.segment(text) if sentence.strip()]
+    return sentences or [text]
+
+
+def _fallback_sentence_split(text: str) -> list[str]:
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?\u3002\uff01\uff1f])\s+", text)
+    ]
+    return [sentence for sentence in sentences if sentence] or [text]

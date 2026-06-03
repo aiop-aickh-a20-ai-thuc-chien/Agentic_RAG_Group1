@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,15 +19,26 @@ from agentic_rag.ingestion.url.artifact import (
     persist_ingestion_artifacts,
 )
 from agentic_rag.ingestion.url.chunking import (
-    TextChunkingStrategy,
+    build_chunk_id,
     build_chunks,
+    chunk_markdown_by_sections,
     normalize_space,
     short_hash,
 )
 from agentic_rag.ingestion.url.extractor import extract_markdown_with_trafilatura
 from agentic_rag.ingestion.url.parser import ParsedHtml, parse_html
 
-_USER_AGENT = "AgenticRAGGroup1/0.1"
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0 Safari/537.36 AgenticRAGGroup1/0.1"
+)
+_REQUEST_HEADERS = {
+    "User-Agent": _USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://vinfastauto.com/",
+}
 _PARSER_NAME = "builtin-html-parser"
 _TRAFILATURA_PARSER_NAME = "trafilatura-markdown+builtin-html-parser"
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -53,7 +66,6 @@ def load_url_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
@@ -62,7 +74,6 @@ def load_url_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     ).chunks
 
 
@@ -72,7 +83,6 @@ def load_url_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> LoadedUrlDocument:
     """Fetch, clean, chunk, and expose URL ingestion artifacts."""
 
@@ -88,7 +98,6 @@ def load_url_with_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     )
 
 
@@ -102,7 +111,6 @@ def load_html_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "html_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk one HTML document into shared Chunk objects."""
 
@@ -115,7 +123,6 @@ def load_html_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        chunking_strategy=chunking_strategy,
     ).chunks
 
 
@@ -129,7 +136,6 @@ def load_html_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "html_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> LoadedUrlDocument:
     """Clean and chunk one HTML document while exposing persisted artifacts."""
 
@@ -148,20 +154,16 @@ def load_html_with_artifacts(
         parsed_sections="\n\n".join(section.text for section in parsed.sections),
     )
 
-    chunks: list[Chunk] = []
-    for section in parsed.sections:
-        chunks.extend(
-            build_chunks(
-                text=section.text,
-                source=source,
-                source_type="url" if source_url else "html",
-                section=section.heading,
-                url=source_url,
-                title=parsed.title,
-                fetched_at=fetched_at,
-                chunking_strategy=chunking_strategy,
-            )
-        )
+    source_type = "url" if source_url else "html"
+    cleaned_markdown = _clean_markdown_noise(parsed_markdown)
+    chunks = _build_markdown_aware_chunks(
+        markdown=cleaned_markdown,
+        source=source,
+        source_type=source_type,
+        url=source_url,
+        title=parsed.title,
+        fetched_at=fetched_at,
+    )
     chunks = _with_html_metadata(
         chunks,
         original_url=original_url,
@@ -180,7 +182,7 @@ def load_html_with_artifacts(
         parser=parser_name,
         run_id=run_id,
         created_at=fetched_at,
-        markdown=parsed_markdown,
+        markdown=cleaned_markdown,
         chunks=chunks,
         page_metadata=parsed.metadata,
         assets=parsed.assets,
@@ -195,7 +197,6 @@ def load_text_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "text_ingestion",
-    chunking_strategy: TextChunkingStrategy | None = None,
 ) -> list[Chunk]:
     """Clean and chunk plain text into shared Chunk objects."""
 
@@ -216,7 +217,6 @@ def load_text_chunks(
         url=None,
         title=None,
         fetched_at=fetched_at,
-        chunking_strategy=chunking_strategy,
     )
     persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
@@ -238,7 +238,7 @@ def _fetch_url(url: str) -> _FetchedPage:
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
         raise ValueError("URL ingestion requires an absolute http or https URL.")
 
-    request = Request(normalized_url, headers={"User-Agent": _USER_AGENT})
+    request = Request(normalized_url, headers=_REQUEST_HEADERS)
     try:
         with urlopen(request, timeout=20) as response:
             content_type = response.headers.get_content_type()
@@ -292,7 +292,99 @@ def _extract_markdown(
         return fallback_markdown, _PARSER_NAME
     if trafilatura_markdown is None:
         return fallback_markdown, _PARSER_NAME
+    if not _has_markdown_heading(trafilatura_markdown) and _has_markdown_heading(fallback_markdown):
+        return fallback_markdown, _PARSER_NAME
     return trafilatura_markdown, _TRAFILATURA_PARSER_NAME
+
+
+def _has_markdown_heading(markdown: str) -> bool:
+    return any(re.match(r"^#{1,6}(?!#)\s+\S", line.strip()) for line in markdown.splitlines())
+
+
+def _build_markdown_aware_chunks(
+    *,
+    markdown: str,
+    source: str,
+    source_type: str,
+    url: str | None,
+    title: str | None,
+    fetched_at: str,
+) -> list[Chunk]:
+    content_hash = short_hash(markdown)
+    section_indexes: dict[str, int] = defaultdict(int)
+    chunks: list[Chunk] = []
+    for markdown_chunk in chunk_markdown_by_sections(markdown):
+        section = markdown_chunk.section or "main"
+        section_indexes[section] += 1
+        chunk_index = section_indexes[section]
+        chunks.append(
+            Chunk(
+                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
+                text=markdown_chunk.text,
+                metadata={
+                    "source": source,
+                    "source_type": source_type,
+                    "file_name": None,
+                    "url": url,
+                    "page": None,
+                    "section": section,
+                    "section_level": markdown_chunk.section_level,
+                    "section_path": list(markdown_chunk.section_path),
+                    "title": title,
+                    "fetched_at": fetched_at,
+                    "content_hash": content_hash,
+                    "chunk_index": chunk_index,
+                    "chunk_token_count": markdown_chunk.chunk_token_count,
+                    "chunking_method": "hybrid-markdown-aware-token-overlap",
+                    "semantic_unit": markdown_chunk.semantic_unit,
+                },
+            )
+        )
+    return chunks
+
+
+def _clean_markdown_noise(markdown: str) -> str:
+    """Strengthen noise filtering for common web UI boilerplate (config, cookies, legal)."""
+    cleaned_lines: list[str] = []
+    noise_line_patterns = (
+        r"gtm\.js",
+        r"googletagmanager",
+        r"dataLayer",
+        r"^\s*function\s*\(",
+        r"^\s*window\.",
+        r"Cookie Policy",
+        r"Privacy Policy",
+        r"Terms of Use",
+        r"Legal Disclaimer",
+    )
+    noise_line_re = re.compile("|".join(noise_line_patterns), flags=re.IGNORECASE)
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if noise_line_re.search(stripped):
+            continue
+        if _looks_like_json_config_line(stripped):
+            continue
+        cleaned_lines.append(line)
+    cleaned = "\n".join(cleaned_lines)
+    cleaned = re.sub(r"\n\s*\n", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _looks_like_json_config_line(line: str) -> bool:
+    if not (line.startswith("{") and line.endswith("}")):
+        return False
+    lowered = line.lower()
+    config_markers = (
+        '"url"',
+        '"route"',
+        '"api"',
+        '"config"',
+        '"token"',
+        '"session"',
+        '"cookie"',
+        '"data"',
+    )
+    return any(marker in lowered for marker in config_markers)
 
 
 def _persist_html_debug_artifacts(
