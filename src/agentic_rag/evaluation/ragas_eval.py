@@ -77,7 +77,8 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
         )
 
         # Convert result back to list of dicts for each row
-        result_df = result.to_pandas()  # type: ignore[union-attr]
+        result_any: Any = result
+        result_df = result_any.to_pandas()
         scores_list = []
 
         for _, row in result_df.iterrows():
