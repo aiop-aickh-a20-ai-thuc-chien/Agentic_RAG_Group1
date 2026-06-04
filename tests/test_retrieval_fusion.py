@@ -462,10 +462,11 @@ def test_build_evidence_context_formats_rank_source_location_chunk_and_text() ->
     )
 
     assert context.splitlines() == [
-        "[1] source=warranty.pdf; page=12; chunk_id=pdf-1; "
-        "score=0.500000; text=Pin cao ap duoc bao hanh 8 nam.",
-        "[2] source=https://example.com/warranty; section=main; chunk_id=url-1; "
-        "score=0.250000; text=Noi dung chinh tu website.",
+        "[1] source=warranty.pdf; page=12; metadata=page_type=pdf, price_type=unknown;"
+        " chunk_id=pdf-1; score=0.500000; text=Pin cao ap duoc bao hanh 8 nam.",
+        "[2] source=https://example.com/warranty; section=main;"
+        " metadata=page_type=url, price_type=unknown;"
+        " chunk_id=url-1; score=0.250000; text=Noi dung chinh tu website.",
     ]
 
 

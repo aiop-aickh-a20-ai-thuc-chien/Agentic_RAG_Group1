@@ -3,10 +3,10 @@ from typing import Any
 
 import pytest
 
+from agentic_rag.agent.graph import AgentResult
 from agentic_rag.core.contracts import Answer, Chunk, Citation, SearchResult
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
 from agentic_rag.evaluation.runner import EvaluationRunner
-from agentic_rag.generation.answering import GenerationResult
 
 EVALUATION_HEADERS = [
     "id",
@@ -105,39 +105,29 @@ def test_evaluation_runner_populates_outputs_and_metrics(
         SearchResult(chunk=chunk_c, score=0.5, rank=2, retriever="rerank"),
     ]
 
-    def fake_evidence_for_question(
-        *,
-        question: str,
-    ) -> tuple[list[SearchResult], str]:
-        return evidence_chunks, "context"
-
-    def fake_generate_answer_with_trace(
-        *,
-        question: str,
-        evidence_context: str,
-        evidence_chunks: list[SearchResult],
-    ) -> GenerationResult:
+    def fake_run_agent(*, provider: Any, question: str, **_: Any) -> AgentResult:
         if "co phieu" in question:
-            return GenerationResult(
+            return AgentResult(
                 answer=Answer(answer="Khong co trong tai lieu.", status="not_found"),
-                trace={},
+                evidence_chunks=[],
+                queries_tried=[question],
+                steps=[],
             )
-        return GenerationResult(
+        return AgentResult(
             answer=Answer(
                 answer="Pin duoc bao hanh 8 nam.",
                 status="answered",
                 citations=[Citation(source="warranty.pdf", chunk_id="chunk-a", page=1)],
             ),
-            trace={},
+            evidence_chunks=evidence_chunks,
+            queries_tried=[question],
+            steps=[],
         )
 
+    monkeypatch.setattr("agentic_rag.agent.graph.run_agent", fake_run_agent)
     monkeypatch.setattr(
-        "agentic_rag.evaluation.runner.evidence_for_question",
-        fake_evidence_for_question,
-    )
-    monkeypatch.setattr(
-        "agentic_rag.evaluation.runner.generate_answer_with_trace",
-        fake_generate_answer_with_trace,
+        "agentic_rag.integrations.local_pdf.providers.LocalPdfEvidenceProvider.from_env",
+        classmethod(lambda cls: None),
     )
 
     EvaluationRunner(str(input_path), str(output_path)).run()
