@@ -20,6 +20,9 @@ dependencies = [
     "trafilatura>=2.0.0,<3",
     "turbovec>=0.7.0",
     "uvicorn>=0.30.0,<1",
+    "langchain-community>=0.4.2",
+    "ragas>=0.2",
+    "langchain-google-vertexai>=3.2.3",
 ]
 
 [project.optional-dependencies]
@@ -94,3 +97,7 @@ module = [
     "langsmith.*",
 ]
 follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+ignore_missing_imports = true

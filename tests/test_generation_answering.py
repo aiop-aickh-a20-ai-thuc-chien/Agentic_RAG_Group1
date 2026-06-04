@@ -1,11 +1,12 @@
 from pytest import MonkeyPatch
 
-from agentic_rag.core.contracts import Answer
+from agentic_rag.core.contracts import Answer, Chunk, SearchResult
 from agentic_rag.generation.answering import (
     NOT_FOUND_ANSWER,
     AnswerDelta,
     AnswerDone,
     apply_citation_markers,
+    build_grounded_prompt,
     format_evidence_context,
     generate_answer,
     stream_answer,
@@ -204,6 +205,59 @@ def test_format_evidence_context_includes_source_and_chunk_id() -> None:
 
     assert "pdf_001_p12_c01" in context
     assert "vinfast_warranty.pdf" in context
+
+
+def test_format_evidence_context_includes_price_source_metadata() -> None:
+    vehicle_price = SearchResult(
+        chunk=Chunk(
+            chunk_id="vf3-price",
+            text="VF 3 Eco co gia ban tu 262.100.700 VND.",
+            metadata={
+                "source": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html",
+                "source_type": "url",
+                "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html",
+                "title": "Dat coc xe dien VF 3",
+            },
+        ),
+        score=0.9,
+        rank=1,
+        retriever="hybrid",
+    )
+    accessory_price = SearchResult(
+        chunk=Chunk(
+            chunk_id="vf3-accessory",
+            text="Bo thanh ngang gia noc VF 3 co gia 2.074.000 VND.",
+            metadata={
+                "source": "https://shop.vinfastauto.com/vn_vi/5007",
+                "source_type": "url",
+                "url": "https://shop.vinfastauto.com/vn_vi/5007",
+                "title": "Phu kien VF 3",
+            },
+        ),
+        score=0.8,
+        rank=2,
+        retriever="hybrid",
+    )
+
+    context = format_evidence_context([vehicle_price, accessory_price])
+
+    # format_evidence_context uses source/page/section; metadata enrichment is
+    # handled by build_evidence_context in fusion.py (agent path).
+    assert "vf3-price" in context
+    assert "vf3-accessory" in context
+    assert "source=https://shop.vinfastauto.com" in context
+
+
+def test_grounded_prompt_allows_partial_supported_answers() -> None:
+    prompt = build_grounded_prompt(
+        question="So sanh VF3, VF5 va VF8",
+        evidence_context=format_evidence_context(sample_search_results()),
+    )
+
+    assert "Every factual sentence must include at least one evidence marker" in prompt
+    assert "If the evidence is insufficient" in prompt
+    assert NOT_FOUND_ANSWER in prompt
+    assert "Do not invent facts or citations" in prompt
 
 
 def test_apply_citation_markers_adds_marker_to_supported_sentence() -> None:

@@ -61,6 +61,7 @@ type ChunkHighlight = {
 
 const API_URL =
   process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000";
+const SOURCE_DEBUG_CACHE_PREFIX = "agentic-rag:source-debug:";
 const CHUNK_HIGHLIGHT_STYLES: ChunkHighlightStyle[] = [
   {
     badge: "bg-amber-100 text-amber-800 dark:bg-amber-300/18 dark:text-amber-100",
@@ -115,7 +116,14 @@ export default function SourceDebugPage() {
 
     async function loadDebug() {
       if (!documentId) return;
-      setIsLoading(true);
+
+      const cachedDebug = readCachedSourceDebug(documentId);
+      if (cachedDebug) {
+        setDebug(cachedDebug);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
       setError("");
 
       try {
@@ -127,11 +135,12 @@ export default function SourceDebugPage() {
           throw new Error(`Không lấy được debug source: ${response.status}`);
         }
         const payload = (await response.json()) as SourceDebugResponse;
+        writeCachedSourceDebug(documentId, payload);
         if (!cancelled) {
           setDebug(payload);
         }
       } catch (loadError) {
-        if (!cancelled) {
+        if (!cancelled && !readCachedSourceDebug(documentId)) {
           setError(sourceErrorMessage(loadError));
           setDebug(null);
         }
@@ -604,7 +613,11 @@ function buildChunkHighlights(chunkInput: string, chunks: SourceChunk[]): ChunkH
 
   return chunks.map((result, index) => {
     const style = CHUNK_HIGHLIGHT_STYLES[index % CHUNK_HIGHLIGHT_STYLES.length];
-    const normalizedChunk = normalizeForRange(result.chunk.text).text.trim();
+    const chunkTextForMapping =
+      typeof result.chunk.metadata?.raw_text === "string" && result.chunk.metadata.raw_text.trim()
+        ? result.chunk.metadata.raw_text
+        : result.chunk.text;
+    const normalizedChunk = normalizeForRange(chunkTextForMapping).text.trim();
     let start = -1;
     let end = -1;
 
@@ -744,6 +757,36 @@ function formatDebugValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return JSON.stringify(value);
+}
+
+function readCachedSourceDebug(documentId: string): SourceDebugResponse | null {
+  if (typeof window === "undefined" || !documentId) return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(sourceDebugCacheKey(documentId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SourceDebugResponse;
+    if (parsed.document_id !== documentId || !Array.isArray(parsed.chunks)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSourceDebug(documentId: string, debug: SourceDebugResponse) {
+  if (typeof window === "undefined" || !documentId) return;
+
+  try {
+    window.sessionStorage.setItem(sourceDebugCacheKey(documentId), JSON.stringify(debug));
+  } catch {
+    // Large debug payloads can exceed sessionStorage quota; the page still works without cache.
+  }
+}
+
+function sourceDebugCacheKey(documentId: string): string {
+  return `${SOURCE_DEBUG_CACHE_PREFIX}${documentId}`;
 }
 
 function sourceErrorMessage(error: unknown): string {

@@ -9,6 +9,7 @@ from functools import lru_cache
 from typing import Protocol, cast
 
 from agentic_rag.core.contracts import SearchResult
+from agentic_rag.retrieval.evidence_metadata import format_prompt_metadata
 from agentic_rag.retrieval.fusion_strategies import (
     DEFAULT_BM25_WEIGHT,
     DEFAULT_DENSE_WEIGHT,
@@ -164,9 +165,10 @@ def build_evidence_context(evidence_chunks: list[SearchResult]) -> str:
         else:
             section = _metadata_text(metadata, "section")
         location = _format_location(page=page, section=section)
+        prompt_metadata = format_prompt_metadata(metadata)
         text = _normalize_text(result.chunk.text)
         lines.append(
-            f"[{result.rank}] source={source}{location}; "
+            f"[{result.rank}] source={source}{location}{prompt_metadata}; "
             f"chunk_id={result.chunk.chunk_id}; score={result.score:.6f}; text={text}"
         )
 

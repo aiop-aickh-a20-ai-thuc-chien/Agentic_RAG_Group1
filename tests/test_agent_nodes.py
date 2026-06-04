@@ -221,6 +221,22 @@ def test_rerank_node_multi_group_per_group_rerank() -> None:
     assert "vf3_a" in chunk_ids
 
 
+def test_rerank_node_multi_group_reads_top_k_from_env(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_RERANK_MULTI_TOP_K", "2")  # type: ignore[attr-defined]
+    docs = [
+        _result_for_query("vf7_a", 0.99, "VF 7 info", 0),
+        _result_for_query("vf7_b", 0.98, "VF 7 info", 0),
+        _result_for_query("vf7_c", 0.97, "VF 7 info", 0),
+        _result_for_query("vf3_a", 0.96, "VF 3 info", 1),
+        _result_for_query("vf3_b", 0.95, "VF 3 info", 1),
+        _result_for_query("vf3_c", 0.94, "VF 3 info", 1),
+    ]
+    update = rerank_node(_base_state(fused_results=docs))
+    groups = update["trace"][0]["groups"]
+    assert [group["kept"] for group in groups] == [2, 2]
+    assert len(update["relevant_docs"]) == 4
+
+
 def test_rerank_node_empty() -> None:
     update = rerank_node(_base_state(fused_results=[]))
     assert update["relevant_docs"] == []

@@ -22,10 +22,10 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
         A list of dicts containing the scores for each row.
     """
     try:
-        from datasets import Dataset  # type: ignore[import-not-found]
+        from datasets import Dataset
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-        from ragas import evaluate  # type: ignore[import-not-found]
-        from ragas.metrics import (  # type: ignore[import-not-found]
+        from ragas import evaluate
+        from ragas.metrics import (
             answer_relevancy,
             context_precision,
             context_recall,
@@ -77,7 +77,8 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
         )
 
         # Convert result back to list of dicts for each row
-        result_df = result.to_pandas()
+        result_any: Any = result
+        result_df = result_any.to_pandas()
         scores_list = []
 
         for _, row in result_df.iterrows():

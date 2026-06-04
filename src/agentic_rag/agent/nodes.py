@@ -37,9 +37,11 @@ except ImportError:
 
 AGENT_MAX_STEPS_ENV = "AGENT_MAX_STEPS"
 AGENT_RERANK_FINAL_TOP_K_ENV = "AGENT_RERANK_FINAL_TOP_K"
+AGENT_RERANK_MULTI_TOP_K_ENV = "AGENT_RERANK_MULTI_TOP_K"
 AGENT_RETRIEVE_WORKERS_ENV = "AGENT_RETRIEVE_WORKERS"
 _DEFAULT_MAX_STEPS = 3
 _DEFAULT_RERANK_FINAL_TOP_K = 8
+_DEFAULT_RERANK_MULTI_TOP_K = 5
 _DEFAULT_RETRIEVE_WORKERS = 3
 
 
@@ -87,11 +89,13 @@ def _generate(
     question: str,
     evidence_context: str,
     evidence_chunks: list[SearchResult],
+    original_question: str | None = None,
 ) -> Any:
     return generate_answer_with_trace(
         question=question,
         evidence_context=evidence_context,
         evidence_chunks=evidence_chunks,
+        original_question=original_question,
     )
 
 
@@ -210,7 +214,7 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
 
     query_groups = _group_by_retrieval_query(raw_docs)
     is_multi = len(query_groups) > 1
-    top_k = 5 if is_multi else _configured_rerank_final_top_k()
+    top_k = _configured_rerank_multi_top_k() if is_multi else _configured_rerank_final_top_k()
 
     reranked, rerank_meta = _rerank_per_query_groups(query_groups, top_k_per_group=top_k)
     return {
@@ -325,7 +329,9 @@ def generate_node(state: AgentState) -> dict[str, Any]:
     """Generate grounded answer from already-reranked relevant_docs."""
     docs = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
     evidence_context = build_evidence_context(docs)
-    result = _generate(_effective_question(state), evidence_context, docs)
+    result = _generate(
+        _effective_question(state), evidence_context, docs, original_question=state["question"]
+    )
 
     return {
         "answer": result.answer,
@@ -549,3 +555,14 @@ def _configured_rerank_final_top_k() -> int:
         return v if v > 0 else _DEFAULT_RERANK_FINAL_TOP_K
     except ValueError:
         return _DEFAULT_RERANK_FINAL_TOP_K
+
+
+def _configured_rerank_multi_top_k() -> int:
+    raw = os.getenv(AGENT_RERANK_MULTI_TOP_K_ENV)
+    if raw is None:
+        return _DEFAULT_RERANK_MULTI_TOP_K
+    try:
+        v = int(raw)
+        return v if v > 0 else _DEFAULT_RERANK_MULTI_TOP_K
+    except ValueError:
+        return _DEFAULT_RERANK_MULTI_TOP_K

@@ -105,6 +105,7 @@ def generate_answer_with_trace(
     question: str,
     evidence_context: str,
     evidence_chunks: list[SearchResult],
+    original_question: str | None = None,
 ) -> GenerationResult:
     """Generate a grounded answer and return trace details for debugging."""
 
@@ -146,7 +147,9 @@ def generate_answer_with_trace(
             ),
         )
 
-    prompt = build_grounded_prompt(question=question, evidence_context=context)
+    prompt = build_grounded_prompt(
+        question=question, evidence_context=context, original_question=original_question
+    )
     client = configured_llm_client()
     llm_source = "configured_llm" if client else "deterministic_fallback"
     answer_text = _traced_complete(prompt, client) if client else _fallback_answer(usable_evidence)
@@ -398,7 +401,9 @@ def validate_answer_with_citations(
     return True
 
 
-def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
+def build_grounded_prompt(
+    *, question: str, evidence_context: str, original_question: str | None = None
+) -> str:
     """Build a prompt that constrains the LLM to retrieved evidence."""
 
     return (
@@ -414,7 +419,10 @@ def build_grounded_prompt(*, question: str, evidence_context: str) -> str:
         "</evidence_context>\n"
         "</context>\n\n"
         "<instructions>\n"
-        "- Answer in Vietnamese.\n"
+        "- IMPORTANT: The user's original question is: \""
+        f'{original_question.strip() if original_question else question.strip()}". '
+        "Detect the language of this question and write your entire answer in that same language. "
+        "English → English. Vietnamese → Vietnamese. Never mix languages.\n"
         "- Be thorough and complete: cover all entities, aspects, or items mentioned "
         "in the question. Do not stop after the first relevant fact.\n"
         "- For comparison or multi-entity questions, address each entity separately "
