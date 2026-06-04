@@ -228,12 +228,16 @@ behind JS interactions, so ingestion now attempts a narrow probe before chunking
 
 2. **Connected probe output to chunking**
    - `crawler.py` now returns optional `probe_markdown`.
-   - `loader.py` appends probe Markdown before cleanup/chunking.
-   - Result: `parsed.md` and `chunks.jsonl` can include interactive state such
-     as:
-     - `VF 9 Plus tuy chon 7 cho`: `1.699.000.000 VND`
-     - `VF 9 Eco`: `1.499.000.000 VND`
-     - `Mau nang cao`: `+ 12.000.000 VND`
+- `loader.py` appends probe Markdown before cleanup/chunking.
+- Result: `parsed.md` and `chunks.jsonl` can include interactive state such
+  as:
+  - `VF 9 Plus tuy chon 7 cho`: `1.699.000.000 VND`
+  - `VF 9 Eco`: `1.499.000.000 VND`
+  - `Mau nang cao`: `+ 12.000.000 VND`
+- Probe records are split with H3 headings per variant so each selectable state
+  can become its own chunk/section instead of one large mixed chunk.
+- Probe also captures and deduplicates visible configurator notes containing
+  `NEDC`/range disclaimer text so human review can inspect that evidence.
 
 3. **Demo app support**
    - Updated `guide/demo/url-ingestion-review-app` with a `Probe` tab.
@@ -257,3 +261,38 @@ behind JS interactions, so ingestion now attempts a narrow probe before chunking
   Markdown when a shared contract is agreed.
 - Keep the probe optional and narrow so normal article/listing ingestion remains
   stable.
+
+## [2026-06-04] Hotfix: Chunk Metadata for Retrieval Review
+
+This update improves chunk review quality without changing the shared `Chunk`
+contract.
+
+### Summary of Changes
+
+1. **Moved search aliases out of chunk text**
+   - Removed the prepended text line like
+     `Search aliases: VF9, VF9, VF9, VF9, VF 9...`.
+   - Aliases now live in `Chunk.metadata["search_aliases"]`.
+   - Reason: repeating aliases inside many chunks makes those chunks look too
+     similar and can pollute retrieval/evaluation.
+
+2. **Added chunk continuation metadata**
+   - Added `chunk_group_id`, `chunk_group_index`, `chunk_group_size`,
+     `previous_chunk_id`, `next_chunk_id`, `is_continuation`, and
+     `continues_to_next`.
+   - This lets reviewers know whether a chunk was cut from a longer section and
+     how to follow adjacent chunks.
+
+3. **Added image reference metadata**
+   - Chunks now include `image_reference_count` and `image_references`.
+   - Image references are selected by alt/title overlap with chunk text when
+     possible.
+   - This gives evaluation a visible image reference signal without repeating
+     alt text heavily inside `chunk.text`.
+
+### Notes
+
+- Retrieval can still use aliases later if it is updated to read metadata.
+- Current ingestion keeps `chunk.text` cleaner and closer to actual evidence.
+- A future multimodal contract can promote `image_references` into a shared
+  first-class evidence/reference structure.

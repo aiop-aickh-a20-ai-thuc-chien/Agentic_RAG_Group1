@@ -177,8 +177,10 @@ def load_url_with_artifacts(
     if not child_documents:
         return loaded
 
-    all_chunks = _dedupe_chunks(
-        [*loaded.chunks, *(chunk for document in child_documents for chunk in document.chunks)]
+    all_chunks = _with_chunk_adjacency(
+        _dedupe_chunks(
+            [*loaded.chunks, *(chunk for document in child_documents for chunk in document.chunks)]
+        )
     )
     all_markdown = "\n\n".join(
         document.markdown.strip() for document in [loaded, *child_documents] if document.markdown
@@ -268,7 +270,7 @@ def load_html_with_artifacts(
         crawler_error=crawler_error,
         parser_name=parser_name,
     )
-    chunks = _dedupe_chunks(chunks)
+    chunks = _with_chunk_adjacency(_dedupe_chunks(chunks))
     artifacts = persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
         input_type="url" if source_url else "html",
@@ -508,11 +510,11 @@ def _build_markdown_aware_chunks(
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
-        chunk_text = _append_search_aliases(
-            markdown_chunk.text,
-            title=title,
-            source=source,
+        chunk_text = markdown_chunk.text
+        search_aliases = _vinfast_model_aliases(
+            " ".join(part for part in (title, chunk_text) if part)
         )
+        section_path = list(markdown_chunk.section_path)
         chunks.append(
             Chunk(
                 chunk_id=build_chunk_id(source_type, source, section, chunk_index),
@@ -525,12 +527,14 @@ def _build_markdown_aware_chunks(
                     "page": None,
                     "section": section,
                     "section_level": markdown_chunk.section_level,
-                    "section_path": list(markdown_chunk.section_path),
+                    "section_path": section_path,
                     "title": title,
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "dedupe_hash": short_hash(normalize_space(chunk_text)),
                     "chunk_index": chunk_index,
+                    "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
+                    "search_aliases": list(search_aliases),
                     "chunk_token_count": markdown_chunk.chunk_token_count,
                     "chunk_overlap_paragraphs": _URL_CHUNK_OVERLAP_PARAGRAPHS,
                     "chunking_method": "hybrid-markdown-aware-token-overlap",
@@ -541,15 +545,38 @@ def _build_markdown_aware_chunks(
     return chunks
 
 
-def _append_search_aliases(text: str, *, title: str | None, source: str) -> str:
-    del source
-    aliases = _vinfast_model_aliases(" ".join(part for part in (title, text) if part))
-    if not aliases:
-        return text
-    alias_line = "Search aliases: " + ", ".join(aliases)
-    if alias_line.lower() in text.lower():
-        return text
-    return f"{alias_line}\n\n{text}"
+def _with_chunk_adjacency(chunks: list[Chunk]) -> list[Chunk]:
+    grouped_indexes: dict[str, list[int]] = defaultdict(list)
+    for index, chunk in enumerate(chunks):
+        grouped_indexes[str(chunk.metadata.get("chunk_group_id", ""))].append(index)
+
+    updated_chunks = list(chunks)
+    for indexes in grouped_indexes.values():
+        group_size = len(indexes)
+        for position, chunk_index in enumerate(indexes):
+            chunk = updated_chunks[chunk_index]
+            previous_chunk_id = (
+                updated_chunks[indexes[position - 1]].chunk_id if position > 0 else None
+            )
+            next_chunk_id = (
+                updated_chunks[indexes[position + 1]].chunk_id
+                if position < group_size - 1
+                else None
+            )
+            updated_chunks[chunk_index] = chunk.model_copy(
+                update={
+                    "metadata": {
+                        **chunk.metadata,
+                        "chunk_group_index": position + 1,
+                        "chunk_group_size": group_size,
+                        "previous_chunk_id": previous_chunk_id,
+                        "next_chunk_id": next_chunk_id,
+                        "is_continuation": position > 0,
+                        "continues_to_next": next_chunk_id is not None,
+                    }
+                }
+            )
+    return updated_chunks
 
 
 def _vinfast_model_aliases(text: str) -> tuple[str, ...]:
@@ -775,6 +802,10 @@ def _with_html_metadata(
                     "published_at": parsed.metadata.published_at,
                     "description": parsed.metadata.description or parsed.metadata.og_description,
                     "asset_count": len(parsed.assets),
+                    "image_reference_count": sum(
+                        1 for asset in parsed.assets if asset.kind == "image"
+                    ),
+                    "image_references": _image_references_for_chunk(chunk.text, parsed),
                     "crawler": crawler,
                     "crawler_error": crawler_error,
                     "parser": parser_name,
@@ -783,6 +814,52 @@ def _with_html_metadata(
         )
         for chunk in chunks
     ]
+
+
+def _image_references_for_chunk(text: str, parsed: ParsedHtml) -> list[dict[str, str | None]]:
+    image_assets = [asset for asset in parsed.assets if asset.kind == "image"]
+    if not image_assets:
+        return []
+
+    references: list[dict[str, str | None]] = []
+    text_words = _reference_words(text)
+    for asset in image_assets:
+        reference_text = " ".join(part for part in (asset.alt, asset.title) if part)
+        reference_words = _reference_words(reference_text)
+        overlap = bool(text_words and reference_words and text_words.intersection(reference_words))
+        if not overlap and len(image_assets) > 3:
+            continue
+        reason = "alt_or_title_overlap" if overlap else "page_image_reference"
+        references.append(
+            {
+                "kind": asset.kind,
+                "url": asset.url,
+                "alt": asset.alt,
+                "title": asset.title,
+                "target_url": asset.target_url,
+                "reference_reason": reason,
+            }
+        )
+        if len(references) >= 5:
+            break
+    return references
+
+
+def _reference_words(text: str) -> set[str]:
+    stop_words = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "cua",
+        "cho",
+        "mau",
+        "hinh",
+        "anh",
+        "xe",
+        "vinfast",
+    }
+    return {word for word in re.findall(r"[a-zA-Z0-9]{3,}", text.lower()) if word not in stop_words}
 
 
 def _validate_http_url(url: str) -> None:

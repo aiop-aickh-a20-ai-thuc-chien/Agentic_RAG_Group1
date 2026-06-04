@@ -43,10 +43,16 @@ VINFAST_CONFIGURATOR_STATE_SCRIPT = """
         colors,
       };
     });
+  const notes = Array.from(new Set((document.body?.innerText || '')
+    .split(/\\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && /NEDC|quãng đường|quang duong/i.test(line))
+  ));
   return {
     kind: 'vinfast_car_deposit_configurator',
     modelId,
     pageUrl: window.location.href,
+    notes,
     editions,
   };
 }
@@ -113,28 +119,47 @@ def vinfast_configurator_state_to_markdown(state: dict[str, Any]) -> str | None:
         lines.extend([f"- Page URL: {page_url}", ""])
 
     for edition in editions:
-        if not isinstance(edition, dict):
-            continue
-        label = _text(edition.get("label")) or _text(edition.get("editionCode"))
-        base_price = _price_text(edition.get("basePriceFormatted"), edition.get("basePriceValue"))
-        if not label or not base_price:
-            continue
-        lines.append(f"- {label}: Giá xe kèm pin {base_price}.")
-        for color in _advanced_colors(edition):
-            color_label = _text(color.get("colorLabel")) or _text(color.get("colorCode"))
-            color_price = _price_text(color.get("priceFormatted"), color.get("priceValue"))
-            price_delta = _price_text(None, color.get("priceDelta"))
-            if not color_label or not color_price or not price_delta:
-                continue
-            lines.append(
-                f"  - {label} + {color_label}: Giá xe kèm pin {color_price} "
-                f"(màu nâng cao + {price_delta})."
-            )
+        if isinstance(edition, dict):
+            lines.extend(_edition_markdown_lines(edition, model_id=model_id))
+
+    notes = _unique_texts(state.get("notes"))
+    if notes:
+        lines.extend(["## VinFast configurator notes", ""])
+        for note in notes:
+            lines.append(f"- {note}")
 
     markdown = "\n".join(lines).strip()
-    if markdown.count("Giá xe kèm pin") == 0:
+    if markdown.count("Gia xe kem pin") == 0:
         return None
     return markdown
+
+
+def _edition_markdown_lines(edition: dict[str, Any], *, model_id: str) -> list[str]:
+    edition_code = _text(edition.get("editionCode"))
+    label = _text(edition.get("label")) or edition_code
+    base_price = _price_text(edition.get("basePriceFormatted"), edition.get("basePriceValue"))
+    if not label or not base_price:
+        return []
+
+    lines = [f"### {label}", ""]
+    if model_id and edition_code:
+        lines.append(f"- Probe source: window.carDeposit.products.{model_id}.{edition_code}.")
+    elif edition_code:
+        lines.append(f"- Probe source edition code: {edition_code}.")
+    lines.append("- Probe relation: this record represents one selectable configurator state.")
+    lines.append(f"- {label}: Gia xe kem pin {base_price}.")
+    for color in _advanced_colors(edition):
+        color_label = _text(color.get("colorLabel")) or _text(color.get("colorCode"))
+        color_price = _price_text(color.get("priceFormatted"), color.get("priceValue"))
+        price_delta = _price_text(None, color.get("priceDelta"))
+        if not color_label or not color_price or not price_delta:
+            continue
+        lines.append(
+            f"- {label} + {color_label}: Gia xe kem pin {color_price} "
+            f"(mau nang cao + {price_delta})."
+        )
+    lines.append("")
+    return lines
 
 
 def _advanced_colors(edition: dict[str, Any]) -> list[dict[str, Any]]:
@@ -156,15 +181,15 @@ def _price_text(formatted: object, raw_value: object) -> str:
     value = _number(raw_value)
     if value <= 0:
         return ""
-    return f"{value:,}".replace(",", ".") + " VNĐ"
+    return f"{value:,}".replace(",", ".") + " VND"
 
 
 def _normalize_vnd(value: str) -> str:
     normalized = " ".join(value.replace("\xa0", " ").split())
-    normalized = normalized.replace("VND", "VNĐ")
-    if normalized.endswith("VNĐ"):
+    normalized = normalized.replace("VNĐ", "VND")
+    if normalized.endswith("VND"):
         return normalized
-    return f"{normalized} VNĐ"
+    return f"{normalized} VND"
 
 
 def _number(value: object) -> int:
@@ -176,3 +201,18 @@ def _number(value: object) -> int:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _unique_texts(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    texts: list[str] = []
+    for item in value:
+        text = _text(item)
+        normalized = " ".join(text.split()).lower()
+        if not text or normalized in seen:
+            continue
+        seen.add(normalized)
+        texts.append(text)
+    return texts

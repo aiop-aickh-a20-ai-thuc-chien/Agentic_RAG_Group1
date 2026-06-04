@@ -19,6 +19,10 @@ def test_vinfast_configurator_state_to_markdown_preserves_variant_and_color_pric
         {
             "modelId": "Products-Car-VF9",
             "pageUrl": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9",
+            "notes": [
+                "Quang duong di chuyen duoc tinh toan dua tren ket qua kiem dinh NEDC.",
+                "Quang duong di chuyen duoc tinh toan dua tren ket qua kiem dinh NEDC.",
+            ],
             "editions": [
                 {
                     "editionCode": "NE3MV",
@@ -48,9 +52,13 @@ def test_vinfast_configurator_state_to_markdown_preserves_variant_and_color_pric
 
     assert markdown is not None
     assert "Probed Interactive State" in markdown
+    assert "### VF 9 Plus tuy chon 7 cho" in markdown
+    assert "window.carDeposit.products.Products-Car-VF9.NE3MV" in markdown
     assert "VF 9 Plus tuy chon 7 cho" in markdown
     assert "1.699.000.000" in markdown
     assert "1.711.000.000" in markdown
     assert "12.000.000" in markdown
+    assert markdown.count("Quang duong di chuyen") == 1
+    assert "VinFast configurator notes" in markdown
     assert "VF 9 Eco" in markdown
     assert "1.499.000.000" in markdown

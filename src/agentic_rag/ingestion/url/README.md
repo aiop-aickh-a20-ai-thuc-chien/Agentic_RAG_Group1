@@ -76,13 +76,28 @@ and appends chunkable Markdown such as:
 ```md
 ## VinFast configurator price options
 
+### VF 9 Plus tuy chon 7 cho
+
+- Probe source: window.carDeposit.products.Products-Car-VF9.NE3MV.
+- Probe relation: this record represents one selectable configurator state.
 - VF 9 Plus tuy chon 7 cho: Gia xe kem pin 1.699.000.000 VND.
-  - VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin 1.711.000.000 VND (mau nang cao + 12.000.000 VND).
+- VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin 1.711.000.000 VND (mau nang cao + 12.000.000 VND).
+
+### VF 9 Eco
+
+- Probe source: window.carDeposit.products.Products-Car-VF9.NE3LV.
+- Probe relation: this record represents one selectable configurator state.
 - VF 9 Eco: Gia xe kem pin 1.499.000.000 VND.
+
+## VinFast configurator notes
+
+- Quang duong ... NEDC ...
 ```
 
 This keeps retrieval/generation unchanged while giving RAG clearer chunks for
 interactive product state.
+The H3 headings make each variant become a separate section/chunk where possible,
+and the note section keeps repeated NEDC disclaimers deduped for review.
 
 ## Child Pages
 
@@ -120,10 +135,52 @@ The strategy is designed for Markdown:
 8. If sentence segmentation is unavailable, fall back to regex and word splitting.
 9. Add lightweight search aliases for VinFast model names such as `VF9`, `VF 9`,
    `VinFast VF9`, and `xe VF 9` so retrieval can match common multilingual query
-   forms without changing retrieval code.
+   forms without changing retrieval code. These aliases are stored in
+   `Chunk.metadata["search_aliases"]`, not prepended to `Chunk.text`, to avoid
+   making many chunks look artificially similar.
 
 This keeps chunks more useful for RAG than character slicing because headings,
 section paths, paragraphs, and sentence boundaries are less likely to be broken.
+
+Each chunk also records continuation metadata:
+
+- `chunk_group_id`: stable group for chunks from the same source and section path.
+- `chunk_group_index`: 1-based position inside that group.
+- `chunk_group_size`: total chunks in the group.
+- `previous_chunk_id`: previous chunk in the same group, when present.
+- `next_chunk_id`: next chunk in the same group, when present.
+- `is_continuation`: whether this chunk starts after an earlier chunk.
+- `continues_to_next`: whether this chunk has a following chunk.
+
+This lets reviewers and downstream RAG code understand whether a chunk is a
+standalone section or a continuation of a longer section.
+
+## Image References
+
+Image/PDF/iframe/object assets are kept in the manifest. For image review, URL
+chunks also receive `image_references` metadata when an image appears relevant to
+the chunk text through alt/title overlap.
+
+Example metadata:
+
+```json
+{
+  "image_reference_count": 1,
+  "image_references": [
+    {
+      "kind": "image",
+      "url": "https://example.edu/vf9-exterior.jpg",
+      "alt": "VF 9 exterior",
+      "title": "VF 9 body image",
+      "target_url": "https://example.edu/vf9-detail",
+      "reference_reason": "alt_or_title_overlap"
+    }
+  ]
+}
+```
+
+This avoids repeating image alt text inside chunk text while still giving human
+reviewers and evaluation scripts a clear reference signal.
 
 ## Price And Product Cleanup
 

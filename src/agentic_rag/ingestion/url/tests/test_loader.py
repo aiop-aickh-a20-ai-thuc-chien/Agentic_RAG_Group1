@@ -52,6 +52,85 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
     assert "tracking" not in chunks[0].text
 
 
+def test_load_html_chunks_stores_search_aliases_in_metadata_not_text() -> None:
+    chunks = load_html_chunks(
+        """
+        <html>
+          <head><title>VinFast VF 9</title></head>
+          <body>
+            <main>
+              <h1>VF 9</h1>
+              <p>Thong tin xe VF 9.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        source="https://example.edu/vf9",
+        source_url="https://example.edu/vf9",
+    )
+
+    assert len(chunks) == 1
+    assert "Search aliases:" not in chunks[0].text
+    assert "VF9" in chunks[0].metadata["search_aliases"]
+    assert "VinFast VF 9" in chunks[0].metadata["search_aliases"]
+
+
+def test_load_html_chunks_records_chunk_adjacency_for_split_sections() -> None:
+    long_markdown = "# Long Section\n\n" + "\n\n".join(
+        f"Paragraph {index} " + ("retrieval evidence " * 70) for index in range(12)
+    )
+
+    loaded = load_html_with_artifacts(
+        "<html><head><title>Long Page</title></head><body><h1>Long Section</h1></body></html>",
+        source="https://example.edu/long",
+        source_url="https://example.edu/long",
+        preferred_markdown=long_markdown,
+    )
+
+    assert len(loaded.chunks) > 1
+    first_chunk = loaded.chunks[0]
+    second_chunk = loaded.chunks[1]
+    assert first_chunk.metadata["chunk_group_size"] == len(loaded.chunks)
+    assert first_chunk.metadata["previous_chunk_id"] is None
+    assert first_chunk.metadata["next_chunk_id"] == second_chunk.chunk_id
+    assert first_chunk.metadata["continues_to_next"] is True
+    assert second_chunk.metadata["previous_chunk_id"] == first_chunk.chunk_id
+    assert second_chunk.metadata["is_continuation"] is True
+
+
+def test_load_html_chunks_adds_image_references_to_related_chunks() -> None:
+    chunks = load_html_chunks(
+        """
+        <html>
+          <body>
+            <main>
+              <h1>VF 9 Exterior</h1>
+              <p>VF 9 exterior image shows the vehicle body.</p>
+              <a href="/vf9-detail">
+                <img src="/vf9-exterior.jpg" alt="VF 9 exterior" title="VF 9 body image" />
+              </a>
+            </main>
+          </body>
+        </html>
+        """,
+        source="https://example.edu/vf9",
+        source_url="https://example.edu/vf9",
+    )
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["image_reference_count"] == 1
+    assert chunks[0].metadata["image_references"] == [
+        {
+            "kind": "image",
+            "url": "https://example.edu/vf9-exterior.jpg",
+            "alt": "VF 9 exterior",
+            "title": "VF 9 body image",
+            "target_url": "https://example.edu/vf9-detail",
+            "reference_reason": "alt_or_title_overlap",
+        }
+    ]
+
+
 def test_load_html_chunks_writes_debug_artifacts(tmp_path: Path) -> None:
     chunks = load_html_chunks(
         "<html><body><h1>Overview</h1><p>Debug content.</p></body></html>",
@@ -310,10 +389,18 @@ def test_load_url_chunks_includes_interactive_probe_markdown(
             probe_markdown=(
                 "# Probed Interactive State\n\n"
                 "## VinFast configurator price options\n\n"
+                "### VF 9 Plus tuy chon 7 cho\n\n"
+                "- Probe source: window.carDeposit.products.Products-Car-VF9.NE3MV.\n"
+                "- Probe relation: this record represents one selectable configurator state.\n"
                 "- VF 9 Plus tuy chon 7 cho: Gia xe kem pin 1.699.000.000 VND.\n"
-                "  - VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin "
+                "- VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin "
                 "1.711.000.000 VND (mau nang cao + 12.000.000 VND).\n"
-                "- VF 9 Eco: Gia xe kem pin 1.499.000.000 VND."
+                "\n### VF 9 Eco\n\n"
+                "- Probe source: window.carDeposit.products.Products-Car-VF9.NE3LV.\n"
+                "- Probe relation: this record represents one selectable configurator state.\n"
+                "- VF 9 Eco: Gia xe kem pin 1.499.000.000 VND.\n\n"
+                "## VinFast configurator notes\n\n"
+                "- Quang duong di chuyen duoc tinh toan dua tren ket qua kiem dinh NEDC."
             ),
         )
 
@@ -327,8 +414,11 @@ def test_load_url_chunks_includes_interactive_probe_markdown(
     assert "1.699.000.000" in loaded.markdown
     assert "1.499.000.000" in loaded.markdown
     assert "12.000.000" in loaded.markdown
+    assert "NEDC" in loaded.markdown
     assert any("1.699.000.000" in chunk.text for chunk in loaded.chunks)
     assert any("12.000.000" in chunk.text for chunk in loaded.chunks)
+    assert any(chunk.metadata["section"] == "VF 9 Plus tuy chon 7 cho" for chunk in loaded.chunks)
+    assert any(chunk.metadata["section"] == "VinFast configurator notes" for chunk in loaded.chunks)
 
 
 def test_load_url_chunks_falls_back_to_urllib_when_crawl4ai_fails(
