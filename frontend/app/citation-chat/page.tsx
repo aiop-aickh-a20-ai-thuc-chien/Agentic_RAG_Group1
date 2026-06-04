@@ -17,6 +17,7 @@ import {
   Moon,
   PanelRightOpen,
   RotateCcw,
+  Search,
   SearchCheck,
   ShieldCheck,
   Sun,
@@ -46,6 +47,7 @@ type AnswerResponse = {
   answer: string;
   status: "answered" | "not_found";
   citations: Citation[];
+  evidence_chunks?: SourceChunk[];
 };
 
 type ChatMessage = {
@@ -127,6 +129,7 @@ type UploadedSource = {
   mode: SourceMode;
   source?: string;
   sourceType?: string;
+  metadata?: Record<string, unknown>;
   totalChunks: number;
   chunks: SourceChunk[];
   uploadedAt: number;
@@ -147,9 +150,27 @@ type QueuedSource = {
   label: string;
 };
 
+class HttpRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(`${message}: ${status}`);
+    this.name = "HttpRequestError";
+    this.status = status;
+  }
+}
+
 type StreamEvent = {
   event: string;
   data: Record<string, unknown>;
+};
+
+type ChatPageCache = {
+  answer: AnswerResponse | null;
+  messages: ChatMessage[];
+  selectedCitationChunkId: string | null;
+  selectedDocumentIds: string[];
+  sourceMode: SourceMode;
 };
 
 const API_URL =
@@ -157,6 +178,7 @@ const API_URL =
 const URL_UPLOAD_CONCURRENCY = 8;
 const SOURCE_CACHE_KEY = "agentic-rag:uploaded-sources:v1";
 const SOURCE_MODE_KEY = "agentic-rag:source-mode:v1";
+const CHAT_STATE_CACHE_KEY = "agentic-rag:chat-state:v1";
 
 function createWelcomeMessage(): ChatMessage {
   return {
@@ -189,6 +211,7 @@ export default function CitationChatPage() {
   const [selectedCitationChunkId, setSelectedCitationChunkId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage()]);
   const [error, setError] = useState("");
+  const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const isDark = theme === "dark";
@@ -207,29 +230,72 @@ export default function CitationChatPage() {
     let cancelled = false;
 
     async function hydrateSources() {
-      if (uploadedSources.length) {
+      const cachedChatState = readCachedChatState();
+      const cachedSources = readCachedSources();
+      const cachedSelectedIds =
+        cachedChatState?.selectedDocumentIds ?? cachedSources.map((source) => source.documentId);
+
+      setSourceMode(cachedChatState?.sourceMode ?? readCachedSourceMode());
+      setUploadedSources(cachedSources);
+      setSelectedDocumentIds(cachedSelectedIds);
+      setAnswer(cachedChatState?.answer ?? null);
+      setSelectedCitationChunkId(cachedChatState?.selectedCitationChunkId ?? null);
+      setMessages(cachedChatState?.messages ?? [createWelcomeMessage()]);
+      if (cachedSources.length) {
         setSourceStatus("ready");
       }
 
       try {
-        const sourceList = await fetchSources(true);
+        const sourceList = await fetchSources();
         if (cancelled) return;
 
-        const restoredSources = sourceList.sources.map((source, index) =>
+        const metadataSources = sourceList.sources.map((source, index) =>
           uploadedSourceFromListItem(source, index),
         );
+        const restoredSources = mergeSourcesWithCachedChunks(metadataSources, cachedSources);
         setUploadedSources(restoredSources);
-        setSelectedDocumentIds(restoredSources.map((source) => source.documentId));
+        setSelectedDocumentIds((current) => {
+          const availableIds = new Set(restoredSources.map((source) => source.documentId));
+          const preserved = current.filter((id) => availableIds.has(id));
+          return preserved.length ? preserved : restoredSources.map((source) => source.documentId);
+        });
         if (restoredSources.length) {
           setSourceStatus("ready");
         }
+
+        restoredSources
+          .filter((source) => source.totalChunks > 0 && source.chunks.length === 0)
+          .forEach((source) => {
+            void fetchSourceChunks(source.documentId)
+              .then((payload) => {
+                if (cancelled) return;
+                setUploadedSources((current) =>
+                  current.map((item) =>
+                    item.documentId === payload.document_id
+                      ? {
+                          ...item,
+                          totalChunks: payload.total_chunks || payload.chunks.length,
+                          chunks: payload.chunks,
+                        }
+                      : item,
+                  ),
+                );
+              })
+              .catch(() => {
+                // Metadata is enough for selection; chunks can be retried lazily.
+              });
+          });
       } catch (hydrateError) {
-        if (!cancelled && !uploadedSources.length) {
+        if (!cancelled && !cachedSources.length) {
           setError(
             hydrateError instanceof Error
               ? hydrateError.message
               : "Khong tai lai duoc danh sach tai lieu.",
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setHasRestoredClientState(true);
         }
       }
     }
@@ -242,20 +308,27 @@ export default function CitationChatPage() {
   }, []);
 
   useEffect(() => {
+    if (!hasRestoredClientState) return;
     writeCachedSources(uploadedSources);
-  }, [uploadedSources]);
-
-  // Read stored tab after hydration (lazy init causes SSR mismatch)
-  useEffect(() => {
-    const stored = globalThis.localStorage?.getItem(SOURCE_MODE_KEY);
-    if (stored === "pdf" || stored === "url" || stored === "text") {
-      setSourceMode(stored);
-    }
-  }, []);
+  }, [hasRestoredClientState, uploadedSources]);
 
   useEffect(() => {
-    globalThis.localStorage?.setItem(SOURCE_MODE_KEY, sourceMode);
-  }, [sourceMode]);
+    if (!hasRestoredClientState) return;
+    writeCachedChatState({
+      answer,
+      messages,
+      selectedCitationChunkId,
+      selectedDocumentIds,
+      sourceMode,
+    });
+  }, [
+    answer,
+    hasRestoredClientState,
+    messages,
+    selectedCitationChunkId,
+    selectedDocumentIds,
+    sourceMode,
+  ]);
 
   const sourcePlaceholder = useMemo(() => {
     if (sourceMode === "url") return "https://example.com/chinh-sach";
@@ -352,6 +425,7 @@ export default function CitationChatPage() {
 
           if (streamEvent.event === "done") {
             const finalAnswer = streamEvent.data as AnswerResponse;
+            const finalEvidenceChunks = finalAnswer.evidence_chunks ?? selectedSourceChunks;
             setAnswer(finalAnswer);
             const firstCitation = visibleCitationItems(
               finalAnswer.citations,
@@ -362,7 +436,7 @@ export default function CitationChatPage() {
               content: finalAnswer.answer,
               status: finalAnswer.status,
               citations: finalAnswer.citations,
-              evidenceChunks: selectedSourceChunks,
+              evidenceChunks: finalEvidenceChunks,
             });
           }
         }
@@ -652,7 +726,7 @@ export default function CitationChatPage() {
               answer={answer}
               onSelectCitation={setSelectedCitationChunkId}
               selectedCitationChunkId={selectedCitationChunkId}
-              sourceChunks={selectedSourceChunks}
+              sourceChunks={answer?.evidence_chunks ?? selectedSourceChunks}
             />
           ) : null}
         </div>
@@ -901,6 +975,15 @@ function SourcePanel({
   uploadedSources: UploadedSource[];
 }) {
   const [queuedSources, setQueuedSources] = useState<QueuedSource[]>([]);
+  const [sourceSearch, setSourceSearch] = useState("");
+  const normalizedSourceSearch = normalizeSearchText(sourceSearch);
+  const filteredUploadedSources = uploadedSources.filter((source) =>
+    sourceMatchesSearch(source, normalizedSourceSearch),
+  );
+  const uploadedSourceIds = uploadedSources.map((source) => source.documentId);
+  const allSourcesSelected =
+    uploadedSourceIds.length > 0 &&
+    uploadedSourceIds.every((documentId) => selectedDocumentIds.includes(documentId));
 
   function resetSource() {
     setSourceStatus("idle");
@@ -954,6 +1037,7 @@ function SourcePanel({
       mode,
       source: uploaded.source ?? undefined,
       sourceType: uploaded.source_type ?? undefined,
+      metadata: {},
       totalChunks,
       chunks: sourceChunks.chunks,
       uploadedAt: Date.now(),
@@ -994,6 +1078,7 @@ function SourcePanel({
   async function processUrlQueue(urls: string[], items: QueuedSource[]) {
     let completed = 0;
     let failed = 0;
+    let visibleFailed = 0;
     let nextIndex = 0;
     setError("");
 
@@ -1011,6 +1096,12 @@ function SourcePanel({
           completed += 1;
         } catch (queueError) {
           failed += 1;
+          if (isHttpStatus(queueError, 502)) {
+            removeQueuedSource(item.id);
+            continue;
+          }
+
+          visibleFailed += 1;
           const message = sourceErrorMessage(queueError);
           updateQueuedSource(item.id, {
             status: "error",
@@ -1029,8 +1120,13 @@ function SourcePanel({
       setSourceStatus("ready");
       return;
     }
-    if (failed > 0) {
+    if (visibleFailed > 0) {
       setSourceStatus("error");
+      return;
+    }
+    if (failed > 0) {
+      setFileName("");
+      setSourceStatus("idle");
     }
   }
 
@@ -1113,6 +1209,10 @@ function SourcePanel({
         ? selectedDocumentIds.filter((id) => id !== documentId)
         : [...selectedDocumentIds, documentId],
     );
+  }
+
+  function toggleAllSourceSelection() {
+    setSelectedDocumentIds(allSourcesSelected ? [] : uploadedSourceIds);
   }
 
   return (
@@ -1234,12 +1334,21 @@ function SourcePanel({
       </Panel>
 
       <Panel className="flex min-h-0 flex-col">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="text-sm font-semibold">Tài liệu đang dùng</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
               {selectedDocumentIds.length} chọn
             </Badge>
+            {uploadedSources.length > 0 && (
+              <button
+                className="rounded-full border border-mint/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-mint transition hover:bg-mint/8 dark:border-emerald-300/24 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-emerald-300/10"
+                onClick={toggleAllSourceSelection}
+                type="button"
+              >
+                {allSourcesSelected ? "Bỏ chọn" : "Chọn tất cả"}
+              </button>
+            )}
             {uploadedSources.length > 0 && (
               <button
                 className="text-[11px] font-medium text-ink/40 transition hover:text-danger dark:text-slate-500 dark:hover:text-red-300"
@@ -1255,6 +1364,28 @@ function SourcePanel({
               </button>
             )}
           </div>
+        </div>
+        <div className="relative mb-3">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/38 dark:text-slate-500"
+            aria-hidden="true"
+          />
+          <input
+            className="h-9 w-full rounded-md border border-line bg-white/78 pl-9 pr-9 text-sm text-ink outline-none transition placeholder:text-ink/36 focus:border-mint focus:ring-2 focus:ring-mint/12 dark:border-white/14 dark:bg-slate-900/78 dark:text-slate-50 dark:placeholder:text-slate-500"
+            placeholder="Tìm tài liệu, URL, loại..."
+            value={sourceSearch}
+            onChange={(event) => setSourceSearch(event.target.value)}
+          />
+          {sourceSearch ? (
+            <button
+              aria-label="Xóa từ khóa tìm kiếm"
+              className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ink/42 transition hover:bg-paper hover:text-ink dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              onClick={() => setSourceSearch("")}
+              type="button"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
         <div className="max-h-[min(38vh,22rem)] min-h-0 space-y-2 overflow-y-auto pr-1">
           {uploadedSources.length || queuedSources.length ? (
@@ -1331,7 +1462,7 @@ function SourcePanel({
                 </article>
               ))}
 
-              {uploadedSources.map((source) => {
+              {filteredUploadedSources.map((source) => {
                 const selected = selectedDocumentIds.includes(source.documentId);
                 return (
                   <article
@@ -1355,19 +1486,16 @@ function SourcePanel({
                       type="button"
                     >
                       <span
-                        className="block truncate text-sm font-medium"
+                        className="line-clamp-2 break-words text-sm font-semibold leading-5 [overflow-wrap:anywhere]"
                         title={source.source || source.name}
                       >
                         {displaySourceName(source)}
                       </span>
-                      <span className="mt-1 block text-xs text-ink/52 dark:text-slate-300">
+                      <span className="mt-1 block text-xs leading-5 text-ink/52 dark:text-slate-300">
                         {formatChunkCount(source.totalChunks)} · {sourceLabel(source.mode)}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-start gap-2">
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-mint dark:bg-slate-800 dark:text-emerald-200">
-                        sẵn sàng
-                      </span>
                       <Link
                         aria-label={`Xem debug ${source.name}`}
                         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-mint transition hover:bg-paper dark:border-white/14 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-slate-800"
@@ -1389,6 +1517,11 @@ function SourcePanel({
                   </article>
                 );
               })}
+              {!filteredUploadedSources.length && uploadedSources.length ? (
+                <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/54 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-300">
+                  Không tìm thấy tài liệu phù hợp.
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
@@ -1849,7 +1982,7 @@ async function uploadUrlSource(url: string): Promise<SourceUploadResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`URL import failed: ${response.status}`);
+    throw new HttpRequestError("URL import failed", response.status);
   }
 
   return (await response.json()) as SourceUploadResponse;
@@ -1895,6 +2028,7 @@ function uploadedSourceFromListItem(
     mode: sourceModeFromSourceType(source.source_type),
     source: source.source,
     sourceType: source.source_type,
+    metadata: source.metadata,
     totalChunks: source.total_chunks || source.chunks.length,
     chunks: source.chunks,
     uploadedAt: Date.now() - index,
@@ -1936,6 +2070,10 @@ function readCachedSources(): UploadedSource[] {
         mode: source.mode || sourceModeFromSourceType(source.sourceType || ""),
         source: source.source,
         sourceType: source.sourceType,
+        metadata:
+          source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata)
+            ? source.metadata
+            : {},
         totalChunks: Number(source.totalChunks) || source.chunks?.length || 0,
         chunks: Array.isArray(source.chunks) ? source.chunks : [],
         uploadedAt: Number(source.uploadedAt) || Date.now() - index,
@@ -1960,6 +2098,60 @@ function writeCachedSources(sources: UploadedSource[]) {
   window.localStorage.setItem(SOURCE_CACHE_KEY, JSON.stringify(cachePayload));
 }
 
+function readCachedSourceMode(): SourceMode {
+  if (typeof window === "undefined") return "pdf";
+
+  const stored = window.localStorage.getItem(SOURCE_MODE_KEY);
+  if (stored === "pdf" || stored === "url" || stored === "text") {
+    return stored;
+  }
+  return "pdf";
+}
+
+function readCachedChatState(): ChatPageCache | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(CHAT_STATE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ChatPageCache;
+    if (!Array.isArray(parsed.messages) || !isSourceMode(parsed.sourceMode)) {
+      return null;
+    }
+    return {
+      answer: parsed.answer ?? null,
+      messages: parsed.messages.length ? parsed.messages : [createWelcomeMessage()],
+      selectedCitationChunkId: parsed.selectedCitationChunkId ?? null,
+      selectedDocumentIds: Array.isArray(parsed.selectedDocumentIds)
+        ? parsed.selectedDocumentIds.filter((id) => typeof id === "string")
+        : [],
+      sourceMode: parsed.sourceMode,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedChatState(state: ChatPageCache) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(SOURCE_MODE_KEY, state.sourceMode);
+  window.localStorage.setItem(
+    CHAT_STATE_CACHE_KEY,
+    JSON.stringify({
+      ...state,
+      messages: state.messages.map((message) => ({
+        ...message,
+        status: message.status === "thinking" ? "not_found" : message.status,
+      })),
+    }),
+  );
+}
+
+function isSourceMode(value: unknown): value is SourceMode {
+  return value === "pdf" || value === "url" || value === "text";
+}
+
 function sourceModeFromSourceType(sourceType: string): SourceMode {
   if (sourceType === "url") return "url";
   if (sourceType === "text") return "text";
@@ -1978,6 +2170,89 @@ function displaySourceName(source: UploadedSource): string {
     return displayUrlName(source.source || source.name);
   }
   return source.name;
+}
+
+function sourceMatchesSearch(source: UploadedSource, normalizedQuery: string): boolean {
+  if (!normalizedQuery) return true;
+
+  const haystack = normalizeSearchText(sourceSearchText(source));
+  const compactHaystack = compactSearchText(haystack);
+  const compactQuery = compactSearchText(normalizedQuery);
+  if (haystack.includes(normalizedQuery) || compactHaystack.includes(compactQuery)) {
+    return true;
+  }
+
+  return searchTokens(normalizedQuery).every((token) => {
+    const compactToken = compactSearchText(token);
+    return haystack.includes(token) || compactHaystack.includes(compactToken);
+  });
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function sourceSearchText(source: UploadedSource): string {
+  return [
+    displaySourceName(source),
+    source.name,
+    source.source,
+    source.sourceType,
+    source.mode,
+    source.provider,
+    source.datasetId,
+    source.documentId,
+    ...metadataSearchValues(source.metadata),
+    ...source.chunks.slice(0, 8).flatMap((result) => [
+      result.chunk.chunk_id,
+      metadataSearchValues(result.chunk.metadata).join(" "),
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function metadataSearchValues(metadata?: Record<string, unknown>): string[] {
+  if (!metadata) return [];
+
+  const preferredKeys = [
+    "title",
+    "document_name",
+    "file_name",
+    "source",
+    "url",
+    "original_url",
+    "final_url",
+    "canonical_url",
+    "section",
+    "source_type",
+    "language",
+  ];
+  return preferredKeys
+    .map((key) => unknownToSearchText(metadata[key]))
+    .filter((value): value is string => Boolean(value));
+}
+
+function unknownToSearchText(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map(unknownToSearchText).filter(Boolean).join(" ");
+  }
+  return null;
+}
+
+function searchTokens(normalizedQuery: string): string[] {
+  return normalizedQuery.split(/\s+/).filter(Boolean);
+}
+
+function compactSearchText(text: string): string {
+  return text.replace(/[^a-z0-9]+/g, "");
 }
 
 function displayUrlName(value: string): string {
@@ -2044,6 +2319,16 @@ function sourceErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Không nạp được tài liệu. Kiểm tra cấu hình API.";
+}
+
+function isHttpStatus(error: unknown, status: number): boolean {
+  if (error instanceof HttpRequestError) {
+    return error.status === status;
+  }
+  if (error instanceof Error) {
+    return new RegExp(`(^|[^0-9])${status}([^0-9]|$)`).test(error.message);
+  }
+  return false;
 }
 
 function isSmallTalkQuestion(text: string): boolean {
