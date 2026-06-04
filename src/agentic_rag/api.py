@@ -896,9 +896,7 @@ def _stream_answer_events(
                 "done",
                 {
                     **answer.model_dump(),
-                    "evidence_chunks": [
-                        chunk.model_dump(mode="json") for chunk in evidence_chunks
-                    ],
+                    "evidence_chunks": [chunk.model_dump(mode="json") for chunk in evidence_chunks],
                 },
             )
             write_rag_trace(
