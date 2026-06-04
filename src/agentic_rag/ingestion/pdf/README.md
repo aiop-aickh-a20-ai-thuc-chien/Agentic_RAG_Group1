@@ -11,9 +11,9 @@ và URL/text ingestion có thể dùng cùng một nền tảng tách nội dung
 Phase hiện tại ưu tiên tạo baseline end-to-end để unblock các phase tiếp theo
 của RAG pipeline. Parser mặc định là Docling: module PDF dùng Docling để chuyển
 PDF cục bộ sang Markdown, sau đó tách Markdown thành `Chunk` objects theo
-contract dùng chung. Chunker mặc định là Docling HybridChunker để tận dụng cấu
-trúc tài liệu native, heading metadata và contextualized text cho retrieval;
-chunker deterministic vẫn được giữ làm fallback/baseline. Kiến trúc mới giữ
+contract dùng chung. Pipeline mặc định là `ocr/docling`; chunker mặc định là
+`deterministic` để giữ output ổn định và dễ debug. Docling HybridChunker vẫn
+có thể bật rõ ràng để so sánh chất lượng chunking native. Kiến trúc mới giữ
 parser và chunker là hai strategy riêng: parser chịu trách nhiệm tạo
 Markdown/file-backed assets/native document, còn chunker chịu trách nhiệm tách
 output parser thành chunk candidate.
@@ -57,6 +57,35 @@ uv sync
 uv run python -c "from agentic_rag.ingestion.pdf import load_pdf_chunks; print(load_pdf_chunks('path/to/file.pdf'))"
 ```
 
+Để test parser cục bộ bằng command line và một file path cụ thể, dùng CLI
+PDF-local. CLI đọc mặc định từ `.env`, nhưng vẫn cho phép override bằng argument:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --pipeline ocr \
+  --strategy docling \
+  --chunker deterministic \
+  --output-json
+```
+
+Nếu đã cấu hình `.env`, có thể chạy ngắn hơn:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf --output-json
+```
+
+Ghi artifact debug theo layout chuẩn của PDF ingestion:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --write-artifacts \
+  --output-root storage/local_pdf/parser-artifacts \
+  --run-id manual-check
+```
+
+Lệnh này tạo `parsed.md`, `chunks.jsonl`, `chunks.md` và `manifest.json` trong
+thư mục run tương ứng.
+
 Public API của module vẫn là:
 
 ```python
@@ -70,33 +99,39 @@ Chọn parser hoặc chunker khác khi registry đã có adapter tương ứng:
 ```python
 chunks = load_pdf_chunks(
     "path/to/file.pdf",
-    parser_name="docling",
-    chunker_name="docling-hybrid",
+    pipeline_name="ocr",
+    strategy_name="docling",
+    chunker_name="deterministic",
 )
 ```
 
-Parser registry hiện có:
+Parser pipeline registry hiện có:
 
-- `docling`: mặc định, baseline hiện tại.
+- `ocr/docling`: mặc định, baseline OCR/layout/text hiện tại.
+- `vlm/mineru`: seam cho VLM parser; hiện fail rõ ràng cho tới khi dependency
+  và execution mode của MinerU được wire trong bước riêng.
 
 Chunker registry hiện có:
 
-- `docling-hybrid`: mặc định, dùng `Docling HybridChunker` trên Docling native
-  document để giữ ngữ cảnh/heading tốt hơn cho PDF.
-- `deterministic`: fallback/baseline, tách Markdown/text ổn định bằng shared
+- `deterministic`: mặc định, tách Markdown/text ổn định bằng shared
   ingestion chunking.
+- `docling-hybrid`: opt-in, dùng `Docling HybridChunker` trên Docling native
+  document để giữ ngữ cảnh/heading tốt hơn cho PDF.
 
 Trong app local, có thể đổi parser hoặc chunker PDF bằng biến môi trường:
 
 ```text
+LOCAL_PDF_PIPELINE=ocr
+LOCAL_PDF_STRATEGY=docling
+# Legacy alias for LOCAL_PDF_STRATEGY during transition:
 LOCAL_PDF_PARSER=docling
-LOCAL_PDF_CHUNKER=docling-hybrid
+LOCAL_PDF_CHUNKER=deterministic
 ```
 
-Khi cần fallback hoặc so sánh regression với chunker deterministic:
+Khi cần so sánh với chunker native của Docling:
 
 ```text
-LOCAL_PDF_CHUNKER=deterministic
+LOCAL_PDF_CHUNKER=docling-hybrid
 ```
 
 `load_pdf_chunks()` chỉ trả về `Chunk` trong memory và không tự ghi file debug.
@@ -114,7 +149,7 @@ Mỗi `Chunk` trả về có metadata chính:
 - `raw_text`: nội dung gốc của Docling chunk trước khi contextualize, nếu dùng
   Docling HybridChunker.
 - `parser`: parser được chọn, mặc định là `docling`.
-- `chunking_method`: chunker được chọn, mặc định là `docling-hybrid`.
+- `chunking_method`: chunker được chọn, mặc định là `deterministic`.
 - `chunk_index`: thứ tự chunk bắt đầu từ 1.
 
 ## Lưu artifact để debug và đánh giá
@@ -148,6 +183,7 @@ Mặc định helper ghi vào thư mục đã được ignore:
 src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
   parsed.md
   chunks.jsonl
+  chunks.md
   manifest.json
 ```
 
@@ -155,6 +191,8 @@ src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
 
 - `parsed.md`: Markdown do parser được chọn export từ PDF gốc.
 - `chunks.jsonl`: mỗi dòng là một shared `Chunk` sau bước chunking.
+- `chunks.md`: companion file dễ đọc để debug chunk bằng mắt; `chunks.jsonl`
+  vẫn là artifact canonical cho máy đọc/replay.
 - `manifest.json`: metadata của lần chạy, gồm input path, parser, run id, đường
   dẫn artifact và số lượng chunk.
 
@@ -177,6 +215,7 @@ Helper này vẫn không thay đổi `load_pdf_chunks()`. Output mặc định n
 src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
   parsed.md
   chunks.jsonl
+  chunks.md
   manifest.json
   elements.jsonl
   assets/
@@ -250,7 +289,7 @@ bộ mà không cần thao tác ở root project.
 Từ root repository:
 
 ```bash
-uv --directory src/agentic_rag/ingestion/pdf sync 
+uv --directory src/agentic_rag/ingestion/pdf sync
 uv --directory src/agentic_rag/ingestion/pdf run ruff format --check .
 uv --directory src/agentic_rag/ingestion/pdf run ruff check .
 uv --directory src/agentic_rag/ingestion/pdf run mypy

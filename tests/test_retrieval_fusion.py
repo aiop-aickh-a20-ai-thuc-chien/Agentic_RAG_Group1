@@ -11,6 +11,7 @@ from agentic_rag.retrieval.fusion import (
     apply_rerank_threshold,
     build_evidence_context,
     normalized_score_fusion,
+    preload_reranker,
     rerank,
     rerank_with_metadata,
     rrf_fusion,
@@ -288,7 +289,7 @@ def test_rerank_uses_cross_encoder_when_configured(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(
         fusion_module,
         "_load_cross_encoder_model",
-        lambda model_name: FakeCrossEncoder(),
+        lambda model_name, device=None: FakeCrossEncoder(),
     )
 
     reranked = rerank("warranty question", candidates, top_k=2)
@@ -313,7 +314,7 @@ def test_rerank_with_metadata_reports_actual_cross_encoder_provider(
     monkeypatch.setattr(
         fusion_module,
         "_load_cross_encoder_model",
-        lambda model_name: FakeCrossEncoder(),
+        lambda model_name, device=None: FakeCrossEncoder(),
     )
 
     reranked, metadata = rerank_with_metadata("warranty question", candidates, top_k=2)
@@ -336,18 +337,89 @@ def test_rerank_metadata_uses_bge_model_by_default(monkeypatch: pytest.MonkeyPat
 def test_rerank_metadata_reports_configured_bge_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
     monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "BAAI/bge-reranker-v2-m3")
+    monkeypatch.setenv("RERANK_DEVICE", "cuda")
 
     metadata = fusion_module.rerank_metadata()
 
     assert metadata["provider"] == "cross-encoder"
     assert metadata["model"] == "BAAI/bge-reranker-v2-m3"
+    assert metadata["device"] == "cuda"
     assert metadata["library"] == "sentence-transformers"
+
+
+def test_preload_reranker_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.delenv("RERANK_PRELOAD", raising=False)
+
+    metadata = preload_reranker()
+
+    assert metadata["preload"] is False
+    assert metadata["status"] == "disabled"
+
+
+def test_preload_reranker_skips_score_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "score")
+    monkeypatch.setenv("RERANK_PRELOAD", "true")
+
+    metadata = preload_reranker()
+
+    assert metadata["preload"] is True
+    assert metadata["status"] == "skipped"
+    assert metadata["reason"] == "provider_not_cross_encoder"
+
+
+def test_preload_reranker_loads_configured_cross_encoder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded_models: list[str] = []
+
+    class FakeCrossEncoder:
+        def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
+            return [0.0 for _pair in pairs]
+
+    def fake_load(model_name: str, device: str | None = None) -> FakeCrossEncoder:
+        loaded_models.append(f"{model_name}:{device}")
+        return FakeCrossEncoder()
+
+    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "test-reranker")
+    monkeypatch.setenv("RERANK_DEVICE", "cuda")
+    monkeypatch.setenv("RERANK_PRELOAD", "true")
+    monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", fake_load)
+
+    metadata = preload_reranker()
+
+    assert loaded_models == ["test-reranker:cuda"]
+    assert metadata["status"] == "loaded"
+    assert metadata["model"] == "test-reranker"
+    assert metadata["device"] == "cuda"
+    assert metadata["used_provider"] == "cross-encoder"
+
+
+def test_preload_reranker_falls_back_when_cuda_torch_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_cuda_error(model_name: str, device: str | None = None) -> object:
+        raise AssertionError("Torch not compiled with CUDA enabled")
+
+    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "test-reranker")
+    monkeypatch.setenv("RERANK_DEVICE", "cuda")
+    monkeypatch.setenv("RERANK_PRELOAD", "true")
+    monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", raise_cuda_error)
+
+    metadata = preload_reranker()
+
+    assert metadata["status"] == "failed"
+    assert metadata["fallback_provider"] == "score"
+    assert metadata["device"] == "cuda"
+    assert "Torch not compiled with CUDA enabled" in str(metadata["fallback_reason"])
 
 
 def test_rerank_falls_back_to_score_based_when_cross_encoder_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def raise_import_error(model_name: str) -> object:
+    def raise_import_error(model_name: str, device: str | None = None) -> object:
         raise ImportError(model_name)
 
     candidates = [
@@ -390,10 +462,11 @@ def test_build_evidence_context_formats_rank_source_location_chunk_and_text() ->
     )
 
     assert context.splitlines() == [
-        "[1] source=warranty.pdf; page=12; chunk_id=pdf-1; "
-        "score=0.500000; text=Pin cao ap duoc bao hanh 8 nam.",
-        "[2] source=https://example.com/warranty; section=main; chunk_id=url-1; "
-        "score=0.250000; text=Noi dung chinh tu website.",
+        "[1] source=warranty.pdf; page=12; metadata=page_type=pdf, price_type=unknown;"
+        " chunk_id=pdf-1; score=0.500000; text=Pin cao ap duoc bao hanh 8 nam.",
+        "[2] source=https://example.com/warranty; section=main;"
+        " metadata=page_type=url, price_type=unknown;"
+        " chunk_id=url-1; score=0.250000; text=Noi dung chinh tu website.",
     ]
 
 

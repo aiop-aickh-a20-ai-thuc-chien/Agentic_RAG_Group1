@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from agentic_rag.ingestion.chunking import ChunkingInput
 
 PdfAssetKind = Literal["image", "table", "chart", "other"]
+PdfPipelineName = Literal["ocr", "vlm"]
 
 
 class _PdfParserModel(BaseModel):
@@ -61,3 +62,17 @@ class PdfParserCapabilities(_PdfParserModel):
     supports_page_metadata: bool = False
     supports_tables: bool = False
     supports_images: bool = False
+
+
+class PdfPipelineCapabilities(_PdfParserModel):
+    """Feature flags for one parser pipeline strategy."""
+
+    pipeline: PdfPipelineName
+    strategy: str
+    supports_markdown: bool = True
+    supports_assets: bool = False
+    supports_page_metadata: bool = False
+    supports_tables: bool = False
+    supports_images: bool = False
+    requires_network: bool = False
+    requires_credentials: bool = False

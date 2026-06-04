@@ -17,23 +17,80 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from agentic_rag.core.contracts import Chunk, SearchResult
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
+from agentic_rag.integrations.local_pdf.storage import (
+    LocalSourceStore,
+    PostgresLocalSourceStore,
+    StoredSourceDocument,
+)
 from agentic_rag.retrieval.fusion import (
     RRF_K,
     ThresholdConfig,
     apply_fusion_threshold,
     apply_pre_fusion_thresholds,
-    apply_rerank_threshold,
     normalized_score_fusion,
-    rerank_with_metadata,
     rrf_fusion,
     weighted_rrf_fusion,
 )
-from agentic_rag.retrieval.search import Store, dense_embedding_metadata
+from agentic_rag.retrieval.search import Store, dense_embedding_metadata, upsert_dense_embeddings
+
+
+def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
+    def _noop(func: Any) -> Any:
+        return func
+
+    return _noop
+
+
+try:
+    from langsmith import traceable as _ls_traceable
+except ImportError:
+    _ls_traceable = _noop_traceable  # type: ignore[assignment]
+
+
+@_ls_traceable(name="query-normalize", run_type="tool")
+def _traced_preprocess(store: Store, question: str) -> dict[str, Any]:
+    return store.preprocess_query(question)
+
+
+@_ls_traceable(name="bm25-search", run_type="retriever")
+def _traced_bm25(store: Store, query: str, top_k: int) -> list[SearchResult]:
+    return store.bm25_search(query, top_k=top_k)
+
+
+@_ls_traceable(name="dense-search", run_type="retriever")
+def _traced_dense(
+    store: Store,
+    query: str,
+    top_k: int,
+) -> tuple[list[SearchResult], str | None]:
+    return _dense_search_safely(store, query, top_k=top_k)
+
+
+@_ls_traceable(name="pre-fusion-threshold", run_type="tool")
+def _traced_pre_fusion_threshold(
+    bm25_results: list[SearchResult],
+    dense_results: list[SearchResult],
+    config: ThresholdConfig,
+) -> tuple[list[SearchResult], list[SearchResult], dict[str, object]]:
+    return apply_pre_fusion_thresholds(
+        bm25_results=bm25_results,
+        dense_results=dense_results,
+        config=config,
+    )
+
+
+@_ls_traceable(name="post-fusion-threshold", run_type="tool")
+def _traced_post_fusion_threshold(
+    fused_results: list[SearchResult],
+    config: ThresholdConfig,
+) -> tuple[list[SearchResult], dict[str, object]]:
+    return apply_fusion_threshold(fused_results, config=config)
 
 
 @dataclass(frozen=True)
@@ -55,6 +112,37 @@ class LocalPdfDocumentChunks:
     total_chunks: int
 
 
+@dataclass(frozen=True)
+class LocalPdfDocumentDebug:
+    """Debug view of one locally ingested source."""
+
+    document_id: str
+    name: str
+    source_type: str
+    source: str
+    markdown: str
+    chunk_input: str
+    chunk_input_type: str
+    chunks: list[Chunk]
+    total_chunks: int
+    metadata: dict[str, object]
+
+
+@dataclass(frozen=True)
+class LocalPdfStoredDocument:
+    """Stored local source document plus chunks for UI hydration."""
+
+    document_id: str
+    dataset_id: str
+    name: str
+    provider: str
+    source_type: str
+    source: str
+    total_chunks: int
+    chunks: list[Chunk]
+    metadata: dict[str, object]
+
+
 class LocalPdfEvidenceProvider:
     """Use internal PDF ingestion plus retrieval/fusion/rerank modules."""
 
@@ -65,9 +153,11 @@ class LocalPdfEvidenceProvider:
         *,
         store_dir: Path,
         pdf_config: PdfIngestionConfig | None = None,
+        source_store: LocalSourceStore | None = None,
     ) -> None:
         self._store_dir = store_dir
         self._pdf_config = pdf_config or PdfIngestionConfig()
+        self._source_store = source_store
         self._files_dir = store_dir / "files"
         self._chunks_dir = store_dir / "chunks"
         self._parsed_dir = store_dir / "parsed"
@@ -84,7 +174,11 @@ class LocalPdfEvidenceProvider:
         """Create a local PDF provider from environment variables."""
 
         store_dir = Path(os.getenv("LOCAL_PDF_STORE_DIR", "storage/local_pdf"))
-        return cls(store_dir=store_dir, pdf_config=PdfIngestionConfig.from_env())
+        return cls(
+            store_dir=store_dir,
+            pdf_config=PdfIngestionConfig.from_env(),
+            source_store=_source_store_from_env(),
+        )
 
     def upload_document(
         self,
@@ -105,18 +199,27 @@ class LocalPdfEvidenceProvider:
 
         parse_started_at = time.perf_counter()
         parsed_markdown = ""
+        pipeline_name = self._pdf_config.pipeline_name
+        strategy_name = self._pdf_config.strategy_name
         parser_name = self._pdf_config.parser_name
         chunker_name = self._pdf_config.chunker_name
+        requested_chunker_name = chunker_name
+        chunking_fallback_reason = None
         if start_parse:
             parsed_pdf = load_pdf_with_markdown(
                 str(pdf_path),
-                parser_name=parser_name,
+                pipeline_name=pipeline_name,
+                strategy_name=strategy_name,
                 chunker_name=chunker_name,
             )
             parsed_markdown = parsed_pdf.markdown
             chunks = parsed_pdf.chunks
             parser_name = parsed_pdf.parser
+            pipeline_name = parsed_pdf.pipeline
+            strategy_name = parsed_pdf.strategy
             chunker_name = parsed_pdf.chunker
+            requested_chunker_name = parsed_pdf.requested_chunker or chunker_name
+            chunking_fallback_reason = parsed_pdf.chunking_fallback_reason
         else:
             chunks = []
         parse_latency_ms = _latency_ms(parse_started_at)
@@ -125,18 +228,31 @@ class LocalPdfEvidenceProvider:
             markdown=parsed_markdown,
         )
         chunk_started_at = time.perf_counter()
-        chunks = [
-            _chunk_with_local_metadata(
-                chunk=chunk,
-                document_id=document_id,
-                name=safe_filename,
-                source_type="pdf",
-            )
-            for chunk in chunks
-        ]
+        chunks = _chunks_with_local_metadata(
+            chunks=chunks,
+            document_id=document_id,
+            name=safe_filename,
+            source_type="pdf",
+        )
         chunk_latency_ms = _latency_ms(chunk_started_at)
         write_started_at = time.perf_counter()
         self._write_chunks(document_id=document_id, chunks=chunks)
+        source_store_trace = self._write_source_store(
+            document_id=document_id,
+            name=safe_filename,
+            source_type="pdf",
+            source=safe_filename,
+            raw_path=pdf_path,
+            markdown_path=markdown_path,
+            metadata={
+                "parser": parser_name,
+                "chunker": chunker_name,
+                "requested_chunker": requested_chunker_name,
+                "fallback_reason": chunking_fallback_reason,
+            },
+            chunks=chunks,
+        )
+        dense_index_trace = _upsert_dense_embeddings_safely(chunks)
         write_latency_ms = _latency_ms(write_started_at)
         return LocalPdfUploadedDocument(
             document_id=document_id,
@@ -154,6 +270,8 @@ class LocalPdfEvidenceProvider:
                 },
                 "parse": {
                     "parser": parser_name,
+                    "pipeline": pipeline_name,
+                    "strategy": strategy_name,
                     "started": start_parse,
                     "markdown_path": str(markdown_path) if markdown_path is not None else None,
                     "markdown_chars": len(parsed_markdown),
@@ -165,12 +283,16 @@ class LocalPdfEvidenceProvider:
                     "chunk_count": len(chunks),
                     "chunk_ids": [chunk.chunk_id for chunk in chunks],
                     "chunker": chunker_name,
+                    "requested_chunker": requested_chunker_name,
+                    "fallback_reason": chunking_fallback_reason,
                     "chunks": [_trace_chunk(chunk) for chunk in chunks],
                     "latency_ms": chunk_latency_ms,
                 },
                 "index_write": {
                     "type": "jsonl",
                     "path": str(self._chunk_path(document_id)),
+                    "source_store": source_store_trace,
+                    "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
                 },
                 "total_latency_ms": _latency_ms(started_at),
@@ -196,23 +318,39 @@ class LocalPdfEvidenceProvider:
         markdown_path = (
             loaded_url.artifacts.markdown_path if loaded_url.artifacts is not None else None
         )
+        local_markdown_path = self._write_markdown(
+            document_id=document_id,
+            markdown=loaded_url.markdown,
+        )
 
         chunk_started_at = time.perf_counter()
-        chunks = [
-            _chunk_with_local_metadata(
-                chunk=chunk,
-                document_id=document_id,
-                name=safe_name,
-                source_type="url",
-                source=url,
-            )
-            for chunk in chunks
-        ]
+        chunks = _chunks_with_local_metadata(
+            chunks=chunks,
+            document_id=document_id,
+            name=safe_name,
+            source_type="url",
+            source=url,
+        )
+        url_trace = _url_ingestion_trace(requested_url=url, chunks=chunks)
         chunk_latency_ms = _latency_ms(chunk_started_at)
         write_started_at = time.perf_counter()
         self._write_chunks(document_id=document_id, chunks=chunks)
+        source_store_trace = self._write_source_store(
+            document_id=document_id,
+            name=safe_name,
+            source_type="url",
+            source=url,
+            raw_path=None,
+            markdown_path=local_markdown_path,
+            metadata={
+                "requested_url": url,
+                "final_url": url_trace["final_url"],
+                "title": url_trace["title"],
+            },
+            chunks=chunks,
+        )
+        dense_index_trace = _upsert_dense_embeddings_safely(chunks)
         write_latency_ms = _latency_ms(write_started_at)
-        url_trace = _url_ingestion_trace(requested_url=url, chunks=chunks)
 
         return LocalPdfUploadedDocument(
             document_id=document_id,
@@ -238,7 +376,12 @@ class LocalPdfEvidenceProvider:
                     "title": url_trace["title"],
                     "section_count": url_trace["section_count"],
                     "sections": url_trace["sections"],
-                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_path": str(local_markdown_path or markdown_path)
+                    if (local_markdown_path or markdown_path) is not None
+                    else None,
+                    "artifact_markdown_path": str(markdown_path)
+                    if markdown_path is not None
+                    else None,
                     "markdown_chars": len(loaded_url.markdown),
                     "markdown_preview": _preview(loaded_url.markdown, _trace_preview_chars()),
                     **_full_trace_content("markdown", loaded_url.markdown),
@@ -256,6 +399,8 @@ class LocalPdfEvidenceProvider:
                 "index_write": {
                     "type": "jsonl",
                     "path": str(self._chunk_path(document_id)),
+                    "source_store": source_store_trace,
+                    "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
                 },
                 "total_latency_ms": _latency_ms(started_at),
@@ -277,21 +422,30 @@ class LocalPdfEvidenceProvider:
             data_artifact_dir=self._artifacts_dir,
             run_id=document_id,
         )
+        markdown_path = self._write_markdown(document_id=document_id, markdown=text)
         ingest_latency_ms = _latency_ms(ingest_started_at)
 
         chunk_started_at = time.perf_counter()
-        chunks = [
-            _chunk_with_local_metadata(
-                chunk=chunk,
-                document_id=document_id,
-                name=safe_name,
-                source_type="text",
-            )
-            for chunk in chunks
-        ]
+        chunks = _chunks_with_local_metadata(
+            chunks=chunks,
+            document_id=document_id,
+            name=safe_name,
+            source_type="text",
+        )
         chunk_latency_ms = _latency_ms(chunk_started_at)
         write_started_at = time.perf_counter()
         self._write_chunks(document_id=document_id, chunks=chunks)
+        source_store_trace = self._write_source_store(
+            document_id=document_id,
+            name=safe_name,
+            source_type="text",
+            source=safe_name,
+            raw_path=None,
+            markdown_path=markdown_path,
+            metadata={"title": title},
+            chunks=chunks,
+        )
+        dense_index_trace = _upsert_dense_embeddings_safely(chunks)
         write_latency_ms = _latency_ms(write_started_at)
 
         return LocalPdfUploadedDocument(
@@ -311,6 +465,9 @@ class LocalPdfEvidenceProvider:
                 "parse": {
                     "parser": "url.load_text_chunks",
                     "started": True,
+                    "markdown_path": str(markdown_path) if markdown_path is not None else None,
+                    "markdown_chars": len(text),
+                    "markdown_preview": _preview(text, _trace_preview_chars()),
                     "latency_ms": ingest_latency_ms,
                 },
                 "chunking": {
@@ -322,6 +479,8 @@ class LocalPdfEvidenceProvider:
                 "index_write": {
                     "type": "jsonl",
                     "path": str(self._chunk_path(document_id)),
+                    "source_store": source_store_trace,
+                    "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
                 },
                 "total_latency_ms": _latency_ms(started_at),
@@ -352,6 +511,152 @@ class LocalPdfEvidenceProvider:
 
         return LocalPdfDocumentChunks(chunks=chunks, total_chunks=total_chunks)
 
+    def list_documents(self, *, include_chunks: bool = True) -> list[LocalPdfStoredDocument]:
+        """Return stored documents for frontend hydration."""
+
+        if self._source_store is not None:
+            return [
+                self._stored_document_from_source_store(item, include_chunks=include_chunks)
+                for item in self._source_store.list_documents()
+            ]
+
+        documents: list[LocalPdfStoredDocument] = []
+        for chunk_path in sorted(
+            self._chunks_dir.glob("*.jsonl"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        ):
+            chunks = self._read_chunks(chunk_path.stem)
+            if chunks:
+                documents.append(self._stored_document_from_chunks(chunk_path.stem, chunks))
+        return documents
+
+    def delete_all_documents(self) -> int:
+        """Delete all source documents, chunks, files and vectors."""
+        import shutil
+
+        count = 0
+        if self._source_store is not None:
+            count = self._source_store.delete_all_documents()
+
+        for path in list(self._chunks_dir.glob("*.jsonl")):
+            path.unlink(missing_ok=True)
+            count = max(count, 1)
+        for path in list(self._parsed_dir.glob("*.md")):
+            path.unlink(missing_ok=True)
+        for path in list(self._files_dir.iterdir()):
+            path.unlink(missing_ok=True)
+        for path in list(self._debug_dir.iterdir()):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+
+        return count
+
+    def delete_document(self, *, document_id: str) -> None:
+        """Delete one source document and all its chunks from store and disk."""
+        import shutil
+
+        if self._source_store is not None:
+            self._source_store.delete_document(document_id)
+
+        safe_id = _safe_document_id(document_id)
+        for path in (
+            self._chunk_path(document_id),
+            self._markdown_path(document_id),
+            self._files_dir / f"{safe_id}.pdf",
+            self._files_dir / f"{safe_id}.txt",
+        ):
+            path.unlink(missing_ok=True)
+
+        debug_dir = self._debug_dir / safe_id
+        if debug_dir.is_dir():
+            shutil.rmtree(debug_dir, ignore_errors=True)
+
+    def document_debug(self, *, document_id: str) -> LocalPdfDocumentDebug:
+        """Return source metadata, parsed Markdown, and chunks for one local document."""
+
+        chunks = self._read_chunks(document_id)
+        if not chunks:
+            raise ValueError(f"Document not found or has no chunks: {document_id}")
+
+        first_chunk = chunks[0]
+        metadata = dict(first_chunk.metadata)
+        name = str(metadata.get("document_name") or metadata.get("file_name") or document_id)
+        source_type = str(metadata.get("source_type") or "unknown")
+        source = str(metadata.get("source") or metadata.get("url") or name)
+        markdown_path = self._markdown_path(document_id)
+        markdown = markdown_path.read_text(encoding="utf-8") if markdown_path.exists() else ""
+        chunk_input, chunk_input_type = self._debug_chunk_input(
+            document_id=document_id,
+            source_type=source_type,
+            markdown=markdown,
+            chunks=chunks,
+        )
+        return LocalPdfDocumentDebug(
+            document_id=document_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            markdown=markdown,
+            chunk_input=chunk_input,
+            chunk_input_type=chunk_input_type,
+            chunks=chunks,
+            total_chunks=len(chunks),
+            metadata=metadata,
+        )
+
+    def _stored_document_from_source_store(
+        self,
+        stored: StoredSourceDocument,
+        *,
+        include_chunks: bool,
+    ) -> LocalPdfStoredDocument:
+        chunks = self._read_chunks(stored.document_id) if include_chunks else []
+        return LocalPdfStoredDocument(
+            document_id=stored.document_id,
+            dataset_id=stored.dataset_id,
+            name=stored.name,
+            provider=self.dataset_id,
+            source_type=stored.source_type,
+            source=stored.source,
+            total_chunks=stored.total_chunks,
+            chunks=chunks,
+            metadata=stored.metadata,
+        )
+
+    def _stored_document_from_chunks(
+        self,
+        document_id: str,
+        chunks: list[Chunk],
+    ) -> LocalPdfStoredDocument:
+        first_chunk = chunks[0]
+        metadata = dict(first_chunk.metadata)
+        name = str(metadata.get("document_name") or metadata.get("file_name") or document_id)
+        source_type = str(metadata.get("source_type") or "unknown")
+        source = str(metadata.get("source") or metadata.get("url") or name)
+        dataset_id = str(metadata.get("dataset_id") or self.dataset_id)
+        provider = str(metadata.get("provider") or self.dataset_id)
+        return LocalPdfStoredDocument(
+            document_id=document_id,
+            dataset_id=dataset_id,
+            name=name,
+            provider=provider,
+            source_type=source_type,
+            source=source,
+            total_chunks=len(chunks),
+            chunks=chunks,
+            metadata=metadata,
+        )
+
+    def document_raw_path(self, *, document_id: str) -> Path:
+        """Return the locally stored raw PDF path for one document."""
+
+        safe_document_id = _safe_document_id(document_id)
+        raw_path = self._files_dir / f"{safe_document_id}.pdf"
+        if not raw_path.exists():
+            raise ValueError(f"Raw source file is not available: {document_id}")
+        return raw_path
+
     def retrieve(
         self,
         *,
@@ -367,7 +672,7 @@ class LocalPdfEvidenceProvider:
 
         store = Store(chunks)
         preprocess_started_at = time.perf_counter()
-        preprocessed_query = store.preprocess_query(question)
+        preprocessed_query = _traced_preprocess(store, question)
         preprocess_latency_ms = _latency_ms(preprocess_started_at)
         normalized_query = preprocessed_query["normalized"]
         if not normalized_query:
@@ -376,20 +681,15 @@ class LocalPdfEvidenceProvider:
         top_k = page_size or _default_page_size()
         candidate_k = max(_default_candidate_count(), top_k)
         bm25_started_at = time.perf_counter()
-        bm25_results = store.bm25_search(normalized_query, top_k=candidate_k)
+        bm25_results = _traced_bm25(store, normalized_query, candidate_k)
         bm25_latency_ms = _latency_ms(bm25_started_at)
         dense_started_at = time.perf_counter()
-        dense_results, dense_error = _dense_search_safely(
-            store,
-            normalized_query,
-            top_k=candidate_k,
-        )
+        # Dense uses original question (with diacritics) for better embedding quality
+        dense_results, dense_error = _traced_dense(store, question, candidate_k)
         dense_latency_ms = _latency_ms(dense_started_at)
         threshold_config = _threshold_config_from_env()
-        bm25_results, dense_results, pre_fusion_threshold_trace = apply_pre_fusion_thresholds(
-            bm25_results=bm25_results,
-            dense_results=dense_results,
-            config=threshold_config,
+        bm25_results, dense_results, pre_fusion_threshold_trace = _traced_pre_fusion_threshold(
+            bm25_results, dense_results, threshold_config
         )
         fusion_started_at = time.perf_counter()
         fused_results, fusion_method_trace = _fuse_results(
@@ -397,22 +697,15 @@ class LocalPdfEvidenceProvider:
             dense_results=dense_results,
             candidate_k=candidate_k,
         )
-        fused_results, fusion_threshold_trace = apply_fusion_threshold(
-            fused_results,
-            config=threshold_config,
+        fused_results, fusion_threshold_trace = _traced_post_fusion_threshold(
+            fused_results, threshold_config
         )
         fusion_latency_ms = _latency_ms(fusion_started_at)
-        rerank_started_at = time.perf_counter()
-        final_results, rerank_trace = rerank_with_metadata(
-            query=normalized_query,
-            candidates=fused_results,
-            top_k=top_k,
-        )
-        final_results, rerank_threshold_trace = apply_rerank_threshold(
-            final_results,
-            config=threshold_config,
-        )
-        rerank_latency_ms = _latency_ms(rerank_started_at)
+        # Rerank removed from provider — agent performs one final rerank with original question
+        final_results = fused_results[:top_k]
+        rerank_trace: dict[str, object] = {"provider": "skipped", "reason": "agent_reranks"}
+        rerank_threshold_trace: dict[str, object] = {}
+        rerank_latency_ms = 0
         return _with_pipeline_metadata(
             results=final_results,
             question=question,
@@ -441,6 +734,38 @@ class LocalPdfEvidenceProvider:
         payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
         chunk_path.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
 
+    def _write_source_store(
+        self,
+        *,
+        document_id: str,
+        name: str,
+        source_type: str,
+        source: str,
+        raw_path: Path | None,
+        markdown_path: Path | None,
+        metadata: dict[str, object],
+        chunks: list[Chunk],
+    ) -> dict[str, object]:
+        if self._source_store is None:
+            return {"type": "jsonl", "enabled": False}
+        self._source_store.write_document(
+            document_id=document_id,
+            dataset_id=self.dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=chunks,
+        )
+        return {
+            "type": "postgres",
+            "enabled": True,
+            "document_id": document_id,
+            "chunk_count": len(chunks),
+        }
+
     def _write_markdown(self, *, document_id: str, markdown: str) -> Path | None:
         if not markdown:
             return None
@@ -450,6 +775,11 @@ class LocalPdfEvidenceProvider:
         return markdown_path
 
     def _read_chunks(self, document_id: str) -> list[Chunk]:
+        if self._source_store is not None:
+            stored_chunks = self._source_store.read_chunks(document_id)
+            if stored_chunks:
+                return stored_chunks
+
         chunk_path = self._chunk_path(document_id)
         if not chunk_path.exists():
             return []
@@ -463,15 +793,24 @@ class LocalPdfEvidenceProvider:
 
     def _chunks_for_documents(self, document_ids: list[str] | None) -> list[Chunk]:
         if document_ids:
-            chunks: list[Chunk] = []
+            if self._source_store is not None:
+                stored = self._source_store.read_chunks_for_documents(document_ids)
+                if stored:
+                    return stored
+            fallback: list[Chunk] = []
             for document_id in document_ids:
-                chunks.extend(self._read_chunks(document_id))
-            return chunks
+                fallback.extend(self._read_chunks(document_id))
+            return fallback
 
-        chunks = []
+        if self._source_store is not None:
+            chunks = self._source_store.read_all_chunks()
+            if chunks:
+                return chunks
+
+        all_chunks: list[Chunk] = []
         for chunk_path in sorted(self._chunks_dir.glob("*.jsonl")):
-            chunks.extend(self._read_chunks(chunk_path.stem))
-        return chunks
+            all_chunks.extend(self._read_chunks(chunk_path.stem))
+        return all_chunks
 
     def _chunk_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
@@ -480,6 +819,39 @@ class LocalPdfEvidenceProvider:
     def _markdown_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
         return self._parsed_dir / f"{safe_document_id}.md"
+
+    def _debug_chunk_input(
+        self,
+        *,
+        document_id: str,
+        source_type: str,
+        markdown: str,
+        chunks: list[Chunk],
+    ) -> tuple[str, str]:
+        normalized_source_type = source_type.lower()
+        if normalized_source_type == "url":
+            first_chunk = chunks[0] if chunks else None
+            if first_chunk and "section_path" in first_chunk.metadata:
+                from agentic_rag.ingestion.url.loader import _clean_markdown_noise
+
+                cleaned = _clean_markdown_noise(markdown) if markdown else ""
+                return cleaned or _chunks_as_text(chunks), "markdown_cleaned"
+            parsed_sections_path = self._url_parsed_sections_path(document_id)
+            if parsed_sections_path is not None:
+                return parsed_sections_path.read_text(encoding="utf-8"), "parsed_sections"
+            return _chunks_as_text(chunks), "parsed_sections"
+        if normalized_source_type == "pdf":
+            return markdown, "markdown"
+        if normalized_source_type == "text":
+            return markdown or _chunks_as_text(chunks), "text"
+        return markdown or _chunks_as_text(chunks), "unknown"
+
+    def _url_parsed_sections_path(self, document_id: str) -> Path | None:
+        safe_document_id = _safe_document_id(document_id)
+        debug_dir = self._debug_dir / safe_document_id
+        if not debug_dir.exists():
+            return None
+        return next(iter(sorted(debug_dir.glob("*_parsed.txt"))), None)
 
 
 def _validate_pdf_upload(*, filename: str, content_type: str | None) -> None:
@@ -495,11 +867,13 @@ def _chunk_with_local_metadata(
     document_id: str,
     name: str,
     source_type: str,
+    storage_chunk_id: str,
     source: str | None = None,
 ) -> Chunk:
     resolved_source = source or str(chunk.metadata.get("source") or name)
     metadata = {
         **chunk.metadata,
+        "storage_chunk_id": storage_chunk_id,
         "document_id": document_id,
         "dataset_id": LocalPdfEvidenceProvider.dataset_id,
         "source": resolved_source,
@@ -511,6 +885,59 @@ def _chunk_with_local_metadata(
     if source_type == "url":
         metadata["url"] = source or chunk.metadata.get("url")
     return Chunk(chunk_id=chunk.chunk_id, text=chunk.text, metadata=metadata)
+
+
+def _chunks_with_local_metadata(
+    *,
+    chunks: list[Chunk],
+    document_id: str,
+    name: str,
+    source_type: str,
+    source: str | None = None,
+) -> list[Chunk]:
+    return [
+        _chunk_with_local_metadata(
+            chunk=chunk,
+            document_id=document_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            storage_chunk_id=f"{document_id}:{index:04d}",
+        )
+        for index, chunk in enumerate(chunks, start=1)
+    ]
+
+
+def _source_store_from_env() -> LocalSourceStore | None:
+    raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
+    if raw_store not in {"postgres", "postgresql", "pg"}:
+        return None
+
+    connection = (
+        os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "").strip()
+        or os.getenv("DENSE_PGVECTOR_CONNECTION", "").strip()
+    )
+    if not connection:
+        raise ValueError(
+            "LOCAL_SOURCE_STORE=postgres requires LOCAL_SOURCE_POSTGRES_CONNECTION "
+            "or DENSE_PGVECTOR_CONNECTION."
+        )
+    table_prefix = os.getenv("LOCAL_SOURCE_POSTGRES_TABLE_PREFIX", "local_rag").strip()
+    return PostgresLocalSourceStore(connection=connection, table_prefix=table_prefix)
+
+
+def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:
+    started_at = time.perf_counter()
+    try:
+        trace = upsert_dense_embeddings(chunks)
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "status": "error",
+            "error": str(exc),
+            "latency_ms": _latency_ms(started_at),
+        }
+    return {**trace, "latency_ms": _latency_ms(started_at)}
 
 
 def _tokenize(text: str) -> list[str]:
@@ -552,6 +979,7 @@ def _default_candidate_count() -> int:
         return 20
 
 
+@_ls_traceable(name="rrf-fusion", run_type="tool")
 def _fuse_results(
     *,
     bm25_results: list[SearchResult],
@@ -759,7 +1187,7 @@ def _with_pipeline_metadata(
         chunk_id = result.chunk.chunk_id
         metadata = {
             **result.chunk.metadata,
-            "retrieval_pipeline": "source_ingestion -> bm25 + dense -> rrf -> rerank",
+            "retrieval_pipeline": "source_ingestion -> bm25 + dense -> rrf",
             "pipeline_trace": pipeline_trace,
             "preprocessed_query": preprocessed_query,
             "bm25": _stage_debug(bm25_by_chunk_id.get(chunk_id)),
@@ -877,6 +1305,10 @@ def _trace_chunk(chunk: Chunk) -> dict[str, object]:
         "text": chunk.text,
         "metadata": chunk.metadata,
     }
+
+
+def _chunks_as_text(chunks: list[Chunk]) -> str:
+    return "\n\n".join(chunk.text for chunk in chunks if chunk.text.strip())
 
 
 def _url_ingestion_trace(*, requested_url: str, chunks: list[Chunk]) -> dict[str, object]:

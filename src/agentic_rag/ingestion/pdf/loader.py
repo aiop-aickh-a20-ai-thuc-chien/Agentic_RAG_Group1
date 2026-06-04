@@ -11,12 +11,17 @@ from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.pdf.chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
     DETERMINISTIC_MARKDOWN_CHUNKER,
+    DOCLING_HYBRID_CHUNKER,
     MarkdownChunker,
     resolve_markdown_chunker,
 )
 from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
-from agentic_rag.ingestion.pdf.parser import DEFAULT_PDF_PARSER, PdfMarkdownParser
-from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser
+from agentic_rag.ingestion.pdf.parser import PdfMarkdownParser
+from agentic_rag.ingestion.pdf.pipelines import (
+    DEFAULT_PDF_PIPELINE,
+    DEFAULT_PDF_STRATEGY,
+    resolve_pdf_pipeline,
+)
 
 
 class LoadedPdfDocument(BaseModel):
@@ -26,14 +31,20 @@ class LoadedPdfDocument(BaseModel):
 
     markdown: str
     chunks: list[Chunk]
-    parser: str = DEFAULT_PDF_PARSER
+    parser: str = DEFAULT_PDF_STRATEGY
+    pipeline: str = DEFAULT_PDF_PIPELINE
+    strategy: str = DEFAULT_PDF_STRATEGY
     chunker: str = DEFAULT_MARKDOWN_CHUNKER
+    requested_chunker: str | None = None
+    chunking_fallback_reason: str | None = None
 
 
 def load_pdf_chunks(
     path: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str | None = None,
+    pipeline_name: str | None = None,
+    strategy_name: str | None = None,
     chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
 ) -> list[Chunk]:
     """Load and chunk a PDF file into shared Chunk objects."""
@@ -41,6 +52,8 @@ def load_pdf_chunks(
     return load_pdf_with_markdown(
         path,
         parser_name=parser_name,
+        pipeline_name=pipeline_name,
+        strategy_name=strategy_name,
         chunker_name=chunker_name,
     ).chunks
 
@@ -48,15 +61,23 @@ def load_pdf_chunks(
 def load_pdf_with_markdown(
     path: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str | None = None,
+    pipeline_name: str | None = None,
+    strategy_name: str | None = None,
     chunker_name: str = DEFAULT_MARKDOWN_CHUNKER,
 ) -> LoadedPdfDocument:
     """Load a PDF into Markdown and shared Chunk objects."""
 
     pdf_path = Path(path)
+    resolved_pipeline = resolve_pdf_pipeline(
+        pipeline_name,
+        strategy_name if strategy_name is not None else parser_name,
+    )
     return _load_pdf_with_markdown(
         pdf_path,
-        resolve_pdf_parser(parser_name),
+        resolved_pipeline.parser,
+        pipeline_name=resolved_pipeline.pipeline_name,
+        strategy_name=resolved_pipeline.strategy_name,
         chunker=resolve_markdown_chunker(chunker_name),
     )
 
@@ -74,6 +95,8 @@ def _load_pdf_with_markdown(
     path: Path,
     parser: PdfMarkdownParser,
     *,
+    pipeline_name: str = DEFAULT_PDF_PIPELINE,
+    strategy_name: str = DEFAULT_PDF_STRATEGY,
     chunker: MarkdownChunker | None = None,
 ) -> LoadedPdfDocument:
     _validate_pdf_path(path)
@@ -85,16 +108,38 @@ def _load_pdf_with_markdown(
         source_path=parse_result.source_path,
         native_document=native_document,
     )
-    chunks = _chunks_from_chunking_input(
-        path,
-        chunking_input,
-        chunker=resolved_chunker,
-    )
+    chunker_name = resolved_chunker.chunker_name
+    fallback_reason = None
+    try:
+        chunks = _chunks_from_chunking_input(
+            path,
+            chunking_input,
+            chunker=resolved_chunker,
+        )
+    except Exception as exc:
+        if not _should_fallback_pdf_chunking(resolved_chunker, exc):
+            raise
+        fallback_chunker = resolve_markdown_chunker(DETERMINISTIC_MARKDOWN_CHUNKER)
+        chunks = _chunks_from_chunking_input(
+            path,
+            chunking_input,
+            chunker=fallback_chunker,
+        )
+        chunker_name = fallback_chunker.chunker_name
+        fallback_reason = _fallback_reason(
+            requested_chunker=resolved_chunker.chunker_name,
+            fallback_chunker=fallback_chunker.chunker_name,
+            exc=exc,
+        )
     return LoadedPdfDocument(
         markdown=parse_result.markdown,
         chunks=chunks,
         parser=parse_result.parser,
-        chunker=resolved_chunker.chunker_name,
+        pipeline=pipeline_name,
+        strategy=strategy_name,
+        chunker=chunker_name,
+        requested_chunker=resolved_chunker.chunker_name,
+        chunking_fallback_reason=fallback_reason,
     )
 
 
@@ -134,7 +179,7 @@ def _chunks_from_markdown(
     path: Path,
     markdown: str,
     *,
-    parser_name: str = DEFAULT_PDF_PARSER,
+    parser_name: str = DEFAULT_PDF_STRATEGY,
     chunker: MarkdownChunker | None = None,
 ) -> list[Chunk]:
     resolved_chunker = (
@@ -185,3 +230,40 @@ def _chunks_from_chunking_input(
 def _safe_chunk_id_part(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower()).strip("_")
     return normalized or "document"
+
+
+def _should_fallback_pdf_chunking(chunker: MarkdownChunker, exc: Exception) -> bool:
+    if chunker.chunker_name != DOCLING_HYBRID_CHUNKER:
+        return False
+    if not isinstance(exc, OSError | RuntimeError):
+        return False
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "huggingface",
+            "cached files",
+            "local_files_only",
+            "couldn't connect",
+            "offline mode",
+        )
+    )
+
+
+def _fallback_reason(
+    *,
+    requested_chunker: str,
+    fallback_chunker: str,
+    exc: Exception,
+) -> str:
+    return (
+        f"{requested_chunker} unavailable ({exc.__class__.__name__}: "
+        f"{_single_line(str(exc), max_chars=240)}); used {fallback_chunker}"
+    )
+
+
+def _single_line(value: str, *, max_chars: int) -> str:
+    compact = re.sub(r"\s+", " ", value).strip()
+    if len(compact) <= max_chars:
+        return compact
+    return f"{compact[: max_chars - 3]}..."

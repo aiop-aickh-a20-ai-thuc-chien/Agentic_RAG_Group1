@@ -202,6 +202,25 @@ def configured_llm_client() -> LLMClient | None:
     return OpenAIChatClient(api_key=api_key, model=model)
 
 
+def configured_generation_llm_client() -> LLMClient | None:
+    """Return the generation LLM client (GENERATION_MODEL) for final answer quality."""
+
+    load_local_env()
+    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+    if provider == "ollama":
+        return configured_llm_client()
+
+    if provider not in {"", "openai"}:
+        raise UnsupportedLLMProviderError(f"Unsupported LLM_PROVIDER: {provider}")
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    model = os.getenv("GENERATION_MODEL", os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL))
+    return OpenAIChatClient(api_key=api_key, model=model)
+
+
 def _configured_timeout_seconds() -> float:
     raw_timeout = os.getenv("LLM_TIMEOUT_SECONDS")
     if not raw_timeout:

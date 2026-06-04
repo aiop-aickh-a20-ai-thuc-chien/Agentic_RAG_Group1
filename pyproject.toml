@@ -11,6 +11,7 @@ dependencies = [
     "langchain-huggingface>=1.2.2",
     "langchain-openai>=1.1.9",
     "langchain-postgres>=0.0.17",
+    "langgraph>=0.2",
     "openai>=1.0.0,<2",
     "pydantic>=2,<3",
     "python-multipart>=0.0.20,<1",
@@ -20,6 +21,9 @@ dependencies = [
     "trafilatura>=2.0.0,<3",
     "turbovec>=0.7.0",
     "uvicorn>=0.30.0,<1",
+    "langchain-community>=0.4.2",
+    "ragas>=0.2",
+    "langchain-google-vertexai>=3.2.3",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +37,7 @@ observability = [
 ]
 rerank = [
     "sentence-transformers>=5,<6",
+    "torch>=2.12,<3",
 ]
 
 [build-system]
@@ -47,6 +52,13 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "ruff>=0.8.0",
+]
+
+# Windows + Python 3.12 uses the CUDA 12.6 build; other platforms (CI/Linux) and
+# other Python versions fall back to PyPI.
+[tool.uv.sources]
+torch = [
+    { url = "https://download.pytorch.org/whl/cu126/torch-2.12.0%2Bcu126-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32' and python_full_version >= '3.12' and python_full_version < '3.13'" },
 ]
 
 [tool.ruff]
@@ -77,5 +89,16 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["rank_bm25.*", "turbovec.*", "langchain_huggingface.*"]
+module = [
+    "rank_bm25.*",
+    "turbovec.*",
+    "langchain_huggingface.*",
+    "langchain_postgres.*",
+    "langgraph.*",
+    "langsmith.*",
+]
 follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+ignore_missing_imports = true

@@ -1,10 +1,13 @@
 "use client";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import {
   ArrowUpRight,
   Bot,
   ChevronLeft,
+  Eye,
   Maximize2,
   Minimize2,
   FileText,
@@ -13,6 +16,8 @@ import {
   Menu,
   Moon,
   PanelRightOpen,
+  RotateCcw,
+  Search,
   SearchCheck,
   ShieldCheck,
   Sun,
@@ -22,11 +27,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KnowledgeScene } from "@/components/knowledge-scene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +47,7 @@ type AnswerResponse = {
   answer: string;
   status: "answered" | "not_found";
   citations: Citation[];
+  evidence_chunks?: SourceChunk[];
 };
 
 type ChatMessage = {
@@ -54,12 +59,19 @@ type ChatMessage = {
   evidenceChunks?: SourceChunk[];
 };
 
+type ChatHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type SourceUploadResponse = {
   provider: string;
   dataset_id: string;
   document_id: string;
   name: string;
   parse_started: boolean;
+  source_type?: string | null;
+  source?: string | null;
 };
 
 type SourceChunk = {
@@ -80,12 +92,44 @@ type SourceChunksResponse = {
   chunks: SourceChunk[];
 };
 
+type SourceListItem = {
+  provider: string;
+  dataset_id: string;
+  document_id: string;
+  name: string;
+  source_type: string;
+  source: string;
+  total_chunks: number;
+  chunks: SourceChunk[];
+  metadata: Record<string, unknown>;
+};
+
+type SourceListResponse = {
+  provider: string;
+  sources: SourceListItem[];
+};
+
+type SourceDebugResponse = {
+  provider: string;
+  document_id: string;
+  name: string;
+  source_type: string;
+  source: string;
+  metadata: Record<string, unknown>;
+  markdown: string;
+  total_chunks: number;
+  chunks: SourceChunk[];
+};
+
 type UploadedSource = {
   datasetId: string;
   documentId: string;
   name: string;
   provider: string;
   mode: SourceMode;
+  source?: string;
+  sourceType?: string;
+  metadata?: Record<string, unknown>;
   totalChunks: number;
   chunks: SourceChunk[];
   uploadedAt: number;
@@ -93,6 +137,7 @@ type UploadedSource = {
 
 type SourceMode = "pdf" | "url" | "text";
 type Theme = "light" | "dark";
+type SourceDebugTab = "source" | "markdown" | "chunks";
 type SourceProcessingStatus = "idle" | "uploading" | "processing" | "ready" | "error";
 type SourceQueueStatus = "queued" | "uploading" | "processing" | "error";
 
@@ -105,13 +150,45 @@ type QueuedSource = {
   label: string;
 };
 
+class HttpRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(`${message}: ${status}`);
+    this.name = "HttpRequestError";
+    this.status = status;
+  }
+}
+
 type StreamEvent = {
   event: string;
   data: Record<string, unknown>;
 };
 
+type ChatPageCache = {
+  answer: AnswerResponse | null;
+  messages: ChatMessage[];
+  selectedCitationChunkId: string | null;
+  selectedDocumentIds: string[];
+  sourceMode: SourceMode;
+};
+
 const API_URL =
   process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000";
+const URL_UPLOAD_CONCURRENCY = 8;
+const SOURCE_CACHE_KEY = "agentic-rag:uploaded-sources:v1";
+const SOURCE_MODE_KEY = "agentic-rag:source-mode:v1";
+const CHAT_STATE_CACHE_KEY = "agentic-rag:chat-state:v1";
+
+function createWelcomeMessage(): ChatMessage {
+  return {
+    id: "welcome",
+    role: "assistant",
+    content: "Tải tài liệu lên, chờ trạng thái sẵn sàng rồi đặt câu hỏi.",
+    status: "answered",
+    citations: [],
+  };
+}
 
 const sourceModes: Array<{ id: SourceMode; label: string; icon: LucideIcon }> = [
   { id: "pdf", label: "PDF", icon: Upload },
@@ -130,19 +207,11 @@ export default function CitationChatPage() {
   const [uploadedSources, setUploadedSources] = useState<UploadedSource[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [sourceStatus, setSourceStatus] = useState<SourceProcessingStatus>("idle");
-  const [sourceChunkCount, setSourceChunkCount] = useState(0);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [selectedCitationChunkId, setSelectedCitationChunkId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Tải tài liệu lên, chờ trạng thái sẵn sàng rồi đặt câu hỏi.",
-      status: "answered",
-      citations: [],
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([createWelcomeMessage()]);
   const [error, setError] = useState("");
+  const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const isDark = theme === "dark";
@@ -156,6 +225,110 @@ export default function CitationChatPage() {
     () => selectedSources.flatMap((source) => source.chunks),
     [selectedSources],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateSources() {
+      const cachedChatState = readCachedChatState();
+      const cachedSources = readCachedSources();
+      const cachedSelectedIds =
+        cachedChatState?.selectedDocumentIds ?? cachedSources.map((source) => source.documentId);
+
+      setSourceMode(cachedChatState?.sourceMode ?? readCachedSourceMode());
+      setUploadedSources(cachedSources);
+      setSelectedDocumentIds(cachedSelectedIds);
+      setAnswer(cachedChatState?.answer ?? null);
+      setSelectedCitationChunkId(cachedChatState?.selectedCitationChunkId ?? null);
+      setMessages(cachedChatState?.messages ?? [createWelcomeMessage()]);
+      if (cachedSources.length) {
+        setSourceStatus("ready");
+      }
+
+      try {
+        const sourceList = await fetchSources();
+        if (cancelled) return;
+
+        const metadataSources = sourceList.sources.map((source, index) =>
+          uploadedSourceFromListItem(source, index),
+        );
+        const restoredSources = mergeSourcesWithCachedChunks(metadataSources, cachedSources);
+        setUploadedSources(restoredSources);
+        setSelectedDocumentIds((current) => {
+          const availableIds = new Set(restoredSources.map((source) => source.documentId));
+          const preserved = current.filter((id) => availableIds.has(id));
+          return preserved.length ? preserved : restoredSources.map((source) => source.documentId);
+        });
+        if (restoredSources.length) {
+          setSourceStatus("ready");
+        }
+
+        restoredSources
+          .filter((source) => source.totalChunks > 0 && source.chunks.length === 0)
+          .forEach((source) => {
+            void fetchSourceChunks(source.documentId)
+              .then((payload) => {
+                if (cancelled) return;
+                setUploadedSources((current) =>
+                  current.map((item) =>
+                    item.documentId === payload.document_id
+                      ? {
+                          ...item,
+                          totalChunks: payload.total_chunks || payload.chunks.length,
+                          chunks: payload.chunks,
+                        }
+                      : item,
+                  ),
+                );
+              })
+              .catch(() => {
+                // Metadata is enough for selection; chunks can be retried lazily.
+              });
+          });
+      } catch (hydrateError) {
+        if (!cancelled && !cachedSources.length) {
+          setError(
+            hydrateError instanceof Error
+              ? hydrateError.message
+              : "Khong tai lai duoc danh sach tai lieu.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setHasRestoredClientState(true);
+        }
+      }
+    }
+
+    hydrateSources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredClientState) return;
+    writeCachedSources(uploadedSources);
+  }, [hasRestoredClientState, uploadedSources]);
+
+  useEffect(() => {
+    if (!hasRestoredClientState) return;
+    writeCachedChatState({
+      answer,
+      messages,
+      selectedCitationChunkId,
+      selectedDocumentIds,
+      sourceMode,
+    });
+  }, [
+    answer,
+    hasRestoredClientState,
+    messages,
+    selectedCitationChunkId,
+    selectedDocumentIds,
+    sourceMode,
+  ]);
 
   const sourcePlaceholder = useMemo(() => {
     if (sourceMode === "url") return "https://example.com/chinh-sach";
@@ -175,6 +348,7 @@ export default function CitationChatPage() {
     setIsLoading(true);
     setQuestion("");
     setSelectedCitationChunkId(null);
+    const requestHistory = chatHistoryForRequest(messages);
 
     const userMessage: ChatMessage = {
       id: createMessageId(),
@@ -198,6 +372,7 @@ export default function CitationChatPage() {
         body: JSON.stringify({
           question: userQuestion,
           document_ids: selectedDocumentIds,
+          history: requestHistory,
           use_mock_evidence: false,
         }),
       });
@@ -250,6 +425,7 @@ export default function CitationChatPage() {
 
           if (streamEvent.event === "done") {
             const finalAnswer = streamEvent.data as AnswerResponse;
+            const finalEvidenceChunks = finalAnswer.evidence_chunks ?? selectedSourceChunks;
             setAnswer(finalAnswer);
             const firstCitation = visibleCitationItems(
               finalAnswer.citations,
@@ -260,7 +436,7 @@ export default function CitationChatPage() {
               content: finalAnswer.answer,
               status: finalAnswer.status,
               citations: finalAnswer.citations,
-              evidenceChunks: selectedSourceChunks,
+              evidenceChunks: finalEvidenceChunks,
             });
           }
         }
@@ -291,6 +467,14 @@ export default function CitationChatPage() {
         message.id === messageId ? { ...message, ...patch } : message,
       ),
     );
+  }
+
+  function resetConversation() {
+    setMessages([createWelcomeMessage()]);
+    setAnswer(null);
+    setSelectedCitationChunkId(null);
+    setQuestion("");
+    setError("");
   }
 
   const contentGrid = cn(
@@ -385,6 +569,22 @@ export default function CitationChatPage() {
           {showSources ? (
             <SourcePanel
               fileName={fileName}
+              onSourceRemove={async (documentId) => {
+                try {
+                  await fetch(
+                    `${API_URL}/sources/${encodeURIComponent(documentId)}`,
+                    { method: "DELETE" },
+                  );
+                } catch {
+                  // optimistic: xóa UI dù API fail
+                }
+                setUploadedSources((current) =>
+                  current.filter((source) => source.documentId !== documentId),
+                );
+                setSelectedDocumentIds((current) =>
+                  current.filter((id) => id !== documentId),
+                );
+              }}
               onSourceReady={(source) => {
                 setUploadedSources((current) => [
                   source,
@@ -396,8 +596,16 @@ export default function CitationChatPage() {
                     : [...current, source.documentId],
                 );
               }}
+              onClearAll={async () => {
+                try {
+                  await fetch(`${API_URL}/sources`, { method: "DELETE" });
+                } catch {
+                  // optimistic
+                }
+                setUploadedSources([]);
+                setSelectedDocumentIds([]);
+              }}
               selectedDocumentIds={selectedDocumentIds}
-              setSourceChunkCount={setSourceChunkCount}
               setSourceStatus={setSourceStatus}
               setError={setError}
               setFileName={setFileName}
@@ -406,7 +614,6 @@ export default function CitationChatPage() {
               setSourceText={setSourceText}
               sourceMode={sourceMode}
               sourcePlaceholder={sourcePlaceholder}
-              sourceChunkCount={sourceChunkCount}
               sourceStatus={sourceStatus}
               sourceText={sourceText}
               uploadedSources={uploadedSources}
@@ -424,27 +631,38 @@ export default function CitationChatPage() {
                     Đặt câu hỏi, nhận câu trả lời cùng nguồn.
                   </h2>
                 </div>
-                <div className="grid grid-cols-2 gap-2 lg:w-60 xl:w-56 2xl:w-64">
-                  <Metric
-                    label="Tài liệu"
-                    value={
-                      selectedDocumentIds.length
-                        ? `${selectedDocumentIds.length} đang dùng`
-                        : "chưa chọn"
-                    }
-                  />
-                  <Metric
-                    label="Trạng thái"
-                    value={
-                      isSourceBusy
-                        ? "đang nạp"
-                        : sourceStatus === "ready"
-                          ? answer
-                            ? "đã trả lời"
-                            : "sẵn sàng"
-                          : "chưa nạp"
-                    }
-                  />
+                <div className="flex flex-col gap-2 lg:w-60 xl:w-56 2xl:w-64">
+                  <Button
+                    className="w-full"
+                    disabled={isLoading}
+                    onClick={resetConversation}
+                    variant="secondary"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    Reset hội thoại
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Metric
+                      label="Tài liệu"
+                      value={
+                        selectedDocumentIds.length
+                          ? `${selectedDocumentIds.length} đang dùng`
+                          : "chưa chọn"
+                      }
+                    />
+                    <Metric
+                      label="Trạng thái"
+                      value={
+                        isSourceBusy
+                          ? "đang nạp"
+                          : sourceStatus === "ready"
+                            ? answer
+                              ? "đã trả lời"
+                              : "sẵn sàng"
+                            : "chưa nạp"
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -508,7 +726,7 @@ export default function CitationChatPage() {
               answer={answer}
               onSelectCitation={setSelectedCitationChunkId}
               selectedCitationChunkId={selectedCitationChunkId}
-              sourceChunks={selectedSourceChunks}
+              sourceChunks={answer?.evidence_chunks ?? selectedSourceChunks}
             />
           ) : null}
         </div>
@@ -553,6 +771,20 @@ function parseStreamEvent(chunk: string): StreamEvent | null {
   }
 }
 
+function chatHistoryForRequest(messages: ChatMessage[]): ChatHistoryMessage[] {
+  return messages
+    .filter((message) =>
+      message.id !== "welcome"
+      && message.status !== "thinking"
+      && message.content.trim().length > 0,
+    )
+    .slice(-6)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim(),
+    }));
+}
+
 function ChatBubble({
   message,
   onSelectCitation,
@@ -595,7 +827,22 @@ function ChatBubble({
           ) : null}
         </div>
         {message.content ? (
-          <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+          isUser ? (
+            <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+          ) : (
+            <div className="prose prose-sm max-w-none leading-7 dark:prose-invert
+              prose-p:my-1
+              prose-ul:my-1 prose-ul:pl-4
+              prose-ol:my-1 prose-ol:pl-4
+              prose-li:my-0
+              prose-headings:my-2 prose-headings:font-semibold
+              prose-strong:font-semibold
+              prose-table:text-sm prose-table:border-collapse
+              prose-th:border prose-th:border-mint/30 prose-th:px-2 prose-th:py-1 prose-th:bg-mint/8
+              prose-td:border prose-td:border-mint/20 prose-td:px-2 prose-td:py-1">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            </div>
+          )
         ) : (
           <div className="space-y-2 py-1">
             <div className="h-3 w-48 rounded-full bg-mint/12 dark:bg-white/16" />
@@ -674,11 +921,30 @@ function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function parseSourceUrls(value: string): string[] {
+  const urls = new Set<string>();
+  for (const rawToken of value.split(/[\s,]+/)) {
+    const token = rawToken.trim().replace(/[),.;]+$/, "");
+    if (!/^https?:\/\//i.test(token)) continue;
+
+    try {
+      const url = new URL(token);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        urls.add(url.href);
+      }
+    } catch {
+      // Ignore malformed tokens so pasted notes around URLs do not block the batch.
+    }
+  }
+  return [...urls];
+}
+
 function SourcePanel({
   fileName,
+  onSourceRemove,
   onSourceReady,
+  onClearAll,
   selectedDocumentIds,
-  setSourceChunkCount,
   setSourceStatus,
   setError,
   setFileName,
@@ -687,15 +953,15 @@ function SourcePanel({
   setSourceText,
   sourceMode,
   sourcePlaceholder,
-  sourceChunkCount,
   sourceStatus,
   sourceText,
   uploadedSources,
 }: {
   fileName: string;
+  onSourceRemove: (documentId: string) => void;
   onSourceReady: (source: UploadedSource) => void;
+  onClearAll: () => void;
   selectedDocumentIds: string[];
-  setSourceChunkCount: (count: number) => void;
   setSourceStatus: (status: SourceProcessingStatus) => void;
   setError: (error: string) => void;
   setFileName: (fileName: string) => void;
@@ -704,18 +970,22 @@ function SourcePanel({
   setSourceText: (text: string) => void;
   sourceMode: SourceMode;
   sourcePlaceholder: string;
-  sourceChunkCount: number;
   sourceStatus: SourceProcessingStatus;
   sourceText: string;
   uploadedSources: UploadedSource[];
 }) {
   const [queuedSources, setQueuedSources] = useState<QueuedSource[]>([]);
-  const sourceStatusLabel = sourceStatusText(sourceStatus, sourceChunkCount);
-  const sourceProgress = sourceStatusProgress(sourceStatus);
-  const isSourceBusy = sourceStatus === "uploading" || sourceStatus === "processing";
+  const [sourceSearch, setSourceSearch] = useState("");
+  const normalizedSourceSearch = normalizeSearchText(sourceSearch);
+  const filteredUploadedSources = uploadedSources.filter((source) =>
+    sourceMatchesSearch(source, normalizedSourceSearch),
+  );
+  const uploadedSourceIds = uploadedSources.map((source) => source.documentId);
+  const allSourcesSelected =
+    uploadedSourceIds.length > 0 &&
+    uploadedSourceIds.every((documentId) => selectedDocumentIds.includes(documentId));
 
   function resetSource() {
-    setSourceChunkCount(0);
     setSourceStatus("idle");
   }
 
@@ -738,27 +1008,26 @@ function SourcePanel({
     mode: SourceMode;
     upload: () => Promise<SourceUploadResponse>;
   }) {
-    setFileName(item.name);
+    setFileName(displayQueuedSourceName(item));
     setSourceStatus("uploading");
     updateQueuedSource(item.id, {
       status: "uploading",
       progress: 35,
-      label: "Đang tải lên RAGFlow",
+      label: "Đang tải tài liệu",
     });
 
     const uploaded = await upload();
-    setFileName(uploaded.name);
+    setFileName(mode === "url" ? displayUrlName(uploaded.source ?? item.name) : uploaded.name);
     setSourceStatus("processing");
     updateQueuedSource(item.id, {
       name: uploaded.name,
       status: "processing",
       progress: 72,
-      label: "RAGFlow đang tách chunk",
+      label: "Đang tách chunk",
     });
 
     const sourceChunks = await waitForSourceChunks(uploaded.document_id);
     const totalChunks = sourceChunks.total_chunks || sourceChunks.chunks.length;
-    setSourceChunkCount(totalChunks);
     setSourceStatus("ready");
     onSourceReady({
       datasetId: uploaded.dataset_id,
@@ -766,6 +1035,9 @@ function SourcePanel({
       name: uploaded.name,
       provider: uploaded.provider,
       mode,
+      source: uploaded.source ?? undefined,
+      sourceType: uploaded.source_type ?? undefined,
+      metadata: {},
       totalChunks,
       chunks: sourceChunks.chunks,
       uploadedAt: Date.now(),
@@ -794,7 +1066,6 @@ function SourcePanel({
           label: message,
         });
         setSourceStatus("error");
-        setSourceChunkCount(0);
         setError(message);
       }
     }
@@ -804,8 +1075,62 @@ function SourcePanel({
     }
   }
 
+  async function processUrlQueue(urls: string[], items: QueuedSource[]) {
+    let completed = 0;
+    let failed = 0;
+    let visibleFailed = 0;
+    let nextIndex = 0;
+    setError("");
+
+    async function worker() {
+      while (nextIndex < urls.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const item = items[index];
+        try {
+          await processQueuedUpload({
+            item,
+            mode: "url",
+            upload: () => uploadUrlSource(urls[index]),
+          });
+          completed += 1;
+        } catch (queueError) {
+          failed += 1;
+          if (isHttpStatus(queueError, 502)) {
+            removeQueuedSource(item.id);
+            continue;
+          }
+
+          visibleFailed += 1;
+          const message = sourceErrorMessage(queueError);
+          updateQueuedSource(item.id, {
+            status: "error",
+            progress: 100,
+            label: message,
+          });
+          setError(message);
+        }
+      }
+    }
+
+    const workerCount = Math.min(URL_UPLOAD_CONCURRENCY, urls.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    if (completed > 0) {
+      setSourceStatus("ready");
+      return;
+    }
+    if (visibleFailed > 0) {
+      setSourceStatus("error");
+      return;
+    }
+    if (failed > 0) {
+      setFileName("");
+      setSourceStatus("idle");
+    }
+  }
+
   function failSourceImport(sourceError: unknown) {
-    setSourceChunkCount(0);
     setSourceStatus("error");
     setError(sourceErrorMessage(sourceError));
   }
@@ -821,10 +1146,34 @@ function SourcePanel({
       return;
     }
 
+    if (sourceMode === "url") {
+      const urls = parseSourceUrls(text);
+      if (!urls.length) {
+        setError("Nhập ít nhất một URL http/https hợp lệ trước khi nạp nguồn.");
+        return;
+      }
+
+      const queued = urls.map((url) => ({
+        id: createMessageId(),
+        name: url,
+        mode: "url" as const,
+        status: "queued" as const,
+        progress: 8,
+        label: "Đang chờ trong hàng đợi",
+      }));
+
+      setError("");
+      resetSource();
+      setQueuedSources((current) => [...queued, ...current]);
+      setSourceText("");
+      void processUrlQueue(urls, queued);
+      return;
+    }
+
     const uploadMode = sourceMode;
     const queuedSource: QueuedSource = {
       id: createMessageId(),
-      name: sourceMode === "url" ? text : "Văn bản người dùng",
+      name: "Văn bản người dùng",
       mode: uploadMode,
       status: "queued",
       progress: 8,
@@ -834,11 +1183,9 @@ function SourcePanel({
     setError("");
     resetSource();
     setQueuedSources((current) => [queuedSource, ...current]);
+    setSourceText("");
 
-    const uploadPromise =
-      sourceMode === "url"
-        ? uploadUrlSource(text)
-        : uploadTextSource({ title: "van-ban-nguoi-dung", text });
+    const uploadPromise = uploadTextSource({ title: "van-ban-nguoi-dung", text });
 
     void processQueuedUpload({
       item: queuedSource,
@@ -864,9 +1211,13 @@ function SourcePanel({
     );
   }
 
+  function toggleAllSourceSelection() {
+    setSelectedDocumentIds(allSourcesSelected ? [] : uploadedSourceIds);
+  }
+
   return (
     <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
-      <Panel>
+      <Panel className="overflow-visible">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold">Nguồn</h2>
@@ -943,31 +1294,22 @@ function SourcePanel({
               />
             </label>
           ) : sourceMode === "url" ? (
-            <div className="space-y-2">
-              <Input
-                placeholder={sourcePlaceholder}
+            <div className="space-y-3">
+              <Textarea
+                className="min-h-24"
+                placeholder={`${sourcePlaceholder}\nCó thể dán nhiều URL, mỗi dòng một link`}
                 value={sourceText}
                 onChange={(event) => setSourceText(event.target.value)}
               />
               <Button
                 className="w-full"
-                disabled={isSourceBusy || !sourceText.trim()}
+                disabled={!sourceText.trim()}
                 onClick={importTextSource}
                 type="button"
               >
-                {isSourceBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <LinkIcon className="h-4 w-4" aria-hidden="true" />
-                )}
+                <LinkIcon className="h-4 w-4" aria-hidden="true" />
                 Nạp URL
               </Button>
-              <SourceProgress
-                label={sourceStatusLabel}
-                progress={sourceProgress}
-                status={sourceStatus}
-                visible={Boolean(fileName)}
-              />
             </div>
           ) : (
             <div className="space-y-2">
@@ -979,36 +1321,73 @@ function SourcePanel({
               />
               <Button
                 className="w-full"
-                disabled={isSourceBusy || !sourceText.trim()}
+                disabled={!sourceText.trim()}
                 onClick={importTextSource}
                 type="button"
               >
-                {isSourceBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                )}
+                <FileText className="h-4 w-4" aria-hidden="true" />
                 Nạp văn bản
               </Button>
-              <SourceProgress
-                label={sourceStatusLabel}
-                progress={sourceProgress}
-                status={sourceStatus}
-                visible={Boolean(fileName)}
-              />
             </div>
           )}
         </div>
       </Panel>
 
-      <Panel>
-        <div className="mb-3 flex items-center justify-between">
+      <Panel className="flex min-h-0 flex-col">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="text-sm font-semibold">Tài liệu đang dùng</h2>
-          <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
-            {selectedDocumentIds.length} chọn
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge className="border-mint/20 text-mint dark:border-emerald-300/24 dark:text-emerald-200">
+              {selectedDocumentIds.length} chọn
+            </Badge>
+            {uploadedSources.length > 0 && (
+              <button
+                className="rounded-full border border-mint/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-mint transition hover:bg-mint/8 dark:border-emerald-300/24 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-emerald-300/10"
+                onClick={toggleAllSourceSelection}
+                type="button"
+              >
+                {allSourcesSelected ? "Bỏ chọn" : "Chọn tất cả"}
+              </button>
+            )}
+            {uploadedSources.length > 0 && (
+              <button
+                className="text-[11px] font-medium text-ink/40 transition hover:text-danger dark:text-slate-500 dark:hover:text-red-300"
+                onClick={() => {
+                  if (window.confirm(`Xóa tất cả ${uploadedSources.length} tài liệu khỏi vector DB?`)) {
+                    onClearAll();
+                  }
+                }}
+                title="Xóa tất cả tài liệu"
+                type="button"
+              >
+                Xóa tất cả
+              </button>
+            )}
+          </div>
         </div>
-        <div className="space-y-2">
+        <div className="relative mb-3">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/38 dark:text-slate-500"
+            aria-hidden="true"
+          />
+          <input
+            className="h-9 w-full rounded-md border border-line bg-white/78 pl-9 pr-9 text-sm text-ink outline-none transition placeholder:text-ink/36 focus:border-mint focus:ring-2 focus:ring-mint/12 dark:border-white/14 dark:bg-slate-900/78 dark:text-slate-50 dark:placeholder:text-slate-500"
+            placeholder="Tìm tài liệu, URL, loại..."
+            value={sourceSearch}
+            onChange={(event) => setSourceSearch(event.target.value)}
+          />
+          {sourceSearch ? (
+            <button
+              aria-label="Xóa từ khóa tìm kiếm"
+              className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ink/42 transition hover:bg-paper hover:text-ink dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              onClick={() => setSourceSearch("")}
+              type="button"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        <div className="max-h-[min(38vh,22rem)] min-h-0 space-y-2 overflow-y-auto pr-1">
           {uploadedSources.length || queuedSources.length ? (
             <>
               {queuedSources.map((source) => (
@@ -1039,13 +1418,23 @@ function SourcePanel({
                       />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium" title={source.name}>
-                          {source.name}
+                      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
+                        <p className="min-w-0 truncate text-sm font-medium" title={source.name}>
+                          {displayQueuedSourceName(source)}
                         </p>
                         <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] text-ink/54 dark:bg-slate-800 dark:text-slate-300">
                           {sourceLabel(source.mode)}
                         </span>
+                        {source.status === "error" && (
+                          <button
+                            aria-label={`Xóa ${source.name}`}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-danger/30 bg-white text-danger/70 transition hover:border-danger hover:bg-danger/8 dark:border-red-300/24 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-300/10"
+                            onClick={() => removeQueuedSource(source.id)}
+                            type="button"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/80 dark:bg-slate-800">
                         <div
@@ -1073,38 +1462,66 @@ function SourcePanel({
                 </article>
               ))}
 
-              {uploadedSources.map((source) => {
-              const selected = selectedDocumentIds.includes(source.documentId);
-              return (
-                <label
-                  className={cn(
-                    "flex min-w-0 cursor-pointer items-start gap-3 overflow-hidden rounded-md border p-3 transition",
-                    selected
-                      ? "border-mint/45 bg-mint/8 dark:border-emerald-300/30 dark:bg-emerald-300/12"
-                      : "border-line bg-paper/70 hover:bg-white dark:border-white/14 dark:bg-slate-900/76 dark:hover:bg-slate-800",
-                  )}
-                  key={source.documentId}
-                >
-                  <input
-                    checked={selected}
-                    className="mt-1 h-4 w-4 shrink-0 accent-mint"
-                    onChange={() => toggleSourceSelection(source.documentId)}
-                    type="checkbox"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium" title={source.name}>
-                      {source.name}
-                    </span>
-                    <span className="mt-1 block text-xs text-ink/52 dark:text-slate-300">
-                      {formatChunkCount(source.totalChunks)} · {sourceLabel(source.mode)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[11px] text-mint dark:bg-slate-800 dark:text-emerald-200">
-                    sẵn sàng
-                  </span>
-                </label>
-              );
+              {filteredUploadedSources.map((source) => {
+                const selected = selectedDocumentIds.includes(source.documentId);
+                return (
+                  <article
+                    className={cn(
+                      "grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 overflow-hidden rounded-md border p-3 transition",
+                      selected
+                        ? "border-mint/45 bg-mint/8 dark:border-emerald-300/30 dark:bg-emerald-300/12"
+                        : "border-line bg-paper/70 hover:bg-white dark:border-white/14 dark:bg-slate-900/76 dark:hover:bg-slate-800",
+                    )}
+                    key={source.documentId}
+                  >
+                    <input
+                      checked={selected}
+                      className="mt-1 h-4 w-4 shrink-0 accent-mint"
+                      onChange={() => toggleSourceSelection(source.documentId)}
+                      type="checkbox"
+                    />
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => toggleSourceSelection(source.documentId)}
+                      type="button"
+                    >
+                      <span
+                        className="line-clamp-2 break-words text-sm font-semibold leading-5 [overflow-wrap:anywhere]"
+                        title={source.source || source.name}
+                      >
+                        {displaySourceName(source)}
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-ink/52 dark:text-slate-300">
+                        {formatChunkCount(source.totalChunks)} · {sourceLabel(source.mode)}
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-start gap-2">
+                      <Link
+                        aria-label={`Xem debug ${source.name}`}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-mint transition hover:bg-paper dark:border-white/14 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-slate-800"
+                        href={`/citation-chat/sources/${encodeURIComponent(source.documentId)}`}
+                        title="Xem parse và chunk"
+                      >
+                        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                      <button
+                        aria-label={`Xóa ${source.name}`}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-ink/54 transition hover:border-danger/35 hover:bg-danger/8 hover:text-danger dark:border-white/14 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-300/30 dark:hover:bg-red-300/10 dark:hover:text-red-200"
+                        onClick={() => onSourceRemove(source.documentId)}
+                        title="Xóa khỏi danh sách"
+                        type="button"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </article>
+                );
               })}
+              {!filteredUploadedSources.length && uploadedSources.length ? (
+                <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/54 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-300">
+                  Không tìm thấy tài liệu phù hợp.
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
@@ -1161,6 +1578,180 @@ function SourceProgress({
       ) : null}
     </div>
   );
+}
+
+function SourceDebugPanel({
+  activeTab,
+  debug,
+  error,
+  isLoading,
+  onClose,
+  onTabChange,
+}: {
+  activeTab: SourceDebugTab;
+  debug: SourceDebugResponse | null;
+  error: string;
+  isLoading: boolean;
+  onClose: () => void;
+  onTabChange: (tab: SourceDebugTab) => void;
+}) {
+  const tabs: Array<{ id: SourceDebugTab; label: string }> = [
+    { id: "source", label: "Gốc" },
+    { id: "markdown", label: "Markdown" },
+    { id: "chunks", label: "Chunks" },
+  ];
+
+  return (
+    <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden pr-1">
+      <Panel className="flex min-h-0 flex-1 flex-col">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Debug ingestion</h2>
+            <p className="mt-1 truncate text-xs text-ink/54 dark:text-slate-300">
+              {debug?.name ?? "Đang tải source"}
+            </p>
+          </div>
+          <button
+            aria-label="Đóng debug source"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-white text-ink/54 transition hover:bg-paper dark:border-white/14 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            onClick={onClose}
+            title="Đóng debug"
+            type="button"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-3 gap-1 rounded-md bg-paper/70 p-1 dark:bg-slate-900/76">
+          {tabs.map((tab) => (
+            <button
+              className={cn(
+                "h-8 rounded px-2 text-xs font-medium transition",
+                activeTab === tab.id
+                  ? "bg-white text-mint shadow-sm dark:bg-slate-800 dark:text-emerald-200"
+                  : "text-ink/58 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-slate-800/70",
+              )}
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              type="button"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {isLoading ? (
+            <div className="flex items-center gap-2 rounded-md border border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Đang tải debug source...
+            </div>
+          ) : error ? (
+            <div className="rounded-md border border-danger/30 bg-danger/8 p-4 text-sm text-danger dark:text-red-200">
+              {error}
+            </div>
+          ) : debug ? (
+            <SourceDebugTabContent activeTab={activeTab} debug={debug} />
+          ) : null}
+        </div>
+      </Panel>
+    </aside>
+  );
+}
+
+function SourceDebugTabContent({
+  activeTab,
+  debug,
+}: {
+  activeTab: SourceDebugTab;
+  debug: SourceDebugResponse;
+}) {
+  if (activeTab === "markdown") {
+    return debug.markdown.trim() ? (
+      <pre className="whitespace-pre-wrap break-words rounded-md border border-line bg-paper/70 p-3 text-xs leading-5 text-ink/72 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
+        {debug.markdown}
+      </pre>
+    ) : (
+      <EmptyDebugState text="Source này chưa có Markdown lưu trong local artifact." />
+    );
+  }
+
+  if (activeTab === "chunks") {
+    return (
+      <div className="space-y-2">
+        <div className="rounded-md border border-line bg-paper/70 p-3 text-xs text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-300">
+          {debug.total_chunks} chunk đã tạo
+        </div>
+        {debug.chunks.map((result) => (
+          <article
+            className="min-w-0 overflow-hidden rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76"
+            key={result.chunk.chunk_id}
+          >
+            <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-ink/72 dark:text-slate-200">
+                  Chunk {result.rank}
+                </p>
+                <p className="mt-1 break-words text-[11px] text-ink/46 [overflow-wrap:anywhere] dark:text-slate-400">
+                  {result.chunk.chunk_id}
+                </p>
+              </div>
+              <Badge>{metadataValue(result.chunk.metadata, "section") ?? "main"}</Badge>
+            </div>
+            <p className="break-words text-sm leading-6 text-ink/72 [overflow-wrap:anywhere] dark:text-slate-200">
+              {result.chunk.text}
+            </p>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <DebugField label="Tên" value={debug.name} />
+      <DebugField label="Loại" value={debug.source_type} />
+      <DebugField label="Nguồn" value={debug.source} />
+      <DebugField label="Provider" value={debug.provider} />
+      <DebugField label="Document ID" value={debug.document_id} />
+      <div className="rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/76">
+        <p className="mb-2 text-xs font-semibold text-ink/62 dark:text-slate-300">Metadata</p>
+        <div className="space-y-2">
+          {Object.entries(debug.metadata).map(([key, value]) => (
+            <DebugField key={key} label={key} value={formatDebugValue(value)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DebugField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md border border-line bg-white/70 px-3 py-2 dark:border-white/14 dark:bg-slate-950/42">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/42 dark:text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 break-words text-xs leading-5 text-ink/70 [overflow-wrap:anywhere] dark:text-slate-200">
+        {value || "-"}
+      </p>
+    </div>
+  );
+}
+
+function EmptyDebugState({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-line bg-paper/70 p-4 text-sm text-ink/58 dark:border-white/14 dark:bg-slate-900/76 dark:text-slate-200">
+      {text}
+    </div>
+  );
+}
+
+function formatDebugValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
 }
 
 function CitationPanel({
@@ -1391,7 +1982,7 @@ async function uploadUrlSource(url: string): Promise<SourceUploadResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`URL import failed: ${response.status}`);
+    throw new HttpRequestError("URL import failed", response.status);
   }
 
   return (await response.json()) as SourceUploadResponse;
@@ -1417,23 +2008,299 @@ async function uploadTextSource({
   return (await response.json()) as SourceUploadResponse;
 }
 
+async function fetchSources(includeChunks = false): Promise<SourceListResponse> {
+  const response = await fetch(`${API_URL}/sources?include_chunks=${includeChunks ? "true" : "false"}`);
+  if (!response.ok) {
+    throw new Error(`Khong lay duoc danh sach tai lieu: ${response.status}`);
+  }
+  return (await response.json()) as SourceListResponse;
+}
+
+function uploadedSourceFromListItem(
+  source: SourceListItem,
+  index: number,
+): UploadedSource {
+  return {
+    datasetId: source.dataset_id,
+    documentId: source.document_id,
+    name: source.name,
+    provider: source.provider,
+    mode: sourceModeFromSourceType(source.source_type),
+    source: source.source,
+    sourceType: source.source_type,
+    metadata: source.metadata,
+    totalChunks: source.total_chunks || source.chunks.length,
+    chunks: source.chunks,
+    uploadedAt: Date.now() - index,
+  };
+}
+
+function mergeSourcesWithCachedChunks(
+  sources: UploadedSource[],
+  cachedSources: UploadedSource[],
+): UploadedSource[] {
+  const cacheById = new Map(cachedSources.map((source) => [source.documentId, source]));
+  return sources.map((source) => {
+    const cached = cacheById.get(source.documentId);
+    if (!cached?.chunks.length || source.chunks.length) {
+      return source;
+    }
+    return {
+      ...source,
+      chunks: cached.chunks,
+    };
+  });
+}
+
+function readCachedSources(): UploadedSource[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(SOURCE_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as UploadedSource[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((source) => source?.documentId && source?.name)
+      .map((source, index) => ({
+        datasetId: source.datasetId || "local_pdf",
+        documentId: source.documentId,
+        name: source.name,
+        provider: source.provider || "local_pdf",
+        mode: source.mode || sourceModeFromSourceType(source.sourceType || ""),
+        source: source.source,
+        sourceType: source.sourceType,
+        metadata:
+          source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata)
+            ? source.metadata
+            : {},
+        totalChunks: Number(source.totalChunks) || source.chunks?.length || 0,
+        chunks: Array.isArray(source.chunks) ? source.chunks : [],
+        uploadedAt: Number(source.uploadedAt) || Date.now() - index,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedSources(sources: UploadedSource[]) {
+  if (typeof window === "undefined") return;
+
+  if (!sources.length) {
+    window.localStorage.removeItem(SOURCE_CACHE_KEY);
+    return;
+  }
+
+  const cachePayload = sources.map((source) => ({
+    ...source,
+    chunks: [],
+  }));
+  window.localStorage.setItem(SOURCE_CACHE_KEY, JSON.stringify(cachePayload));
+}
+
+function readCachedSourceMode(): SourceMode {
+  if (typeof window === "undefined") return "pdf";
+
+  const stored = window.localStorage.getItem(SOURCE_MODE_KEY);
+  if (stored === "pdf" || stored === "url" || stored === "text") {
+    return stored;
+  }
+  return "pdf";
+}
+
+function readCachedChatState(): ChatPageCache | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(CHAT_STATE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ChatPageCache;
+    if (!Array.isArray(parsed.messages) || !isSourceMode(parsed.sourceMode)) {
+      return null;
+    }
+    return {
+      answer: parsed.answer ?? null,
+      messages: parsed.messages.length ? parsed.messages : [createWelcomeMessage()],
+      selectedCitationChunkId: parsed.selectedCitationChunkId ?? null,
+      selectedDocumentIds: Array.isArray(parsed.selectedDocumentIds)
+        ? parsed.selectedDocumentIds.filter((id) => typeof id === "string")
+        : [],
+      sourceMode: parsed.sourceMode,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedChatState(state: ChatPageCache) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(SOURCE_MODE_KEY, state.sourceMode);
+  window.localStorage.setItem(
+    CHAT_STATE_CACHE_KEY,
+    JSON.stringify({
+      ...state,
+      messages: state.messages.map((message) => ({
+        ...message,
+        status: message.status === "thinking" ? "not_found" : message.status,
+      })),
+    }),
+  );
+}
+
+function isSourceMode(value: unknown): value is SourceMode {
+  return value === "pdf" || value === "url" || value === "text";
+}
+
+function sourceModeFromSourceType(sourceType: string): SourceMode {
+  if (sourceType === "url") return "url";
+  if (sourceType === "text") return "text";
+  return "pdf";
+}
+
+function displayQueuedSourceName(source: QueuedSource): string {
+  if (source.mode === "url") {
+    return displayUrlName(source.name);
+  }
+  return source.name;
+}
+
+function displaySourceName(source: UploadedSource): string {
+  if (source.mode === "url") {
+    return displayUrlName(source.source || source.name);
+  }
+  return source.name;
+}
+
+function sourceMatchesSearch(source: UploadedSource, normalizedQuery: string): boolean {
+  if (!normalizedQuery) return true;
+
+  const haystack = normalizeSearchText(sourceSearchText(source));
+  const compactHaystack = compactSearchText(haystack);
+  const compactQuery = compactSearchText(normalizedQuery);
+  if (haystack.includes(normalizedQuery) || compactHaystack.includes(compactQuery)) {
+    return true;
+  }
+
+  return searchTokens(normalizedQuery).every((token) => {
+    const compactToken = compactSearchText(token);
+    return haystack.includes(token) || compactHaystack.includes(compactToken);
+  });
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function sourceSearchText(source: UploadedSource): string {
+  return [
+    displaySourceName(source),
+    source.name,
+    source.source,
+    source.sourceType,
+    source.mode,
+    source.provider,
+    source.datasetId,
+    source.documentId,
+    ...metadataSearchValues(source.metadata),
+    ...source.chunks.slice(0, 8).flatMap((result) => [
+      result.chunk.chunk_id,
+      metadataSearchValues(result.chunk.metadata).join(" "),
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function metadataSearchValues(metadata?: Record<string, unknown>): string[] {
+  if (!metadata) return [];
+
+  const preferredKeys = [
+    "title",
+    "document_name",
+    "file_name",
+    "source",
+    "url",
+    "original_url",
+    "final_url",
+    "canonical_url",
+    "section",
+    "source_type",
+    "language",
+  ];
+  return preferredKeys
+    .map((key) => unknownToSearchText(metadata[key]))
+    .filter((value): value is string => Boolean(value));
+}
+
+function unknownToSearchText(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map(unknownToSearchText).filter(Boolean).join(" ");
+  }
+  return null;
+}
+
+function searchTokens(normalizedQuery: string): string[] {
+  return normalizedQuery.split(/\s+/).filter(Boolean);
+}
+
+function compactSearchText(text: string): string {
+  return text.replace(/[^a-z0-9]+/g, "");
+}
+
+function displayUrlName(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.hostname}${parsed.pathname}`.replace(/\/$/, "") || parsed.hostname;
+  } catch {
+    return value
+      .replace(/^https?:\/\//, "")
+      .replace(/\.html\.txt$/, "")
+      .replace(/\.txt$/, "");
+  }
+}
+
 async function waitForSourceChunks(
   documentId: string,
   attempts = 20,
   delayMs = 3000,
 ): Promise<SourceChunksResponse> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(`${API_URL}/sources/${documentId}/chunks`);
-    if (response.ok) {
-      const payload = (await response.json()) as SourceChunksResponse;
+    try {
+      const payload = await fetchSourceChunks(documentId);
       if (payload.chunks.length > 0) {
         return payload;
       }
+    } catch {
+      // The source may still be parsing; keep polling until the caller's timeout.
     }
     await delay(delayMs);
   }
 
-  throw new Error("RAGFlow đã nhận tài liệu nhưng chưa tạo chunk. Chờ thêm rồi thử lại.");
+  throw new Error("Tài liệu đã được nhận nhưng chưa tạo chunk. Chờ thêm rồi thử lại.");
+}
+
+async function fetchSourceChunks(documentId: string): Promise<SourceChunksResponse> {
+  const response = await fetch(`${API_URL}/sources/${documentId}/chunks`);
+  if (!response.ok) {
+    throw new Error(`Khong lay duoc chunk source: ${response.status}`);
+  }
+  return (await response.json()) as SourceChunksResponse;
+}
+
+async function fetchSourceDebug(documentId: string): Promise<SourceDebugResponse> {
+  const response = await fetch(`${API_URL}/sources/${documentId}/debug`);
+  if (!response.ok) {
+    throw new Error(`Không lấy được debug source: ${response.status}`);
+  }
+  return (await response.json()) as SourceDebugResponse;
 }
 
 function delay(ms: number): Promise<void> {
@@ -1441,17 +2308,27 @@ function delay(ms: number): Promise<void> {
 }
 
 function sourceStatusText(status: SourceProcessingStatus, chunkCount: number): string {
-  if (status === "uploading") return "Đang tải tài liệu lên RAGFlow";
-  if (status === "processing") return "RAGFlow đang tách đoạn tài liệu";
+  if (status === "uploading") return "Đang tải tài liệu";
+  if (status === "processing") return "Đang tách đoạn tài liệu";
   if (status === "ready") return `Sẵn sàng hỏi đáp (${chunkCount} chunk)`;
   if (status === "error") return "Chưa nạp được tài liệu";
-  return "Tệp sẽ được nạp vào RAGFlow";
+  return "Tệp sẽ được nạp vào phiên chat";
 }
 
 function sourceErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
-    : "Không nạp được tài liệu vào RAGFlow. Kiểm tra cấu hình API.";
+    : "Không nạp được tài liệu. Kiểm tra cấu hình API.";
+}
+
+function isHttpStatus(error: unknown, status: number): boolean {
+  if (error instanceof HttpRequestError) {
+    return error.status === status;
+  }
+  if (error instanceof Error) {
+    return new RegExp(`(^|[^0-9])${status}([^0-9]|$)`).test(error.message);
+  }
+  return false;
 }
 
 function isSmallTalkQuestion(text: string): boolean {

@@ -73,4 +73,9 @@ index/
 Thumbs.db
 
 # uv lock file
-uv.lock 
+uv.lock
+
+# Evaluation data files
+eval.xlsx
+result.xlsx
+*.xlsx

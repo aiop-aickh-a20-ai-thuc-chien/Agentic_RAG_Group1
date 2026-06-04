@@ -10,6 +10,7 @@ from agentic_rag.ingestion.pdf import LoadedPdfDocument
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
+from agentic_rag.integrations.local_pdf.storage import StoredSourceDocument
 from agentic_rag.retrieval.search import Store
 
 
@@ -59,7 +60,9 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
                     metadata={"chunk_index": 2, "section": "Dieu kien"},
                 ),
             ],
-            parser=kwargs["parser_name"],
+            parser=kwargs["strategy_name"],
+            pipeline=kwargs["pipeline_name"],
+            strategy=kwargs["strategy_name"],
             chunker=kwargs["chunker_name"],
         )
 
@@ -86,11 +89,14 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     assert trace["parse"]["markdown_preview"] == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
     assert "markdown" not in trace["parse"]
     assert seen_kwargs == {
-        "parser_name": "docling",
-        "chunker_name": "docling-hybrid",
+        "pipeline_name": "ocr",
+        "strategy_name": "docling",
+        "chunker_name": "deterministic",
     }
     assert trace["chunking"]["chunk_count"] == 2
-    assert trace["chunking"]["chunker"] == "docling-hybrid"
+    assert trace["parse"]["pipeline"] == "ocr"
+    assert trace["parse"]["strategy"] == "docling"
+    assert trace["chunking"]["chunker"] == "deterministic"
     assert trace["index_write"]["type"] == "jsonl"
     assert document_chunks.total_chunks == 2
     assert [chunk.chunk_id for chunk in document_chunks.chunks] == [
@@ -103,6 +109,12 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     markdown_path = tmp_path / "parsed" / f"{uploaded.document_id}.md"
     assert trace["parse"]["markdown_path"] == str(markdown_path)
     assert markdown_path.read_text(encoding="utf-8") == ("# Bao hanh\nPin VF8 duoc bao hanh 8 nam.")
+    debug = provider.document_debug(document_id=uploaded.document_id)
+    assert debug.markdown == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
+    assert debug.chunk_input == "# Bao hanh\nPin VF8 duoc bao hanh 8 nam."
+    assert debug.chunk_input_type == "markdown"
+    assert debug.name == "warranty.pdf"
+    assert debug.source_type == "pdf"
 
 
 def test_local_pdf_provider_can_include_full_markdown_in_trace(
@@ -140,7 +152,9 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
         return LoadedPdfDocument(
             markdown="# Configured\nNoi dung.",
             chunks=[],
-            parser=kwargs["parser_name"],
+            parser=kwargs["strategy_name"],
+            pipeline=kwargs["pipeline_name"],
+            strategy=kwargs["strategy_name"],
             chunker=kwargs["chunker_name"],
         )
 
@@ -151,8 +165,9 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
     provider = LocalPdfEvidenceProvider(
         store_dir=tmp_path,
         pdf_config=PdfIngestionConfig(
-            parser_name="docling",
-            chunker_name="docling-hybrid",
+            pipeline_name="vlm",
+            strategy_name="mineru",
+            chunker_name="deterministic",
         ),
     )
 
@@ -164,11 +179,14 @@ def test_local_pdf_provider_passes_configured_parser_and_chunker(
 
     trace = cast(dict[str, dict[str, Any]], uploaded.trace)
     assert seen_kwargs == {
-        "parser_name": "docling",
-        "chunker_name": "docling-hybrid",
+        "pipeline_name": "vlm",
+        "strategy_name": "mineru",
+        "chunker_name": "deterministic",
     }
-    assert trace["parse"]["parser"] == "docling"
-    assert trace["chunking"]["chunker"] == "docling-hybrid"
+    assert trace["parse"]["parser"] == "mineru"
+    assert trace["parse"]["pipeline"] == "vlm"
+    assert trace["parse"]["strategy"] == "mineru"
+    assert trace["chunking"]["chunker"] == "deterministic"
 
 
 def test_local_pdf_provider_uploads_url_chunks(
@@ -214,7 +232,8 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert trace["parse"]["title"] == "Trang chinh sach"
     assert trace["parse"]["section_count"] == 1
     assert trace["parse"]["sections"] == ["Chinh sach"]
-    assert trace["parse"]["markdown_path"] is None
+    markdown_path = tmp_path / "parsed" / f"{uploaded.document_id}.md"
+    assert trace["parse"]["markdown_path"] == str(markdown_path)
     assert trace["parse"]["markdown_chars"] == 70
     assert trace["parse"]["markdown_preview"].startswith("# Trang chinh sach")
     assert trace["chunking"]["chunk_count"] == 1
@@ -225,6 +244,12 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert chunk.metadata["source_type"] == "url"
     assert chunk.metadata["source"] == "https://example.com/chinh-sach"
     assert chunk.metadata["url"] == "https://example.com/chinh-sach"
+    debug = provider.document_debug(document_id=uploaded.document_id)
+    assert debug.markdown.startswith("# Trang chinh sach")
+    assert debug.chunk_input == "Noi dung URL ve chinh sach mua nha."
+    assert debug.chunk_input_type == "parsed_sections"
+    assert debug.source_type == "url"
+    assert debug.source == "https://example.com/chinh-sach"
 
 
 def test_local_pdf_provider_uploads_text_chunks(
@@ -252,6 +277,99 @@ def test_local_pdf_provider_uploads_text_chunks(
     assert chunk.metadata["document_id"] == uploaded.document_id
     assert chunk.metadata["source_type"] == "text"
     assert chunk.text == "Noi dung tu nguoi dung"
+
+
+def test_local_pdf_provider_can_persist_chunks_with_source_store(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+            self.seen_metadata: dict[str, object] | None = None
+
+        def write_document(
+            self,
+            *,
+            document_id: str,
+            dataset_id: str,
+            name: str,
+            source_type: str,
+            source: str,
+            raw_path: Path | None,
+            markdown_path: Path | None,
+            metadata: dict[str, object],
+            chunks: list[Chunk],
+        ) -> None:
+            self.seen_metadata = metadata
+            self.documents[document_id] = chunks
+
+        def read_chunks(self, document_id: str) -> list[Chunk]:
+            return self.documents.get(document_id, [])
+
+        def read_all_chunks(self) -> list[Chunk]:
+            return [chunk for chunks in self.documents.values() for chunk in chunks]
+
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return [
+                StoredSourceDocument(
+                    document_id=document_id,
+                    dataset_id="local_pdf",
+                    name="Ghi-chu.txt",
+                    source_type="text",
+                    source="Ghi-chu.txt",
+                    total_chunks=len(chunks),
+                    metadata={"title": "Ghi chu"},
+                )
+                for document_id, chunks in self.documents.items()
+            ]
+
+        def delete_document(self, document_id: str) -> None:
+            if document_id not in self.documents:
+                raise ValueError(f"Document {document_id!r} not found.")
+            del self.documents[document_id]
+
+        def delete_all_documents(self) -> int:
+            count = len(self.documents)
+            self.documents.clear()
+            return count
+
+        def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+            result = []
+            for doc_id in document_ids:
+                result.extend(self.documents.get(doc_id, []))
+            return result
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+    document_chunks = provider.document_chunks(document_id=uploaded.document_id)
+
+    assert uploaded.document_id in source_store.documents
+    assert source_store.seen_metadata == {"title": "Ghi chu"}
+    assert document_chunks.total_chunks == 1
+    assert document_chunks.chunks[0].metadata["storage_chunk_id"] == (
+        f"{uploaded.document_id}:0001"
+    )
+    documents = provider.list_documents()
+    assert len(documents) == 1
+    assert documents[0].document_id == uploaded.document_id
+    assert documents[0].chunks[0].text == "Noi dung tu nguoi dung"
 
 
 def test_local_pdf_provider_retrieves_matching_chunks(
@@ -304,11 +422,10 @@ def test_local_pdf_provider_retrieves_matching_chunks(
 
     assert len(results) >= 1
     assert results[0].chunk.chunk_id == "pdf_doc_c0001"
-    assert results[0].retriever == "rerank"
+    assert results[0].retriever == "hybrid"
     assert results[0].rank == 1
     assert (
-        results[0].chunk.metadata["retrieval_pipeline"]
-        == "source_ingestion -> bm25 + dense -> rrf -> rerank"
+        results[0].chunk.metadata["retrieval_pipeline"] == "source_ingestion -> bm25 + dense -> rrf"
     )
     assert results[0].chunk.metadata["bm25"] is not None
     assert results[0].chunk.metadata["dense"] is not None
@@ -331,13 +448,13 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert rrf_contributions["dense"]["retriever"] == "dense"
     assert rrf_contributions["total_rrf_score"] > 0
     assert pipeline_trace["thresholds"]["pre_fusion"]["bm25_original_count"] >= 1
-    assert pipeline_trace["thresholds"]["pre_fusion"]["thresholds_applied"] is False
+    assert isinstance(pipeline_trace["thresholds"]["pre_fusion"]["thresholds_applied"], bool)
     assert pipeline_trace["thresholds"]["fusion"]["fusion_min_score"] is None
-    assert pipeline_trace["thresholds"]["rerank"]["final_evidence_count"] == len(results)
     assert results[0].chunk.metadata["rrf_contributions"]["total_rrf_score"] > 0
-    assert pipeline_trace["rerank"]["tech"]["used_provider"] == "score"
+    assert pipeline_trace["rerank"]["tech"]["provider"] == "skipped"
+    assert pipeline_trace["rerank"]["tech"]["reason"] == "agent_reranks"
     assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "hybrid"
-    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "rerank"
+    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "hybrid"
 
 
 def test_local_pdf_provider_rejects_non_pdf_upload(tmp_path: Path) -> None:

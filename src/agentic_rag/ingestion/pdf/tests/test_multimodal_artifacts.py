@@ -79,6 +79,7 @@ def test_save_pdf_multimodal_artifacts_writes_elements_assets_and_enriched_chunk
     assert manifest.chart_count == 1
     assert manifest.table_count == 1
     assert (run_dir / "elements.jsonl").exists()
+    assert (run_dir / "chunks.md").exists()
     assert (run_dir / "assets" / "images" / "pdf_mixed_image_0001.png").exists()
     assert (run_dir / "assets" / "charts" / "pdf_mixed_chart_0001.png").exists()
     assert (run_dir / "assets" / "tables" / "pdf_mixed_table_0001.md").exists()

@@ -3,50 +3,97 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
-import time
-from collections.abc import Iterator
-from html.parser import HTMLParser
-from urllib.error import HTTPError as UrlHTTPError
-from urllib.error import URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+import warnings
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
+import time  # noqa: E402
+from collections.abc import AsyncIterator, Iterator  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from html.parser import HTMLParser  # noqa: E402
+from urllib.error import HTTPError as UrlHTTPError  # noqa: E402
+from urllib.error import URLError  # noqa: E402
+from urllib.parse import urlparse  # noqa: E402
+from urllib.request import Request, urlopen  # noqa: E402
 
-from agentic_rag.core.contracts import Answer, SearchResult
-from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider
-from agentic_rag.generation.answering import (
+from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+from agentic_rag.agent.graph import run_agent  # noqa: E402
+from agentic_rag.core.contracts import Answer, Chunk, SearchResult  # noqa: E402
+from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider  # noqa: E402
+from agentic_rag.generation.answering import (  # noqa: E402
     AnswerDelta,
     AnswerDone,
     generate_answer_with_trace,
     stream_answer,
 )
-from agentic_rag.generation.evidence import (
+from agentic_rag.generation.evidence import (  # noqa: E402
     EvidenceProviderName,
     configured_evidence_provider_name,
     evidence_for_question,
     ragflow_provider_from_env,
     source_provider_from_env,
 )
-from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
-from agentic_rag.integrations.ragflow.client import RAGFlowClientError
-from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError
-from agentic_rag.observability.trace import new_run_id, write_rag_trace, write_source_trace
-from agentic_rag.runtime_env import load_local_env
+from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider  # noqa: E402
+from agentic_rag.integrations.ragflow.client import RAGFlowClientError  # noqa: E402
+from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError  # noqa: E402
+from agentic_rag.observability.trace import (  # noqa: E402
+    new_run_id,
+    write_rag_trace,
+    write_source_trace,
+)
+from agentic_rag.retrieval.fusion import (  # noqa: E402
+    build_evidence_context as _build_evidence_context,
+)
+from agentic_rag.retrieval.fusion import preload_reranker  # noqa: E402
+from agentic_rag.runtime_env import load_local_env  # noqa: E402
 
 load_local_env()
 
 UPLOAD_FILE = File(...)
+LOGGER = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _api_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Warm optional heavyweight models before the first user request."""
+
+    _preload_configured_models()
+    yield
+
+
+def _preload_configured_models() -> None:
+    result = preload_reranker()
+    status = result.get("status")
+    if status == "loaded":
+        LOGGER.info(
+            "Preloaded reranker model %s.",
+            result.get("model"),
+        )
+    elif status == "failed":
+        LOGGER.warning(
+            "Reranker preload failed; falling back at request time: %s",
+            result.get("fallback_reason"),
+        )
 
 
 class AnswerRequest(BaseModel):
     """Request body for the answer endpoint."""
 
     question: str = Field(min_length=1)
+    history: list[dict[str, str]] | None = Field(
+        default=None,
+        description=(
+            "Conversation history for context-aware query rewriting. "
+            'Each entry: {"role": "user" | "assistant", "content": "..."}. '
+            "Only used when AGENT_MODE=true."
+        ),
+    )
     evidence_context: str | None = None
     evidence_chunks: list[SearchResult] | None = None
     evidence_provider: EvidenceProviderName | None = None
@@ -69,6 +116,8 @@ class SourceUploadResponse(BaseModel):
     document_id: str
     name: str
     parse_started: bool
+    source_type: str | None = None
+    source: str | None = None
 
 
 class SourceUrlRequest(BaseModel):
@@ -93,7 +142,44 @@ class SourceChunksResponse(BaseModel):
     chunks: list[SearchResult]
 
 
-api = FastAPI(title="Agentic RAG Generation API")
+class SourceListItem(BaseModel):
+    """One persisted source document for frontend hydration."""
+
+    provider: str
+    dataset_id: str
+    document_id: str
+    name: str
+    source_type: str
+    source: str
+    total_chunks: int
+    chunks: list[SearchResult]
+    metadata: dict[str, object]
+
+
+class SourceListResponse(BaseModel):
+    """Persisted source documents available to the current provider."""
+
+    provider: str
+    sources: list[SourceListItem]
+
+
+class SourceDebugResponse(BaseModel):
+    """Debug payload for one uploaded source."""
+
+    provider: str
+    document_id: str
+    name: str
+    source_type: str
+    source: str
+    metadata: dict[str, object]
+    markdown: str
+    chunk_input: str
+    chunk_input_type: str
+    total_chunks: int
+    chunks: list[SearchResult]
+
+
+api = FastAPI(title="Agentic RAG Generation API", lifespan=_api_lifespan)
 api.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -144,14 +230,37 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
             headers={"Cache-Control": "no-cache"},
         )
 
+    if _agent_mode_enabled():
+        provider = source_provider_from_env()
+        result = run_agent(
+            provider=provider,
+            question=request.question,
+            document_ids=request.document_ids,
+            history=request.history or [],
+        )
+        return StreamingResponse(
+            _stream_direct_answer_events(
+                question=request.question,
+                answer=result.answer,
+                provider="agentic",
+                evidence_chunks=result.evidence_chunks,
+                generation_trace={
+                    "queries_tried": result.queries_tried,
+                    "agent_steps": result.steps,
+                },
+            ),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
     evidence_chunks, evidence_context = _evidence_for_request(request)
-    provider = _provider_name(request)
+    provider_name = _provider_name(request)
     return StreamingResponse(
         _stream_answer_events(
             question=request.question,
             evidence_context=evidence_context,
             evidence_chunks=evidence_chunks,
-            provider=provider,
+            provider=provider_name,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
@@ -194,6 +303,8 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="pdf",
+        source=file.filename or uploaded.name,
     )
 
 
@@ -243,6 +354,43 @@ def upload_text_source(request: SourceTextRequest) -> SourceUploadResponse:
     )
 
 
+@api.get("/sources", response_model=SourceListResponse)
+def list_sources(
+    include_chunks: bool = False,
+) -> SourceListResponse:
+    """Return persisted sources for frontend hydration after reload."""
+
+    try:
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    provider_label = _source_provider_label(provider_name)
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        return SourceListResponse(provider=provider_label, sources=[])
+
+    sources = [
+        SourceListItem(
+            provider=provider_label,
+            dataset_id=document.dataset_id,
+            document_id=document.document_id,
+            name=document.name,
+            source_type=document.source_type,
+            source=document.source,
+            total_chunks=document.total_chunks,
+            chunks=(
+                _search_results_for_chunks(document.chunks, provider_label)
+                if include_chunks
+                else []
+            ),
+            metadata=document.metadata,
+        )
+        for document in provider.list_documents(include_chunks=include_chunks)
+    ]
+    return SourceListResponse(provider=provider_label, sources=sources)
+
+
 @api.get("/sources/{document_id}/chunks", response_model=SourceChunksResponse)
 def source_chunks(document_id: str) -> SourceChunksResponse:
     """Return normalized chunks for one uploaded document."""
@@ -268,6 +416,134 @@ def source_chunks(document_id: str) -> SourceChunksResponse:
         total_chunks=document_chunks.total_chunks,
         chunks=chunks,
     )
+
+
+@api.get("/sources/{document_id}/debug", response_model=SourceDebugResponse)
+def source_debug(document_id: str) -> SourceDebugResponse:
+    """Return source metadata, parsed Markdown, and chunks for debugging ingestion."""
+
+    try:
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    provider_label = _source_provider_label(provider_name)
+    if isinstance(provider, LocalPdfEvidenceProvider):
+        try:
+            debug = provider.document_debug(document_id=document_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        chunks = _search_results_for_chunks(debug.chunks, provider_label)
+        return SourceDebugResponse(
+            provider=provider_label,
+            document_id=debug.document_id,
+            name=debug.name,
+            source_type=debug.source_type,
+            source=debug.source,
+            metadata=debug.metadata,
+            markdown=debug.markdown,
+            chunk_input=debug.chunk_input,
+            chunk_input_type=debug.chunk_input_type,
+            total_chunks=debug.total_chunks,
+            chunks=chunks,
+        )
+
+    document_chunks = _document_chunks(provider, document_id)
+    chunks = _search_results_for_chunks(document_chunks.chunks, provider_label)
+    metadata = dict(document_chunks.chunks[0].metadata) if document_chunks.chunks else {}
+    name = str(metadata.get("document_name") or metadata.get("file_name") or document_id)
+    source_type = str(metadata.get("source_type") or provider_label)
+    source = str(metadata.get("source") or metadata.get("url") or name)
+    return SourceDebugResponse(
+        provider=provider_label,
+        document_id=document_id,
+        name=name,
+        source_type=source_type,
+        source=source,
+        metadata=metadata,
+        markdown="",
+        chunk_input="",
+        chunk_input_type="unknown",
+        total_chunks=document_chunks.total_chunks,
+        chunks=chunks,
+    )
+
+
+@api.get("/sources/{document_id}/raw")
+def source_raw(document_id: str) -> FileResponse:
+    """Return the original uploaded PDF file for local debug previews."""
+
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Raw source file is only available for local PDF sources.",
+        )
+
+    try:
+        raw_path = provider.document_raw_path(document_id=document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return FileResponse(
+        raw_path,
+        media_type="application/pdf",
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline"},
+    )
+
+
+@api.delete("/sources")
+def delete_all_sources() -> dict[str, object]:
+    """Delete all local source documents, chunks, files and vectors."""
+
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Delete all is only supported for local PDF sources.",
+        )
+
+    count = provider.delete_all_documents()
+    return {"status": "deleted", "deleted_count": count}
+
+
+@api.delete("/sources/{document_id}")
+def delete_source(document_id: str) -> dict[str, str]:
+    """Delete a local source document and all its chunks from storage and disk."""
+
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Delete is only supported for local PDF sources.",
+        )
+
+    try:
+        provider.delete_document(document_id=document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {"status": "deleted", "document_id": document_id}
+
+
+def _search_results_for_chunks(chunks: list[Chunk], provider_label: str) -> list[SearchResult]:
+    return [
+        SearchResult(chunk=chunk, score=1.0 / rank, rank=rank, retriever=provider_label)
+        for rank, chunk in enumerate(chunks, start=1)
+    ]
 
 
 def _document_chunks(
@@ -310,6 +586,8 @@ def _upload_text_document(
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="text",
+        source=filename,
     )
 
 
@@ -341,6 +619,8 @@ def _upload_local_url_document(url: str) -> SourceUploadResponse:
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="url",
+        source=url,
     )
 
 
@@ -372,6 +652,8 @@ def _upload_local_text_document(*, title: str, text: str) -> SourceUploadRespons
         document_id=uploaded.document_id,
         name=uploaded.name,
         parse_started=uploaded.parse_started,
+        source_type="text",
+        source=title,
     )
 
 
@@ -391,6 +673,30 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         )
         return small_talk_answer
 
+    if _agent_mode_enabled():
+        provider = source_provider_from_env()
+        result = run_agent(
+            provider=provider,
+            question=request.question,
+            document_ids=request.document_ids,
+            history=request.history or [],
+        )
+        write_rag_trace(
+            run_id=run_id,
+            provider="agentic",
+            question=request.question,
+            evidence_chunks=result.evidence_chunks,
+            evidence_context=_build_evidence_context(result.evidence_chunks),
+            answer=result.answer,
+            latency_ms=_latency_ms(started_at),
+            generation_trace={
+                "queries_tried": result.queries_tried,
+                "agent_steps": result.steps,
+                "retrieve_count": len([s for s in result.steps if s.get("node") == "retrieve"]),
+            },
+        )
+        return result.answer
+
     evidence_chunks, evidence_context = _evidence_for_request(request)
     generation = generate_answer_with_trace(
         question=request.question,
@@ -408,6 +714,10 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         generation_trace=generation.trace,
     )
     return generation.answer
+
+
+def _agent_mode_enabled() -> bool:
+    return os.getenv("AGENT_MODE", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _small_talk_answer(question: str) -> Answer | None:
@@ -588,7 +898,13 @@ def _stream_answer_events(
                 citation_payload["index"] = index
                 yield _sse_event("citation", citation_payload)
 
-            yield _sse_event("done", answer.model_dump())
+            yield _sse_event(
+                "done",
+                {
+                    **answer.model_dump(),
+                    "evidence_chunks": [chunk.model_dump(mode="json") for chunk in evidence_chunks],
+                },
+            )
             write_rag_trace(
                 run_id=run_id,
                 provider=provider,
@@ -601,19 +917,34 @@ def _stream_answer_events(
             )
 
 
-def _stream_direct_answer_events(*, question: str, answer: Answer) -> Iterator[str]:
+def _stream_direct_answer_events(
+    *,
+    question: str,
+    answer: Answer,
+    provider: str = "small_talk",
+    evidence_chunks: list[SearchResult] | None = None,
+    generation_trace: dict[str, object] | None = None,
+) -> Iterator[str]:
     started_at = time.perf_counter()
     run_id = new_run_id()
+    chunks = evidence_chunks or []
     yield _sse_event("answer_delta", {"text": answer.answer})
-    yield _sse_event("done", answer.model_dump())
+    yield _sse_event(
+        "done",
+        {
+            **answer.model_dump(),
+            "evidence_chunks": [chunk.model_dump(mode="json") for chunk in chunks],
+        },
+    )
     write_rag_trace(
         run_id=run_id,
-        provider="small_talk",
+        provider=provider,
         question=question,
-        evidence_chunks=[],
-        evidence_context="",
+        evidence_chunks=chunks,
+        evidence_context=_build_evidence_context(chunks),
         answer=answer,
         latency_ms=_latency_ms(started_at),
+        generation_trace=generation_trace,
     )
 
 
