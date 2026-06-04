@@ -81,6 +81,7 @@ class _FetchedPage:
     links: tuple[str, ...] = ()
     crawler: str = "urllib"
     crawler_error: str | None = None
+    probe_markdown: str | None = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,7 @@ def load_url_with_artifacts(
         preferred_parser=_CRAWL4AI_PARSER_NAME if page.markdown else None,
         crawler=page.crawler,
         crawler_error=page.crawler_error,
+        probe_markdown=page.probe_markdown,
     )
     if max_child_pages == 0:
         return loaded
@@ -168,6 +170,7 @@ def load_url_with_artifacts(
                 preferred_parser=_CRAWL4AI_PARSER_NAME if child_page.markdown else None,
                 crawler=child_page.crawler,
                 crawler_error=child_page.crawler_error,
+                probe_markdown=child_page.probe_markdown,
             )
         )
 
@@ -222,6 +225,7 @@ def load_html_with_artifacts(
     preferred_parser: str | None = None,
     crawler: str = "static-html",
     crawler_error: str | None = None,
+    probe_markdown: str | None = None,
 ) -> LoadedUrlDocument:
     """Clean and chunk one HTML document while exposing persisted artifacts."""
 
@@ -243,7 +247,9 @@ def load_html_with_artifacts(
     )
 
     source_type = "url" if source_url else "html"
-    cleaned_markdown = _clean_markdown_noise(parsed_markdown)
+    cleaned_markdown = _clean_markdown_noise(
+        _append_probe_markdown(parsed_markdown, probe_markdown)
+    )
     chunks = _build_markdown_aware_chunks(
         markdown=cleaned_markdown,
         source=source,
@@ -337,6 +343,7 @@ def _fetch_url(url: str) -> _FetchedPage:
         markdown=crawled_page.markdown,
         links=crawled_page.links,
         crawler="crawl4ai",
+        probe_markdown=crawled_page.probe_markdown,
     )
 
 
@@ -432,6 +439,14 @@ def _extract_markdown(
         candidates,
         key=lambda candidate: _markdown_quality_score(candidate[0], title=parsed.title),
     )
+
+
+def _append_probe_markdown(markdown: str, probe_markdown: str | None) -> str:
+    if not probe_markdown or not probe_markdown.strip():
+        return markdown
+    if probe_markdown.strip() in markdown:
+        return markdown
+    return f"{markdown.strip()}\n\n{probe_markdown.strip()}"
 
 
 def _has_markdown_heading(markdown: str) -> bool:

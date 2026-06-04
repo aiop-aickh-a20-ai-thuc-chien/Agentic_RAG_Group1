@@ -9,6 +9,10 @@ from agentic_rag.ingestion.url.loader import (
     load_url_chunks,
     load_url_with_artifacts,
 )
+from agentic_rag.ingestion.url.probe import (
+    should_probe_interactive_state,
+    vinfast_configurator_state_to_markdown,
+)
 
 __all__ = [
     "Crawl4AIPage",
@@ -19,4 +23,6 @@ __all__ = [
     "load_text_chunks",
     "load_url_chunks",
     "load_url_with_artifacts",
+    "should_probe_interactive_state",
+    "vinfast_configurator_state_to_markdown",
 ]

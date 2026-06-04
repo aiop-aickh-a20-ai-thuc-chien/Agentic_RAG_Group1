@@ -210,3 +210,50 @@ changing `src/agentic_rag/retrieval` or `src/agentic_rag/generation`.
 
 - Keep image/color assets as metadata or reference links instead of repeating
   alt text inside chunk text.
+
+## [2026-06-04] Hotfix: Interactive Configurator Probe
+
+This update addresses frontend usage where another feature only sends a pasted
+URL to ingestion. Dynamic configurator pages can hide important price/state data
+behind JS interactions, so ingestion now attempts a narrow probe before chunking.
+
+### Summary of Changes
+
+1. **Added interactive probe module**
+   - Added `src/agentic_rag/ingestion/url/probe.py`.
+   - The first supported probe targets VinFast car deposit configurator URLs
+     such as `dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9`.
+   - The probe reads `window.carDeposit.products` from the rendered page and
+     converts variant/color state into Markdown.
+
+2. **Connected probe output to chunking**
+   - `crawler.py` now returns optional `probe_markdown`.
+   - `loader.py` appends probe Markdown before cleanup/chunking.
+   - Result: `parsed.md` and `chunks.jsonl` can include interactive state such
+     as:
+     - `VF 9 Plus tuy chon 7 cho`: `1.699.000.000 VND`
+     - `VF 9 Eco`: `1.499.000.000 VND`
+     - `Mau nang cao`: `+ 12.000.000 VND`
+
+3. **Demo app support**
+   - Updated `guide/demo/url-ingestion-review-app` with a `Probe` tab.
+   - Reviewers can paste one URL and inspect whether probe chunks were created.
+
+### Verification
+
+- `uv run ruff format ... --check`
+  - Result: passed for modified URL ingestion files.
+- `uv run ruff check ...`
+  - Result: passed for modified URL ingestion files.
+- `uv run mypy src\agentic_rag\ingestion\url\probe.py src\agentic_rag\ingestion\url\crawler.py src\agentic_rag\ingestion\url\loader.py`
+  - Result: passed.
+- `uv run pytest src\agentic_rag\ingestion\url\tests -q`
+  - Result: `50 passed, 1 skipped`.
+
+### Remaining Work
+
+- Generalize probe contracts for other configurator/e-commerce pages.
+- Store variant/color options as structured metadata records in addition to
+  Markdown when a shared contract is agreed.
+- Keep the probe optional and narrow so normal article/listing ingestion remains
+  stable.

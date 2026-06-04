@@ -292,6 +292,45 @@ def test_load_url_chunks_prefers_crawl4ai_markdown(monkeypatch: pytest.MonkeyPat
     assert chunks[0].metadata["parser"] == "crawl4ai-markdown+builtin-html-parser"
 
 
+def test_load_url_chunks_includes_interactive_probe_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        assert (
+            url
+            == "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9"
+        )
+        return Crawl4AIPage(
+            html=(
+                "<html><body><h1>VF 9 Configurator</h1><p>Default visible state.</p></body></html>"
+            ),
+            markdown="# VF 9 Configurator\n\nDefault visible state.",
+            url=url,
+            links=(),
+            probe_markdown=(
+                "# Probed Interactive State\n\n"
+                "## VinFast configurator price options\n\n"
+                "- VF 9 Plus tuy chon 7 cho: Gia xe kem pin 1.699.000.000 VND.\n"
+                "  - VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin "
+                "1.711.000.000 VND (mau nang cao + 12.000.000 VND).\n"
+                "- VF 9 Eco: Gia xe kem pin 1.499.000.000 VND."
+            ),
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+
+    loaded = loader_module.load_url_with_artifacts(
+        "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9"
+    )
+
+    assert "Probed Interactive State" in loaded.markdown
+    assert "1.699.000.000" in loaded.markdown
+    assert "1.499.000.000" in loaded.markdown
+    assert "12.000.000" in loaded.markdown
+    assert any("1.699.000.000" in chunk.text for chunk in loaded.chunks)
+    assert any("12.000.000" in chunk.text for chunk in loaded.chunks)
+
+
 def test_load_url_chunks_falls_back_to_urllib_when_crawl4ai_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

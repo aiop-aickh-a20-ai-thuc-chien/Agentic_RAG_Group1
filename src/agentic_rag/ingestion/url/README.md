@@ -10,6 +10,8 @@ PDF responses are rejected here and should be routed to the PDF ingestion module
 
 - `loader.py`: public ingestion boundary for URL, HTML, and text inputs.
 - `crawler.py`: Crawl4AI adapter used as the preferred live URL crawler.
+- `probe.py`: optional interactive-state probes for dynamic pages whose
+  important data is stored in JavaScript state rather than visible Markdown.
 - `parser.py`: stdlib HTML parser that extracts headings, body text, metadata,
   links, images, and other page assets.
 - `extractor.py`: Trafilatura adapter for main-content Markdown extraction.
@@ -41,9 +43,11 @@ The default URL path is:
    than blindly preferring the longest output.
 7. The loader removes common script/config/cookie/login/cart/menu boilerplate
    from Markdown.
-8. VinFast vehicle price-card text is normalized so current prices and old
+8. Supported interactive pages are probed for important JS state that is not
+   reliably visible in the default rendered page.
+9. VinFast vehicle price-card text is normalized so current prices and old
    crossed prices remain explicit in Markdown.
-9. The loader chunks global Markdown with heading-aware metadata and enriches
+10. The loader chunks global Markdown with heading-aware metadata and enriches
    each `Chunk.metadata` with URL metadata such as original URL, final URL,
    canonical URL, language, author, description, crawler name, parser name,
    source URL, section path, asset count, and dedupe hash.
@@ -52,6 +56,33 @@ Crawl4AI is preferred for live URLs because it can capture rendered content that
 static HTML fetches often miss. Trafilatura remains useful for main-content
 cleanup, and the builtin parser remains the deterministic fallback for local HTML
 and tests.
+
+## Interactive Probes
+
+Some pages expose important content only after user interaction, for example a
+vehicle configurator where each button changes the selected variant, color, and
+price. A frontend may only send one pasted URL, so URL ingestion must extract
+that state itself when possible.
+
+`probe.py` currently includes a narrow VinFast configurator probe for URLs like:
+
+```text
+https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9
+```
+
+The probe reads `window.carDeposit.products` through the rendered browser page
+and appends chunkable Markdown such as:
+
+```md
+## VinFast configurator price options
+
+- VF 9 Plus tuy chon 7 cho: Gia xe kem pin 1.699.000.000 VND.
+  - VF 9 Plus tuy chon 7 cho + Mau nang cao: Gia xe kem pin 1.711.000.000 VND (mau nang cao + 12.000.000 VND).
+- VF 9 Eco: Gia xe kem pin 1.499.000.000 VND.
+```
+
+This keeps retrieval/generation unchanged while giving RAG clearer chunks for
+interactive product state.
 
 ## Child Pages
 
@@ -162,14 +193,9 @@ improve ingestion-side filtering before changing retrieval or generation.
 
 ## Known Follow-up
 
-Some configurator pages expose important state in JavaScript data rather than in
-the currently visible HTML. For example, VinFast car deposit pages can store
-variant/color price options in `window.carDeposit.products`.
-
-The current URL ingestion can crawl the page and preserve visible content, but it
-does not yet convert that JavaScript state into first-class structured chunks.
-For a stronger contract, add a dedicated configurator extractor that emits
-records such as:
+Some configurator pages need stronger structured contracts beyond Markdown probe
+records. For a stronger contract, add a shared configurator/commerce record that
+emits fields such as:
 
 - variant code,
 - variant label,

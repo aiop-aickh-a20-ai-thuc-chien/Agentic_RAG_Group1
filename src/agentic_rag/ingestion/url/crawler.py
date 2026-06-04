@@ -8,6 +8,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from importlib import import_module
 
+from agentic_rag.ingestion.url.probe import probe_interactive_markdown
+
 
 @dataclass(frozen=True)
 class Crawl4AIPage:
@@ -18,6 +20,7 @@ class Crawl4AIPage:
     url: str
     links: tuple[str, ...] = ()
     content_type: str | None = "text/html"
+    probe_markdown: str | None = None
 
 
 def crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
@@ -63,7 +66,15 @@ async def _crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
         markdown=_markdown_text(getattr(result, "markdown", None)),
         url=_first_text_attr(result, ("url",)) or url,
         links=_links_from_result(getattr(result, "links", None)),
+        probe_markdown=await _safe_probe_interactive_markdown(url),
     )
+
+
+async def _safe_probe_interactive_markdown(url: str) -> str | None:
+    try:
+        return await probe_interactive_markdown(url)
+    except Exception:
+        return None
 
 
 def _build_crawler_run_config() -> object:
