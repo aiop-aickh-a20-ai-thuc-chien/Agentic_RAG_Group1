@@ -7,7 +7,6 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from importlib import import_module
-from typing import cast
 
 
 @dataclass(frozen=True)
@@ -158,4 +157,4 @@ def _first_text_attr(value: object, attr_names: tuple[str, ...]) -> str:
         attr_value = getattr(value, attr_name, None)
         if isinstance(attr_value, str) and attr_value.strip():
             return attr_value.strip()
-    return cast(str, "")
+    return ""
