@@ -7,7 +7,7 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Any, cast
+from typing import cast
 
 
 @dataclass(frozen=True)
