@@ -22,7 +22,7 @@ def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, floa
         A list of dicts containing the scores for each row.
     """
     try:
-        from datasets import Dataset  # type: ignore[import-untyped]
+        from datasets import Dataset
         from langchain_openai import ChatOpenAI, OpenAIEmbeddings
         from ragas import evaluate
         from ragas.metrics import (
