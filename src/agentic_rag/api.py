@@ -6,6 +6,9 @@ import json
 import logging
 import os
 import re
+import warnings
+
+warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
 import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
@@ -484,8 +487,7 @@ def source_raw(document_id: str) -> FileResponse:
     return FileResponse(
         raw_path,
         media_type="application/pdf",
-        filename=raw_path.name,
-        headers={"Cache-Control": "no-store"},
+        headers={"Cache-Control": "no-store", "Content-Disposition": "inline"},
     )
 
 
@@ -890,7 +892,15 @@ def _stream_answer_events(
                 citation_payload["index"] = index
                 yield _sse_event("citation", citation_payload)
 
-            yield _sse_event("done", answer.model_dump())
+            yield _sse_event(
+                "done",
+                {
+                    **answer.model_dump(),
+                    "evidence_chunks": [
+                        chunk.model_dump(mode="json") for chunk in evidence_chunks
+                    ],
+                },
+            )
             write_rag_trace(
                 run_id=run_id,
                 provider=provider,
@@ -915,7 +925,13 @@ def _stream_direct_answer_events(
     run_id = new_run_id()
     chunks = evidence_chunks or []
     yield _sse_event("answer_delta", {"text": answer.answer})
-    yield _sse_event("done", answer.model_dump())
+    yield _sse_event(
+        "done",
+        {
+            **answer.model_dump(),
+            "evidence_chunks": [chunk.model_dump(mode="json") for chunk in chunks],
+        },
+    )
     write_rag_trace(
         run_id=run_id,
         provider=provider,

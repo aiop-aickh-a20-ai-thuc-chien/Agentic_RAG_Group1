@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
-from agentic_rag.generation.answering import generate_answer_with_trace
-from agentic_rag.generation.evidence import evidence_for_question
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,17 @@ class EvaluationRunner:
                 "Install the evaluation extra with `uv sync --extra evaluation`."
             ) from exc
 
+        from agentic_rag.runtime_env import load_local_env
+        load_local_env()
+
+        import os
+        os.environ["AGENT_RETRIEVE_WORKERS"] = "1"
+
+        from agentic_rag.agent.graph import run_agent
+        from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
+
+        provider = LocalPdfEvidenceProvider.from_env()
+
         logger.info("Loading dataset from %s", self.input_file)
         wb = openpyxl.load_workbook(self.input_file)
         if "Evaluation" not in wb.sheetnames:
@@ -92,16 +102,13 @@ class EvaluationRunner:
                 ws.cell(row=row_idx, column=header["is_out_of_scope"]).value
             )
 
-            # 1. Run Pipeline
+            # 1. Run Agent Pipeline
             try:
-                evidence_chunks, evidence_context = evidence_for_question(question=question)
-                generation = generate_answer_with_trace(
-                    question=question,
-                    evidence_context=evidence_context,
-                    evidence_chunks=evidence_chunks,
-                )
-            except Exception as exc:
-                logger.error("Error generating answer for row %s: %s", row_idx, exc)
+                result = run_agent(provider=provider, question=question)
+                evidence_chunks = result.evidence_chunks
+                generation_answer = result.answer
+            except Exception:
+                logger.exception("Error generating answer for row %s", row_idx)
                 continue
 
             # Format chunks to JSON
@@ -119,31 +126,30 @@ class EvaluationRunner:
             )
 
             bot_citations_json = json.dumps(
-                [c.model_dump() for c in generation.answer.citations], ensure_ascii=False
+                [c.model_dump() for c in generation_answer.citations], ensure_ascii=False
             )
 
             # Write pipeline output
             ws.cell(row=row_idx, column=header["rag_input"]).value = question
             ws.cell(row=row_idx, column=header["rag_context"]).value = rag_context_json
-            ws.cell(row=row_idx, column=header["bot_response"]).value = generation.answer.answer
+            ws.cell(row=row_idx, column=header["bot_response"]).value = generation_answer.answer
             ws.cell(row=row_idx, column=header["bot_citations"]).value = bot_citations_json
             ws.cell(row=row_idx, column=header["trace_url"]).value = "N/A (check local traces)"
 
-            # 2. Calculate Metrics
-            top5_ids = [chunk.chunk.chunk_id for chunk in evidence_chunks[:5]]
+            # 2. Calculate Metrics — prefer storage_chunk_id (stable, user-friendly)
+            top5_ids = [_resolve_chunk_id(chunk.chunk) for chunk in evidence_chunks[:5]]
             ws.cell(row=row_idx, column=header["retrieved_top5_ids"]).value = ", ".join(top5_ids)
 
             gt_chunks_raw = ws.cell(row=row_idx, column=header["ground_truth_chunk_ids"]).value
 
             if is_out_of_scope:
-                is_not_found = generation.answer.status == "not_found"
+                is_not_found = generation_answer.status == "not_found"
                 ws.cell(row=row_idx, column=header["guardrail_pass"]).value = is_not_found
             else:
                 ws.cell(row=row_idx, column=header["guardrail_pass"]).value = "N/A"
 
                 relevant_ids = _parse_relevant_ids(gt_chunks_raw)
                 if relevant_ids:
-                    # Compute ground truth rank
                     gt_rank = -1
                     for i, cid in enumerate(top5_ids, start=1):
                         if cid in relevant_ids:
@@ -151,16 +157,24 @@ class EvaluationRunner:
                             break
                     ws.cell(row=row_idx, column=header["ground_truth_rank"]).value = gt_rank
 
-                    # Compute recall and mrr
                     recall = recall_at_k(top5_ids, relevant_ids, k=5)
                     mrr = mrr_at_k(top5_ids, relevant_ids, k=5)
                     ws.cell(row=row_idx, column=header["recall_at_5"]).value = recall
                     ws.cell(row=row_idx, column=header["mrr_at_5"]).value = mrr
 
-                    # Citation chunk match
-                    bot_citation_ids = {c.chunk_id for c in generation.answer.citations}
+                    bot_citation_ids = {
+                        _resolve_chunk_id(chunk.chunk)
+                        for chunk in evidence_chunks
+                        if any(
+                        c.chunk_id == chunk.chunk.chunk_id
+                        for c in generation_answer.citations
+                    )
+                    }
                     has_match = bool(relevant_ids.intersection(bot_citation_ids))
                     ws.cell(row=row_idx, column=header["citation_chunk_match"]).value = has_match
+
+            # Save after each row to avoid losing progress on crash
+            wb.save(self.output_file)
 
         # 3. RAGAS Evaluation
         if self.run_ragas:
@@ -223,7 +237,9 @@ class EvaluationRunner:
                         "ragas_context_recall", 0.0
                     )
 
-        # Save workbook
+        # 4. Summary row
+        _write_summary(ws, header, self.run_ragas)
+
         logger.info("Saving evaluation results to %s", self.output_file)
         wb.save(self.output_file)
 
@@ -256,3 +272,60 @@ def _parse_relevant_ids(value: object) -> set[str]:
     if not raw_value or raw_value.upper() == "NONE":
         return set()
     return {chunk_id.strip() for chunk_id in raw_value.split(",") if chunk_id.strip()}
+
+
+def _write_summary(ws: Any, header: dict[str, int], include_ragas: bool) -> None:
+    """Append an AVERAGE summary row below all data rows."""
+    last_data_row = ws.max_row
+    summary_row = last_data_row + 2
+
+    ws.cell(row=summary_row, column=1).value = "AVERAGE"
+
+    numeric_cols = ["recall_at_5", "mrr_at_5"]
+    if include_ragas:
+        numeric_cols += [
+            "ragas_faithfulness",
+            "ragas_answer_relevancy",
+            "ragas_context_precision",
+            "ragas_context_recall",
+        ]
+
+    for col_name in numeric_cols:
+        if col_name not in header:
+            continue
+        col_idx = header[col_name]
+        values = [
+            ws.cell(row=r, column=col_idx).value
+            for r in range(3, last_data_row + 1)
+            if isinstance(ws.cell(row=r, column=col_idx).value, (int, float))
+        ]
+        if values:
+            ws.cell(row=summary_row, column=col_idx).value = round(sum(values) / len(values), 4)
+
+
+def _resolve_chunk_id(chunk: Any) -> str:
+    """Prefer storage_chunk_id from metadata — stable, human-readable, easy to fill in Excel."""
+    storage_id = chunk.metadata.get("storage_chunk_id")
+    if isinstance(storage_id, str) and storage_id:
+        return storage_id
+    return str(chunk.chunk_id)
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(description="Run RAG evaluation over an Excel dataset.")
+    parser.add_argument("--input", required=True, help="Path to input Excel file.")
+    parser.add_argument("--output", required=True, help="Path to output Excel file.")
+    parser.add_argument("--ragas", action="store_true", help="Also run RAGAS LLM-as-judge metrics.")
+    args = parser.parse_args()
+
+    runner = EvaluationRunner(
+        input_file=args.input,
+        output_file=args.output,
+        run_ragas=args.ragas,
+    )
+    runner.run()
+
+
+if __name__ == "__main__":
+    main()
