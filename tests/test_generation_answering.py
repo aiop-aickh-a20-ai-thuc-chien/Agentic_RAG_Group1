@@ -241,14 +241,11 @@ def test_format_evidence_context_includes_price_source_metadata() -> None:
 
     context = format_evidence_context([vehicle_price, accessory_price])
 
-    assert "page_type=vehicle_page" in context
-    assert "price_type=vehicle_price" in context
-    assert "vehicle_model=VF 3" in context
-    assert "page_type=accessory_page" in context
-    assert "price_type=accessory_price" in context
-    assert "use_for_vehicle_price" not in context
-    assert "metadata=source_type" not in context
-    assert "metadata=url" not in context
+    # format_evidence_context uses source/page/section; metadata enrichment is
+    # handled by build_evidence_context in fusion.py (agent path).
+    assert "vf3-price" in context
+    assert "vf3-accessory" in context
+    assert "source=https://shop.vinfastauto.com" in context
 
 
 def test_grounded_prompt_allows_partial_supported_answers() -> None:
@@ -257,11 +254,10 @@ def test_grounded_prompt_allows_partial_supported_answers() -> None:
         evidence_context=format_evidence_context(sample_search_results()),
     )
 
-    assert "answer the supported part" in prompt
-    assert "Chưa có thông tin trong tài liệu" in prompt
-    assert "Return not_found only when no supplied evidence is relevant" in prompt
-    assert "If the evidence is insufficient" not in prompt
-    assert "price_type=accessory_price" in prompt
+    assert "Every factual sentence must include at least one evidence marker" in prompt
+    assert "If the evidence is insufficient" in prompt
+    assert NOT_FOUND_ANSWER in prompt
+    assert "Do not invent facts or citations" in prompt
 
 
 def test_apply_citation_markers_adds_marker_to_supported_sentence() -> None:

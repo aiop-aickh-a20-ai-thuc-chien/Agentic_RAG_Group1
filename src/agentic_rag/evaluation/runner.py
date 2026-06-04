@@ -56,9 +56,11 @@ class EvaluationRunner:
             ) from exc
 
         from agentic_rag.runtime_env import load_local_env
+
         load_local_env()
 
         import os
+
         os.environ["AGENT_RETRIEVE_WORKERS"] = "1"
 
         from agentic_rag.agent.graph import run_agent
@@ -166,9 +168,8 @@ class EvaluationRunner:
                         _resolve_chunk_id(chunk.chunk)
                         for chunk in evidence_chunks
                         if any(
-                        c.chunk_id == chunk.chunk.chunk_id
-                        for c in generation_answer.citations
-                    )
+                            c.chunk_id == chunk.chunk.chunk_id for c in generation_answer.citations
+                        )
                     }
                     has_match = bool(relevant_ids.intersection(bot_citation_ids))
                     ws.cell(row=row_idx, column=header["citation_chunk_match"]).value = has_match

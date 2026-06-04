@@ -420,7 +420,7 @@ def build_grounded_prompt(
         "</context>\n\n"
         "<instructions>\n"
         "- IMPORTANT: The user's original question is: \""
-        f"{original_question.strip() if original_question else question.strip()}\". "
+        f'{original_question.strip() if original_question else question.strip()}". '
         "Detect the language of this question and write your entire answer in that same language. "
         "English → English. Vietnamese → Vietnamese. Never mix languages.\n"
         "- Be thorough and complete: cover all entities, aspects, or items mentioned "
