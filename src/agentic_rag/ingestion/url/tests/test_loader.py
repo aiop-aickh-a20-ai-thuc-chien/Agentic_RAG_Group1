@@ -417,8 +417,17 @@ def test_load_url_chunks_includes_interactive_probe_markdown(
     assert "NEDC" in loaded.markdown
     assert any("1.699.000.000" in chunk.text for chunk in loaded.chunks)
     assert any("12.000.000" in chunk.text for chunk in loaded.chunks)
-    assert any(chunk.metadata["section"] == "VF 9 Plus tuy chon 7 cho" for chunk in loaded.chunks)
-    assert any(chunk.metadata["section"] == "VinFast configurator notes" for chunk in loaded.chunks)
+    vf9_plus_chunk = next(
+        chunk for chunk in loaded.chunks if chunk.metadata["section"] == "VF 9 Plus tuy chon 7 cho"
+    )
+    notes_chunk = next(
+        chunk
+        for chunk in loaded.chunks
+        if chunk.metadata["section"] == "VinFast configurator notes"
+    )
+    assert vf9_plus_chunk.metadata["content_origin"] == "interactive_probe"
+    assert vf9_plus_chunk.metadata["probe_state_label"] == "VF 9 Plus tuy chon 7 cho"
+    assert notes_chunk.metadata["content_origin"] == "interactive_probe"
 
 
 def test_load_url_chunks_falls_back_to_urllib_when_crawl4ai_fails(

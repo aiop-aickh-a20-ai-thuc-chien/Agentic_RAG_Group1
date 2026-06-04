@@ -515,6 +515,7 @@ def _build_markdown_aware_chunks(
             " ".join(part for part in (title, chunk_text) if part)
         )
         section_path = list(markdown_chunk.section_path)
+        content_origin = _chunk_content_origin(section_path)
         chunks.append(
             Chunk(
                 chunk_id=build_chunk_id(source_type, source, section, chunk_index),
@@ -535,6 +536,12 @@ def _build_markdown_aware_chunks(
                     "chunk_index": chunk_index,
                     "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
                     "search_aliases": list(search_aliases),
+                    "content_origin": content_origin,
+                    "probe_parent_section": _probe_parent_section(
+                        section_path,
+                        content_origin,
+                    ),
+                    "probe_state_label": _probe_state_label(section, content_origin),
                     "chunk_token_count": markdown_chunk.chunk_token_count,
                     "chunk_overlap_paragraphs": _URL_CHUNK_OVERLAP_PARAGRAPHS,
                     "chunking_method": "hybrid-markdown-aware-token-overlap",
@@ -543,6 +550,24 @@ def _build_markdown_aware_chunks(
             )
         )
     return chunks
+
+
+def _chunk_content_origin(section_path: list[str]) -> str:
+    if section_path and section_path[0] == "Probed Interactive State":
+        return "interactive_probe"
+    return "document"
+
+
+def _probe_parent_section(section_path: list[str], content_origin: str) -> str | None:
+    if content_origin != "interactive_probe":
+        return None
+    return section_path[1] if len(section_path) > 1 else None
+
+
+def _probe_state_label(section: str, content_origin: str) -> str | None:
+    if content_origin != "interactive_probe":
+        return None
+    return section
 
 
 def _with_chunk_adjacency(chunks: list[Chunk]) -> list[Chunk]:
