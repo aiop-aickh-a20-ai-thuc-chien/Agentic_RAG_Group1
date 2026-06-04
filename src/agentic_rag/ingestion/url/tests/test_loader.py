@@ -13,6 +13,7 @@ from agentic_rag.ingestion.url import (
     load_url_chunks,
 )
 from agentic_rag.ingestion.url import loader as loader_module
+from agentic_rag.ingestion.url.crawler import Crawl4AIPage
 
 
 def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None:
@@ -152,11 +153,11 @@ def test_load_html_with_artifacts_returns_markdown_and_paths(
         run_id="artifact-run",
     )
 
-    assert loaded.markdown == "# Artifact Page\n\n# Intro\n\nArtifact content.\n"
+    assert loaded.markdown == "# Artifact Page\n\n# Intro\n\nArtifact content."
     assert len(loaded.chunks) == 1
     assert loaded.chunks[0].text == "# Intro\n\nArtifact content."
     assert loaded.artifacts is not None
-    assert loaded.artifacts.markdown_path.read_text(encoding="utf-8") == loaded.markdown
+    assert loaded.artifacts.markdown_path.read_text(encoding="utf-8").rstrip() == loaded.markdown
     assert loaded.artifacts.chunks_path.exists()
 
 
@@ -197,6 +198,45 @@ def test_load_html_chunks_prefers_trafilatura_markdown_for_artifacts(
     assert manifest["parser"] == "trafilatura-markdown+builtin-html-parser"
 
 
+def test_load_html_with_artifacts_normalizes_vehicle_price_cards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
+    loaded = load_html_with_artifacts(
+        "<html><head><title>Xe điện VinFast VF 9</title></head>"
+        "<body><h1>VF9</h1></body></html>",
+        source="https://shop.example/vf9",
+        source_url="https://shop.example/vf9",
+        preferred_markdown=(
+            "# Xe điện VinFast VF 9\n\n"
+            "VF 9 Eco\n\n"
+            "Giá bán từ\n\n"
+            "1.229.180.000\n\n"
+            "VNĐ\n\n"
+            "1.499.000.000\n\n"
+            "VNĐ\n\n"
+            "VF 9 Plus\n\n"
+            "Giá bán từ\n\n"
+            "1.393.180.000\n\n"
+            "VNĐ\n\n"
+            "1.699.000.000\n\n"
+            "VNĐ"
+        ),
+    )
+
+    assert (
+        "- VF 9 Eco: Giá bán từ 1.229.180.000 VNĐ; "
+        "giá niêm yết cũ ~~1.499.000.000 VNĐ~~."
+    ) in loaded.markdown
+    assert (
+        "- VF 9 Plus: Giá bán từ 1.393.180.000 VNĐ; "
+        "giá niêm yết cũ ~~1.699.000.000 VNĐ~~."
+    ) in loaded.markdown
+    assert "~~1.499.000.000 VNĐ~~" in loaded.chunks[0].text
+    assert "~~1.699.000.000 VNĐ~~" in loaded.chunks[0].text
+
+
 def test_load_text_chunks_returns_text_source_metadata() -> None:
     chunks = load_text_chunks(" Plain text content for ingestion. ", source="manual-note")
 
@@ -232,6 +272,84 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert chunks[0].metadata["final_url"] == "https://example.edu/final"
     assert chunks[0].metadata["section"] == "Overview"
     assert chunks[0].metadata["section_path"] == ["Overview"]
+
+
+def test_load_url_chunks_prefers_crawl4ai_markdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        assert url == "https://example.edu/dynamic"
+        return Crawl4AIPage(
+            html="<html><body><h1>Server Shell</h1><p>Hydrated later.</p></body></html>",
+            markdown="# Rendered Product\n\n## Card A\n\nDynamic card content.",
+            url="https://example.edu/dynamic",
+            links=(),
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+
+    chunks = load_url_chunks("https://example.edu/dynamic")
+
+    assert len(chunks) == 1
+    assert chunks[0].text == "## Card A\n\nDynamic card content."
+    assert chunks[0].metadata["section_path"] == ["Rendered Product", "Card A"]
+    assert chunks[0].metadata["crawler"] == "crawl4ai"
+    assert chunks[0].metadata["parser"] == "crawl4ai-markdown+builtin-html-parser"
+
+
+def test_load_url_chunks_falls_back_to_urllib_when_crawl4ai_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        raise RuntimeError("browser is unavailable")
+
+    def fake_fetch_url_urllib(
+        url: str,
+        *,
+        crawler_error: str | None = None,
+    ) -> loader_module._FetchedPage:
+        assert url == "https://example.edu/static"
+        assert crawler_error == "RuntimeError: browser is unavailable"
+        return loader_module._FetchedPage(
+            html="<html><body><h1>Static</h1><p>Fallback content.</p></body></html>",
+            url="https://example.edu/static",
+            crawler="urllib",
+            crawler_error=crawler_error,
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+    monkeypatch.setattr(loader_module, "_fetch_url_urllib", fake_fetch_url_urllib)
+
+    chunks = load_url_chunks("https://example.edu/static")
+
+    assert len(chunks) == 1
+    assert chunks[0].text == "# Static\n\nFallback content."
+    assert chunks[0].metadata["crawler"] == "urllib"
+    assert chunks[0].metadata["crawler_error"] == "RuntimeError: browser is unavailable"
+
+
+def test_load_url_chunks_can_crawl_child_pages_and_dedupe_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        if url == "https://example.edu/products":
+            return Crawl4AIPage(
+                html="<html><body><h1>Products</h1></body></html>",
+                markdown="# Products\n\nShared product card.",
+                url=url,
+                links=("https://example.edu/products/card-a", "https://other.edu/out"),
+            )
+        return Crawl4AIPage(
+            html="<html><body><h1>Products</h1></body></html>",
+            markdown="# Products\n\nShared product card.",
+            url=url,
+            links=(),
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+
+    chunks = load_url_chunks("https://example.edu/products", max_child_pages=1)
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["source"] == "https://example.edu/products"
 
 
 def test_load_url_chunks_rejects_non_http_url() -> None:
