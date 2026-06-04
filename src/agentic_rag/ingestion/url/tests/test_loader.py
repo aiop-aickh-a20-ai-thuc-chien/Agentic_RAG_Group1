@@ -204,8 +204,7 @@ def test_load_html_with_artifacts_normalizes_vehicle_price_cards(
     monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
 
     loaded = load_html_with_artifacts(
-        "<html><head><title>Xe điện VinFast VF 9</title></head>"
-        "<body><h1>VF9</h1></body></html>",
+        "<html><head><title>Xe điện VinFast VF 9</title></head><body><h1>VF9</h1></body></html>",
         source="https://shop.example/vf9",
         source_url="https://shop.example/vf9",
         preferred_markdown=(
@@ -226,12 +225,10 @@ def test_load_html_with_artifacts_normalizes_vehicle_price_cards(
     )
 
     assert (
-        "- VF 9 Eco: Giá bán từ 1.229.180.000 VNĐ; "
-        "giá niêm yết cũ ~~1.499.000.000 VNĐ~~."
+        "- VF 9 Eco: Giá bán từ 1.229.180.000 VNĐ; giá niêm yết cũ ~~1.499.000.000 VNĐ~~."
     ) in loaded.markdown
     assert (
-        "- VF 9 Plus: Giá bán từ 1.393.180.000 VNĐ; "
-        "giá niêm yết cũ ~~1.699.000.000 VNĐ~~."
+        "- VF 9 Plus: Giá bán từ 1.393.180.000 VNĐ; giá niêm yết cũ ~~1.699.000.000 VNĐ~~."
     ) in loaded.markdown
     assert "~~1.499.000.000 VNĐ~~" in loaded.chunks[0].text
     assert "~~1.699.000.000 VNĐ~~" in loaded.chunks[0].text

@@ -640,8 +640,7 @@ def _price_card_from_lines(lines: list[str], index: int) -> tuple[str, int] | No
         return None
 
     normalized = (
-        f"- {variant}: Giá bán từ {current_price} VNĐ; "
-        f"giá niêm yết cũ ~~{old_price} VNĐ~~."
+        f"- {variant}: Giá bán từ {current_price} VNĐ; giá niêm yết cũ ~~{old_price} VNĐ~~."
     )
     return normalized, old_currency_index + 1
 
