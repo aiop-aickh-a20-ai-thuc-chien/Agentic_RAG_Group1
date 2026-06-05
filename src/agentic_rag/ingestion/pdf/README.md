@@ -78,6 +78,9 @@ Ghi artifact debug theo layout chuẩn của PDF ingestion:
 
 ```bash
 uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --pipeline ocr \
+  --strategy docling \
+  --chunker docling-page-aware \
   --write-artifacts \
   --output-root storage/local_pdf/parser-artifacts \
   --run-id manual-check
@@ -85,6 +88,34 @@ uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
 
 Lệnh này tạo `parsed.md`, `chunks.jsonl`, `chunks.md` và `manifest.json` trong
 thư mục run tương ứng.
+
+Ví dụ smoke test với PDF thật đã có trong repo:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse \
+  src/agentic_rag/ingestion/pdf/.data/VF3-ERG_VN_V4.pdf \
+  --pipeline ocr \
+  --strategy docling \
+  --chunker docling-page-aware \
+  --write-artifacts \
+  --output-root tmp/pdf-cli-artifacts \
+  --run-id vf3-local-test
+```
+
+Kiểm tra output:
+
+```bash
+RUN_DIR="tmp/pdf-cli-artifacts/vf3_erg_vn_v4/vf3_local_test"
+
+cat "$RUN_DIR/manifest.json"
+sed -n '1,120p' "$RUN_DIR/parsed.md"
+sed -n '1,120p' "$RUN_DIR/chunks.md"
+head -n 3 "$RUN_DIR/chunks.jsonl"
+```
+
+Một số dòng log như `RapidOCR returned empty result!` hoặc warning OCR không có
+text có thể xuất hiện với vùng/page không OCR được. Nếu command vẫn in
+`Wrote parser artifacts to ...` thì artifact đã được ghi thành công.
 
 Public API của module vẫn là:
 
@@ -115,6 +146,9 @@ Chunker registry hiện có:
 
 - `deterministic`: mặc định, tách Markdown/text ổn định bằng shared
   ingestion chunking.
+- `docling-page-aware`: dùng Docling native document provenance để tách nội dung
+  theo trang trước khi áp dụng deterministic chunking; phù hợp khi cần citation
+  PDF có `page`/`page_range`.
 - `docling-hybrid`: opt-in, dùng `Docling HybridChunker` trên Docling native
   document để giữ ngữ cảnh/heading tốt hơn cho PDF.
 
@@ -134,6 +168,12 @@ Khi cần so sánh với chunker native của Docling:
 LOCAL_PDF_CHUNKER=docling-hybrid
 ```
 
+Khi cần ưu tiên citation theo trang từ Docling provenance:
+
+```text
+LOCAL_PDF_CHUNKER=docling-page-aware
+```
+
 `load_pdf_chunks()` chỉ trả về `Chunk` trong memory và không tự ghi file debug.
 Nếu cần lưu output để kiểm tra parser hoặc đánh giá chunking, dùng helper riêng
 được mô tả ở phần bên dưới.
@@ -144,6 +184,10 @@ Mỗi `Chunk` trả về có metadata chính:
 - `source_type`: luôn là `pdf`.
 - `file_name`: tên file PDF.
 - `page`: hiện là `None` trong baseline Markdown chunking.
+- `pages`: có khi dùng `docling-page-aware`; lưu danh sách trang provenance đầy
+  đủ nếu item gốc trải trên nhiều trang.
+- `page_range`: có khi dùng `docling-page-aware` và parser cung cấp page
+  provenance.
 - `section`: heading path dạng chuỗi nếu parser/chunker cung cấp.
 - `section_path`: danh sách heading đầy đủ nếu dùng Docling HybridChunker.
 - `raw_text`: nội dung gốc của Docling chunk trước khi contextualize, nếu dùng
@@ -167,12 +211,14 @@ Khi muốn xuất artifact bằng parser khác đã được đăng ký:
 uv run python -c "from agentic_rag.ingestion.pdf import save_pdf_ingestion_artifacts; print(save_pdf_ingestion_artifacts('path/to/file.pdf', parser_name='docling').model_dump())"
 ```
 
-Hoặc dùng CLI PDF-local:
+Hoặc dùng CLI PDF-local từ root repository:
 
 ```bash
-uv --directory src/agentic_rag/ingestion/pdf run python -m agentic_rag.ingestion.pdf.benchmarking.cli export-artifacts \
-  --pdf path/to/file.pdf \
-  --parser docling \
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --pipeline ocr \
+  --strategy docling \
+  --chunker docling-page-aware \
+  --write-artifacts \
   --output-root src/agentic_rag/ingestion/pdf/.data/parser-comparison \
   --run-id docling-baseline
 ```
@@ -202,7 +248,36 @@ evaluation cục bộ.
 ## Lưu artifact đa phương thức
 
 Khi cần giữ lại bảng, hình ảnh hoặc chart candidate để hậu xử lý, dùng helper
-rõ ràng thay vì thêm side effect vào `load_pdf_chunks()`:
+rõ ràng thay vì thêm side effect vào `load_pdf_chunks()`. Với CLI PDF-local:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse path/to/file.pdf \
+  --write-multimodal-artifacts \
+  --output-root src/agentic_rag/ingestion/pdf/.data/parser-comparison \
+  --run-id docling-multimodal
+```
+
+Ví dụ với PDF thật:
+
+```bash
+uv run python -m agentic_rag.ingestion.pdf.cli parse \
+  src/agentic_rag/ingestion/pdf/.data/VF3-ERG_VN_V4.pdf \
+  --write-multimodal-artifacts \
+  --output-root tmp/pdf-multimodal-artifacts \
+  --run-id vf3-image-test
+```
+
+Kiểm tra output multimodal:
+
+```bash
+RUN_DIR="tmp/pdf-multimodal-artifacts/vf3_erg_vn_v4/vf3_image_test"
+
+sed -n '1,120p' "$RUN_DIR/parsed.md"
+sed -n '1,20p' "$RUN_DIR/elements.jsonl"
+find "$RUN_DIR/assets" -maxdepth 3 -type f | sort
+```
+
+Nếu cần gọi bằng Python thay vì CLI, dùng helper tương ứng:
 
 ```bash
 uv run python -c "from agentic_rag.ingestion.pdf import save_pdf_multimodal_artifacts; print(save_pdf_multimodal_artifacts('path/to/file.pdf').model_dump())"
@@ -226,8 +301,14 @@ src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
 
 Ý nghĩa phần mở rộng:
 
+- `parsed.md`: Markdown được export với image references khi Docling cung cấp
+  image data; các link ảnh trỏ tới file trong `assets/images/`.
 - `elements.jsonl`: mỗi dòng mô tả một asset bằng `element_id`, loại asset,
-  page nếu có, đường dẫn file asset và các `chunk_id` liên quan.
+  `page`, có thể kèm `pages`/`page_range` nếu provenance trải trên nhiều trang,
+  đường dẫn file asset và các `chunk_id` liên quan. Khi chunk có page metadata,
+  asset được gắn vào mọi chunk có giao với `pages` hoặc `page_range` của asset;
+  nếu không có chunk phù hợp, `chunk_ids` để rỗng thay vì gắn mặc định vào
+  chunk đầu tiên.
 - `assets/images/`: raw image được Docling trích ra từ PDF.
 - `assets/tables/`: bảng được lưu ở Markdown, CSV và PNG nếu parser cung cấp.
 - `assets/charts/`: chart candidate được lưu như raw image khi Docling gắn label
@@ -235,8 +316,11 @@ src/agentic_rag/ingestion/pdf/.data/artifacts/<pdf-stem>/<run-id>/
 
 `Chunk.metadata` chỉ lưu reference như `asset_ids`, `has_image`, `has_table`,
 `has_chart`; không nhúng binary image, DataFrame hoặc table object vào `Chunk`.
-V1 chỉ lưu raw assets và table Markdown/CSV. Captioning hình ảnh và chart
-extraction bằng model nặng sẽ được xử lý ở phase tối ưu sau.
+Mapping asset hiện là page/page-range based, chưa dùng coordinate/proximity
+trong cùng một trang. Với text hoặc asset trải nhiều trang, chunk vẫn giữ text
+nguyên vẹn và chỉ annotate bằng `page`, `pages`, `page_range`. V1 chỉ lưu raw
+assets và table Markdown/CSV. Captioning hình ảnh và chart extraction bằng
+model nặng sẽ được xử lý ở phase tối ưu sau.
 
 ## Benchmark tự động
 
@@ -245,6 +329,22 @@ không vendor benchmark dataset hoặc mã nguồn OmniDocBench; developer cần
 cấp ground-truth JSON, thư mục Markdown parser output và môi trường Docker hoặc
 checkout OmniDocBench cục bộ.
 
+Nếu cần tải benchmark dataset phục vụ kiểm tra local, dùng script PDF-local:
+
+```bash
+uv --directory src/agentic_rag/ingestion/pdf run python download_benchmark_datasets.py
+```
+
+Script này dùng `huggingface-hub` để tải:
+
+- ParseBench vào `src/agentic_rag/ingestion/pdf/.data/parsebench_dataset/`.
+- MDPBench vào `src/agentic_rag/ingestion/pdf/.data/mdpbench_dataset/`.
+
+Chạy bằng `uv --directory src/agentic_rag/ingestion/pdf` để `./.data` resolve
+về thư mục `.data/` của PDF subproject, vốn đã được ignore. Không chạy script từ
+root repo nếu không truyền output path riêng, vì root-level `.data/` không phải
+layout artifact chuẩn của module PDF.
+
 Wrapper hỗ trợ hai backend:
 
 - `docker`: dựng command Docker và mount ground truth, predictions, config và
@@ -252,10 +352,10 @@ Wrapper hỗ trợ hai backend:
 - `local`: chạy `python pdf_validation.py --config <config>` từ checkout
   OmniDocBench cục bộ.
 
-Ví dụ dry-run từ root repository:
+Ví dụ dry-run từ PDF subproject:
 
 ```bash
-uv --directory src/agentic_rag/ingestion/pdf run python -m agentic_rag.ingestion.pdf.benchmarking.cli run-omnidocbench \
+uv --directory src/agentic_rag/ingestion/pdf run python -m benchmarking.cli run-omnidocbench \
   --backend docker \
   --ground-truth /path/to/OmniDocBench.json \
   --predictions /path/to/parser_markdown_outputs \
