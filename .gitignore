@@ -88,3 +88,4 @@ src/agentic_rag/ingestion/Crawl link/*.json
 src/agentic_rag/ingestion/Crawl link/*.txt
 src/agentic_rag/ingestion/Crawl link/chroma_db/
 src/agentic_rag/ingestion/Crawl link/desktop.ini
+tsconfig.tsbuildinfo
