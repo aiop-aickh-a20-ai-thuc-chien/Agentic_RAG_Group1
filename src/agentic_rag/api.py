@@ -15,12 +15,12 @@ from contextlib import asynccontextmanager  # noqa: E402
 from html.parser import HTMLParser  # noqa: E402
 from urllib.error import HTTPError as UrlHTTPError  # noqa: E402
 from urllib.error import URLError  # noqa: E402
-from urllib.parse import urlparse  # noqa: E402
+from urllib.parse import quote, urlparse  # noqa: E402
 from urllib.request import Request, urlopen  # noqa: E402
 
 from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+from fastapi.responses import FileResponse, Response, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from agentic_rag.agent.graph import run_agent  # noqa: E402
@@ -474,8 +474,8 @@ def source_debug(document_id: str) -> SourceDebugResponse:
     )
 
 
-@api.get("/sources/{document_id}/raw")
-def source_raw(document_id: str) -> FileResponse:
+@api.get("/sources/{document_id}/raw", response_model=None)
+def source_raw(document_id: str) -> Response:
     """Return the original uploaded PDF file for local debug previews."""
 
     try:
@@ -490,6 +490,20 @@ def source_raw(document_id: str) -> FileResponse:
         )
 
     try:
+        raw = provider.document_raw_content(document_id=document_id)
+    except ValueError:
+        raw = None
+    if raw is not None:
+        return Response(
+            content=raw.content,
+            media_type=raw.content_type,
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Disposition": _inline_content_disposition(raw.name),
+            },
+        )
+
+    try:
         raw_path = provider.document_raw_path(document_id=document_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -499,6 +513,13 @@ def source_raw(document_id: str) -> FileResponse:
         media_type="application/pdf",
         headers={"Cache-Control": "no-store", "Content-Disposition": "inline"},
     )
+
+
+def _inline_content_disposition(filename: str) -> str:
+    encoded_filename = quote(filename)
+    if encoded_filename != filename:
+        return f"inline; filename*=utf-8''{encoded_filename}"
+    return f'inline; filename="{filename}"'
 
 
 @api.delete("/sources")
@@ -516,7 +537,10 @@ def delete_all_sources() -> dict[str, object]:
             detail="Delete all is only supported for local PDF sources.",
         )
 
-    count = provider.delete_all_documents()
+    try:
+        count = provider.delete_all_documents()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"status": "deleted", "deleted_count": count}
 
 
@@ -539,6 +563,8 @@ def delete_source(document_id: str) -> dict[str, str]:
         provider.delete_document(document_id=document_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"status": "deleted", "document_id": document_id}
 

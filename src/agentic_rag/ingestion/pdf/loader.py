@@ -8,16 +8,17 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf.chunkers import (
+
+from .chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
     DETERMINISTIC_MARKDOWN_CHUNKER,
     DOCLING_HYBRID_CHUNKER,
     MarkdownChunker,
     resolve_markdown_chunker,
 )
-from agentic_rag.ingestion.pdf.models import PdfChunkingInput, PdfParseResult
-from agentic_rag.ingestion.pdf.parser import PdfMarkdownParser
-from agentic_rag.ingestion.pdf.pipelines import (
+from .models import PdfChunkingInput, PdfParseResult
+from .parser import PdfMarkdownParser
+from .pipelines import (
     DEFAULT_PDF_PIPELINE,
     DEFAULT_PDF_STRATEGY,
     resolve_pdf_pipeline,
@@ -216,9 +217,9 @@ def _chunks_from_chunking_input(
             "chunking_method": chunker.chunker_name,
             "chunk_index": index,
         }
-        metadata.update(
-            {key: value for key, value in markdown_chunk.metadata.items() if key not in metadata}
-        )
+        for key, value in markdown_chunk.metadata.items():
+            if (key == "page" and value is not None) or key not in metadata:
+                metadata[key] = value
         chunks.append(
             Chunk(
                 chunk_id=chunk_id,
