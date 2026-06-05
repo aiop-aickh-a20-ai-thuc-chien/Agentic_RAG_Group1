@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from pytest import MonkeyPatch
 
 from agentic_rag.core.contracts import Chunk, SearchResult
@@ -10,7 +11,7 @@ from agentic_rag.ingestion.pdf import LoadedPdfDocument
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
-from agentic_rag.integrations.local_pdf.storage import StoredSourceDocument
+from agentic_rag.integrations.local_pdf.storage import StoredRawSource, StoredSourceDocument
 from agentic_rag.retrieval.search import Store
 
 
@@ -372,11 +373,122 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
     assert documents[0].chunks[0].text == "Noi dung tu nguoi dung"
 
 
+def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+
+        def write_document(self, **kwargs: Any) -> None:
+            self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.dense_embedding_metadata",
+        lambda: {
+            "requested_provider": "auto",
+            "resolved_provider": "local_openai",
+            "fallback_reason": "openai_api_key_missing",
+            "model": "local-model",
+        },
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: (_ for _ in ()).throw(ConnectionError("local endpoint unavailable")),
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    assert uploaded.document_id in source_store.documents
+    trace = cast(dict[str, dict[str, Any]], uploaded.trace)
+    assert trace["index_write"]["source_store"]["enabled"] is True
+    assert trace["index_write"]["dense_index"] == {
+        "enabled": True,
+        "status": "error",
+        "error": "local endpoint unavailable",
+        "requested_provider": "auto",
+        "resolved_provider": "local_openai",
+        "fallback_reason": "openai_api_key_missing",
+        "model": "local-model",
+        "latency_ms": trace["index_write"]["dense_index"]["latency_ms"],
+    }
+
+
+def test_local_pdf_provider_does_not_delete_source_when_qdrant_document_delete_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        deleted = False
+
+        def delete_document(self, document_id: str) -> None:
+            self.deleted = True
+
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        lambda document_id: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match=r"Qdrant.*source storage was not deleted"):
+        provider.delete_document(document_id="doc-1")
+
+    assert source_store.deleted is False
+
+
+def test_local_pdf_provider_does_not_delete_sources_when_qdrant_clear_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        deleted = False
+
+        def delete_all_documents(self) -> int:
+            self.deleted = True
+            return 1
+
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_all_qdrant_points",
+        lambda: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match=r"Qdrant.*source storage was not deleted"):
+        provider.delete_all_documents()
+
+    assert source_store.deleted is False
+
+
 def test_local_pdf_provider_retrieves_matching_chunks(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "score")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     _mock_openai_client(monkeypatch)
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
@@ -455,6 +567,79 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert pipeline_trace["rerank"]["tech"]["reason"] == "agent_reranks"
     assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "hybrid"
     assert pipeline_trace["rerank"]["output"][0]["retriever"] == "hybrid"
+
+
+def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeCloudSourceStore:
+        def read_all_chunks(self) -> list[Chunk]:
+            raise AssertionError("cloud retrieval should not rebuild BM25 from stored chunks")
+
+        def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+            raise AssertionError("cloud retrieval should not load selected chunks from S3")
+
+    expected = [
+        SearchResult(
+            chunk=Chunk(
+                chunk_id="c1",
+                text="Pin VF8 duoc bao hanh",
+                metadata={"document_id": "doc-1"},
+            ),
+            score=0.91,
+            rank=1,
+            retriever="hybrid",
+        )
+    ]
+    seen: dict[str, object] = {}
+
+    def fake_qdrant_hybrid_search(
+        question: str,
+        *,
+        document_ids: list[str] | None = None,
+        top_k: int = 10,
+    ) -> list[SearchResult]:
+        seen["question"] = question
+        seen["document_ids"] = document_ids
+        seen["top_k"] = top_k
+        return expected
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("LOCAL_PDF_RETRIEVAL_TOP_K", "3")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.qdrant_hybrid_search",
+        fake_qdrant_hybrid_search,
+    )
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeCloudSourceStore()),
+    )
+
+    results = provider.retrieve(question="pin vf8", document_ids=["doc-1"])
+
+    assert results == expected
+    assert seen == {"question": "pin vf8", "document_ids": ["doc-1"], "top_k": 3}
+
+
+def test_local_pdf_provider_reads_raw_source_from_cloud_store(tmp_path: Path) -> None:
+    class FakeCloudSourceStore:
+        def read_raw(self, document_id: str) -> StoredRawSource:
+            return StoredRawSource(
+                content=b"%PDF-1.4",
+                content_type="application/pdf",
+                name=f"{document_id}.pdf",
+            )
+
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeCloudSourceStore()),
+    )
+
+    raw = provider.document_raw_content(document_id="doc-1")
+
+    assert raw.content == b"%PDF-1.4"
+    assert raw.content_type == "application/pdf"
 
 
 def test_local_pdf_provider_rejects_non_pdf_upload(tmp_path: Path) -> None:
