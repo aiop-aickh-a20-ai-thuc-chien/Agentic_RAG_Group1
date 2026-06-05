@@ -17,6 +17,7 @@ from agentic_rag.ingestion.chunking import (
 
 DETERMINISTIC_MARKDOWN_CHUNKER = "deterministic"
 DOCLING_HYBRID_CHUNKER = "docling-hybrid"
+DOCLING_PAGE_AWARE_CHUNKER = "docling-page-aware"
 DEFAULT_MARKDOWN_CHUNKER = DETERMINISTIC_MARKDOWN_CHUNKER
 
 
@@ -71,6 +72,12 @@ class DoclingHybridChunker:
         return chunks
 
 
+class DoclingPageAwareChunker(DoclingHybridChunker):
+    """Backward-compatible alias for native Docling page-aware chunking."""
+
+    chunker_name = DOCLING_PAGE_AWARE_CHUNKER
+
+
 class MarkdownChunkerDefinition(BaseModel):
     """Registered Markdown chunker factory."""
 
@@ -88,6 +95,10 @@ _MARKDOWN_CHUNKER_REGISTRY: dict[str, MarkdownChunkerDefinition] = {
     DOCLING_HYBRID_CHUNKER: MarkdownChunkerDefinition(
         name=DOCLING_HYBRID_CHUNKER,
         factory=DoclingHybridChunker,
+    ),
+    DOCLING_PAGE_AWARE_CHUNKER: MarkdownChunkerDefinition(
+        name=DOCLING_PAGE_AWARE_CHUNKER,
+        factory=DoclingPageAwareChunker,
     ),
 }
 

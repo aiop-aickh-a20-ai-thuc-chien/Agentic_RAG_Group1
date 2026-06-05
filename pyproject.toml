@@ -100,5 +100,9 @@ module = [
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
+module = ["docling", "docling.*", "docling_core", "docling_core.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["ragas", "ragas.*", "datasets", "datasets.*"]
 ignore_missing_imports = true

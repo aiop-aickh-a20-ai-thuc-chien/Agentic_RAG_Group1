@@ -11,6 +11,7 @@ from agentic_rag.ingestion.pdf.artifacts import (
 from agentic_rag.ingestion.pdf.chunkers import (
     DeterministicMarkdownChunker,
     DoclingHybridChunker,
+    DoclingPageAwareChunker,
     MarkdownChunker,
     resolve_markdown_chunker,
     supported_markdown_chunkers,
@@ -49,6 +50,7 @@ __all__ = [
     "DEFAULT_PDF_STRATEGY",
     "DeterministicMarkdownChunker",
     "DoclingHybridChunker",
+    "DoclingPageAwareChunker",
     "LoadedPdfDocument",
     "MarkdownChunker",
     "PdfAssetRef",
