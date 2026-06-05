@@ -5,21 +5,30 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from collections import Counter
+from collections.abc import Iterable
+from hashlib import sha256
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, SearchResult
+from agentic_rag.retrieval.embeddings import (
+    EmbeddingConfig,
+    EmbeddingProfile,
+    create_embedding_client,
+    resolve_embedding_config,
+    validate_embedding_vectors,
+)
 
-DEFAULT_DENSE_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_DENSE_EMBEDDING_DIMENSIONS = 1536
-DEFAULT_HF_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-DENSE_EMBEDDING_PROVIDER_ENV = "DENSE_EMBEDDING_PROVIDER"
 DENSE_VECTOR_STORE_ENV = "DENSE_VECTOR_STORE"
 DENSE_PGVECTOR_CONNECTION_ENV = "DENSE_PGVECTOR_CONNECTION"
 DENSE_PGVECTOR_COLLECTION_ENV = "DENSE_PGVECTOR_COLLECTION"
-HF_EMBEDDING_MODEL_ENV = "HF_EMBEDDING_MODEL"
+QDRANT_URL_ENV = "QDRANT_URL"
+QDRANT_API_KEY_ENV = "QDRANT_API_KEY"
+QDRANT_COLLECTION_ENV = "QDRANT_COLLECTION"
 
 REQUERY_ROUTER_PROMPT = """
 <task>
@@ -200,21 +209,38 @@ class Store:
 def dense_embedding_metadata() -> dict[str, object]:
     """Return the dense retrieval embedding configuration used by Store."""
 
-    provider = _configured_embedding_provider()
     vector_store = _configured_vector_store()
-    if provider == "huggingface":
+    try:
+        config = resolve_embedding_config()
+    except ValueError as exc:
         return {
-            "provider": "huggingface",
-            "library": "langchain-huggingface",
-            "model": os.getenv(HF_EMBEDDING_MODEL_ENV, DEFAULT_HF_EMBEDDING_MODEL),
+            "provider": None,
+            "requested_provider": (
+                os.getenv("DENSE_EMBEDDING_PROVIDER", "auto").strip().lower() or "auto"
+            ),
+            "resolved_provider": None,
+            "configuration_error": str(exc),
             "vector_store": vector_store,
+            **({"collection": _configured_qdrant_collection()} if vector_store == "qdrant" else {}),
         }
     return {
-        "provider": "openai",
-        "library": "langchain-openai",
-        "model": DEFAULT_DENSE_EMBEDDING_MODEL,
-        "dimensions": DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
+        "provider": config.resolved_provider,
+        "requested_provider": config.requested_provider,
+        "resolved_provider": config.resolved_provider,
+        "fallback_reason": config.fallback_reason,
+        "library": (
+            "langchain-huggingface"
+            if config.resolved_provider == "huggingface"
+            else "langchain-openai"
+        ),
+        "model": config.model,
+        **(
+            {"expected_dimensions": config.expected_dimensions}
+            if config.expected_dimensions is not None
+            else {}
+        ),
         "vector_store": vector_store,
+        **({"collection": _configured_qdrant_collection()} if vector_store == "qdrant" else {}),
     }
 
 
@@ -222,6 +248,8 @@ def upsert_dense_embeddings(chunks: list[Chunk]) -> dict[str, object]:
     """Upsert chunk embeddings into the configured persistent vector store."""
 
     vector_store = _configured_vector_store()
+    if vector_store == "qdrant":
+        return _upsert_qdrant_embeddings(chunks)
     if vector_store != "pgvector":
         return {
             "enabled": False,
@@ -246,28 +274,17 @@ def upsert_dense_embeddings(chunks: list[Chunk]) -> dict[str, object]:
     }
 
 
-def _configured_embedding_provider() -> str:
-    return os.getenv(DENSE_EMBEDDING_PROVIDER_ENV, "openai").strip().lower()
-
-
 def _configured_vector_store() -> str:
     raw = os.getenv(DENSE_VECTOR_STORE_ENV, "turbovec").strip().lower()
-    return "pgvector" if raw in {"pgvector", "postgres", "postgresql"} else "turbovec"
+    if raw in {"pgvector", "postgres", "postgresql"}:
+        return "pgvector"
+    if raw == "qdrant":
+        return "qdrant"
+    return "turbovec"
 
 
 def _configured_embedding() -> Any:
-    provider = _configured_embedding_provider()
-    if provider == "huggingface":
-        from langchain_huggingface.embeddings import HuggingFaceEmbeddings
-
-        model = os.getenv(HF_EMBEDDING_MODEL_ENV, DEFAULT_HF_EMBEDDING_MODEL)
-        return HuggingFaceEmbeddings(model_name=model)
-    from langchain_openai import OpenAIEmbeddings
-
-    return OpenAIEmbeddings(
-        model=DEFAULT_DENSE_EMBEDDING_MODEL,
-        dimensions=DEFAULT_DENSE_EMBEDDING_DIMENSIONS,
-    )
+    return create_embedding_client(resolve_embedding_config())
 
 
 def _build_pgvector_store(
@@ -320,6 +337,511 @@ def _configured_pgvector_collection() -> str:
     return os.getenv(DENSE_PGVECTOR_COLLECTION_ENV, "document").strip() or "document"
 
 
+def _configured_qdrant_collection() -> str:
+    return os.getenv(QDRANT_COLLECTION_ENV, "agentic_rag_chunks").strip() or "agentic_rag_chunks"
+
+
+def qdrant_hybrid_search(
+    query: str,
+    *,
+    document_ids: list[str] | None = None,
+    top_k: int = 10,
+) -> list[SearchResult]:
+    """Run Qdrant-backed hybrid retrieval and return shared search results."""
+
+    if top_k <= 0:
+        return []
+    embedding_config = resolve_embedding_config()
+    embedding = _configured_embedding()
+    dense_vector = _embed_query(embedding, query)
+    embedding_profile = validate_embedding_vectors(
+        [dense_vector],
+        config=embedding_config,
+    )
+    sparse_vector = _sparse_vector(query)
+    client = _qdrant_client_from_env()
+    _validate_qdrant_collection(
+        client=client,
+        embedding_profile=embedding_profile,
+    )
+    response = _query_qdrant_points(
+        client=client,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        embedding_profile=embedding_profile,
+        document_ids=document_ids,
+        top_k=top_k,
+    )
+    raw_points = getattr(response, "points", response)
+    if not isinstance(raw_points, Iterable):
+        return []
+    results: list[SearchResult] = []
+    for rank, point in enumerate(raw_points, start=1):
+        payload = getattr(point, "payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        results.append(
+            SearchResult(
+                chunk=_chunk_from_qdrant_payload(payload),
+                score=float(getattr(point, "score", 0.0)),
+                rank=rank,
+                retriever="hybrid",
+            )
+        )
+    return results
+
+
+def delete_qdrant_document_points(document_id: str) -> dict[str, object]:
+    """Delete Qdrant points belonging to one source document."""
+
+    if _configured_vector_store() != "qdrant":
+        return {"enabled": False, "vector_store": _configured_vector_store()}
+    client = _qdrant_client_from_env()
+    try:
+        _delete_qdrant_points(client=client, document_ids=[document_id])
+    except Exception as exc:
+        if not _is_qdrant_not_found(exc):
+            raise
+    return {
+        "enabled": True,
+        "vector_store": "qdrant",
+        "collection": _configured_qdrant_collection(),
+        "document_id": document_id,
+        "deleted": True,
+    }
+
+
+def delete_all_qdrant_points() -> dict[str, object]:
+    """Delete all Qdrant points in the configured collection."""
+
+    if _configured_vector_store() != "qdrant":
+        return {"enabled": False, "vector_store": _configured_vector_store()}
+    client = _qdrant_client_from_env()
+    try:
+        _delete_qdrant_points(client=client, document_ids=None)
+    except Exception as exc:
+        if not _is_qdrant_not_found(exc):
+            raise
+    return {
+        "enabled": True,
+        "vector_store": "qdrant",
+        "collection": _configured_qdrant_collection(),
+        "deleted": True,
+    }
+
+
+def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
+    if not chunks:
+        return {
+            "enabled": True,
+            "vector_store": "qdrant",
+            "chunk_count": 0,
+            "collection": _configured_qdrant_collection(),
+        }
+    embedding_config = resolve_embedding_config()
+    embedding = _configured_embedding()
+    dense_vectors = _embed_documents(embedding, [chunk.text for chunk in chunks])
+    embedding_profile = validate_embedding_vectors(
+        dense_vectors,
+        config=embedding_config,
+    )
+    client = _qdrant_client_from_env()
+    _ensure_qdrant_collection(
+        client=client,
+        embedding_profile=embedding_profile,
+    )
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("DENSE_VECTOR_STORE=qdrant requires qdrant-client.") from exc
+    points = []
+    for index, chunk in enumerate(chunks, start=1):
+        sparse_vector = _sparse_vector(chunk.text)
+        sparse_indices = sparse_vector["indices"]
+        sparse_values = sparse_vector["values"]
+        points.append(
+            models.PointStruct(
+                id=_qdrant_point_id(chunk=chunk, fallback_index=index),
+                vector={
+                    "dense": dense_vectors[index - 1],
+                    "sparse": models.SparseVector(
+                        indices=[int(value) for value in sparse_indices],
+                        values=[float(value) for value in sparse_values],
+                    ),
+                },
+                payload=_qdrant_payload(
+                    chunk=chunk,
+                    fallback_index=index,
+                    embedding_profile=embedding_profile,
+                ),
+            )
+        )
+    client.upsert(collection_name=_configured_qdrant_collection(), points=points)
+    return {
+        "enabled": True,
+        "vector_store": "qdrant",
+        "chunk_count": len(chunks),
+        "collection": _configured_qdrant_collection(),
+        **_embedding_trace_metadata(
+            config=embedding_config,
+            profile=embedding_profile,
+        ),
+    }
+
+
+def _qdrant_client_from_env() -> Any:
+    url = os.getenv(QDRANT_URL_ENV, "").strip()
+    api_key = os.getenv(QDRANT_API_KEY_ENV, "").strip() or None
+    if not url:
+        raise ValueError("DENSE_VECTOR_STORE=qdrant requires QDRANT_URL.")
+    try:
+        from qdrant_client import QdrantClient
+    except ImportError as exc:
+        raise RuntimeError("DENSE_VECTOR_STORE=qdrant requires qdrant-client.") from exc
+    return QdrantClient(url=url, api_key=api_key)
+
+
+def _ensure_qdrant_collection(
+    *,
+    client: Any,
+    embedding_profile: EmbeddingProfile,
+) -> None:
+    collection = _configured_qdrant_collection()
+    get_collection = getattr(client, "get_collection", None)
+    if not callable(get_collection):
+        raise RuntimeError("Qdrant client must implement get_collection.")
+    try:
+        collection_info = get_collection(collection)
+    except Exception as exc:
+        if not _is_qdrant_not_found(exc):
+            raise
+    else:
+        _validate_qdrant_collection_info(
+            client=client,
+            collection_info=collection_info,
+            embedding_profile=embedding_profile,
+        )
+        return
+
+    create_collection = getattr(client, "create_collection", None)
+    if not callable(create_collection):
+        raise RuntimeError("Qdrant client must implement create_collection.")
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("Qdrant collection creation requires qdrant-client.") from exc
+    create_collection(
+        collection_name=collection,
+        vectors_config={
+            "dense": models.VectorParams(
+                size=embedding_profile.dimensions,
+                distance=models.Distance.COSINE,
+            )
+        },
+        sparse_vectors_config={"sparse": models.SparseVectorParams()},
+    )
+
+
+def _validate_qdrant_collection(
+    *,
+    client: Any,
+    embedding_profile: EmbeddingProfile,
+) -> None:
+    collection = _configured_qdrant_collection()
+    get_collection = getattr(client, "get_collection", None)
+    if not callable(get_collection):
+        raise RuntimeError("Qdrant client must implement get_collection.")
+    try:
+        collection_info = get_collection(collection)
+    except Exception as exc:
+        if _is_qdrant_not_found(exc):
+            raise ValueError(
+                f"Qdrant collection {collection!r} does not exist. "
+                "Ingest a document before querying."
+            ) from exc
+        raise
+    _validate_qdrant_collection_info(
+        client=client,
+        collection_info=collection_info,
+        embedding_profile=embedding_profile,
+    )
+
+
+def _validate_qdrant_collection_info(
+    *,
+    client: Any,
+    collection_info: object,
+    embedding_profile: EmbeddingProfile,
+) -> None:
+    collection = _configured_qdrant_collection()
+    stored_dimensions = _qdrant_dense_vector_size(collection_info)
+    if stored_dimensions != embedding_profile.dimensions:
+        raise ValueError(
+            f"Qdrant collection {collection!r} dense dimension is {stored_dimensions}, "
+            f"but the active embedding dimension is {embedding_profile.dimensions}. "
+            "Change QDRANT_COLLECTION or delete the collection and reindex."
+        )
+
+    stored_profile = _qdrant_stored_embedding_profile(client)
+    if stored_profile is None:
+        return
+    expected_profile = _embedding_profile_payload(embedding_profile)
+    if stored_profile != expected_profile:
+        raise ValueError(
+            f"Qdrant collection {collection!r} embedding profile is incompatible: "
+            f"stored={stored_profile}, active={expected_profile}. "
+            "Change QDRANT_COLLECTION or delete the collection and reindex."
+        )
+
+
+def _qdrant_dense_vector_size(collection_info: object) -> int:
+    config = getattr(collection_info, "config", None)
+    params = getattr(config, "params", None)
+    vectors = getattr(params, "vectors", None)
+    dense_config = vectors.get("dense") if isinstance(vectors, dict) else None
+    size = getattr(dense_config, "size", None)
+    if not isinstance(size, int) or size <= 0:
+        raise ValueError(
+            "Qdrant collection does not expose the required named dense vector. "
+            "Change QDRANT_COLLECTION or delete the collection and reindex."
+        )
+    return size
+
+
+def _qdrant_stored_embedding_profile(client: Any) -> dict[str, object] | None:
+    scroll = getattr(client, "scroll", None)
+    if not callable(scroll):
+        raise RuntimeError("Qdrant client must implement scroll for profile validation.")
+    response = scroll(
+        collection_name=_configured_qdrant_collection(),
+        limit=1,
+        with_payload=True,
+        with_vectors=False,
+    )
+    raw_points = (
+        response[0] if isinstance(response, tuple) else getattr(response, "points", response)
+    )
+    if not isinstance(raw_points, Iterable):
+        raise ValueError("Qdrant scroll returned an invalid response.")
+    points = list(raw_points)
+    if not points:
+        return None
+    payload = getattr(points[0], "payload", None)
+    profile = payload.get("_embedding_profile") if isinstance(payload, dict) else None
+    if not isinstance(profile, dict):
+        raise ValueError(
+            f"Qdrant collection {_configured_qdrant_collection()!r} contains legacy points "
+            "without an embedding profile. Change QDRANT_COLLECTION or delete the collection "
+            "and reindex."
+        )
+    return dict(profile)
+
+
+def _is_qdrant_not_found(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 404:
+        return True
+    response = getattr(exc, "response", None)
+    return getattr(response, "status_code", None) == 404
+
+
+def _query_qdrant_points(
+    *,
+    client: Any,
+    dense_vector: list[float],
+    sparse_vector: dict[str, list[int] | list[float]],
+    embedding_profile: EmbeddingProfile,
+    document_ids: list[str] | None,
+    top_k: int,
+) -> object:
+    if type(client).__module__.startswith("qdrant_client"):
+        try:
+            from qdrant_client import models
+        except ImportError:
+            pass
+        else:
+            q_filter = _qdrant_document_filter(document_ids, models=models)
+            sparse_indices = sparse_vector["indices"]
+            sparse_values = sparse_vector["values"]
+            if not all(isinstance(index, int) for index in sparse_indices):
+                sparse_indices = []
+            if not all(isinstance(value, float) for value in sparse_values):
+                sparse_values = []
+            return client.query_points(
+                collection_name=_configured_qdrant_collection(),
+                prefetch=[
+                    models.Prefetch(
+                        query=dense_vector,
+                        using="dense",
+                        limit=top_k,
+                        filter=q_filter,
+                    ),
+                    models.Prefetch(
+                        query=models.SparseVector(
+                            indices=sparse_indices,
+                            values=sparse_values,
+                        ),
+                        using="sparse",
+                        limit=top_k,
+                        filter=q_filter,
+                    ),
+                ],
+                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                limit=top_k,
+                with_payload=True,
+            )
+    return client.query_points(
+        collection_name=_configured_qdrant_collection(),
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        document_ids=document_ids,
+        limit=top_k,
+        with_payload=True,
+    )
+
+
+def _delete_qdrant_points(*, client: Any, document_ids: list[str] | None) -> None:
+    delete = getattr(client, "delete", None)
+    if not callable(delete):
+        raise RuntimeError("Qdrant client must implement delete.")
+    if type(client).__module__.startswith("qdrant_client"):
+        try:
+            from qdrant_client import models
+        except ImportError:
+            pass
+        else:
+            selector_filter = _qdrant_document_filter(document_ids, models=models)
+            delete(
+                collection_name=_configured_qdrant_collection(),
+                points_selector=models.FilterSelector(filter=selector_filter),
+                wait=True,
+            )
+            return
+    delete(
+        collection_name=_configured_qdrant_collection(),
+        document_ids=document_ids,
+        wait=True,
+    )
+
+
+def _qdrant_document_filter(document_ids: list[str] | None, *, models: Any) -> Any:
+    if not document_ids:
+        return models.Filter(must=[])
+    if len(document_ids) == 1:
+        match = models.MatchValue(value=document_ids[0])
+    else:
+        match = models.MatchAny(any=document_ids)
+    return models.Filter(
+        must=[
+            models.FieldCondition(
+                key="document_id",
+                match=match,
+            )
+        ]
+    )
+
+
+def _embed_documents(embedding: object, texts: list[str]) -> list[list[float]]:
+    embed_documents = getattr(embedding, "embed_documents", None)
+    if callable(embed_documents):
+        vectors = embed_documents(texts)
+        return [[float(value) for value in vector] for vector in vectors]
+    embed_query = getattr(embedding, "embed_query", None)
+    if callable(embed_query):
+        return [[float(value) for value in embed_query(text)] for text in texts]
+    raise TypeError("Embedding provider must implement embed_documents or embed_query.")
+
+
+def _embed_query(embedding: object, query: str) -> list[float]:
+    embed_query = getattr(embedding, "embed_query", None)
+    if callable(embed_query):
+        return [float(value) for value in embed_query(query)]
+    return _embed_documents(embedding, [query])[0]
+
+
+def _sparse_vector(text: str) -> dict[str, list[int] | list[float]]:
+    counts = Counter(_tokenize(text))
+    indices = [_stable_sparse_index(token) for token in counts]
+    values = [float(count) for count in counts.values()]
+    return {"indices": indices, "values": values}
+
+
+def _stable_sparse_index(token: str) -> int:
+    # Qdrant sparse vector indices must be unsigned integers. A deterministic
+    # token hash is sufficient for the lightweight lexical signal used here.
+    return int.from_bytes(sha256(token.encode()).digest()[:8], "big") % 2_147_483_647
+
+
+def _qdrant_payload(
+    *,
+    chunk: Chunk,
+    fallback_index: int,
+    embedding_profile: EmbeddingProfile,
+) -> dict[str, object]:
+    metadata = chunk.metadata
+    return {
+        "document_id": str(metadata.get("document_id") or ""),
+        "chunk_id": chunk.chunk_id,
+        "storage_chunk_id": _dense_id(chunk=chunk, fallback_index=fallback_index),
+        "source_type": str(metadata.get("source_type") or ""),
+        "source": str(metadata.get("source") or ""),
+        "url": metadata.get("url"),
+        "page": metadata.get("page"),
+        "section": metadata.get("section"),
+        "text": chunk.text,
+        "metadata": metadata,
+        "_embedding_profile": _embedding_profile_payload(embedding_profile),
+    }
+
+
+def _embedding_profile_payload(profile: EmbeddingProfile) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": profile.provider,
+        "model": profile.model,
+        "dimensions": profile.dimensions,
+    }
+
+
+def _embedding_trace_metadata(
+    *,
+    config: EmbeddingConfig,
+    profile: EmbeddingProfile,
+) -> dict[str, object]:
+    return {
+        "requested_provider": config.requested_provider,
+        "resolved_provider": config.resolved_provider,
+        "fallback_reason": config.fallback_reason,
+        "model": profile.model,
+        "dimensions": profile.dimensions,
+    }
+
+
+def _chunk_from_qdrant_payload(payload: dict[str, object]) -> Chunk:
+    metadata = payload.get("metadata")
+    chunk_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    payload_metadata_keys = (
+        "document_id",
+        "storage_chunk_id",
+        "source_type",
+        "source",
+        "url",
+        "page",
+        "section",
+    )
+    for key in payload_metadata_keys:
+        value = payload.get(key)
+        if value is not None:
+            chunk_metadata.setdefault(key, value)
+    return Chunk(
+        chunk_id=str(
+            payload.get("chunk_id") or payload.get("storage_chunk_id") or "qdrant_unknown"
+        ),
+        text=str(payload.get("text") or ""),
+        metadata=chunk_metadata,
+    )
+
+
 def _dense_metadatas(chunks: list[Chunk]) -> list[dict[str, object]]:
     return [
         {
@@ -345,6 +867,11 @@ def _dense_id(*, chunk: Chunk, fallback_index: int) -> str:
         return storage_chunk_id
     document_id = str(chunk.metadata.get("document_id") or "document")
     return f"{document_id}:{fallback_index:04d}"
+
+
+def _qdrant_point_id(*, chunk: Chunk, fallback_index: int) -> str:
+    storage_id = _dense_id(chunk=chunk, fallback_index=fallback_index)
+    return str(uuid5(NAMESPACE_URL, storage_id))
 
 
 _DENSE_FILTER_MAX_IDS = 5

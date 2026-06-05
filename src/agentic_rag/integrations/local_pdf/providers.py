@@ -26,6 +26,8 @@ from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
 from agentic_rag.integrations.local_pdf.storage import (
     LocalSourceStore,
     PostgresLocalSourceStore,
+    S3LocalSourceStore,
+    StoredRawSource,
     StoredSourceDocument,
 )
 from agentic_rag.retrieval.fusion import (
@@ -37,7 +39,14 @@ from agentic_rag.retrieval.fusion import (
     rrf_fusion,
     weighted_rrf_fusion,
 )
-from agentic_rag.retrieval.search import Store, dense_embedding_metadata, upsert_dense_embeddings
+from agentic_rag.retrieval.search import (
+    Store,
+    delete_all_qdrant_points,
+    delete_qdrant_document_points,
+    dense_embedding_metadata,
+    qdrant_hybrid_search,
+    upsert_dense_embeddings,
+)
 
 
 def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
@@ -536,6 +545,7 @@ class LocalPdfEvidenceProvider:
         import shutil
 
         count = 0
+        _delete_all_dense_embeddings()
         if self._source_store is not None:
             count = self._source_store.delete_all_documents()
 
@@ -556,6 +566,7 @@ class LocalPdfEvidenceProvider:
         """Delete one source document and all its chunks from store and disk."""
         import shutil
 
+        _delete_dense_document(document_id)
         if self._source_store is not None:
             self._source_store.delete_document(document_id)
 
@@ -586,6 +597,10 @@ class LocalPdfEvidenceProvider:
         source = str(metadata.get("source") or metadata.get("url") or name)
         markdown_path = self._markdown_path(document_id)
         markdown = markdown_path.read_text(encoding="utf-8") if markdown_path.exists() else ""
+        if not markdown and self._source_store is not None:
+            read_markdown = getattr(self._source_store, "read_markdown", None)
+            if callable(read_markdown):
+                markdown = str(read_markdown(document_id))
         chunk_input, chunk_input_type = self._debug_chunk_input(
             document_id=document_id,
             source_type=source_type,
@@ -657,6 +672,17 @@ class LocalPdfEvidenceProvider:
             raise ValueError(f"Raw source file is not available: {document_id}")
         return raw_path
 
+    def document_raw_content(self, *, document_id: str) -> StoredRawSource:
+        """Return cloud-backed raw source content when the source store supports it."""
+
+        if self._source_store is not None:
+            read_raw = getattr(self._source_store, "read_raw", None)
+            if callable(read_raw):
+                raw = read_raw(document_id)
+                if isinstance(raw, StoredRawSource):
+                    return raw
+        raise ValueError(f"Raw source file is not available: {document_id}")
+
     def retrieve(
         self,
         *,
@@ -665,6 +691,13 @@ class LocalPdfEvidenceProvider:
         page_size: int | None = None,
     ) -> list[SearchResult]:
         """Run PDF chunks through BM25, dense retrieval, RRF, and rerank."""
+
+        if _qdrant_vector_store_enabled():
+            return qdrant_hybrid_search(
+                question,
+                document_ids=document_ids,
+                top_k=page_size or _default_page_size(),
+            )
 
         chunks = self._chunks_for_documents(document_ids)
         if not chunks:
@@ -760,7 +793,7 @@ class LocalPdfEvidenceProvider:
             chunks=chunks,
         )
         return {
-            "type": "postgres",
+            "type": _source_store_trace_type(self._source_store),
             "enabled": True,
             "document_id": document_id,
             "chunk_count": len(chunks),
@@ -910,6 +943,8 @@ def _chunks_with_local_metadata(
 
 def _source_store_from_env() -> LocalSourceStore | None:
     raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
+    if raw_store == "s3":
+        return S3LocalSourceStore.from_env()
     if raw_store not in {"postgres", "postgresql", "pg"}:
         return None
 
@@ -926,8 +961,17 @@ def _source_store_from_env() -> LocalSourceStore | None:
     return PostgresLocalSourceStore(connection=connection, table_prefix=table_prefix)
 
 
+def _source_store_trace_type(source_store: LocalSourceStore) -> str:
+    if isinstance(source_store, S3LocalSourceStore):
+        return "s3"
+    if isinstance(source_store, PostgresLocalSourceStore):
+        return "postgres"
+    return source_store.__class__.__name__
+
+
 def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:
     started_at = time.perf_counter()
+    embedding_metadata = dense_embedding_metadata()
     try:
         trace = upsert_dense_embeddings(chunks)
     except Exception as exc:
@@ -935,9 +979,33 @@ def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:
             "enabled": True,
             "status": "error",
             "error": str(exc),
+            **embedding_metadata,
             "latency_ms": _latency_ms(started_at),
         }
     return {**trace, "latency_ms": _latency_ms(started_at)}
+
+
+def _delete_dense_document(document_id: str) -> dict[str, object]:
+    try:
+        return delete_qdrant_document_points(document_id)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Qdrant deletion failed for document {document_id!r}; "
+            f"source storage was not deleted: {exc}"
+        ) from exc
+
+
+def _delete_all_dense_embeddings() -> dict[str, object]:
+    try:
+        return delete_all_qdrant_points()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Qdrant deletion failed while clearing sources; source storage was not deleted: {exc}"
+        ) from exc
+
+
+def _qdrant_vector_store_enabled() -> bool:
+    return os.getenv("DENSE_VECTOR_STORE", "turbovec").strip().lower() == "qdrant"
 
 
 def _tokenize(text: str) -> list[str]:

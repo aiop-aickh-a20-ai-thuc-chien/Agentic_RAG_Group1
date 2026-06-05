@@ -230,6 +230,75 @@ curl -F "file=@path/to/file.pdf" http://127.0.0.1:8000/sources/upload
 curl http://127.0.0.1:8000/sources/<document_id>/chunks
 ```
 
+### Cloud source storage and retrieval
+
+For a cloud-backed prototype, keep the same API and provider selection but move
+source artifacts to S3 and retrieval indexing to Qdrant:
+
+```bash
+EVIDENCE_PROVIDER=local_pdf
+LOCAL_SOURCE_STORE=s3
+AWS_REGION=ap-southeast-1
+AWS_S3_BUCKET=your-bucket
+AWS_S3_PREFIX=agentic-rag/sources
+DENSE_VECTOR_STORE=qdrant
+QDRANT_URL=https://your-cluster.qdrant.io
+QDRANT_API_KEY=...
+QDRANT_COLLECTION=agentic_rag_chunks
+DENSE_EMBEDDING_PROVIDER=auto
+DENSE_EMBEDDING_DIMENSIONS=
+OPENAI_EMBEDDING_DIMENSIONS=1536
+LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:8000/v1
+LOCAL_EMBEDDING_MODEL=your-embedding-model
+LOCAL_EMBEDDING_API_KEY=
+```
+
+In this mode S3 stores raw files, URL/text records, parsed Markdown, debug
+artifacts, source manifests, and chunk manifests. Qdrant stores the persistent
+chunk retrieval index and is used for cloud-mode hybrid search, so normal answer
+retrieval does not rebuild BM25 from S3 chunk manifests on each request.
+
+`DENSE_EMBEDDING_PROVIDER=auto` uses OpenAI only when `OPENAI_API_KEY` exists.
+Otherwise it resolves to the local OpenAI-compatible endpoint. Runtime OpenAI
+errors do not trigger a provider switch. `huggingface` remains an explicit
+in-process option.
+
+Serve a pooling/embedding model with vLLM in an isolated uv environment:
+
+```bash
+uv run --isolated --with vllm \
+  vllm serve your-embedding-model --runner pooling --port 8000
+```
+
+Or use SGLang:
+
+```bash
+uv run --isolated --with "sglang[all]" \
+  python -m sglang.launch_server \
+  --model-path your-embedding-model \
+  --is-embedding \
+  --port 30000
+```
+
+These commands do not add vLLM or SGLang to the RAG application's
+`pyproject.toml`. For SGLang, set
+`LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:30000/v1`.
+
+Verify the serving endpoint before starting ingestion:
+
+```bash
+curl http://127.0.0.1:8000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"model":"your-embedding-model","input":["embedding smoke test"]}'
+```
+
+Leave `DENSE_EMBEDDING_DIMENSIONS` empty to infer the local model's native
+dimension, or set it to enforce an expected size. A Qdrant collection stores a
+single provider/model/dimension profile. Switching any part of that profile
+requires a new `QDRANT_COLLECTION` or an explicit delete and reindex; the app
+will reject incompatible and legacy populated collections without recreating
+them.
+
 Flow:
 
 ```text

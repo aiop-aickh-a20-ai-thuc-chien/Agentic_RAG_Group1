@@ -376,12 +376,18 @@ def _write_referenced_image_markdown(
         markdown_path.write_text(fallback_markdown, encoding="utf-8")
         return
 
-    from docling_core.types.doc.document import ImageRefMode
+    from importlib import import_module
+
+    image_ref_mode_name = "ImageRefMode"
+    image_ref_mode = getattr(
+        import_module("docling_core.types.doc.document"),
+        image_ref_mode_name,
+    )
 
     cast(Callable[..., object], save_as_markdown)(
         markdown_path,
         artifacts_dir=Path("assets/images"),
-        image_mode=ImageRefMode.REFERENCED,
+        image_mode=image_ref_mode.REFERENCED,
     )
 
 
