@@ -83,6 +83,8 @@ def run_agent(
         "pending_queries": [],
         "fused_results": [],
         "relevant_docs": [],
+        "pinned_docs": [],
+        "missing_entities": [],
         "queries_tried": [question],
         "step_count": 0,
         "retrieval_exhausted": False,
