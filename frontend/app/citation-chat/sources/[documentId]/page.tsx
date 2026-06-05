@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -409,12 +411,141 @@ function ChunkCard({
         </div>
         <SectionBadge metadata={result.chunk.metadata} />
       </div>
-      <p className="break-words text-sm leading-6 text-ink/72 [overflow-wrap:anywhere] dark:text-slate-200">
-        {result.chunk.text}
-      </p>
+      <div className="break-words text-sm [overflow-wrap:anywhere]">
+        <ReactMarkdown
+          components={{
+            h1: ({ children }) => (
+              <h1 className="mb-1 mt-2 text-sm font-bold text-ink dark:text-slate-100">
+                {children}
+              </h1>
+            ),
+            h2: ({ children }) => (
+              <h2 className="mb-1 mt-2 text-sm font-semibold text-ink dark:text-slate-100">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="mb-0.5 mt-1 text-xs font-semibold text-ink/80 dark:text-slate-200">
+                {children}
+              </h3>
+            ),
+            p: ({ children }) => (
+              <p className="leading-6 text-ink/72 dark:text-slate-200">{children}</p>
+            ),
+            ul: ({ children }) => (
+              <ul className="ml-3 list-disc text-ink/72 dark:text-slate-200">{children}</ul>
+            ),
+            ol: ({ children }) => (
+              <ol className="ml-3 list-decimal text-ink/72 dark:text-slate-200">{children}</ol>
+            ),
+            li: ({ children }) => <li className="leading-6">{children}</li>,
+          }}
+          remarkPlugins={[remarkGfm]}
+        >
+          {result.chunk.text}
+        </ReactMarkdown>
+      </div>
       <ChunkMetadata metadata={result.chunk.metadata} />
     </article>
   );
+}
+
+function renderLinePieces(
+  text: string,
+  contentStart: number,
+  lineEnd: number,
+  highlights: ChunkHighlight[],
+  lineIdx: number,
+): ReactNode[] {
+  const pieces: ReactNode[] = [];
+  let cursor = contentStart;
+  for (const h of highlights) {
+    if (h.start >= lineEnd || h.end <= contentStart) continue;
+    const hStart = Math.max(h.start, contentStart);
+    const hEnd = Math.min(h.end, lineEnd);
+    if (hStart > cursor) {
+      pieces.push(<span key={`gap-${lineIdx}-${cursor}`}>{text.slice(cursor, hStart)}</span>);
+    }
+    if (hEnd > hStart) {
+      pieces.push(
+        <mark
+          className={cn("rounded px-0.5 text-inherit", h.style.text)}
+          key={`${h.key}-l${lineIdx}`}
+          title={`Chunk ${h.rank}: ${h.chunkId}`}
+        >
+          {text.slice(hStart, hEnd)}
+        </mark>,
+      );
+      cursor = hEnd;
+    }
+  }
+  if (cursor < lineEnd) {
+    pieces.push(<span key={`tail-${lineIdx}-${cursor}`}>{text.slice(cursor, lineEnd)}</span>);
+  }
+  return pieces;
+}
+
+function MarkdownPieces({
+  highlights,
+  text,
+}: {
+  highlights: ChunkHighlight[];
+  text: string;
+}) {
+  const lines = text.split("\n");
+  const elements: ReactNode[] = [];
+  let charPos = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineStart = charPos;
+    const lineEnd = charPos + line.length;
+    charPos += line.length + 1;
+
+    if (line.trim() === "") {
+      elements.push(<div className="h-3" key={`blank-${i}`} />);
+      continue;
+    }
+
+    const headingMatch = /^(#{1,6})\s+/.exec(line);
+    const isBullet = /^[-*+]\s/.test(line);
+    const contentStart = headingMatch
+      ? lineStart + headingMatch[0].length
+      : isBullet
+        ? lineStart + 2
+        : lineStart;
+    const pieces = renderLinePieces(text, contentStart, lineEnd, highlights, i);
+
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const cls =
+        level === 1
+          ? "mt-3 text-sm font-bold text-ink dark:text-slate-100"
+          : level === 2
+            ? "mt-2 text-xs font-semibold text-ink dark:text-slate-100"
+            : "mt-1 text-xs font-medium text-ink/80 dark:text-slate-200";
+      elements.push(
+        <div className={cls} key={i}>
+          {pieces}
+        </div>,
+      );
+    } else if (isBullet) {
+      elements.push(
+        <div className="flex gap-1.5 leading-6" key={i}>
+          <span className="shrink-0 text-xs text-ink/40 dark:text-slate-500">•</span>
+          <span className="text-xs text-ink/72 dark:text-slate-200">{pieces}</span>
+        </div>,
+      );
+    } else {
+      elements.push(
+        <div className="text-xs leading-6 text-ink/72 dark:text-slate-200" key={i}>
+          {pieces}
+        </div>,
+      );
+    }
+  }
+
+  return <div className="break-words [overflow-wrap:anywhere]">{elements}</div>;
 }
 
 function HighlightedChunkInput({
@@ -433,38 +564,41 @@ function HighlightedChunkInput({
     return (
       <div className="space-y-3">
         <DebugNotice text="Chưa map được chunk nào lên đầu vào này. Thường là source cũ hoặc thiếu artifact debug khi upload." />
-        <pre className="whitespace-pre-wrap break-words rounded-md border border-line bg-white/70 p-4 text-xs leading-6 text-ink/72 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-950/40 dark:text-slate-200">
-          {text}
-        </pre>
+        <div className="rounded-md border border-line bg-white/70 p-4 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-950/40">
+          <ReactMarkdown
+            components={{
+              h1: ({ children }) => (
+                <h1 className="mb-2 mt-3 text-sm font-bold text-ink dark:text-slate-100">
+                  {children}
+                </h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="mb-1 mt-2 text-xs font-semibold text-ink dark:text-slate-100">
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="mb-1 mt-1 text-xs font-medium text-ink/80 dark:text-slate-200">
+                  {children}
+                </h3>
+              ),
+              p: ({ children }) => (
+                <p className="text-xs leading-6 text-ink/72 dark:text-slate-200">{children}</p>
+              ),
+              ul: ({ children }) => (
+                <ul className="ml-3 list-disc text-xs text-ink/72 dark:text-slate-200">
+                  {children}
+                </ul>
+              ),
+              li: ({ children }) => <li className="leading-6">{children}</li>,
+            }}
+            remarkPlugins={[remarkGfm]}
+          >
+            {text}
+          </ReactMarkdown>
+        </div>
       </div>
     );
-  }
-
-  const pieces: ReactNode[] = [];
-  let cursor = 0;
-  for (const highlight of mappedHighlights) {
-    const start = Math.max(highlight.start, cursor);
-    const end = Math.max(highlight.end, start);
-    if (start > cursor) {
-      pieces.push(
-        <span key={`text-${cursor}-${start}`}>{text.slice(cursor, start)}</span>,
-      );
-    }
-    if (end > cursor) {
-      pieces.push(
-        <mark
-          className={cn("rounded px-0.5 text-inherit", highlight.style.text)}
-          key={highlight.key}
-          title={`Chunk ${highlight.rank}: ${highlight.chunkId}`}
-        >
-          {text.slice(start, end)}
-        </mark>,
-      );
-      cursor = end;
-    }
-  }
-  if (cursor < text.length) {
-    pieces.push(<span key={`text-${cursor}-end`}>{text.slice(cursor)}</span>);
   }
 
   return (
@@ -473,9 +607,9 @@ function HighlightedChunkInput({
         Đã map {mappedHighlights.length}/{highlights.length} chunk lên đầu vào chunking
         {unmappedCount ? `, ${unmappedCount} chunk không tìm thấy range.` : "."}
       </div>
-      <pre className="whitespace-pre-wrap break-words rounded-md border border-line bg-white/70 p-4 text-xs leading-6 text-ink/72 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-950/40 dark:text-slate-200">
-        {pieces}
-      </pre>
+      <div className="rounded-md border border-line bg-white/70 p-4 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-950/40">
+        <MarkdownPieces highlights={mappedHighlights} text={text} />
+      </div>
     </div>
   );
 }
@@ -607,25 +741,51 @@ function isHttpUrl(value: string) {
   }
 }
 
+function stripChunkHeadingPrefix(text: string): string {
+  const m = /^#{1,6} [^\n]+\n\n/.exec(text);
+  return m ? text.slice(m[0].length) : text;
+}
+
 function buildChunkHighlights(chunkInput: string, chunks: SourceChunk[]): ChunkHighlight[] {
   const normalizedChunkInput = normalizeForRange(chunkInput);
   let normalizedCursor = 0;
 
   return chunks.map((result, index) => {
     const style = CHUNK_HIGHLIGHT_STYLES[index % CHUNK_HIGHLIGHT_STYLES.length];
+
+    // Fast path: use stored character offsets when available (new chunks)
+    const rangeValue = result.chunk.metadata?.chunk_input_range;
+    if (
+      Array.isArray(rangeValue) &&
+      typeof rangeValue[0] === "number" &&
+      typeof rangeValue[1] === "number"
+    ) {
+      const start = rangeValue[0] as number;
+      const end = rangeValue[1] as number;
+      return {
+        chunkId: result.chunk.chunk_id,
+        end,
+        key: chunkKey(result, index),
+        mapped: start >= 0 && end > start && end <= chunkInput.length,
+        rank: result.rank,
+        start,
+        style,
+      };
+    }
+
+    // Fallback: text search for chunks without chunk_input_range (old ingested data)
     const chunkTextForMapping =
       typeof result.chunk.metadata?.raw_text === "string" && result.chunk.metadata.raw_text.trim()
         ? result.chunk.metadata.raw_text
-        : result.chunk.text;
+        : stripChunkHeadingPrefix(result.chunk.text);
     const normalizedChunk = normalizeForRange(chunkTextForMapping).text.trim();
     let start = -1;
     let end = -1;
 
     if (normalizedChunk) {
       const afterCursor = normalizedChunkInput.text.indexOf(normalizedChunk, normalizedCursor);
-      const foundAt = afterCursor >= 0
-        ? afterCursor
-        : normalizedChunkInput.text.indexOf(normalizedChunk);
+      const foundAt =
+        afterCursor >= 0 ? afterCursor : normalizedChunkInput.text.indexOf(normalizedChunk);
       if (foundAt >= 0) {
         const normalizedEnd = foundAt + normalizedChunk.length - 1;
         start = normalizedChunkInput.map[foundAt] ?? -1;

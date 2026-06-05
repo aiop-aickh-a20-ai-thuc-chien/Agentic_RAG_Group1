@@ -120,6 +120,6 @@ def test_shared_hierarchical_markdown_chunking_preserves_section_metadata() -> N
     assert chunks[0].chunk_token_count is not None
     assert chunks[0].chunk_token_count > 0
     assert chunks[0].semantic_unit == "hierarchical_markdown_subsection"
-    assert chunks[0].metadata["full_path"] == ["Section"]
-    assert chunks[0].metadata["part_index"] == 1
-    assert chunks[0].metadata["part_total"] == 1
+    assert chunks[0].section_path == ("Section",)
+    assert chunks[0].metadata["chunk_part_index"] == 1
+    assert chunks[0].metadata["chunk_part_total"] == 1

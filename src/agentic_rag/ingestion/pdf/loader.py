@@ -204,7 +204,9 @@ def _chunks_from_chunking_input(
 
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
+        chunk_id = f"pdf_{safe_file_stem}_c{index:04d}"
         metadata = {
+            "chunk_id": chunk_id,
             "source": str(path),
             "source_type": "pdf",
             "file_name": path.name,
@@ -219,7 +221,7 @@ def _chunks_from_chunking_input(
         )
         chunks.append(
             Chunk(
-                chunk_id=f"pdf_{safe_file_stem}_c{index:04d}",
+                chunk_id=chunk_id,
                 text=markdown_chunk.text,
                 metadata=metadata,
             )

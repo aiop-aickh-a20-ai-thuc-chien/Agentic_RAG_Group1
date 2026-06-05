@@ -132,4 +132,5 @@ def test_pgvector_dense_search_filters_to_selected_documents(
     results = store.dense_search("pin vf8", top_k=3)
 
     assert seen["filter"] == {"document_id": "doc-1"}
+    assert results[0].chunk.metadata["chunk_id"] == "c1"
     assert results[0].chunk.metadata["document_id"] == "doc-1"

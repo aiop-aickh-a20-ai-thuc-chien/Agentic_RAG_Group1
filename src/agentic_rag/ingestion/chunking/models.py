@@ -20,6 +20,8 @@ class MarkdownSection(_IngestionChunkingModel):
     level: int = 0
     path: tuple[str, ...] = ()
     text: str
+    source_start: int = 0
+    source_end: int = 0
 
 
 class ChunkCandidate(_IngestionChunkingModel):

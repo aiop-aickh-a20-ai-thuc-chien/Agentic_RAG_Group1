@@ -380,10 +380,13 @@ def _chunk_from_dense_document(
     metadata = getattr(doc, "metadata", {})
     if isinstance(metadata, dict) and "chunk_id" in metadata:
         nested_metadata = metadata.get("metadata")
+        chunk_id = str(metadata["chunk_id"])
+        chunk_metadata = dict(nested_metadata) if isinstance(nested_metadata, dict) else {}
+        chunk_metadata.setdefault("chunk_id", chunk_id)
         return Chunk(
-            chunk_id=str(metadata["chunk_id"]),
+            chunk_id=chunk_id,
             text=str(getattr(doc, "page_content", "")),
-            metadata=nested_metadata if isinstance(nested_metadata, dict) else {},
+            metadata=chunk_metadata,
         )
 
     doc_id = getattr(doc, "id", None)
