@@ -85,6 +85,8 @@ def _base_state(**overrides: object) -> AgentState:
         "pending_queries": [],
         "fused_results": [],
         "relevant_docs": [],
+        "pinned_docs": [],
+        "missing_entities": [],
         "queries_tried": ["Pin bảo hành bao lâu?"],
         "step_count": 0,
         "retrieval_exhausted": False,
@@ -240,6 +242,91 @@ def test_rerank_node_multi_group_reads_top_k_from_env(monkeypatch: object) -> No
 def test_rerank_node_empty() -> None:
     update = rerank_node(_base_state(fused_results=[]))
     assert update["relevant_docs"] == []
+    assert update["pinned_docs"] == []
+    assert update["missing_entities"] == []
+
+
+def test_rerank_node_gap_detection_flags_thin_group(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_MIN_CHUNKS_PER_ENTITY", "2")  # type: ignore[attr-defined]
+    docs = [
+        _result_for_query("vf7_a", 0.99, "VF 7 info", 0),
+        _result_for_query("vf7_b", 0.98, "VF 7 info", 0),
+        _result_for_query("vf3_a", 0.20, "VF 3 info", 1),
+    ]
+    update = rerank_node(_base_state(fused_results=docs))
+    assert "VF 3 info" in update["missing_entities"]
+    assert "VF 7 info" not in update["missing_entities"]
+
+
+def test_rerank_node_gap_detection_pins_sufficient_group(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_MIN_CHUNKS_PER_ENTITY", "2")  # type: ignore[attr-defined]
+    docs = [
+        _result_for_query("vf7_a", 0.99, "VF 7 info", 0),
+        _result_for_query("vf7_b", 0.98, "VF 7 info", 0),
+        _result_for_query("vf3_a", 0.20, "VF 3 info", 1),
+    ]
+    update = rerank_node(_base_state(fused_results=docs))
+    pinned_ids = [r.chunk.chunk_id for r in update["pinned_docs"]]
+    assert "vf7_a" in pinned_ids
+    assert "vf7_b" in pinned_ids
+    assert "vf3_a" not in pinned_ids
+
+
+def test_rerank_node_no_gap_detection_for_single_group() -> None:
+    docs = [_result(f"c{i}", 0.9) for i in range(3)]
+    update = rerank_node(_base_state(fused_results=docs))
+    assert update["missing_entities"] == []
+
+
+# --- transform_query_node với missing_entities ---
+
+
+def test_transform_skips_when_no_new_query(monkeypatch: object) -> None:
+    import agentic_rag.agent.nodes as m
+
+    monkeypatch.setattr(m, "configured_llm_client", lambda: None)  # type: ignore[attr-defined]
+    update = transform_query_node(_base_state())
+    assert update["trace"][0].get("skipped") is True
+    assert update["trace"][0]["reason"] == "query_already_tried"
+    assert update["retrieval_exhausted"] is True
+
+
+def test_transform_passes_missing_entities_to_llm(monkeypatch: object) -> None:
+    import agentic_rag.agent.nodes as m
+
+    captured: list[str] = []
+
+    class _FakeLLM:
+        def complete(self, prompt: str) -> str:
+            captured.append(prompt)
+            return '{"method": "requery", "query": "thông số kỹ thuật VF 3"}'
+
+        def stream_complete(self, prompt: str) -> Iterator[str]:
+            yield ""
+
+    monkeypatch.setattr(m, "configured_llm_client", lambda: _FakeLLM())  # type: ignore[attr-defined]
+    state = _base_state(missing_entities=["VF 3 info"])
+    update = transform_query_node(state)
+    assert any("VF 3 info" in p for p in captured)
+    assert update["trace"][0]["next_route_hint"] == "retrieve"
+
+
+# --- generate_node với pinned_docs ---
+
+
+def test_generate_node_merges_pinned_and_relevant_docs() -> None:
+    pinned = [_result("pinned_c1", 0.95)]
+    relevant = [_result("relevant_c2", 0.80)]
+    update = generate_node(_base_state(pinned_docs=pinned, relevant_docs=relevant))
+    assert isinstance(update["answer"], Answer)
+    assert update["trace"][0]["pinned_count"] == 1
+
+
+def test_generate_node_deduplicates_pinned_and_relevant() -> None:
+    shared = _result("shared_c1", 0.90)
+    update = generate_node(_base_state(pinned_docs=[shared], relevant_docs=[shared]))
+    doc_ids = [r.chunk.chunk_id for r in update["relevant_docs"]]
+    assert doc_ids.count("shared_c1") == 1
 
 
 # --- route_after_rerank ---
@@ -258,18 +345,25 @@ def test_route_rerank_generates_at_max_steps(monkeypatch: object) -> None:
     assert route_after_rerank(_base_state(relevant_docs=[], step_count=2)) == "generate"
 
 
-# --- transform_query_node ---
+def test_route_rerank_transforms_when_below_threshold(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_MIN_RELEVANCE_SCORE", "0.5")  # type: ignore[attr-defined]
+    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.3)], step_count=1)) == "transform_query"
 
 
-def test_transform_skips_when_no_new_query(monkeypatch: object) -> None:
-    import agentic_rag.agent.nodes as m
+def test_route_rerank_generates_when_above_threshold(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_MIN_RELEVANCE_SCORE", "0.5")  # type: ignore[attr-defined]
+    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.8)])) == "generate"
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: None)  # type: ignore[attr-defined]
-    update = transform_query_node(_base_state())
-    assert update["trace"][0].get("skipped") is True
-    assert update["trace"][0]["reason"] == "query_already_tried"
-    assert update["trace"][0]["next_route_hint"] == "generate"
-    assert update["retrieval_exhausted"] is True
+
+def test_route_rerank_generates_at_max_steps_even_below_threshold(monkeypatch: object) -> None:
+    monkeypatch.setenv("AGENT_MIN_RELEVANCE_SCORE", "0.9")  # type: ignore[attr-defined]
+    monkeypatch.setenv("AGENT_MAX_STEPS", "2")  # type: ignore[attr-defined]
+    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.1)], step_count=2)) == "generate"
+
+
+def test_route_rerank_threshold_disabled_by_default() -> None:
+    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.001)])) == "generate"
+
 
 
 def test_transform_skip_after_existing_answer_points_to_check(monkeypatch: object) -> None:
