@@ -68,7 +68,8 @@ def test_oversized_section_splits_deterministically_by_token_budget() -> None:
 
 def test_chunk_markdown_by_sections_splits_numbered_subsections() -> None:
     chunks = chunk_markdown_by_sections(
-        "# VF 8\n1. Battery warranty\nWarranty covers the battery pack for long ownership periods.\n\n"
+        "# VF 8\n1. Battery warranty\n"
+        "Warranty covers the battery pack for long ownership periods.\n\n"
         "2. Charging speed\nCharging information is available at showrooms with support.",
         max_chars=80,
     )
