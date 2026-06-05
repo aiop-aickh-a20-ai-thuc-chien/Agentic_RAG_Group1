@@ -85,6 +85,7 @@ def run_agent(
         "relevant_docs": [],
         "pinned_docs": [],
         "missing_entities": [],
+        "rejected_chunk_ids": [],
         "queries_tried": [question],
         "step_count": 0,
         "retrieval_exhausted": False,

@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     relevant_docs: list[SearchResult]
     pinned_docs: Annotated[list[SearchResult], operator.add]
     missing_entities: list[str]
+    rejected_chunk_ids: Annotated[list[str], operator.add]
     queries_tried: Annotated[list[str], operator.add]
     step_count: int
     retrieval_exhausted: bool
