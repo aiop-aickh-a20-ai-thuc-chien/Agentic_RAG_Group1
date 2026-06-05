@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
@@ -40,10 +40,23 @@ RAGAS_REQUIRED_COLUMNS = {
 class EvaluationRunner:
     """Runs the RAG pipeline over a test dataset and calculates metrics."""
 
-    def __init__(self, input_file: str, output_file: str, run_ragas: bool = False) -> None:
+    def __init__(
+        self,
+        input_file: str,
+        output_file: str,
+        run_ragas: bool = False,
+        approved_only: bool = False,
+        on_row_done: Callable[[], None] | None = None,
+        target_row: int | None = None,
+        force: bool = False,
+    ) -> None:
         self.input_file = input_file
         self.output_file = output_file
         self.run_ragas = run_ragas
+        self.approved_only = approved_only
+        self.on_row_done = on_row_done
+        self.target_row = target_row  # when set: only process this excel row
+        self.force = force  # when True: re-evaluate even if bot_response already exists
 
     def run(self) -> None:
         """Execute the evaluation pipeline."""
@@ -77,13 +90,22 @@ class EvaluationRunner:
 
         # Determine column indices from header (row 2)
         header = {cell.value: idx for idx, cell in enumerate(ws[2], start=1) if cell.value}
-        _validate_required_columns(
-            header,
-            required_columns=BASE_REQUIRED_COLUMNS
-            | (RAGAS_REQUIRED_COLUMNS if self.run_ragas else set()),
-        )
+
+        if self.target_row is not None:
+            # Single-row mode: auto-create any missing output columns
+            _ensure_output_columns(ws, header, include_ragas=self.run_ragas)
+            wb.save(self.output_file)
+        else:
+            _validate_required_columns(
+                header,
+                required_columns=BASE_REQUIRED_COLUMNS
+                | (RAGAS_REQUIRED_COLUMNS if self.run_ragas else set()),
+            )
 
         for row_idx in range(3, ws.max_row + 1):
+            if self.target_row is not None and row_idx != self.target_row:
+                continue
+
             question_cell = ws.cell(row=row_idx, column=header["question"])
             if not question_cell.value:
                 continue
@@ -92,9 +114,15 @@ class EvaluationRunner:
             if not question:
                 continue
 
-            # Skip if already evaluated
+            # Skip rows that haven't been approved when running in approved_only mode
+            if self.approved_only and "review_status" in header:
+                review_status = ws.cell(row=row_idx, column=header["review_status"]).value
+                if review_status != "approved":
+                    continue
+
+            # Skip if already evaluated (unless force re-eval)
             bot_response_cell = ws.cell(row=row_idx, column=header["bot_response"])
-            if bot_response_cell.value:
+            if bot_response_cell.value and not self.force:
                 logger.info("Skipping row %s (already evaluated)", row_idx)
                 continue
 
@@ -176,6 +204,8 @@ class EvaluationRunner:
 
             # Save after each row to avoid losing progress on crash
             wb.save(self.output_file)
+            if self.on_row_done:
+                self.on_row_done()
 
         # 3. RAGAS Evaluation
         if self.run_ragas:
@@ -186,6 +216,9 @@ class EvaluationRunner:
             row_mapping = []
 
             for row_idx in range(3, ws.max_row + 1):
+                if self.target_row is not None and row_idx != self.target_row:
+                    continue
+
                 is_out_of_scope = _is_truthy_cell(
                     ws.cell(row=row_idx, column=header["is_out_of_scope"]).value
                 )
@@ -243,6 +276,20 @@ class EvaluationRunner:
 
         logger.info("Saving evaluation results to %s", self.output_file)
         wb.save(self.output_file)
+
+
+def _ensure_output_columns(
+    ws: Any,
+    header: dict[str, int],
+    *,
+    include_ragas: bool = True,
+) -> None:
+    """Auto-create any missing output columns so single-row eval never KeyErrors."""
+    needed = BASE_REQUIRED_COLUMNS | (RAGAS_REQUIRED_COLUMNS if include_ragas else set())
+    for col_name in sorted(needed - set(header)):
+        nc = max(header.values()) + 1
+        ws.cell(row=2, column=nc).value = col_name
+        header[col_name] = nc
 
 
 def _validate_required_columns(

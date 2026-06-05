@@ -47,6 +47,7 @@ from agentic_rag.observability.trace import (  # noqa: E402
     write_rag_trace,
     write_source_trace,
 )
+from agentic_rag.eval_review import router as eval_review_router  # noqa: E402
 from agentic_rag.retrieval.fusion import (  # noqa: E402
     build_evidence_context as _build_evidence_context,
 )
@@ -192,6 +193,9 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+api.include_router(eval_review_router, prefix="/eval-review")
 
 
 @api.get("/health")
