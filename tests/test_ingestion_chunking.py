@@ -104,7 +104,8 @@ def test_shared_sentence_splitting_detects_english_and_vietnamese() -> None:
 
 def test_shared_hierarchical_markdown_chunking_preserves_section_metadata() -> None:
     chunks = chunking.chunk_markdown_by_sections(
-        "# Section\nDoan mot ngan.\n\nDoan hai ngan.",
+        "# Section\nDoan mot ngan du dai de giu lai trong pipeline.\n\n"
+        "Doan hai ngan nhung van vuot nguong toi thieu.",
         max_chars=100,
         overlap_chars=10,
     )
@@ -112,7 +113,13 @@ def test_shared_hierarchical_markdown_chunking_preserves_section_metadata() -> N
     assert [item.section for item in chunks] == ["Section"]
     assert chunks[0].section_level == 1
     assert chunks[0].section_path == ("Section",)
-    assert chunks[0].text == "# Section\n\nDoan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].text == (
+        "# Section\n\nDoan mot ngan du dai de giu lai trong pipeline.\n\n"
+        "Doan hai ngan nhung van vuot nguong toi thieu."
+    )
     assert chunks[0].chunk_token_count is not None
     assert chunks[0].chunk_token_count > 0
-    assert chunks[0].semantic_unit == "markdown_section_paragraph_sentence"
+    assert chunks[0].semantic_unit == "hierarchical_markdown_subsection"
+    assert chunks[0].metadata["full_path"] == ["Section"]
+    assert chunks[0].metadata["part_index"] == 1
+    assert chunks[0].metadata["part_total"] == 1

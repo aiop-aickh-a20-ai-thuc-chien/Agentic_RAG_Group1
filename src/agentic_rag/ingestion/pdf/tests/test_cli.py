@@ -4,7 +4,34 @@ from pathlib import Path
 import pytest
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf import LoadedPdfDocument, PdfIngestionArtifactManifest, cli
+from agentic_rag.ingestion.pdf import (
+    LoadedPdfDocument,
+    PdfIngestionArtifactManifest,
+    PdfMultimodalArtifactManifest,
+    cli,
+)
+
+
+def test_parse_cli_help_lists_supported_options(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["parse", "--help"])
+
+    output = capsys.readouterr().out
+
+    assert exc_info.value.code == 0
+    assert "--pipeline PIPELINE_NAME" in output
+    assert "  - ocr" in output
+    assert "  - vlm" in output
+    assert "--strategy STRATEGY_NAME" in output
+    assert "  - docling" in output
+    assert "  - mineru" in output
+    assert "--chunker CHUNKER_NAME" in output
+    assert "  - deterministic" in output
+    assert "  - docling-hybrid" in output
+    assert "  - docling-page-aware" in output
+    assert "--write-multimodal-artifacts" in output
 
 
 def test_parse_cli_emits_json_and_forwards_arguments(
@@ -236,3 +263,75 @@ def test_parse_cli_artifact_only_output_does_not_build_json_payload(
 
     assert exit_code == 0
     assert stdout.strip() == f"Wrote parser artifacts to {output_root / 'source' / 'cli_run'}"
+
+
+def test_parse_cli_writes_multimodal_artifacts_without_building_standard_payload(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    output_root = tmp_path / "artifacts"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    seen_artifact_args: dict[str, object] = {}
+
+    def fail_load_pdf_with_markdown(*_args: object, **_kwargs: object) -> LoadedPdfDocument:
+        raise AssertionError("multimodal artifact CLI should call multimodal helper directly")
+
+    monkeypatch.setattr(cli, "load_pdf_with_markdown", fail_load_pdf_with_markdown)
+
+    def fake_save_pdf_multimodal_artifacts(
+        path: str,
+        **kwargs: object,
+    ) -> PdfMultimodalArtifactManifest:
+        seen_artifact_args["path"] = path
+        seen_artifact_args.update(kwargs)
+        return PdfMultimodalArtifactManifest(
+            input_path=path,
+            parser="docling",
+            run_id="image_run",
+            created_at="2026-06-05T00:00:00+00:00",
+            artifact_root=str(output_root),
+            run_dir=str(output_root / "source" / "image_run"),
+            markdown_path=str(output_root / "source" / "image_run" / "parsed.md"),
+            chunks_path=str(output_root / "source" / "image_run" / "chunks.jsonl"),
+            chunks_markdown_path=str(output_root / "source" / "image_run" / "chunks.md"),
+            manifest_path=str(output_root / "source" / "image_run" / "manifest.json"),
+            elements_path=str(output_root / "source" / "image_run" / "elements.jsonl"),
+            assets_dir=str(output_root / "source" / "image_run" / "assets"),
+            chunk_count=1,
+            element_count=1,
+            image_count=1,
+            table_count=0,
+            chart_count=0,
+        )
+
+    monkeypatch.setattr(
+        cli,
+        "save_pdf_multimodal_artifacts",
+        fake_save_pdf_multimodal_artifacts,
+    )
+
+    exit_code = cli.main(
+        [
+            "parse",
+            str(pdf_path),
+            "--write-multimodal-artifacts",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "image-run",
+        ]
+    )
+
+    stdout = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert stdout.strip() == (
+        f"Wrote multimodal parser artifacts to {output_root / 'source' / 'image_run'}"
+    )
+    assert seen_artifact_args == {
+        "path": str(pdf_path),
+        "output_root": output_root,
+        "run_id": "image-run",
+    }
