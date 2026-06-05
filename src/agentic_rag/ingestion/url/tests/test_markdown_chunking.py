@@ -33,7 +33,8 @@ def test_seven_hashes_are_not_treated_as_markdown_heading() -> None:
 
 def test_chunk_markdown_by_sections_prefers_paragraph_boundaries() -> None:
     chunks = chunk_markdown_by_sections(
-        "# Section\nDoan mot ngan.\n\nDoan hai ngan.",
+        "# Section\nDoan mot ngan du dai de giu lai trong pipeline.\n\n"
+        "Doan hai ngan nhung van vuot nguong toi thieu.",
         max_chars=100,
         overlap_chars=10,
     )
@@ -41,10 +42,16 @@ def test_chunk_markdown_by_sections_prefers_paragraph_boundaries() -> None:
     assert [chunk.section for chunk in chunks] == ["Section"]
     assert chunks[0].section_level == 1
     assert chunks[0].section_path == ("Section",)
-    assert chunks[0].text == "# Section\n\nDoan mot ngan.\n\nDoan hai ngan."
+    assert chunks[0].text == (
+        "# Section\n\nDoan mot ngan du dai de giu lai trong pipeline.\n\n"
+        "Doan hai ngan nhung van vuot nguong toi thieu."
+    )
     assert chunks[0].chunk_token_count is not None
     assert chunks[0].chunk_token_count > 0
-    assert chunks[0].semantic_unit == "markdown_section_paragraph_sentence"
+    assert chunks[0].semantic_unit == "hierarchical_markdown_subsection"
+    assert chunks[0].metadata["full_path"] == ["Section"]
+    assert chunks[0].metadata["part_index"] == 1
+    assert chunks[0].metadata["part_total"] == 1
 
 
 def test_oversized_section_splits_deterministically_by_token_budget() -> None:
@@ -57,3 +64,17 @@ def test_oversized_section_splits_deterministically_by_token_budget() -> None:
     assert all(chunk.section_path == ("Long",) for chunk in chunks)
     assert all(chunk.text for chunk in chunks)
     assert chunks == chunk_markdown_by_sections(markdown, max_tokens=5, overlap_paragraphs=0)
+
+
+def test_chunk_markdown_by_sections_splits_numbered_subsections() -> None:
+    chunks = chunk_markdown_by_sections(
+        "# VF 8\n1. Battery warranty\nWarranty covers the battery pack for long ownership periods.\n\n"
+        "2. Charging speed\nCharging information is available at showrooms with support.",
+        max_chars=80,
+    )
+
+    assert [chunk.section for chunk in chunks] == ["1 Battery warranty", "2 Charging speed"]
+    assert chunks[0].section_path == ("VF 8", "1 Battery warranty")
+    assert chunks[1].section_path == ("VF 8", "2 Charging speed")
+    assert chunks[0].metadata["depth"] == 2
+    assert "Warranty covers the battery pack for long ownership periods." in chunks[0].text

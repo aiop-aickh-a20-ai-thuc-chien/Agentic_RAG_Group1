@@ -87,7 +87,7 @@ app.post('/api/chunk', (req, res) => {
             try {
                 const out = JSON.parse(stdout);
                 if (out.success) {
-                    res.json({ chunks: out.chunks });
+                    res.json({ chunks: out.chunks, markdown: out.markdown || '' });
                 } else {
                     res.status(500).json({ error: out.error });
                 }
@@ -333,6 +333,42 @@ app.get('/api/processed', async (req, res) => {
         res.json({ processed_ids: [...new Set(ids)] });
     } catch (err) {
         console.error("Processed API Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/label', async (req, res) => {
+    const chunkId = (req.query.chunkId || '').toString().trim();
+    if (!chunkId) return res.status(400).json({ error: 'chunkId is required.' });
+
+    try {
+        if (!fs.existsSync(EXCEL_FILE)) {
+            return res.json({ found: false });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(EXCEL_FILE);
+        const worksheet = workbook.worksheets[0];
+
+        let found = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (found || rowNumber === 1) return;
+            const rowChunkId = (row.getCell(5).value || '').toString().trim();
+            if (rowChunkId !== chunkId) return;
+            found = {
+                found: true,
+                id: (row.getCell(1).value || '').toString(),
+                title: (row.getCell(2).value || '').toString(),
+                question: (row.getCell(3).value || '').toString(),
+                expected_answer: (row.getCell(4).value || '').toString(),
+                chunk_id: rowChunkId,
+                url: (row.getCell(6).value || '').toString()
+            };
+        });
+
+        res.json(found || { found: false });
+    } catch (err) {
+        console.error("Label API Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
