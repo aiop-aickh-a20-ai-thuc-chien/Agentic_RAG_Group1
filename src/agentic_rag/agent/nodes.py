@@ -218,10 +218,16 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
             "relevant_docs": [],
             "pinned_docs": [],
             "missing_entities": [],
+            "rejected_chunk_ids": [],
             "trace": [{"node": "rerank", "total": 0, "kept": 0}],
         }
 
-    query_groups = _group_by_retrieval_query(raw_docs)
+    rejected = set(state.get("rejected_chunk_ids") or [])
+    filtered_docs = [d for d in raw_docs if d.chunk.chunk_id not in rejected]
+    if not filtered_docs:
+        filtered_docs = raw_docs  
+
+    query_groups = _group_by_retrieval_query(filtered_docs)
     is_multi = len(query_groups) > 1
     top_k = _configured_rerank_multi_top_k() if is_multi else _configured_rerank_final_top_k()
     min_chunks = _configured_min_chunks_per_entity()
@@ -236,24 +242,34 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
             kept = group_trace.get("kept", 0)
             if not query or query == "__unknown_query__":
                 continue
-            if kept >= min_chunks:
-                group_docs = [
-                    r for r in reranked
-                    if r.chunk.metadata.get("agent_retrieval_query") == query
-                ]
+            group_docs = [
+                r for r in reranked
+                if r.chunk.metadata.get("agent_retrieval_query") == query
+            ]
+            if group_docs:
                 pinned.extend(group_docs)
-            else:
+            if kept < min_chunks:
                 missing_entities.append(query)
+
+    reranked_ids = {r.chunk.chunk_id for r in reranked}
+    new_rejected = [
+        d.chunk.chunk_id
+        for d in filtered_docs
+        if d.chunk.chunk_id not in reranked_ids
+    ]
 
     return {
         "relevant_docs": reranked,
         "pinned_docs": pinned,
         "missing_entities": missing_entities,
+        "rejected_chunk_ids": new_rejected,
         "trace": [
             {
                 "node": "rerank",
                 "total": len(raw_docs),
+                "filtered": len(filtered_docs),
                 "kept": len(reranked),
+                "rejected_this_round": len(new_rejected),
                 "kept_chunk_ids": [r.chunk.chunk_id for r in reranked],
                 "missing_entities": missing_entities,
                 **rerank_meta,
@@ -403,10 +419,17 @@ def check_answer_node(state: AgentState) -> dict[str, Any]:
 
 def route_after_rerank(state: AgentState) -> str:
     docs = state.get("relevant_docs") or []
-    if docs and _docs_meet_threshold(docs):
-        return "generate"
+    missing = state.get("missing_entities") or []
+
     if state.get("step_count", 0) >= _configured_max_steps():
         return "generate"
+
+    if missing:
+        return "transform_query"
+
+    if docs and _docs_meet_threshold(docs):
+        return "generate"
+
     return "transform_query"
 
 

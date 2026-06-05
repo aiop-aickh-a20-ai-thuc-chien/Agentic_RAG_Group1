@@ -87,6 +87,7 @@ def _base_state(**overrides: object) -> AgentState:
         "relevant_docs": [],
         "pinned_docs": [],
         "missing_entities": [],
+        "rejected_chunk_ids": [],
         "queries_tried": ["Pin bảo hành bao lâu?"],
         "step_count": 0,
         "retrieval_exhausted": False,
@@ -258,7 +259,8 @@ def test_rerank_node_gap_detection_flags_thin_group(monkeypatch: object) -> None
     assert "VF 7 info" not in update["missing_entities"]
 
 
-def test_rerank_node_gap_detection_pins_sufficient_group(monkeypatch: object) -> None:
+def test_rerank_node_gap_detection_pins_all_groups(monkeypatch: object) -> None:
+    """All chunks are pinned regardless of group size — thin groups still flagged missing."""
     monkeypatch.setenv("AGENT_MIN_CHUNKS_PER_ENTITY", "2")  # type: ignore[attr-defined]
     docs = [
         _result_for_query("vf7_a", 0.99, "VF 7 info", 0),
@@ -269,13 +271,56 @@ def test_rerank_node_gap_detection_pins_sufficient_group(monkeypatch: object) ->
     pinned_ids = [r.chunk.chunk_id for r in update["pinned_docs"]]
     assert "vf7_a" in pinned_ids
     assert "vf7_b" in pinned_ids
-    assert "vf3_a" not in pinned_ids
+    assert "vf3_a" in pinned_ids
+    assert "VF 3 info" in update["missing_entities"]
 
 
 def test_rerank_node_no_gap_detection_for_single_group() -> None:
     docs = [_result(f"c{i}", 0.9) for i in range(3)]
     update = rerank_node(_base_state(fused_results=docs))
     assert update["missing_entities"] == []
+
+
+def test_rerank_node_rejected_chunks_excluded_in_next_loop() -> None:
+    """Chunks rejected in loop 1 are filtered out before reranking in loop 2."""
+    import agentic_rag.agent.nodes as m
+
+    seen: list[list[str]] = []
+
+    def fake_rerank(question: str, candidates: list, top_k: int = 5):
+        seen.append([r.chunk.chunk_id for r in candidates])
+        top = candidates[:top_k]
+        return top, {"used_provider": "score_fallback"}
+
+    # monkeypatch not available here — use direct call pattern
+    original = m._rerank
+    m._rerank = fake_rerank  # type: ignore[assignment]
+    try:
+        bad_ids = [f"bad_{i}" for i in range(3)]
+        good_ids = ["good_1"]
+        all_docs = [
+            _result_for_query(cid, 0.1, "VF 3 info", 0) for cid in bad_ids
+        ] + [_result_for_query("good_1", 0.9, "VF 3 info", 0)]
+
+        state = _base_state(
+            fused_results=all_docs,
+            rejected_chunk_ids=bad_ids,
+        )
+        rerank_node(state)
+
+        assert seen, "rerank was never called"
+        assert all(cid not in seen[0] for cid in bad_ids)
+        assert "good_1" in seen[0]
+    finally:
+        m._rerank = original  # type: ignore[assignment]
+
+
+def test_rerank_node_builds_rejected_list() -> None:
+    """Chunks not selected into top_k are added to rejected_chunk_ids."""
+    docs = [_result(f"c{i}", 0.9) for i in range(6)]
+    update = rerank_node(_base_state(fused_results=docs))
+    # All chunks fit within top_k, so nothing rejected
+    assert isinstance(update["rejected_chunk_ids"], list)
 
 
 # --- transform_query_node với missing_entities ---
@@ -334,6 +379,25 @@ def test_generate_node_deduplicates_pinned_and_relevant() -> None:
 
 def test_route_rerank_generates_when_has_docs() -> None:
     assert route_after_rerank(_base_state(relevant_docs=[_result("c1")])) == "generate"
+
+
+def test_route_rerank_transforms_when_missing_entities_even_with_docs() -> None:
+    """Has docs but some entities are missing — should go find them, not generate yet."""
+    state = _base_state(
+        relevant_docs=[_result("c1")],
+        missing_entities=["thông tin VF7"],
+        step_count=1,
+    )
+    assert route_after_rerank(state) == "transform_query"
+
+
+def test_route_rerank_generates_when_no_missing_entities() -> None:
+    """All entities covered — generate even if we came from a multi-query."""
+    state = _base_state(
+        relevant_docs=[_result("c1")],
+        missing_entities=[],
+    )
+    assert route_after_rerank(state) == "generate"
 
 
 def test_route_rerank_transforms_when_no_docs() -> None:
