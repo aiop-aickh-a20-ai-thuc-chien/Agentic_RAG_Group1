@@ -8,17 +8,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.pdf.loader import (
+
+from .chunkers import DoclingPageAwareChunker
+from .loader import (
     LoadedPdfDocument,
+    _chunks_from_chunking_input,
     _chunks_from_markdown,
     _safe_chunk_id_part,
     _validate_pdf_path,
 )
-from agentic_rag.ingestion.pdf.parser import DoclingMarkdownParser, PdfMarkdownParser
-from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser
+from .models import PdfChunkingInput
+from .parser import DoclingMarkdownParser, PdfMarkdownParser
+from .registry import resolve_pdf_parser
 
 DEFAULT_PDF_ARTIFACT_ROOT = Path(__file__).resolve().parent / ".data" / "artifacts"
 
@@ -55,6 +59,8 @@ class PdfElementArtifact(_PdfArtifactModel):
     element_id: str
     kind: Literal["image", "table", "chart"]
     page: int | None
+    pages: list[int] = Field(default_factory=list)
+    page_range: list[int] | None = None
     source_ref: str
     asset_paths: list[str]
     text: str | None = None
@@ -241,23 +247,35 @@ def _save_pdf_multimodal_artifacts_from_document(
     manifest_path = run_dir / "manifest.json"
     elements_path = run_dir / "elements.jsonl"
 
-    markdown_path.write_text(markdown, encoding="utf-8")
+    _write_referenced_image_markdown(
+        doc=doc,
+        markdown_path=markdown_path,
+        fallback_markdown=markdown,
+    )
 
-    chunks = _chunks_from_markdown(path, markdown)
-    first_chunk_id = chunks[0].chunk_id if chunks else None
+    chunks = _chunks_from_chunking_input(
+        path,
+        PdfChunkingInput(
+            markdown=markdown,
+            parser="docling",
+            source_path=str(path),
+            native_document=doc,
+        ),
+        chunker=DoclingPageAwareChunker(),
+    )
     elements = _extract_multimodal_elements(
         doc,
         safe_file_stem=safe_file_stem,
-        first_chunk_id=first_chunk_id,
         images_dir=images_dir,
         tables_dir=tables_dir,
         charts_dir=charts_dir,
     )
-    enriched_chunks = _enrich_chunks_with_assets(chunks, elements)
+    mapped_elements = _map_elements_to_chunks_by_page(chunks, elements)
+    enriched_chunks = _enrich_chunks_with_assets(chunks, mapped_elements)
 
     _write_chunks_jsonl(chunks_path, enriched_chunks)
     _write_chunks_markdown(chunks_markdown_path, enriched_chunks)
-    _write_elements_jsonl(elements_path, elements)
+    _write_elements_jsonl(elements_path, mapped_elements)
 
     manifest = PdfMultimodalArtifactManifest(
         input_path=str(path),
@@ -273,10 +291,10 @@ def _save_pdf_multimodal_artifacts_from_document(
         elements_path=str(elements_path),
         assets_dir=str(assets_dir),
         chunk_count=len(enriched_chunks),
-        element_count=len(elements),
-        image_count=sum(element.kind == "image" for element in elements),
-        table_count=sum(element.kind == "table" for element in elements),
-        chart_count=sum(element.kind == "chart" for element in elements),
+        element_count=len(mapped_elements),
+        image_count=sum(element.kind == "image" for element in mapped_elements),
+        table_count=sum(element.kind == "table" for element in mapped_elements),
+        chart_count=sum(element.kind == "chart" for element in mapped_elements),
     )
     _write_model_json(manifest_path, manifest)
     return manifest
@@ -286,7 +304,6 @@ def _extract_multimodal_elements(
     doc: Any,
     *,
     safe_file_stem: str,
-    first_chunk_id: str | None,
     images_dir: Path,
     tables_dir: Path,
     charts_dir: Path,
@@ -336,14 +353,42 @@ def _extract_multimodal_elements(
                 element_id=element_id,
                 kind=kind,
                 page=_item_page(item),
+                pages=_item_pages(item),
+                page_range=_item_page_range(item),
                 source_ref=_item_source_ref(item, fallback=element_id),
                 asset_paths=asset_paths,
                 text=text,
-                chunk_ids=[first_chunk_id] if first_chunk_id is not None else [],
+                chunk_ids=[],
             )
         )
 
     return elements
+
+
+def _write_referenced_image_markdown(
+    *,
+    doc: Any,
+    markdown_path: Path,
+    fallback_markdown: str,
+) -> None:
+    save_as_markdown = getattr(doc, "save_as_markdown", None)
+    if not callable(save_as_markdown):
+        markdown_path.write_text(fallback_markdown, encoding="utf-8")
+        return
+
+    from importlib import import_module
+
+    image_ref_mode_name = "ImageRefMode"
+    image_ref_mode = getattr(
+        import_module("docling_core.types.doc.document"),
+        image_ref_mode_name,
+    )
+
+    cast(Callable[..., object], save_as_markdown)(
+        markdown_path,
+        artifacts_dir=Path("assets/images"),
+        image_mode=image_ref_mode.REFERENCED,
+    )
 
 
 def _iter_docling_items(doc: Any) -> list[Any]:
@@ -379,13 +424,27 @@ def _element_kind(item: Any) -> Literal["image", "table", "chart"] | None:
 
 
 def _item_page(item: Any) -> int | None:
+    pages = _item_pages(item)
+    return pages[0] if pages else None
+
+
+def _item_pages(item: Any) -> list[int]:
     provenance = getattr(item, "prov", None)
     if not provenance:
+        return []
+    pages: list[int] = []
+    for item_provenance in provenance:
+        page_no = getattr(item_provenance, "page_no", None)
+        if isinstance(page_no, int) and page_no not in pages:
+            pages.append(page_no)
+    return sorted(pages)
+
+
+def _item_page_range(item: Any) -> list[int] | None:
+    pages = _item_pages(item)
+    if not pages:
         return None
-    page_no = getattr(provenance[0], "page_no", None)
-    if isinstance(page_no, int):
-        return page_no
-    return None
+    return [pages[0], pages[-1]]
 
 
 def _item_source_ref(item: Any, *, fallback: str) -> str:
@@ -445,34 +504,75 @@ def _enrich_chunks_with_assets(
     if not chunks:
         return []
 
-    asset_ids = [element.element_id for element in elements]
-    has_image = any(element.kind == "image" for element in elements)
-    has_table = any(element.kind == "table" for element in elements)
-    has_chart = any(element.kind == "chart" for element in elements)
+    elements_by_chunk_id: dict[str, list[PdfElementArtifact]] = {}
+    for element in elements:
+        for chunk_id in element.chunk_ids:
+            elements_by_chunk_id.setdefault(chunk_id, []).append(element)
 
-    enriched_first_metadata: dict[str, Any] = dict(chunks[0].metadata)
-    enriched_first_metadata.update(
-        {
-            "asset_ids": asset_ids,
-            "has_image": has_image,
-            "has_table": has_table,
-            "has_chart": has_chart,
-        }
-    )
-
-    enriched_chunks = [chunks[0].model_copy(update={"metadata": enriched_first_metadata})]
-    for chunk in chunks[1:]:
+    enriched_chunks: list[Chunk] = []
+    for chunk in chunks:
+        chunk_elements = elements_by_chunk_id.get(chunk.chunk_id, [])
         metadata: dict[str, Any] = dict(chunk.metadata)
         metadata.update(
             {
-                "asset_ids": [],
-                "has_image": False,
-                "has_table": False,
-                "has_chart": False,
+                "asset_ids": [element.element_id for element in chunk_elements],
+                "has_image": any(element.kind == "image" for element in chunk_elements),
+                "has_table": any(element.kind == "table" for element in chunk_elements),
+                "has_chart": any(element.kind == "chart" for element in chunk_elements),
             }
         )
         enriched_chunks.append(chunk.model_copy(update={"metadata": metadata}))
     return enriched_chunks
+
+
+def _map_elements_to_chunks_by_page(
+    chunks: list[Chunk],
+    elements: list[PdfElementArtifact],
+) -> list[PdfElementArtifact]:
+    chunk_ids_by_page: dict[int, list[str]] = {}
+    for chunk in chunks:
+        for page in _metadata_pages(chunk.metadata):
+            chunk_ids_by_page.setdefault(page, []).append(chunk.chunk_id)
+
+    mapped_elements: list[PdfElementArtifact] = []
+    for element in elements:
+        chunk_ids: list[str] = []
+        for page in _element_pages(element):
+            for chunk_id in chunk_ids_by_page.get(page, []):
+                if chunk_id not in chunk_ids:
+                    chunk_ids.append(chunk_id)
+        mapped_elements.append(element.model_copy(update={"chunk_ids": chunk_ids}))
+    return mapped_elements
+
+
+def _metadata_pages(metadata: dict[str, Any]) -> list[int]:
+    pages = metadata.get("pages")
+    if isinstance(pages, list):
+        resolved_pages = [page for page in pages if isinstance(page, int)]
+        if resolved_pages:
+            return sorted(set(resolved_pages))
+
+    page_range = metadata.get("page_range")
+    if (
+        isinstance(page_range, list)
+        and len(page_range) == 2
+        and isinstance(page_range[0], int)
+        and isinstance(page_range[1], int)
+    ):
+        start, end = sorted((page_range[0], page_range[1]))
+        return list(range(start, end + 1))
+
+    page = metadata.get("page")
+    return [page] if isinstance(page, int) else []
+
+
+def _element_pages(element: PdfElementArtifact) -> list[int]:
+    if element.pages:
+        return sorted(set(element.pages))
+    if element.page_range is not None and len(element.page_range) == 2:
+        start, end = sorted((element.page_range[0], element.page_range[1]))
+        return list(range(start, end + 1))
+    return [element.page] if element.page is not None else []
 
 
 def _write_chunks_jsonl(path: Path, chunks: list[Chunk]) -> None:

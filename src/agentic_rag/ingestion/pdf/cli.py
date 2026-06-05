@@ -68,13 +68,13 @@ def _parse_pdf(args: argparse.Namespace) -> int:
         chunker_name=chunker_name,
     )
     if args.write_artifacts and not args.output_json:
-        manifest = save_loaded_pdf_ingestion_artifacts(
+        parser_manifest = save_loaded_pdf_ingestion_artifacts(
             args.path,
             loaded,
             output_root=args.output_root,
             run_id=args.run_id,
         )
-        print(f"Wrote parser artifacts to {manifest.run_dir}")
+        print(f"Wrote parser artifacts to {parser_manifest.run_dir}")
         return 0
 
     payload = _loaded_pdf_payload(
