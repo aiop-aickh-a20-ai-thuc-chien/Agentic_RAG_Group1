@@ -311,6 +311,17 @@ def extract_markdown_with_trafilatura(html: str, *, source_url: str | None) -> s
     return cleaned_markdown or None
 
 
+def fetch_html_with_trafilatura(url: str) -> str | None:
+    """Fetch raw HTML with trafilatura when browser crawling is unavailable."""
+
+    trafilatura = cast(Any, import_module("trafilatura"))
+    fetch_url = cast(Callable[..., str | None], trafilatura.fetch_url)
+    html = fetch_url(url)
+    if not html:
+        return None
+    return html.strip() or None
+
+
 def normalize_extracted_markdown(markdown: str) -> str:
     """Fix common inline spacing artifacts from HTML-to-Markdown extraction."""
 

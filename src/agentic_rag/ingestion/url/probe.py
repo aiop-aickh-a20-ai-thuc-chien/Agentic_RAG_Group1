@@ -7,6 +7,7 @@ if probing fails, normal URL ingestion still works.
 
 from __future__ import annotations
 
+import re
 from importlib import import_module
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -136,7 +137,7 @@ def vinfast_configurator_state_to_markdown(state: dict[str, Any]) -> str | None:
 
 def _edition_markdown_lines(edition: dict[str, Any], *, model_id: str) -> list[str]:
     edition_code = _text(edition.get("editionCode"))
-    label = _text(edition.get("label")) or edition_code
+    label = _configurator_label(_text(edition.get("label")) or edition_code, model_id=model_id)
     base_price = _price_text(edition.get("basePriceFormatted"), edition.get("basePriceValue"))
     if not label or not base_price:
         return []
@@ -147,7 +148,11 @@ def _edition_markdown_lines(edition: dict[str, Any], *, model_id: str) -> list[s
     elif edition_code:
         lines.append(f"- Probe source edition code: {edition_code}.")
     lines.append("- Probe relation: this record represents one selectable configurator state.")
-    lines.append(f"- {label}: Gia xe kem pin {base_price}.")
+    lines.append(
+        "- Price rule: final price / gia cuoi cung = base price of this exact "
+        "variant + selected option delta; do not reuse a price from another variant."
+    )
+    lines.append(f"- {label}: base price / gia co ban / Gia xe kem pin {base_price}.")
     for color in _advanced_colors(edition):
         color_label = _text(color.get("colorLabel")) or _text(color.get("colorCode"))
         color_price = _price_text(color.get("priceFormatted"), color.get("priceValue"))
@@ -155,11 +160,26 @@ def _edition_markdown_lines(edition: dict[str, Any], *, model_id: str) -> list[s
         if not color_label or not color_price or not price_delta:
             continue
         lines.append(
-            f"- {label} + {color_label}: Gia xe kem pin {color_price} "
-            f"(mau nang cao + {price_delta})."
+            f"- {label} + {color_label}: final price / gia cuoi cung / Gia xe kem pin "
+            f"{base_price} + {price_delta} = {color_price} "
+            f"(option delta / phu phi mau nang cao + {price_delta})."
         )
     lines.append("")
     return lines
+
+
+def _configurator_label(label: str, *, model_id: str) -> str:
+    if not label:
+        return ""
+    if re.search(r"\bVF\s*-?\s*\d{1,2}\b", label, flags=re.IGNORECASE):
+        return label
+    model_label = _model_label_from_model_id(model_id)
+    return f"{model_label} {label}".strip() if model_label else label
+
+
+def _model_label_from_model_id(model_id: str) -> str:
+    match = re.search(r"Products-Car-VF(\d{1,2})", model_id, flags=re.IGNORECASE)
+    return f"VF {match.group(1)}" if match is not None else ""
 
 
 def _advanced_colors(edition: dict[str, Any]) -> list[dict[str, Any]]:

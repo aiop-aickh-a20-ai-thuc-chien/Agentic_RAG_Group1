@@ -1,5 +1,9 @@
 # URL Ingestion
 
+For the current Crawl4AI-first improved pipeline, fallback order, metadata, and
+downstream implementation checklist, see
+[`docs/improved-url-ingestion.md`](improved-url-ingestion.md).
+
 URL ingestion lives in:
 
 ```text

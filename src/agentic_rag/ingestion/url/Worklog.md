@@ -296,3 +296,323 @@ contract.
 - Current ingestion keeps `chunk.text` cleaner and closer to actual evidence.
 - A future multimodal contract can promote `image_references` into a shared
   first-class evidence/reference structure.
+
+## [2026-06-05] Demo Review: Markdown, Chunk, and Quality-Check Audit
+
+This update adds guide-side demos for reviewing the improved Crawl4AI-first URL
+ingestion pipeline with human-readable outputs.
+
+### Summary of Changes
+
+1. **Human-review demo now reports problems explicitly**
+   - Updated `guide/demo/url-ingestion-human-review/run_demo.py`.
+   - The demo still writes `summary.md`, `parsed.md`, `chunks.jsonl`, and
+     `manifest.json`.
+   - It now also writes:
+     - `review_report.json`
+     - one `human_review_<case>.md` file per case
+   - The report flags likely problems such as:
+     - missing or very short Markdown
+     - no generated chunks
+     - boilerplate/noise chunks
+     - duplicate chunks
+     - missing review/retrieval metadata
+     - ambiguous multi-price chunks
+     - missing configurator probe chunks
+     - possible wrong parser quality-check decisions
+
+2. **Added shared guide review helpers**
+   - Added `guide/demo/url_ingestion_review_lib.py`.
+   - The helper loads simple `.env` `KEY=VALUE` pairs into `os.environ` when
+     values are not already set by the shell.
+   - Secret values are not printed or written to reports.
+   - Useful detected variables include `OPENAI_API_KEY`, `OPENAI_MODEL`,
+     `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `LLM_PROVIDER`, and
+     `LLM_TIMEOUT_SECONDS`.
+
+3. **Added frontend-vs-improved comparison demo**
+   - Added `guide/demo/url-ingestion-comparison-review`.
+   - The demo compares:
+     - `frontend_src_agentic_rag`: direct public API usage, like a frontend call
+       into `src/agentic_rag.ingestion.url`
+     - `guide_demo_improved_agentic_rag`: the same ingestion output plus
+       guide-side improved human-review diagnostics
+   - Outputs include:
+     - `comparison_summary.md`
+     - `comparison_report.json`
+     - `human_review_comparison.md`
+     - per-path artifact directories for parsed Markdown, chunks, and manifests
+
+4. **Added interactive browser apps for both review demos**
+   - `guide/demo/url-ingestion-human-review/server.py` serves the human-review
+     app at `http://127.0.0.1:8770`.
+   - `guide/demo/url-ingestion-comparison-review/server.py` serves the
+     comparison app at `http://127.0.0.1:8771`.
+   - Reviewers can paste URLs, run ingestion/comparison, inspect Markdown and
+     chunks, edit human-review Markdown, and save review files under each
+     demo's `output/` directory.
+
+### Expected Impact
+
+- Reviewers can inspect Markdown and chunks without reading implementation code.
+- Quality-check decisions are auditable through `markdown_quality` metadata and
+  generated review notes.
+- The comparison demo shows whether frontend-facing ingestion and guide-side
+  review output diverge before changes are promoted.
+
+### Notes
+
+- These demos live under `guide/` and are intended for local review artifacts.
+- The demos do not expose `.env` secret values.
+- Live URL runs still require network/browser availability; offline fixtures are
+  available for deterministic review.
+
+## [2026-06-05] Human Review Fixes: Price Semantics And Cleaner Fallback
+
+Human review outputs under `guide/demo/url-ingestion-human-review/output` and
+`guide/demo/url-ingestion-comparison-review/output` highlighted three ingestion
+issues:
+
+1. Configurator probe chunks needed clearer arithmetic so RAG would not mix the
+   base price of one VF9 variant with the option delta of another variant.
+2. Product/accessory listing chunks contained prices inside raw Markdown links,
+   which made human review flag ambiguous multi-price chunks.
+3. Crawl4AI could return useful but image-heavy/gallery-heavy Markdown; a
+   cleaner Trafilatura candidate should win when it has enough content and lower
+   image/link/boilerplate noise.
+
+### Summary of Changes
+
+- Updated `probe.py` so VinFast configurator records:
+  - prefix short edition labels with the model inferred from `modelId`,
+  - state the exact price rule,
+  - emit explicit `base price + option delta = final price` lines.
+- Updated `loader.py` quality scoring to:
+  - cap the score contribution from repeated prices,
+  - track `image_count` and `link_count`,
+  - select lower-noise Trafilatura/BM25/builtin candidates when they have enough
+    signal.
+- Updated product cleanup to normalize product-price links into explicit
+  current-price bullets.
+- Corrected `image_reference_count` so it matches the actual image references
+  attached to each chunk.
+- Added `guide/reports/url_ingestion_external_owner_comment.md` for retrieval,
+  generation, frontend, and evaluation owners outside ingestion.
+
+### Verification
+
+- `uv run pytest src\agentic_rag\ingestion\url\tests -q`
+  - Result: `59 passed, 1 skipped`
+- `uv run ruff check src\agentic_rag\ingestion\url\probe.py src\agentic_rag\ingestion\url\loader.py src\agentic_rag\ingestion\url\tests\test_probe.py src\agentic_rag\ingestion\url\tests\test_loader.py`
+  - Result: passed
+
+## [2026-06-05] Fetch Fallback: Trafilatura Before urllib
+
+The live URL fetch order is now explicit:
+
+1. Crawl4AI remains the primary crawler for rendered/dynamic pages.
+2. If Crawl4AI fails, Trafilatura `fetch_url()` is tried as a lightweight HTML
+   fetch fallback.
+3. If Trafilatura fetch fails or returns empty HTML, `urllib` is used as the
+   deterministic final fallback.
+
+### Summary of Changes
+
+- Added `fetch_html_with_trafilatura()` to `extractor.py`.
+- Added `_fetch_url_trafilatura()` to `loader.py`.
+- Updated `_fetch_url()` to preserve the Crawl4AI failure in `crawler_error`,
+  then append Trafilatura failure details if the final fetch path is `urllib`.
+- Added regression coverage for:
+  - Crawl4AI failure using Trafilatura fetch before `urllib`.
+  - Crawl4AI + Trafilatura failure falling back to `urllib`.
+
+## [2026-06-05] Audit: Primary Chunk Preservation for Quality Review
+
+To allow human reviewers to audit the quality-check selection logic, ingestion now preserves the "primary" chunks (usually from Crawl4AI) even when a fallback (like Trafilatura or BM25) is selected.
+
+### Summary of Changes
+
+1.  **Updated LoadedUrlDocument**: Added `primary_chunks` field to hold chunks from the primary crawler before quality selection.
+2.  **Double-Chunking on Fallback**: In `loader.py`, if the quality scorer selects a fallback, the loader now generates a second set of chunks from the discarded primary candidate.
+3.  **Demo Support**: Updated the human-review server payload to include these primary chunks, enabling side-by-side comparison in the browser UI to decide if quality check is necessary or too aggressive.
+
+### Verification
+
+- `uv run pytest src\agentic_rag\ingestion\url\tests -q`
+  - Result: `60 passed, 1 skipped`
+
+## [2026-06-05] Hotfix: Ingestion Support for Dynamic VinFast Shop Pages
+
+Fixed issues where the VinFast deposit and configurator pages (e.g., VF9) returned empty content due to aggressive selector exclusion and boilerplate filtering.
+
+### Summary of Changes
+
+1.  **Relaxed Crawler Exclusions**: Removed `.dat-coc-steps` and wizard-related classes from the crawler's exclusion list. These containers hold the main price and configuration evidence for VinFast shop pages.
+2.  **Increased Render Delay**: Increased the browser settling delay to 5 seconds to allow complex dynamic price cards to fully render before extraction.
+3.  **Refined Boilerplate Filtering**: Removed "Shopping" and "Consultation" from the `loader.py` boilerplate list, as these sections often house valid product options.
+4.  **Improved Search & UI**:
+    - Added **Semantic Reranking** to the Q&A review tool using OpenAI.
+    - Implemented VinFast model name normalization (e.g., "VF 9" -> "vf9") for better retrieval match rates.
+    - Enhanced the UI with color-coded term highlighting and a "Primary Chunks (Raw)" tab for auditing quality-check decisions.
+
+### Verification
+
+- Confirmed capture of VF9 configurator content at `shop.vinfastauto.com`.
+
+## [2026-06-05] Diagnostic: Visibility for "0 Chunk" Failures
+
+Improved the human-review demo to diagnose why ingestion produces 0 chunks with no fallback reason.
+
+1. **Candidate Comparison**: Added a table to `index.html` showing metrics for all parsers (Built-in, Crawl4AI, Trafilatura).
+2. **Crawler Error Reporting**: The UI now explicitly displays Crawl4AI execution errors (timeouts, browser crashes) trapped in the manifest.
+3. **Fallback Clarity**: Clarified that `Fallback Reason: none` occurs when only one usable candidate (the empty shell) is found.
+
+## [2026-06-05] Hotfix: Increased Crawl4AI Timeout for Heavy Dynamic Pages
+
+Increased Crawl4AI timeouts and rendering delays to prevent "0 chunk" failures on heavy pages like the VinFast configurator.
+
+### Summary of Changes
+1. **Increased rendering delay**: Bumped `delay_before_return_html` from 5.0s to 10.0s.
+2. **Increased page timeout**: Bumped `page_timeout` from 60s to 90s.
+
+## [2026-06-05] Hotfix: Robust Waiting for Perpetual Network Activity
+
+Fixed "0 chunk" failures on pages where `networkidle` never completes due to background analytics or chat widgets.
+
+### Summary of Changes
+1. **Shifted Wait Strategy**: Changed `wait_until` from `networkidle` to `load`.
+2. **Added Targeted Wait**: Introduced `wait_for` targeting `[data-edition]` and `.dat-coc-steps` to ensure React hydration completes even if the network remains busy.
+
+## [2026-06-05] Diagnostic: Visibility for Blocked and Filtered URLs
+
+Enhanced the human-review demo to surface link metadata captured during crawling.
+
+### Summary of Changes
+1. **Link Metadata Capture**: Updated `crawler.py` to explicitly preserve categorized links (internal, external, blocked) in the diagnostic payload.
+2. **Network Resources View**: Added a scrollable links inspector to the Diagnostics panel in `index.html` to help debug link filtering and resource blocking.
+
+## [2026-06-05] Diagnostic: Surface Resource Loading Errors
+
+Improved diagnostic visibility for failed sub-resources (images, scripts).
+
+### Summary of Changes
+1. **Image Metadata Preservation**: Updated `crawler.py` to include raw image metadata in the diagnostic payload.
+2. **Failed Resource Reporter**: Updated the human-review UI to detect and display 404/500 errors from images and metadata-reported resource errors.
+
+## [2026-06-05] Diagnostic: Capture Script Loading Errors via JS Probing
+
+Configured Crawl4AI to capture script loading failures that are not typically included in the default resource timing metadata.
+
+### Summary of Changes
+1. **JS Probe for Scripts**: Added a `js_code` snippet to `CrawlerRunConfig` in `crawler.py` that identifies scripts with 0 duration or protocol failures via the Performance API.
+2. **Metadata Augmentation**: Updated `_crawl_url_with_crawl4ai` to extract the probe results and merge them into `metadata["resource_errors"]` for UI visibility.
+
+## [2026-06-05] Diagnostic: Global Variable Initialization Probe
+
+Added a JS probe to detect if critical global variables (React, ReactDOM, carDeposit) are initialized.
+
+### Summary of Changes
+1. **Enhanced JS Probe**: Updated the `js_code` in `crawler.py` to return a structured object containing both resource errors and initialization checks.
+2. **Metadata Capture**: Updated `_crawl_url_with_crawl4ai` to store `initialization_status` in metadata.
+
+## [2026-06-05] Diagnostic: Flag Critical Probe Failures in Review App
+
+Configured the human-review app to automatically flag a warning if critical JavaScript variables (like `carDeposit`) are missing on configurator pages.
+
+### Summary of Changes
+1. **Automated Issue Detection**: Updated `server.py` to inspect `initialization_status` in chunk metadata and inject a `WARNING / probe` issue when `carDeposit` is missing on relevant URLs.
+2. **Review Visibility**: This ensures that hydration failures are prominently listed in both the browser UI and the generated Markdown report.
+3. **UI Display**: Updated the human-review demo to show initialization status in the Diagnostics panel.
+
+## [2026-06-05] Review Checks: Question to Chunk Citation
+
+Pulled the latest `develop` into the hotfix branch and resolved URL ingestion conflicts by keeping the Crawl4AI/probe workflow while preserving the newer extractor/normalizer path from `develop`.
+
+### Summary of Changes
+
+1. **Loader compatibility**: `loader.py` now accepts both the newer string-returning Trafilatura extractor and the older result-object shape used by the hotfix tests.
+2. **Chunk metadata cleanup**: VinFast search aliases are deduplicated and remain in metadata only, so repeated aliases do not pollute chunk text.
+3. **Develop chunker compatibility**: URL chunks now pass `root_title` into the shared hierarchical Markdown splitter and record the merged strategy as `hierarchical-markdown-probe-aware-overlap`.
+4. **Review-app citation checks**: The local demo now emits deterministic Q&A checks. Each found answer includes a `citation_chunk_id`, so human reviewers can confirm whether a question can be derived from the produced chunks.
+5. **Regression coverage**: Added assertions that VF9 price, advanced color surcharge, and NEDC note questions map back to concrete chunk IDs.
+
+### Human Review Flow
+
+1. Run `uv run python guide/demo/url-ingestion-review-app/server.py`.
+2. Paste a URL and run ingestion.
+3. Open **Q&A Checks** to inspect derived questions and citation chunk IDs.
+4. Cross-check the cited chunk in **Chunks** or `chunks.jsonl`.
+
+## [2026-06-05] Hotfix: Avoid Title-Only Crawl4AI Output
+
+Live review of `https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html`
+showed two different failure modes:
+
+1. Crawl4AI timed out because the generic crawler config waited for configurator
+   selectors (`[data-edition], .dat-coc-steps`) on a page that is not the
+   configurator.
+2. After removing the strict wait for non-configurator URLs, Crawl4AI succeeded
+   but its `cleaned_html` contained only the `<title>`, so ingestion produced one
+   title-only chunk.
+
+### Summary of Changes
+
+- Added URL-aware Crawl4AI wait selection:
+  - configurator URL: wait for `[data-edition], .dat-coc-steps`;
+  - model/deposit page URL: do not use the configurator wait selector.
+- Added `_best_html_attr()` so Crawl4AI raw `html` is preferred when
+  `cleaned_html` is title-only.
+- Added loader fallback from Crawl4AI-success-but-title-only to Trafilatura fetch
+  before returning chunks.
+- Added regression tests for both wait selection and title-only fallback.
+
+### Live Verification
+
+Review app run:
+
+```text
+URL: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html
+Run ID: vf9_review_check_title_only_fallback
+Result: parsed.md length 7698, chunk_count 6
+```
+
+The page now captures VF9 text, specs, and Eco/Plus price cards instead of only:
+
+```md
+# Xe điện VinFast VF 9 - Giá bán và chương trình ưu đãi | VinFast
+```
+
+No PostgreSQL or repeated crawl loop is needed for this fix. The problem was
+source extraction quality, not missing persistence. The local review app already
+stores each run as `parsed.md`, `chunks.jsonl`, and `manifest.json`.
+
+## [2026-06-05] Hotfix: Crawl4AI React SPA Snapshot Strategy
+
+Applied the local `guide/crawl4ai_react_spa_solution.md` guidance to the URL
+crawler.
+
+### Summary of Changes
+
+- Added React-aware `wait_for` conditions:
+  - configurator pages wait for `window.carDeposit.products` or meaningful body
+    text;
+  - generic React pages wait for `main`, `[data-loaded]`, `.main-content`,
+    `#root`, `#app`, or enough body text.
+- Replaced single diagnostic JS with a Crawl4AI `js_code` sequence that:
+  - scrolls to the bottom and back to trigger lazy rendering;
+  - clicks collapsed accordions and tabs;
+  - waits after interactions;
+  - returns script-resource and initialization diagnostics.
+- Added support for Crawl4AI list-style `js_execution_result` so diagnostics
+  remain visible when multiple JS snippets run.
+- Parser metadata now records pipeline supplements, for example
+  `builtin-html-parser+crawl4ai-rendered-html+interactive-probe`, so reviewers
+  can tell when base Markdown came from builtin parsing but dynamic state came
+  from Crawl4AI/probe.
+
+### Verification
+
+```text
+URL: https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9
+Result: chunks 22, markdown_len 27131, crawler crawl4ai, has_probe True, has_color True
+```
