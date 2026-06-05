@@ -42,7 +42,7 @@ AGENT_RERANK_FINAL_TOP_K_ENV = "AGENT_RERANK_FINAL_TOP_K"
 AGENT_RERANK_MULTI_TOP_K_ENV = "AGENT_RERANK_MULTI_TOP_K"
 AGENT_RETRIEVE_WORKERS_ENV = "AGENT_RETRIEVE_WORKERS"
 _DEFAULT_MAX_STEPS = 3
-_DEFAULT_MIN_RELEVANCE_SCORE = 0.0  
+_DEFAULT_MIN_RELEVANCE_SCORE = 0.0
 _DEFAULT_MIN_CHUNKS_PER_ENTITY = 2
 _DEFAULT_RERANK_FINAL_TOP_K = 8
 _DEFAULT_RERANK_MULTI_TOP_K = 5
@@ -225,7 +225,7 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
     rejected = set(state.get("rejected_chunk_ids") or [])
     filtered_docs = [d for d in raw_docs if d.chunk.chunk_id not in rejected]
     if not filtered_docs:
-        filtered_docs = raw_docs  
+        filtered_docs = raw_docs
 
     query_groups = _group_by_retrieval_query(filtered_docs)
     is_multi = len(query_groups) > 1
@@ -243,8 +243,7 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
             if not query or query == "__unknown_query__":
                 continue
             group_docs = [
-                r for r in reranked
-                if r.chunk.metadata.get("agent_retrieval_query") == query
+                r for r in reranked if r.chunk.metadata.get("agent_retrieval_query") == query
             ]
             if group_docs:
                 pinned.extend(group_docs)
@@ -252,11 +251,7 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
                 missing_entities.append(query)
 
     reranked_ids = {r.chunk.chunk_id for r in reranked}
-    new_rejected = [
-        d.chunk.chunk_id
-        for d in filtered_docs
-        if d.chunk.chunk_id not in reranked_ids
-    ]
+    new_rejected = [d.chunk.chunk_id for d in filtered_docs if d.chunk.chunk_id not in reranked_ids]
 
     return {
         "relevant_docs": reranked,

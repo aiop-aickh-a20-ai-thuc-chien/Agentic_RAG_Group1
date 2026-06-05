@@ -152,6 +152,7 @@ Return JSON only. Use Vietnamese queries.
 _MULTI_INTENT_SIGNALS = {"và", "so sánh", "vs", "hoặc", "cũng như", "khác nhau", "giống nhau"}
 _HISTORY_SIGNALS = {"nó", "cái đó", "điều đó", "thế còn", "còn", "vậy còn", "thêm"}
 
+
 def preprocess_query(
     question: str,
     history: list[dict[str, str]],

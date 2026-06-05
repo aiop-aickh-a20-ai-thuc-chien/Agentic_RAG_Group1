@@ -287,7 +287,9 @@ def test_rerank_node_rejected_chunks_excluded_in_next_loop() -> None:
 
     seen: list[list[str]] = []
 
-    def fake_rerank(question: str, candidates: list, top_k: int = 5):
+    def fake_rerank(
+        question: str, candidates: list[SearchResult], top_k: int = 5
+    ) -> tuple[list[SearchResult], dict[str, object]]:
         seen.append([r.chunk.chunk_id for r in candidates])
         top = candidates[:top_k]
         return top, {"used_provider": "score_fallback"}
@@ -297,10 +299,9 @@ def test_rerank_node_rejected_chunks_excluded_in_next_loop() -> None:
     m._rerank = fake_rerank  # type: ignore[assignment]
     try:
         bad_ids = [f"bad_{i}" for i in range(3)]
-        good_ids = ["good_1"]
-        all_docs = [
-            _result_for_query(cid, 0.1, "VF 3 info", 0) for cid in bad_ids
-        ] + [_result_for_query("good_1", 0.9, "VF 3 info", 0)]
+        all_docs = [_result_for_query(cid, 0.1, "VF 3 info", 0) for cid in bad_ids] + [
+            _result_for_query("good_1", 0.9, "VF 3 info", 0)
+        ]
 
         state = _base_state(
             fused_results=all_docs,
@@ -312,7 +313,7 @@ def test_rerank_node_rejected_chunks_excluded_in_next_loop() -> None:
         assert all(cid not in seen[0] for cid in bad_ids)
         assert "good_1" in seen[0]
     finally:
-        m._rerank = original  # type: ignore[assignment]
+        m._rerank = original
 
 
 def test_rerank_node_builds_rejected_list() -> None:
@@ -411,7 +412,8 @@ def test_route_rerank_generates_at_max_steps(monkeypatch: object) -> None:
 
 def test_route_rerank_transforms_when_below_threshold(monkeypatch: object) -> None:
     monkeypatch.setenv("AGENT_MIN_RELEVANCE_SCORE", "0.5")  # type: ignore[attr-defined]
-    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.3)], step_count=1)) == "transform_query"
+    state = _base_state(relevant_docs=[_result("c1", 0.3)], step_count=1)
+    assert route_after_rerank(state) == "transform_query"
 
 
 def test_route_rerank_generates_when_above_threshold(monkeypatch: object) -> None:
@@ -422,12 +424,12 @@ def test_route_rerank_generates_when_above_threshold(monkeypatch: object) -> Non
 def test_route_rerank_generates_at_max_steps_even_below_threshold(monkeypatch: object) -> None:
     monkeypatch.setenv("AGENT_MIN_RELEVANCE_SCORE", "0.9")  # type: ignore[attr-defined]
     monkeypatch.setenv("AGENT_MAX_STEPS", "2")  # type: ignore[attr-defined]
-    assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.1)], step_count=2)) == "generate"
+    state = _base_state(relevant_docs=[_result("c1", 0.1)], step_count=2)
+    assert route_after_rerank(state) == "generate"
 
 
 def test_route_rerank_threshold_disabled_by_default() -> None:
     assert route_after_rerank(_base_state(relevant_docs=[_result("c1", 0.001)])) == "generate"
-
 
 
 def test_transform_skip_after_existing_answer_points_to_check(monkeypatch: object) -> None:
