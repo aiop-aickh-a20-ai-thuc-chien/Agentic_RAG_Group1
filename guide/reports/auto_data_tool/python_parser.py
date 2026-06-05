@@ -6,13 +6,15 @@ import traceback
 sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 
-def parse_url(url: str) -> list[dict[str, str]]:
-    from agentic_rag.ingestion.url.loader import load_url_chunks  # type: ignore[import-untyped]
+def parse_url(url: str) -> dict[str, object]:
+    from agentic_rag.ingestion.url.loader import (  # type: ignore[import-untyped]
+        load_url_with_artifacts,
+    )
 
-    chunks = load_url_chunks(url)
+    document = load_url_with_artifacts(url)
     # Returns list of Chunk objects which have chunk_id, text, metadata
     result = []
-    for c in chunks:
+    for c in document.chunks:
         result.append(
             {
                 "id": c.chunk_id,
@@ -21,10 +23,10 @@ def parse_url(url: str) -> list[dict[str, str]]:
                 "text": c.text,
             }
         )
-    return result
+    return {"chunks": result, "markdown": document.markdown}
 
 
-def parse_pdf(path: str) -> list[dict[str, str]]:
+def parse_pdf(path: str) -> dict[str, object]:
     from agentic_rag.ingestion.pdf.loader import load_pdf_chunks  # type: ignore[import-untyped]
 
     chunks = load_pdf_chunks(path)
@@ -38,7 +40,7 @@ def parse_pdf(path: str) -> list[dict[str, str]]:
                 "text": c.text,
             }
         )
-    return result
+    return {"chunks": result, "markdown": "\n\n".join(item["text"] for item in result)}
 
 
 def main() -> None:
@@ -50,11 +52,11 @@ def main() -> None:
 
     try:
         if args.url:
-            chunks = parse_url(args.url)
-            print(json.dumps({"success": True, "chunks": chunks}, ensure_ascii=False))
+            parsed = parse_url(args.url)
+            print(json.dumps({"success": True, **parsed}, ensure_ascii=False))
         elif args.pdf:
-            chunks = parse_pdf(args.pdf)
-            print(json.dumps({"success": True, "chunks": chunks}, ensure_ascii=False))
+            parsed = parse_pdf(args.pdf)
+            print(json.dumps({"success": True, **parsed}, ensure_ascii=False))
         else:
             print(json.dumps({"success": False, "error": "No input provided"}))
     except Exception as e:

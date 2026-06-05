@@ -1,59 +1,247 @@
-# Hướng dẫn sử dụng Auto Data Tool (Sinh QA tự động)
+# Auto Data Tool
 
-Tool này được thiết kế để tự động hoá quá trình nạp dữ liệu (URLs, PDFs), bóc tách (chunking) và sinh ra các cặp câu hỏi - câu trả lời (QA) dùng cho việc đánh giá (Evaluation Dataset) hệ thống Agentic RAG.
+Auto Data Tool hỗ trợ nạp dữ liệu URL/PDF, chạy đúng pipeline ingestion của repo, kiểm tra kết quả parse/chunking và tạo cặp Question/Answer cho evaluation dataset.
 
-## Cơ chế hoạt động
+Tool này nằm trong `guide/reports/auto_data_tool` và lưu kết quả QA vào `guide/reports/result.xlsx`.
 
-- **Giao diện (Frontend)**: Được xây dựng bằng HTML/CSS/JS thuần, giúp bạn dễ dàng theo dõi, kiểm duyệt và sinh QA hàng loạt.
-- **Máy chủ (Backend Node.js)**: Đóng vai trò cầu nối, gọi tới API của LLM (để sinh QA) và lưu kết quả xuống file Excel `guide/reports/result.xlsx`.
-- **Trạm trung chuyển Python (`python_parser.py`)**: ĐÂY LÀ ĐIỂM QUAN TRỌNG. Tool **không** tự bóc tách văn bản. Thay vào đó, nó nhúng trực tiếp môi trường ảo `.venv` của Repo và gọi thẳng vào 2 hàm gốc của hệ thống RAG:
-  - `agentic_rag.ingestion.url.loader.load_url_chunks`
-  - `agentic_rag.ingestion.pdf.loader.load_pdf_chunks`
-  
-Điều này đảm bảo 100% thuật toán chia đoạn (chunking logic), tiền xử lý (preprocessing) và mã băm (Chunk ID) được sinh ra từ Tool sẽ KHỚP HOÀN TOÀN với những gì hệ thống RAG thực tế đang chạy.
+## Chức năng chính
 
-## Hướng dẫn cài đặt và chạy Tool
+- Nạp danh sách URL từ file `.txt`.
+- Nạp PDF từ một thư mục local.
+- Gọi trực tiếp ingestion pipeline của repo qua `python_parser.py`.
+- Hiển thị danh sách vector chunks để review và label.
+- Tự động sinh Question/Answer bằng LLM gateway.
+- Lưu từng QA hoặc batch QA vào Excel.
+- Lazy-load Question/Answer đã có trong Excel theo `chunk_id` khi người dùng chọn chunk.
+- Review raw document, parsed Markdown và chunk highlight trong tab riêng.
 
-### 1. Cài đặt thư viện Node.js
-Đảm bảo bạn đã cài đặt Node.js trên máy. Sau đó mở Terminal, di chuyển vào thư mục này và cài đặt các gói cần thiết:
+## Kiến trúc hoạt động
+
+### Frontend
+
+Frontend dùng HTML/CSS/JavaScript thuần trong thư mục `public`.
+
+Các màn hình chính:
+
+- `Label QA`: dùng để chọn chunk, xem context, sinh hoặc chỉnh sửa Question/Answer.
+- `Review parsing / chunking`: dùng để kiểm tra raw document, Markdown sau parse và các chunk được tô màu.
+
+### Backend Node.js
+
+`server.js` cung cấp các API local:
+
+```text
+POST /api/parse_list
+POST /api/chunk
+POST /api/generate
+POST /api/generate_batch
+POST /api/excel
+POST /api/excel_batch
+GET  /api/processed
+GET  /api/label?chunkId=<chunk_id>
+```
+
+Backend chịu trách nhiệm:
+
+- Đọc danh sách URL/PDF từ input path.
+- Gọi Python parser để dùng ingestion thật của repo.
+- Gọi LLM gateway để sinh QA.
+- Đọc/ghi `guide/reports/result.xlsx`.
+- Lazy-load QA đã label từ Excel theo `chunk_id`.
+
+### Python parser
+
+`python_parser.py` không tự implement parser/chunker riêng. File này gọi trực tiếp module ingestion của repo:
+
+```python
+agentic_rag.ingestion.url.loader.load_url_with_artifacts
+agentic_rag.ingestion.pdf.loader.load_pdf_chunks
+```
+
+Với URL, parser trả về:
+
+```json
+{
+  "success": true,
+  "chunks": [...],
+  "markdown": "parsed markdown used by ingestion"
+}
+```
+
+Điều này giúp Auto Data Tool review đúng Markdown và chunks mà hệ thống RAG thật đang dùng.
+
+## Pipeline URL hiện tại
+
+URL ingestion hiện dùng pipeline mới đã port từ bản `Crawl link`:
+
+- Render/extract theo hướng DOM Markdown.
+- Giữ cấu trúc heading H1-H6.
+- Bắt nội dung trong tab/accordion khi có thể.
+- Ghép các dòng thông số dạng label/value.
+- Normalize noise như nav, footer, cookie, CTA, dialog.
+- Chunk theo `hierarchical-markdown-subsection-overlap`.
+
+Với live URL, loader sẽ thử Playwright extractor nếu môi trường có Python Playwright. Nếu chưa có hoặc browser extraction lỗi, pipeline fallback về fetch HTML thường để tool vẫn chạy được.
+
+## Cài đặt
+
+Cài dependencies Node.js trong thư mục tool:
 
 ```bash
 cd guide/reports/auto_data_tool
 npm install
 ```
 
-### 2. Cấu hình môi trường (Không bắt buộc)
-Bạn có thể thiết lập file `.env` (đặt cùng cấp với file `server.js`) nếu cần cấu hình các tham số bảo mật.
-Ví dụ:
-```env
-PORT=3000
+Repo Python environment cần được sync trước ở root project:
+
+```bash
+uv sync
 ```
 
-### 3. Khởi động máy chủ
-Từ Terminal trong thư mục `auto_data_tool`, chạy lệnh sau:
+Nếu không dùng `uv`, cần đảm bảo `.venv` của repo tồn tại và import được package `agentic_rag`.
+
+## Chạy tool
+
+Từ thư mục `guide/reports/auto_data_tool`:
 
 ```bash
 node server.js
 ```
 
-Sau khi Terminal báo `Server running on http://localhost:3000`, hãy mở trình duyệt và truy cập vào đường link trên để sử dụng Tool.
+Sau đó mở:
 
-## Hướng dẫn sử dụng trên Giao diện Web
+```text
+http://localhost:3000
+```
 
-1. **Nạp dữ liệu**: 
-   - Điền đường dẫn tuyệt đối hoặc tương đối tới file `*.txt` chứa danh sách các URL.
-   - Điền đường dẫn tới thư mục chứa các file PDF (nếu có).
-   - Nhấn **+ Nạp Document Chunk**. Tool sẽ kết nối với Python để bóc tách dữ liệu và hiển thị lên bảng.
+Có thể đổi port bằng `.env` cùng cấp `server.js`:
 
-2. **Gán nhãn & Sinh QA**:
-   - Chọn một Chunk bất kỳ trong danh sách.
-   - (Tuỳ chọn) Bạn có thể cấu hình tên model và URL của LLM Gateway ở cột bên trái.
-   - Nhấn **Tự Động Sinh QA Cặp**.
-   - Chỉnh sửa câu hỏi/câu trả lời nếu cần thiết.
-   - Nhấn **Lưu Excel** để lưu trực tiếp vào file `result.xlsx`.
+```env
+PORT=3000
+```
 
-3. **Chạy hàng loạt (Batch Autopilot)**:
-   - Nhấn nút **Auto (Batch) QA** ở góc dưới bên trái, Tool sẽ tự động duyệt qua các Chunk chưa được gán nhãn và sinh QA mà không cần bạn làm thủ công từng cái một.
+## Cách sử dụng
 
-> [!NOTE]
-> File kết quả Excel (`result.xlsx`) sẽ được đặt ngay bên ngoài thư mục này (trong `guide/reports`). Các cột trong file Excel đã được căn lỉnh chuẩn format của Evaluation Pipeline.
+### 1. Nạp dữ liệu
+
+Nhập một trong hai nguồn:
+
+```text
+TXT File Path (URLs)
+PDF Folder Path
+```
+
+Sau đó bấm:
+
+```text
++ Nạp Document Chunk
+```
+
+Tool sẽ gọi `/api/parse_list`, sau đó gọi `/api/chunk` cho từng source.
+
+### 2. Review parsing và chunking
+
+Chọn một chunk trong bảng, sau đó mở tab:
+
+```text
+Review parsing / chunking
+```
+
+Tab này hiển thị:
+
+- Raw document source bằng iframe nếu source là URL HTTP/HTTPS.
+- Nút mở trang gốc trong tab browser mới.
+- Parsed Markdown sau HTML/PDF ingestion.
+- Danh sách chunk theo màu để dễ kiểm tra boundary.
+- Chunk đang chọn được highlight riêng.
+
+Nếu raw preview bị website chặn iframe, dùng nút `Mở trang gốc` để xem trực tiếp.
+
+### 3. Label QA
+
+Mở tab:
+
+```text
+Label QA
+```
+
+Khi chọn chunk, tool sẽ gọi:
+
+```text
+GET /api/label?chunkId=<chunk_id>
+```
+
+Nếu Excel đã có QA cho chunk đó, Question/Answer sẽ được fill tự động. Cách này tránh load toàn bộ Excel lên frontend.
+
+Nếu chưa có QA:
+
+- Nhập API key nếu cần.
+- Chọn model.
+- Bấm `Tự động sinh QA cặp`.
+- Review lại Question/Answer.
+- Bấm `Lưu Excel`.
+
+### 4. Batch QA
+
+Cấu hình:
+
+```text
+Độ trễ nhịp (ms)
+Số chunk / batch
+```
+
+Bấm:
+
+```text
+Chạy hàng loạt
+```
+
+Tool sẽ duyệt các chunk chưa có QA, gọi LLM theo batch và lưu Excel theo batch.
+
+## File kết quả
+
+Kết quả được ghi vào:
+
+```text
+guide/reports/result.xlsx
+```
+
+Các cột chính:
+
+```text
+id
+section_name
+question
+expected_answer
+ground_truth_chunk_ids
+ground_truth_doc
+is_out_of_scope
+custom_preconds
+```
+
+`ground_truth_chunk_ids` dùng `chunk_id` từ ingestion pipeline, nên có thể map ngược về chunk trong tool hoặc hệ thống RAG.
+
+## Ghi chú về generated artifacts
+
+Không commit các file kết quả hoặc artifact local như:
+
+```text
+guide/reports/result.xlsx
+src/agentic_rag/ingestion/Crawl link/*.jsonl
+src/agentic_rag/ingestion/Crawl link/*.json
+src/agentic_rag/ingestion/Crawl link/*.txt
+.playwright-cli/
+```
+
+Các artifact này chỉ dùng để debug/review local hoặc comment trong PR nếu cần minh họa kết quả.
+
+## Kiểm tra nhanh sau khi sửa tool
+
+Các check tối thiểu liên quan:
+
+```bash
+node --check guide/reports/auto_data_tool/server.js
+node --check guide/reports/auto_data_tool/public/app.js
+.\.venv\Scripts\python.exe -m py_compile guide/reports/auto_data_tool/python_parser.py
+.\.venv\Scripts\python.exe -m pytest src/agentic_rag/ingestion/url/tests tests/test_ingestion_chunking.py -q
+```

@@ -25,7 +25,12 @@ from agentic_rag.ingestion.url.chunking import (
     normalize_space,
     short_hash,
 )
-from agentic_rag.ingestion.url.extractor import extract_markdown_with_trafilatura
+from agentic_rag.ingestion.url.extractor import (
+    ExtractedMarkdown,
+    extract_markdown_from_html,
+    extract_markdown_with_playwright,
+    extract_markdown_with_trafilatura,
+)
 from agentic_rag.ingestion.url.parser import ParsedHtml, parse_html
 
 _USER_AGENT = (
@@ -66,6 +71,7 @@ def load_url_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
+    use_browser_extractor: bool = True,
 ) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
@@ -74,6 +80,7 @@ def load_url_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
+        use_browser_extractor=use_browser_extractor,
     ).chunks
 
 
@@ -83,10 +90,20 @@ def load_url_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
+    use_browser_extractor: bool = True,
 ) -> LoadedUrlDocument:
     """Fetch, clean, chunk, and expose URL ingestion artifacts."""
 
     _raise_if_pdf_url(url)
+    if use_browser_extractor:
+        browser_loaded = _try_load_url_with_browser_extractor(
+            url,
+            debug_artifact_dir=debug_artifact_dir,
+            data_artifact_dir=data_artifact_dir,
+            run_id=run_id,
+        )
+        if browser_loaded is not None:
+            return browser_loaded
     page = _fetch_url(url)
     _raise_if_pdf_response(page)
     return load_html_with_artifacts(
@@ -95,6 +112,37 @@ def load_url_with_artifacts(
         source_url=page.url,
         original_url=url,
         final_url=page.url,
+        debug_artifact_dir=debug_artifact_dir,
+        data_artifact_dir=data_artifact_dir,
+        run_id=run_id,
+    )
+
+
+def _try_load_url_with_browser_extractor(
+    url: str,
+    *,
+    debug_artifact_dir: str | Path | None,
+    data_artifact_dir: str | Path | None,
+    run_id: str,
+) -> LoadedUrlDocument | None:
+    try:
+        extracted = extract_markdown_with_playwright(url)
+    except Exception:
+        return None
+    final_url = extracted.final_url or url
+    parsed = (
+        parse_html(extracted.rendered_html, base_url=final_url)
+        if extracted.rendered_html
+        else ParsedHtml(title=extracted.title, sections=())
+    )
+    return _load_extracted_markdown_with_artifacts(
+        extracted=extracted,
+        source=final_url,
+        source_url=final_url,
+        original_url=url,
+        final_url=final_url,
+        parsed=parsed,
+        html=extracted.rendered_html,
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
@@ -140,13 +188,11 @@ def load_html_with_artifacts(
     """Clean and chunk one HTML document while exposing persisted artifacts."""
 
     parsed = parse_html(html, base_url=source_url or source)
-    fetched_at = _utc_now()
     parsed_markdown, parser_name = _extract_markdown(
         html=html,
         parsed=parsed,
         source_url=source_url or source,
     )
-    canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
     _persist_html_debug_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         source=source,
@@ -154,40 +200,22 @@ def load_html_with_artifacts(
         parsed_sections="\n\n".join(section.text for section in parsed.sections),
     )
 
-    source_type = "url" if source_url else "html"
-    cleaned_markdown = _clean_markdown_noise(parsed_markdown)
-    chunks = _build_markdown_aware_chunks(
-        markdown=cleaned_markdown,
-        source=source,
-        source_type=source_type,
-        url=source_url,
-        title=parsed.title,
-        fetched_at=fetched_at,
-    )
-    chunks = _with_html_metadata(
-        chunks,
-        original_url=original_url,
-        final_url=final_url,
-        canonical_url=canonical_url,
-        parsed=parsed,
-    )
-    artifacts = persist_ingestion_artifacts(
-        data_dir=data_artifact_dir,
-        input_type="url" if source_url else "html",
+    return _load_extracted_markdown_with_artifacts(
+        extracted=ExtractedMarkdown(
+            markdown=parsed_markdown,
+            parser_name=parser_name,
+            title=parsed.title,
+        ),
         source=source,
         source_url=source_url,
         original_url=original_url,
         final_url=final_url,
-        canonical_url=canonical_url,
-        parser=parser_name,
+        parsed=parsed,
+        html=None,
+        debug_artifact_dir=None,
+        data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        created_at=fetched_at,
-        markdown=cleaned_markdown,
-        chunks=chunks,
-        page_metadata=parsed.metadata,
-        assets=parsed.assets,
     )
-    return LoadedUrlDocument(markdown=parsed_markdown, chunks=chunks, artifacts=artifacts)
 
 
 def load_text_chunks(
@@ -283,6 +311,9 @@ def _extract_markdown(
     source_url: str | None,
 ) -> tuple[str, str]:
     fallback_markdown = _parsed_markdown(parsed)
+    extracted = extract_markdown_from_html(html, title=parsed.title, source_url=source_url)
+    if extracted is not None and _has_markdown_heading(extracted.markdown):
+        return extracted.markdown, extracted.parser_name
     try:
         trafilatura_markdown = extract_markdown_with_trafilatura(
             html,
@@ -301,6 +332,66 @@ def _has_markdown_heading(markdown: str) -> bool:
     return any(re.match(r"^#{1,6}(?!#)\s+\S", line.strip()) for line in markdown.splitlines())
 
 
+def _load_extracted_markdown_with_artifacts(
+    *,
+    extracted: ExtractedMarkdown,
+    source: str,
+    source_url: str | None,
+    original_url: str | None,
+    final_url: str | None,
+    parsed: ParsedHtml,
+    html: str | None,
+    debug_artifact_dir: str | Path | None,
+    data_artifact_dir: str | Path | None,
+    run_id: str,
+) -> LoadedUrlDocument:
+    fetched_at = _utc_now()
+    canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
+    if html is not None:
+        _persist_html_debug_artifacts(
+            debug_artifact_dir=debug_artifact_dir,
+            source=source,
+            html=html,
+            parsed_sections="\n\n".join(section.text for section in parsed.sections),
+        )
+    source_type = "url" if source_url else "html"
+    title = extracted.title or parsed.title
+    cleaned_markdown = _clean_markdown_noise(extracted.markdown)
+    chunks = _build_markdown_aware_chunks(
+        markdown=cleaned_markdown,
+        source=source,
+        source_type=source_type,
+        url=source_url,
+        title=title,
+        fetched_at=fetched_at,
+    )
+    chunks = _with_html_metadata(
+        chunks,
+        original_url=original_url,
+        final_url=final_url,
+        canonical_url=canonical_url,
+        parsed=parsed,
+    )
+    chunks = _with_extractor_metadata(chunks, extracted=extracted)
+    artifacts = persist_ingestion_artifacts(
+        data_dir=data_artifact_dir,
+        input_type="url" if source_url else "html",
+        source=source,
+        source_url=source_url,
+        original_url=original_url,
+        final_url=final_url,
+        canonical_url=canonical_url,
+        parser=extracted.parser_name,
+        run_id=run_id,
+        created_at=fetched_at,
+        markdown=cleaned_markdown,
+        chunks=chunks,
+        page_metadata=parsed.metadata,
+        assets=parsed.assets,
+    )
+    return LoadedUrlDocument(markdown=cleaned_markdown, chunks=chunks, artifacts=artifacts)
+
+
 def _build_markdown_aware_chunks(
     *,
     markdown: str,
@@ -313,7 +404,7 @@ def _build_markdown_aware_chunks(
     content_hash = short_hash(markdown)
     section_indexes: dict[str, int] = defaultdict(int)
     chunks: list[Chunk] = []
-    for markdown_chunk in chunk_markdown_by_sections(markdown):
+    for markdown_chunk in chunk_markdown_by_sections(markdown, root_title=title):
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
@@ -335,8 +426,9 @@ def _build_markdown_aware_chunks(
                     "content_hash": content_hash,
                     "chunk_index": chunk_index,
                     "chunk_token_count": markdown_chunk.chunk_token_count,
-                    "chunking_method": "hybrid-markdown-aware-token-overlap",
+                    "chunking_method": "hierarchical-markdown-subsection-overlap",
                     "semantic_unit": markdown_chunk.semantic_unit,
+                    **markdown_chunk.metadata,
                 },
             )
         )
@@ -437,6 +529,27 @@ def _with_html_metadata(
                     "published_at": parsed.metadata.published_at,
                     "description": parsed.metadata.description or parsed.metadata.og_description,
                     "asset_count": len(parsed.assets),
+                }
+            }
+        )
+        for chunk in chunks
+    ]
+
+
+def _with_extractor_metadata(
+    chunks: list[Chunk],
+    *,
+    extracted: ExtractedMarkdown,
+) -> list[Chunk]:
+    return [
+        chunk.model_copy(
+            update={
+                "metadata": {
+                    **chunk.metadata,
+                    "parser": extracted.parser_name,
+                    "browser_fetched_ok": extracted.fetched_ok,
+                    "is_product": bool(extracted.product),
+                    "normalize_stats": extracted.normalize_stats,
                 }
             }
         )
