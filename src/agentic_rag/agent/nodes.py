@@ -36,10 +36,14 @@ except ImportError:
 
 
 AGENT_MAX_STEPS_ENV = "AGENT_MAX_STEPS"
+AGENT_MIN_RELEVANCE_SCORE_ENV = "AGENT_MIN_RELEVANCE_SCORE"
+AGENT_MIN_CHUNKS_PER_ENTITY_ENV = "AGENT_MIN_CHUNKS_PER_ENTITY"
 AGENT_RERANK_FINAL_TOP_K_ENV = "AGENT_RERANK_FINAL_TOP_K"
 AGENT_RERANK_MULTI_TOP_K_ENV = "AGENT_RERANK_MULTI_TOP_K"
 AGENT_RETRIEVE_WORKERS_ENV = "AGENT_RETRIEVE_WORKERS"
 _DEFAULT_MAX_STEPS = 3
+_DEFAULT_MIN_RELEVANCE_SCORE = 0.0  
+_DEFAULT_MIN_CHUNKS_PER_ENTITY = 2
 _DEFAULT_RERANK_FINAL_TOP_K = 8
 _DEFAULT_RERANK_MULTI_TOP_K = 5
 _DEFAULT_RETRIEVE_WORKERS = 3
@@ -210,21 +214,48 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
     """Rerank all accumulated docs via per-group cross-encoder."""
     raw_docs = state.get("fused_results", [])
     if not raw_docs:
-        return {"relevant_docs": [], "trace": [{"node": "rerank", "total": 0, "kept": 0}]}
+        return {
+            "relevant_docs": [],
+            "pinned_docs": [],
+            "missing_entities": [],
+            "trace": [{"node": "rerank", "total": 0, "kept": 0}],
+        }
 
     query_groups = _group_by_retrieval_query(raw_docs)
     is_multi = len(query_groups) > 1
     top_k = _configured_rerank_multi_top_k() if is_multi else _configured_rerank_final_top_k()
+    min_chunks = _configured_min_chunks_per_entity()
 
     reranked, rerank_meta = _rerank_per_query_groups(query_groups, top_k_per_group=top_k)
+
+    pinned: list[SearchResult] = []
+    missing_entities: list[str] = []
+    if is_multi:
+        for group_trace in rerank_meta.get("groups", []):
+            query = group_trace.get("query", "")
+            kept = group_trace.get("kept", 0)
+            if not query or query == "__unknown_query__":
+                continue
+            if kept >= min_chunks:
+                group_docs = [
+                    r for r in reranked
+                    if r.chunk.metadata.get("agent_retrieval_query") == query
+                ]
+                pinned.extend(group_docs)
+            else:
+                missing_entities.append(query)
+
     return {
         "relevant_docs": reranked,
+        "pinned_docs": pinned,
+        "missing_entities": missing_entities,
         "trace": [
             {
                 "node": "rerank",
                 "total": len(raw_docs),
                 "kept": len(reranked),
                 "kept_chunk_ids": [r.chunk.chunk_id for r in reranked],
+                "missing_entities": missing_entities,
                 **rerank_meta,
             }
         ],
@@ -237,10 +268,12 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
     context_docs = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
     effective_question = _effective_question(state)
     queries_tried = state.get("queries_tried", [])
+    missing_entities = state.get("missing_entities") or []
     result = transform_query(
         question=effective_question,
         docs=context_docs,
         queries_tried=queries_tried,
+        missing_entities=missing_entities,
         llm_client=llm_client,
     )
 
@@ -326,8 +359,16 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
 
 
 def generate_node(state: AgentState) -> dict[str, Any]:
-    """Generate grounded answer from already-reranked relevant_docs."""
-    docs = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
+    """Generate grounded answer from reranked docs + pinned docs from previous loops."""
+    relevant = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
+    pinned = state.get("pinned_docs") or []
+
+    docs = sorted(
+        _dedup_keep_best_score(pinned + relevant),
+        key=lambda r: r.score,
+        reverse=True,
+    )
+
     evidence_context = build_evidence_context(docs)
     result = _generate(
         _effective_question(state), evidence_context, docs, original_question=state["question"]
@@ -336,7 +377,14 @@ def generate_node(state: AgentState) -> dict[str, Any]:
     return {
         "answer": result.answer,
         "relevant_docs": docs,
-        "trace": [{"node": "generate", "answer_status": result.answer.status}],
+        "trace": [
+            {
+                "node": "generate",
+                "answer_status": result.answer.status,
+                "pinned_count": len(pinned),
+                "docs_used": len(docs),
+            }
+        ],
     }
 
 
@@ -354,7 +402,8 @@ def check_answer_node(state: AgentState) -> dict[str, Any]:
 
 
 def route_after_rerank(state: AgentState) -> str:
-    if state.get("relevant_docs"):
+    docs = state.get("relevant_docs") or []
+    if docs and _docs_meet_threshold(docs):
         return "generate"
     if state.get("step_count", 0) >= _configured_max_steps():
         return "generate"
@@ -524,6 +573,13 @@ def _rerank_per_query_groups(
     }
 
 
+def _docs_meet_threshold(docs: list[SearchResult]) -> bool:
+    threshold = _configured_min_relevance_score()
+    if threshold <= 0.0:
+        return True
+    return any(r.score >= threshold for r in docs)
+
+
 def _configured_max_steps() -> int:
     raw = os.getenv(AGENT_MAX_STEPS_ENV)
     if raw is None:
@@ -533,6 +589,27 @@ def _configured_max_steps() -> int:
         return v if v > 0 else _DEFAULT_MAX_STEPS
     except ValueError:
         return _DEFAULT_MAX_STEPS
+
+
+def _configured_min_relevance_score() -> float:
+    raw = os.getenv(AGENT_MIN_RELEVANCE_SCORE_ENV)
+    if raw is None:
+        return _DEFAULT_MIN_RELEVANCE_SCORE
+    try:
+        return float(raw)
+    except ValueError:
+        return _DEFAULT_MIN_RELEVANCE_SCORE
+
+
+def _configured_min_chunks_per_entity() -> int:
+    raw = os.getenv(AGENT_MIN_CHUNKS_PER_ENTITY_ENV)
+    if raw is None:
+        return _DEFAULT_MIN_CHUNKS_PER_ENTITY
+    try:
+        v = int(raw)
+        return v if v > 0 else _DEFAULT_MIN_CHUNKS_PER_ENTITY
+    except ValueError:
+        return _DEFAULT_MIN_CHUNKS_PER_ENTITY
 
 
 def _configured_retrieve_workers() -> int:
