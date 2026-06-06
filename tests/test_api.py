@@ -1,5 +1,9 @@
 from pathlib import Path
+from typing import Any, cast
 
+import pytest
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
 from pytest import MonkeyPatch
 
 from agentic_rag.api import (
@@ -10,6 +14,8 @@ from agentic_rag.api import (
     _stream_answer_events,
     _stream_direct_answer_events,
     answer_question,
+    delete_all_sources,
+    delete_source,
     health,
     list_sources,
     source_debug,
@@ -21,6 +27,7 @@ from agentic_rag.core.contracts import Chunk
 from agentic_rag.generation.answering import format_evidence_context
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
+from agentic_rag.integrations.local_pdf.storage import StoredRawSource
 from agentic_rag.testing.fixtures import sample_search_results
 
 
@@ -215,7 +222,128 @@ def test_raw_source_returns_local_pdf_file(
     response = source_raw(uploaded.document_id)
 
     assert response.media_type == "application/pdf"
+    assert isinstance(response, FileResponse)
     assert Path(str(response.path)).name == f"{uploaded.document_id}.pdf"
+
+
+def test_raw_source_streams_cloud_raw_bytes(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    class FakeCloudSourceStore:
+        def read_raw(self, document_id: str) -> StoredRawSource:
+            return StoredRawSource(
+                content=b"%PDF-1.4",
+                content_type="application/pdf",
+                name=f"{document_id}.pdf",
+            )
+
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeCloudSourceStore()),
+    )
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    response = source_raw("doc-1")
+
+    assert response.media_type == "application/pdf"
+    assert response.body == b"%PDF-1.4"
+
+
+def test_raw_cloud_source_encodes_unicode_filename(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeCloudSourceStore:
+        def read_raw(self, document_id: str) -> StoredRawSource:
+            return StoredRawSource(
+                content=b"%PDF-1.4",
+                content_type="application/pdf",
+                name="Tài liệu tiếng Việt.pdf",
+            )
+
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeCloudSourceStore()),
+    )
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    response = source_raw("doc-1")
+
+    assert response.headers["content-disposition"] == (
+        "inline; filename*=utf-8''T%C3%A0i%20li%E1%BB%87u%20ti%E1%BA%BFng%20Vi%E1%BB%87t.pdf"
+    )
+    response.headers["content-disposition"].encode("latin-1")
+
+
+def test_raw_cloud_source_encodes_header_control_characters(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeCloudSourceStore:
+        def read_raw(self, document_id: str) -> StoredRawSource:
+            return StoredRawSource(
+                content=b"source",
+                content_type="text/plain; charset=utf-8",
+                name='report"\r\nX-Test: injected.txt',
+            )
+
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeCloudSourceStore()),
+    )
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    response = source_raw("doc-1")
+    disposition = response.headers["content-disposition"]
+
+    assert disposition.startswith("inline; filename*=utf-8''")
+    assert "%22" in disposition
+    assert "%0D%0A" in disposition
+    assert "\r" not in disposition
+    assert "\n" not in disposition
+    assert response.body == b"source"
+    assert response.media_type == "text/plain; charset=utf-8"
+
+
+def test_delete_source_returns_bad_gateway_for_qdrant_failure(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        provider,
+        "delete_document",
+        lambda **kwargs: (_ for _ in ()).throw(
+            RuntimeError("Qdrant deletion failed; source storage was not deleted.")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        delete_source("doc-1")
+
+    assert raised.value.status_code == 502
+    assert "source storage was not deleted" in str(raised.value.detail)
+
+
+def test_delete_all_sources_returns_bad_gateway_for_qdrant_failure(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        provider,
+        "delete_all_documents",
+        lambda: (_ for _ in ()).throw(
+            RuntimeError("Qdrant deletion failed; source storage was not deleted.")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        delete_all_sources()
+
+    assert raised.value.status_code == 502
+    assert "source storage was not deleted" in str(raised.value.detail)
 
 
 def test_text_source_uses_local_provider_when_configured(

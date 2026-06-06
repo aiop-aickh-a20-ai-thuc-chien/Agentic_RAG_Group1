@@ -80,6 +80,63 @@ module, quality gate và quy tắc an toàn thống nhất trong cả nhóm.
 | Generation + citations + UI | `agentic_rag.generation.answering`, `agentic_rag.app` |
 | Evaluation report | `agentic_rag.evaluation.metrics` |
 
+## Storage backends
+
+Local development can run with JSONL source manifests and the in-process
+`turbovec` dense store. Cloud prototype mode keeps `EVIDENCE_PROVIDER=local_pdf`
+but can set `LOCAL_SOURCE_STORE=s3` and `DENSE_VECTOR_STORE=qdrant` so S3 stores
+raw source files, parsed Markdown, debug artifacts, and chunk manifests while
+Qdrant stores the persistent hybrid retrieval index.
+
+## Dense embedding providers
+
+`DENSE_EMBEDDING_PROVIDER=auto` uses OpenAI when `OPENAI_API_KEY` is configured.
+Without that key it selects `local_openai`, which expects an OpenAI-compatible
+`/v1/embeddings` service:
+
+```env
+DENSE_EMBEDDING_PROVIDER=auto
+DENSE_EMBEDDING_DIMENSIONS=
+OPENAI_EMBEDDING_DIMENSIONS=1536
+LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:8000/v1
+LOCAL_EMBEDDING_MODEL=your-embedding-model
+LOCAL_EMBEDDING_API_KEY=
+```
+
+Run vLLM in an isolated uv environment:
+
+```bash
+uv run --isolated --with vllm \
+  vllm serve your-embedding-model --runner pooling --port 8000
+```
+
+Or run SGLang without adding it to this application's dependencies:
+
+```bash
+uv run --isolated --with "sglang[all]" \
+  python -m sglang.launch_server \
+  --model-path your-embedding-model \
+  --is-embedding \
+  --port 30000
+```
+
+For SGLang, set `LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:30000/v1`.
+`DENSE_EMBEDDING_PROVIDER=huggingface` remains an explicit in-process option and
+is never selected automatically.
+
+Smoke-test either local server:
+
+```bash
+curl http://127.0.0.1:8000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"model":"your-embedding-model","input":["embedding smoke test"]}'
+```
+
+One `QDRANT_COLLECTION` may contain only one provider/model/dimension profile.
+When changing the embedding model or provider, use a new collection name or
+delete the existing collection and reindex. The app does not recreate an
+incompatible collection automatically.
+
 ## Quality Gate
 
 Mỗi Pull Request cần pass các lệnh sau:

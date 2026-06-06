@@ -1,6 +1,6 @@
 """PDF ingestion package."""
 
-from agentic_rag.ingestion.pdf.artifacts import (
+from .artifacts import (
     PdfElementArtifact,
     PdfIngestionArtifactManifest,
     PdfMultimodalArtifactManifest,
@@ -8,7 +8,7 @@ from agentic_rag.ingestion.pdf.artifacts import (
     save_pdf_ingestion_artifacts,
     save_pdf_multimodal_artifacts,
 )
-from agentic_rag.ingestion.pdf.chunkers import (
+from .chunkers import (
     DeterministicMarkdownChunker,
     DoclingHybridChunker,
     DoclingPageAwareChunker,
@@ -16,20 +16,20 @@ from agentic_rag.ingestion.pdf.chunkers import (
     resolve_markdown_chunker,
     supported_markdown_chunkers,
 )
-from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
-from agentic_rag.ingestion.pdf.loader import (
+from .config import PdfIngestionConfig
+from .loader import (
     LoadedPdfDocument,
     load_pdf_chunks,
     load_pdf_with_markdown,
 )
-from agentic_rag.ingestion.pdf.models import (
+from .models import (
     PdfAssetRef,
     PdfChunkingInput,
     PdfParserCapabilities,
     PdfParseResult,
     PdfPipelineCapabilities,
 )
-from agentic_rag.ingestion.pdf.pipelines import (
+from .pipelines import (
     DEFAULT_PDF_PIPELINE,
     DEFAULT_PDF_STRATEGY,
     PdfParserPipelineDefinition,
@@ -39,7 +39,7 @@ from agentic_rag.ingestion.pdf.pipelines import (
     supported_pdf_pipelines,
     supported_pdf_strategies,
 )
-from agentic_rag.ingestion.pdf.registry import (
+from .registry import (
     parser_capabilities,
     resolve_pdf_parser,
     supported_pdf_parsers,

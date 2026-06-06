@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from agentic_rag.ingestion.pdf.chunkers import (
     DeterministicMarkdownChunker,
     DoclingHybridChunker,
+    DoclingPageAwareChunker,
     MarkdownChunkerDefinition,
     resolve_markdown_chunker,
     supported_markdown_chunkers,
@@ -20,6 +21,56 @@ class FakeDoclingChunk:
     def __init__(self, text: str, headings: list[str] | None = None) -> None:
         self.text = text
         self.meta = FakeDoclingChunkMeta(headings=headings)
+
+
+class FakeProvenance:
+    def __init__(self, page_no: int) -> None:
+        self.page_no = page_no
+
+
+class FakeTextItem:
+    label = "text"
+
+    def __init__(
+        self,
+        text: str,
+        page_no: int | None = None,
+        *,
+        page_numbers: list[int] | None = None,
+        label: str = "text",
+    ) -> None:
+        self.label = label
+        self.text = text
+        resolved_pages = page_numbers if page_numbers is not None else [page_no]
+        self.prov = [
+            FakeProvenance(page_number) for page_number in resolved_pages if page_number is not None
+        ]
+
+
+class FakeTableItem:
+    label = "table"
+
+    def __init__(self, markdown: str, page_no: int | None) -> None:
+        self._markdown = markdown
+        self.prov = [FakeProvenance(page_no)] if page_no is not None else []
+
+    def export_to_markdown(self, doc: object | None = None) -> str:
+        return self._markdown
+
+
+class FakePictureItem:
+    label = "picture"
+
+    def __init__(self, page_no: int) -> None:
+        self.prov = [FakeProvenance(page_no)]
+
+
+class FakeDoclingDocument:
+    def __init__(self, items: list[object]) -> None:
+        self._items = items
+
+    def iterate_items(self, *args: object, **kwargs: object) -> list[tuple[object, int]]:
+        return [(item, 0) for item in self._items]
 
 
 class FakeHybridChunker:
@@ -72,6 +123,84 @@ def test_supported_markdown_chunkers_lists_default_docling_aliases() -> None:
         "docling-hybrid",
         "docling-page-aware",
     )
+
+
+def test_docling_page_aware_chunker_requires_native_document() -> None:
+    chunker = resolve_markdown_chunker("docling-page-aware")
+
+    assert isinstance(chunker, DoclingPageAwareChunker)
+    assert chunker.requires_native_document is True
+    with pytest.raises(ValueError, match="requires parser-native"):
+        chunker.chunk(_chunking_input("# Warranty\nContent"))
+
+
+def test_docling_page_aware_chunker_maps_docling_provenance_to_page_metadata() -> None:
+    native_document = FakeDoclingDocument(
+        [
+            FakeTextItem("# Warranty\nPin VF8 duoc bao hanh 8 nam.", page_no=2),
+            FakePictureItem(page_no=2),
+            FakeTextItem("# Service\nBao duong tai showroom.", page_no=3),
+            FakeTableItem("| A | B |\n|---|---|\n| 1 | 2 |", page_no=4),
+        ]
+    )
+    chunker = resolve_markdown_chunker("docling-page-aware")
+
+    chunks = chunker.chunk(_chunking_input("", native_document=native_document))
+
+    assert [chunk.metadata["page"] for chunk in chunks] == [2, 3, 4]
+    assert [chunk.metadata["page_range"] for chunk in chunks] == [[2, 2], [3, 3], [4, 4]]
+    assert chunks[0].section == "Warranty"
+    assert chunks[0].text == "Pin VF8 duoc bao hanh 8 nam."
+    assert chunks[1].section == "Service"
+    assert chunks[2].text == "| A | B |\n|---|---|\n| 1 | 2 |"
+
+
+def test_docling_page_aware_chunker_preserves_multi_page_provenance() -> None:
+    native_document = FakeDoclingDocument(
+        [
+            FakeTextItem(
+                "# Warranty\nPolicy spans pages.",
+                page_numbers=[2, 3],
+            )
+        ]
+    )
+    chunker = resolve_markdown_chunker("docling-page-aware")
+
+    chunks = chunker.chunk(_chunking_input("", native_document=native_document))
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["page"] == 2
+    assert chunks[0].metadata["pages"] == [2, 3]
+    assert chunks[0].metadata["page_range"] == [2, 3]
+
+
+def test_docling_page_aware_chunker_converts_native_headings_to_markdown() -> None:
+    native_document = FakeDoclingDocument(
+        [
+            FakeTextItem("Warranty", page_no=2, label="title"),
+            FakeTextItem("Battery", page_no=2, label="section_header"),
+            FakeTextItem("Pin VF8 duoc bao hanh 8 nam.", page_no=2),
+        ]
+    )
+    chunker = resolve_markdown_chunker("docling-page-aware")
+
+    chunks = chunker.chunk(_chunking_input("", native_document=native_document))
+
+    assert len(chunks) == 1
+    assert chunks[0].section == "Battery"
+    assert chunks[0].text == "Pin VF8 duoc bao hanh 8 nam."
+    assert chunks[0].metadata["page"] == 2
+
+
+def test_docling_page_aware_chunker_keeps_chunks_when_provenance_is_missing() -> None:
+    native_document = FakeDoclingDocument([FakeTextItem("# Warranty\nNoi dung.", page_no=None)])
+    chunker = resolve_markdown_chunker("docling-page-aware")
+
+    chunks = chunker.chunk(_chunking_input("", native_document=native_document))
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata == {"page": None}
+    assert chunks[0].text == "Noi dung."
 
 
 def test_docling_hybrid_chunker_requires_native_document() -> None:

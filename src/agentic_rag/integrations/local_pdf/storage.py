@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from psycopg.types.json import Jsonb
 
@@ -23,6 +25,15 @@ class StoredSourceDocument:
     source: str
     total_chunks: int
     metadata: dict[str, object]
+
+
+@dataclass(frozen=True)
+class StoredRawSource:
+    """Raw source bytes plus the content type needed by the API response."""
+
+    content: bytes
+    content_type: str
+    name: str
 
 
 class LocalSourceStore(Protocol):
@@ -60,6 +71,238 @@ class LocalSourceStore(Protocol):
 
     def delete_all_documents(self) -> int:
         """Delete all source documents and chunks. Returns number of deleted documents."""
+
+
+class S3LocalSourceStore:
+    """Store source documents, chunks, and artifacts in S3-compatible object storage."""
+
+    def __init__(self, *, bucket: str, prefix: str = "", client: Any | None = None) -> None:
+        if not bucket.strip():
+            raise ValueError("S3 source store requires AWS_S3_BUCKET.")
+        self._bucket = bucket.strip()
+        self._prefix = _normalize_s3_prefix(prefix)
+        self._client: Any = client or _s3_client_from_env()
+
+    @classmethod
+    def from_env(cls) -> S3LocalSourceStore:
+        """Create an S3 source store from environment variables."""
+
+        import os
+
+        return cls(
+            bucket=os.getenv("AWS_S3_BUCKET", "").strip(),
+            prefix=os.getenv("AWS_S3_PREFIX", "").strip(),
+        )
+
+    def write_document(
+        self,
+        *,
+        document_id: str,
+        dataset_id: str,
+        name: str,
+        source_type: str,
+        source: str,
+        raw_path: Path | None,
+        markdown_path: Path | None,
+        metadata: dict[str, object],
+        chunks: list[Chunk],
+    ) -> None:
+        base_key = self._document_prefix(document_id)
+        raw_key = self._write_raw_source(
+            base_key=base_key,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+        )
+        markdown_key = None
+        if markdown_path is not None and markdown_path.exists():
+            markdown_key = f"{base_key}/parsed/document.md"
+            self._put_bytes(
+                markdown_key,
+                markdown_path.read_bytes(),
+                content_type="text/markdown; charset=utf-8",
+            )
+
+        chunks_key = f"{base_key}/chunks/chunks.jsonl"
+        chunks_payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
+        self._put_bytes(
+            chunks_key,
+            f"{chunks_payload}\n".encode() if chunks_payload else b"",
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+
+        now = datetime.now(UTC).isoformat()
+        manifest = {
+            "document_id": document_id,
+            "dataset_id": dataset_id,
+            "provider": "local_pdf",
+            "name": name,
+            "source_type": source_type,
+            "source": source,
+            "total_chunks": len(chunks),
+            "created_at": now,
+            "updated_at": now,
+            "raw_key": raw_key,
+            "markdown_key": markdown_key,
+            "chunks_key": chunks_key,
+            "metadata": metadata,
+        }
+        self._put_json(f"{base_key}/manifest.json", manifest)
+
+    def read_chunks(self, document_id: str) -> list[Chunk]:
+        manifest = self._read_manifest(document_id)
+        if manifest is None:
+            return []
+        chunks_key = _manifest_text(manifest, "chunks_key")
+        if not chunks_key:
+            return []
+        return _chunks_from_jsonl(self._get_bytes(chunks_key).decode())
+
+    def read_all_chunks(self) -> list[Chunk]:
+        return [
+            chunk
+            for document in self.list_documents()
+            for chunk in self.read_chunks(document.document_id)
+        ]
+
+    def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+        return [chunk for document_id in document_ids for chunk in self.read_chunks(document_id)]
+
+    def list_documents(self) -> list[StoredSourceDocument]:
+        documents: list[StoredSourceDocument] = []
+        for key in self._list_keys(self._prefix):
+            if not key.endswith("/manifest.json"):
+                continue
+            manifest = json.loads(self._get_bytes(key).decode())
+            if not isinstance(manifest, dict):
+                continue
+            documents.append(_stored_document_from_manifest(manifest))
+        return sorted(
+            documents,
+            key=lambda document: str(document.metadata.get("updated_at") or ""),
+            reverse=True,
+        )
+
+    def read_markdown(self, document_id: str) -> str:
+        manifest = self._read_manifest(document_id)
+        if manifest is None:
+            return ""
+        markdown_key = _manifest_text(manifest, "markdown_key")
+        if not markdown_key:
+            return ""
+        return self._get_bytes(markdown_key).decode()
+
+    def read_raw(self, document_id: str) -> StoredRawSource:
+        manifest = self._read_manifest(document_id)
+        if manifest is None:
+            raise ValueError(f"Raw source file is not available: {document_id}")
+        raw_key = _manifest_text(manifest, "raw_key")
+        if not raw_key:
+            raise ValueError(f"Raw source file is not available: {document_id}")
+        source_type = _manifest_text(manifest, "source_type") or "pdf"
+        return StoredRawSource(
+            content=self._get_bytes(raw_key),
+            content_type=_content_type_for_source(source_type),
+            name=_manifest_text(manifest, "name") or document_id,
+        )
+
+    def delete_document(self, document_id: str) -> None:
+        prefix = f"{self._document_prefix(document_id)}/"
+        keys = self._list_keys(prefix)
+        if not keys:
+            raise ValueError(f"Document {document_id!r} not found in store.")
+        self._delete_keys(keys)
+
+    def delete_all_documents(self) -> int:
+        keys = self._list_keys(self._prefix)
+        manifest_keys = [key for key in keys if key.endswith("/manifest.json")]
+        if keys:
+            self._delete_keys(keys)
+        return len(manifest_keys)
+
+    def _document_prefix(self, document_id: str) -> str:
+        safe_document_id = _safe_s3_segment(document_id)
+        return f"{self._prefix}{safe_document_id}" if self._prefix else safe_document_id
+
+    def _read_manifest(self, document_id: str) -> dict[str, object] | None:
+        key = f"{self._document_prefix(document_id)}/manifest.json"
+        try:
+            payload = json.loads(self._get_bytes(key).decode())
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _write_raw_source(
+        self,
+        *,
+        base_key: str,
+        source_type: str,
+        source: str,
+        raw_path: Path | None,
+    ) -> str:
+        suffix = "source.pdf" if source_type == "pdf" else "source.txt"
+        raw_key = f"{base_key}/raw/{suffix}"
+        if raw_path is not None and raw_path.exists():
+            payload = raw_path.read_bytes()
+        else:
+            payload = source.encode()
+        self._put_bytes(raw_key, payload, content_type=_content_type_for_source(source_type))
+        return raw_key
+
+    def _put_json(self, key: str, payload: dict[str, object]) -> None:
+        self._put_bytes(
+            key,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True).encode(),
+            content_type="application/json; charset=utf-8",
+        )
+
+    def _put_bytes(self, key: str, payload: bytes, *, content_type: str) -> None:
+        self._client.put_object(
+            Bucket=self._bucket,
+            Key=key,
+            Body=payload,
+            ContentType=content_type,
+        )
+
+    def _get_bytes(self, key: str) -> bytes:
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        body = response["Body"]
+        payload = body.read()
+        return payload if isinstance(payload, bytes) else bytes(payload)
+
+    def _list_keys(self, prefix: str) -> list[str]:
+        keys: list[str] = []
+        continuation_token: str | None = None
+        while True:
+            kwargs = {"Bucket": self._bucket, "Prefix": prefix}
+            if continuation_token is not None:
+                kwargs["ContinuationToken"] = continuation_token
+            response = self._client.list_objects_v2(**kwargs)
+            if not isinstance(response, dict):
+                return keys
+            contents = response.get("Contents", [])
+            if isinstance(contents, list):
+                keys.extend(
+                    str(item["Key"])
+                    for item in contents
+                    if isinstance(item, dict) and "Key" in item
+                )
+            if not response.get("IsTruncated"):
+                return keys
+            raw_token = response.get("NextContinuationToken")
+            if not isinstance(raw_token, str) or not raw_token:
+                raise RuntimeError(
+                    "S3 returned a truncated object listing without a continuation token."
+                )
+            continuation_token = raw_token
+
+    def _delete_keys(self, keys: list[str]) -> None:
+        for start in range(0, len(keys), 1000):
+            batch = keys[start : start + 1000]
+            self._client.delete_objects(
+                Bucket=self._bucket,
+                Delete={"Objects": [{"Key": key} for key in batch]},
+            )
 
 
 class PostgresLocalSourceStore:
@@ -317,6 +560,67 @@ def _psycopg_connection_string(connection: str) -> str:
     if connection.startswith("postgres+psycopg://"):
         return f"postgres://{connection.removeprefix('postgres+psycopg://')}"
     return connection
+
+
+def _s3_client_from_env() -> Any:
+    try:
+        import boto3
+    except ImportError as exc:
+        raise RuntimeError("LOCAL_SOURCE_STORE=s3 requires boto3 to be installed.") from exc
+
+    return boto3.client("s3")  # type: ignore[no-untyped-call]
+
+
+def _normalize_s3_prefix(prefix: str) -> str:
+    normalized = prefix.strip().strip("/")
+    return f"{normalized}/" if normalized else ""
+
+
+def _safe_s3_segment(value: str) -> str:
+    import re
+
+    cleaned = re.sub(r"[^A-Za-z0-9._:-]+", "-", value.strip()).strip("-")
+    if not cleaned:
+        raise ValueError("S3 document id cannot be empty.")
+    return cleaned
+
+
+def _manifest_text(manifest: dict[str, object], key: str) -> str | None:
+    value = manifest.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _stored_document_from_manifest(manifest: dict[str, object]) -> StoredSourceDocument:
+    metadata = manifest.get("metadata")
+    document_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    updated_at = manifest.get("updated_at")
+    if isinstance(updated_at, str):
+        document_metadata.setdefault("updated_at", updated_at)
+    total_chunks = manifest.get("total_chunks")
+    return StoredSourceDocument(
+        document_id=str(manifest.get("document_id") or ""),
+        dataset_id=str(manifest.get("dataset_id") or ""),
+        name=str(manifest.get("name") or ""),
+        source_type=str(manifest.get("source_type") or ""),
+        source=str(manifest.get("source") or ""),
+        total_chunks=total_chunks if isinstance(total_chunks, int) else 0,
+        metadata=document_metadata,
+    )
+
+
+def _chunks_from_jsonl(payload: str) -> list[Chunk]:
+    chunks: list[Chunk] = []
+    for line in payload.splitlines():
+        stripped = line.strip()
+        if stripped:
+            chunks.append(Chunk.model_validate_json(stripped))
+    return chunks
+
+
+def _content_type_for_source(source_type: str) -> str:
+    if source_type == "pdf":
+        return "application/pdf"
+    return "text/plain; charset=utf-8"
 
 
 def _storage_chunk_id(*, chunk: Chunk, fallback_index: int) -> str:
