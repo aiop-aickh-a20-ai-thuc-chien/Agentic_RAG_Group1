@@ -97,6 +97,7 @@ module = [
     "langchain_huggingface.*",
     "langchain_postgres.*",
     "boto3.*",
+    "botocore.*",
     "langgraph.*",
     "langsmith.*",
     "qdrant_client.*",
@@ -105,4 +106,8 @@ follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
 module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["openpyxl", "openpyxl.*"]
 ignore_missing_imports = true

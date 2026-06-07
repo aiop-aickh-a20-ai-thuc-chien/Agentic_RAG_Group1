@@ -242,6 +242,11 @@ class LocalPdfEvidenceProvider:
         parse_latency_ms = _latency_ms(parse_started_at)
         # Deterministic document_id = chunk prefix so re-uploads overwrite (idempotent).
         document_id = _document_id_from_chunks(chunks, fallback=f"pdf_{short_hash(safe_filename)}")
+        if self._source_store is None:
+            final_pdf_path = self._files_dir / f"{_safe_document_id(document_id)}.pdf"
+            if pdf_path != final_pdf_path:
+                pdf_path.replace(final_pdf_path)
+                pdf_path = final_pdf_path
         markdown_path = self._write_markdown(
             document_id=document_id,
             markdown=parsed_markdown,
@@ -336,9 +341,7 @@ class LocalPdfEvidenceProvider:
         safe_name = _safe_url_filename(url)
 
         ingest_started_at = time.perf_counter()
-        debug_artifact_dir = (
-            None if self._source_store is not None else self._debug_dir / run_id
-        )
+        debug_artifact_dir = None if self._source_store is not None else self._debug_dir / run_id
         data_artifact_dir = None if self._source_store is not None else self._artifacts_dir
         loaded_url = load_url_with_artifacts(
             url,
@@ -465,9 +468,7 @@ class LocalPdfEvidenceProvider:
         chunks = load_text_chunks(
             text,
             source=safe_name,
-            debug_artifact_dir=None
-            if self._source_store is not None
-            else self._debug_dir / run_id,
+            debug_artifact_dir=None if self._source_store is not None else self._debug_dir / run_id,
             data_artifact_dir=None if self._source_store is not None else self._artifacts_dir,
             run_id=run_id,
         )

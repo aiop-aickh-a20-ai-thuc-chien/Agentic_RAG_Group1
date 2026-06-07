@@ -61,7 +61,7 @@ class EvaluationRunner:
     def run(self) -> None:
         """Execute the evaluation pipeline."""
         try:
-            import openpyxl  # type: ignore[import-untyped]
+            import openpyxl
         except ImportError as exc:
             raise RuntimeError(
                 "Evaluation runner requires openpyxl. "

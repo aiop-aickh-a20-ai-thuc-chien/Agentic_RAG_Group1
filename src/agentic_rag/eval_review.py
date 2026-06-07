@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 import time
@@ -61,6 +62,7 @@ def _invalidate_rows_cache() -> None:
     _rows_cache["mtime"] = None
     _rows_cache["rows"] = None
 
+
 # ── Per-row eval queue (Excel-backed) ────────────────────────────────────────
 # eval_queue.xlsx is the single source of truth. Worker polls it every 3s.
 # Columns: excel_row | force | status | enqueued_at
@@ -69,8 +71,8 @@ _QUEUE_SHEET = "Queue"
 _QUEUE_COLS = ["excel_row", "force", "status", "enqueued_at"]
 
 _row_status: dict[int, dict[str, Any]] = {}  # fast in-memory cache for status API
-_queue_lock = threading.Lock()               # protects eval_queue.xlsx
-_worker_lock = threading.Lock()              # protects _worker_thread
+_queue_lock = threading.Lock()  # protects eval_queue.xlsx
+_worker_lock = threading.Lock()  # protects _worker_thread
 _worker_thread: threading.Thread | None = None
 
 
@@ -222,19 +224,14 @@ def _load_wb() -> openpyxl.Workbook:
 def _save_wb(wb: openpyxl.Workbook) -> None:
     """Save main workbook then overwrite the rolling backup copy."""
     import shutil
+
     wb.save(EXCEL_PATH)
-    try:
+    with contextlib.suppress(Exception):
         shutil.copy2(EXCEL_PATH, BACKUP_PATH)
-    except Exception:
-        pass
 
 
 def _read_header(ws: Any) -> dict[str, int]:
-    return {
-        cell.value: idx
-        for idx, cell in enumerate(ws[HEADER_ROW], start=1)
-        if cell.value
-    }
+    return {cell.value: idx for idx, cell in enumerate(ws[HEADER_ROW], start=1) if cell.value}
 
 
 def _ensure_review_status_col(ws: Any, header: dict[str, int]) -> bool:
@@ -276,7 +273,7 @@ def _read_all_rows() -> list[dict[str, Any]]:
     with _file_lock:
         mtime = EXCEL_PATH.stat().st_mtime if EXCEL_PATH.exists() else None
         if mtime is not None and _rows_cache["mtime"] == mtime and _rows_cache["rows"] is not None:
-            return _rows_cache["rows"]
+            return _rows_cache["rows"]  # type: ignore[no-any-return]
 
         try:
             wb = _load_wb()
@@ -284,7 +281,7 @@ def _read_all_rows() -> list[dict[str, Any]]:
             if exc.status_code == 503:
                 fallback = _rows_cache["rows"] or _rows_cache["last_good"]
                 if fallback is not None:
-                    return fallback
+                    return fallback  # type: ignore[no-any-return]
             raise
         ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
         header = _read_header(ws)
@@ -312,7 +309,7 @@ def _read_all_rows() -> list[dict[str, Any]]:
 
 
 @router.get("/api/rows")
-def get_rows(slim: bool = False) -> list[dict]:
+def get_rows(slim: bool = False) -> list[dict[str, Any]]:
     rows = _read_all_rows()
     if slim:
         return [{"excel_row": r["excel_row"], **{k: r.get(k) for k in _SLIM_FIELDS}} for r in rows]
@@ -320,7 +317,7 @@ def get_rows(slim: bool = False) -> list[dict]:
 
 
 @router.patch("/api/rows/{excel_row}")
-def update_row(excel_row: int, update: RowUpdate) -> dict:
+def update_row(excel_row: int, update: RowUpdate) -> dict[str, Any]:
     with _file_lock:
         wb = _load_wb()
         ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
@@ -342,7 +339,7 @@ def update_row(excel_row: int, update: RowUpdate) -> dict:
 
 
 @router.post("/api/rows/{excel_row}/approve")
-def approve_row(excel_row: int) -> dict:
+def approve_row(excel_row: int) -> dict[str, Any]:
     with _file_lock:
         wb = _load_wb()
         ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
@@ -358,7 +355,7 @@ def approve_row(excel_row: int) -> dict:
 
 
 @router.post("/api/rows/{excel_row}/approve-and-eval")
-def approve_and_eval_row(excel_row: int) -> dict:
+def approve_and_eval_row(excel_row: int) -> dict[str, Any]:
     """Approve a row and enqueue it for pipeline evaluation. Returns immediately."""
     with _file_lock:
         wb = _load_wb()
@@ -382,7 +379,7 @@ def approve_and_eval_row(excel_row: int) -> dict:
 
 
 @router.post("/api/rows/{excel_row}/re-eval")
-def re_eval_row(excel_row: int) -> dict:
+def re_eval_row(excel_row: int) -> dict[str, Any]:
     """Re-evaluate an already-evaluated row (force=True bypasses the skip check)."""
     with _file_lock:
         wb = _load_wb()
@@ -400,12 +397,12 @@ def re_eval_row(excel_row: int) -> dict:
 
 
 @router.get("/api/rows/{excel_row}/eval-status")
-def get_row_eval_status(excel_row: int) -> dict:
+def get_row_eval_status(excel_row: int) -> dict[str, Any]:
     return _row_status.get(excel_row, {"status": "idle", "message": ""})
 
 
 @router.get("/api/eval/active-status")
-def get_active_eval_status() -> dict:
+def get_active_eval_status() -> dict[str, Any]:
     """Return status of all rows currently queued/running — one call replaces N polls."""
     return {
         str(row): status
@@ -451,18 +448,30 @@ threading.Thread(target=_eval_worker_loop, daemon=True).start()
 
 
 _EVAL_OUTPUT_COLS = {
-    "rag_input", "rag_context", "bot_response", "bot_citations", "trace_url",
-    "retrieved_top5_ids", "ground_truth_rank", "recall_at_5", "mrr_at_5",
-    "citation_chunk_match", "guardrail_pass",
-    "ragas_faithfulness", "ragas_answer_relevancy",
-    "ragas_context_precision", "ragas_context_recall",
+    "rag_input",
+    "rag_context",
+    "bot_response",
+    "bot_citations",
+    "trace_url",
+    "retrieved_top5_ids",
+    "ground_truth_rank",
+    "recall_at_5",
+    "mrr_at_5",
+    "citation_chunk_match",
+    "guardrail_pass",
+    "ragas_faithfulness",
+    "ragas_answer_relevancy",
+    "ragas_context_precision",
+    "ragas_context_recall",
 }
 
 
 def _run_single_row_eval(excel_row: int, *, force: bool = False) -> None:
     """Run EvaluationRunner on a temp copy, then merge only eval columns back under lock."""
     import shutil
+
     from agentic_rag.runtime_env import load_local_env
+
     load_local_env()
 
     from agentic_rag.evaluation.runner import EvaluationRunner
@@ -511,7 +520,7 @@ def _run_single_row_eval(excel_row: int, *, force: bool = False) -> None:
 
 
 @router.post("/api/rows/{excel_row}/reject")
-def reject_row(excel_row: int) -> dict:
+def reject_row(excel_row: int) -> dict[str, Any]:
     with _file_lock:
         wb = _load_wb()
         ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
@@ -537,24 +546,20 @@ def reject_row(excel_row: int) -> dict:
 
 
 @router.get("/api/rejected")
-def get_rejected_rows() -> list[dict]:
+def get_rejected_rows() -> list[dict[str, Any]]:
     if not REJECT_PATH.exists():
         return []
 
     with _file_lock:
         rb = openpyxl.load_workbook(REJECT_PATH, read_only=True, data_only=True)
         rws = rb["Rejected"] if "Rejected" in rb.sheetnames else rb.active
-        header = {
-            cell.value: idx
-            for idx, cell in enumerate(rws[1], start=1)
-            if cell.value
-        }
+        header = {cell.value: idx for idx, cell in enumerate(rws[1], start=1) if cell.value}
         q_col = header.get("question", 1)
         rows = []
         for reject_row in range(2, rws.max_row + 1):
             if not rws.cell(row=reject_row, column=q_col).value:
                 continue
-            row = {"reject_row": reject_row, "excel_row": reject_row}
+            row: dict[str, Any] = {"reject_row": reject_row, "excel_row": reject_row}
             for col_name, col_idx in header.items():
                 row[col_name] = rws.cell(row=reject_row, column=col_idx).value
             row["display_status"] = "deleted"
@@ -564,7 +569,7 @@ def get_rejected_rows() -> list[dict]:
 
 
 @router.post("/api/rejected/{reject_row}/restore")
-def restore_rejected_row(reject_row: int) -> dict:
+def restore_rejected_row(reject_row: int) -> dict[str, Any]:
     if reject_row < 2:
         raise HTTPException(status_code=404, detail="Rejected row not found")
     if not REJECT_PATH.exists():
@@ -577,11 +582,7 @@ def restore_rejected_row(reject_row: int) -> dict:
             rb.close()
             raise HTTPException(status_code=404, detail="Rejected row not found")
 
-        reject_header = {
-            cell.value: idx
-            for idx, cell in enumerate(rws[1], start=1)
-            if cell.value
-        }
+        reject_header = {cell.value: idx for idx, cell in enumerate(rws[1], start=1) if cell.value}
         q_col = reject_header.get("question", 1)
         if not rws.cell(row=reject_row, column=q_col).value:
             rb.close()
@@ -635,7 +636,7 @@ def restore_rejected_row(reject_row: int) -> dict:
         return {"ok": True, "restored_row": result}
 
 
-def _append_to_reject(row_data: dict, header: dict[str, int]) -> None:
+def _append_to_reject(row_data: dict[str, Any], header: dict[str, int]) -> None:
     col_names = [k for k, _ in sorted(header.items(), key=lambda x: x[1])]
 
     if REJECT_PATH.exists():
@@ -657,7 +658,7 @@ def _append_to_reject(row_data: dict, header: dict[str, int]) -> None:
 
 
 @router.post("/api/eval/run")
-def run_eval(config: RunConfig) -> dict:
+def run_eval(config: RunConfig) -> dict[str, Any]:
     global _job
     if _job["status"] == "running":
         raise HTTPException(status_code=409, detail="Evaluation already running")
@@ -670,9 +671,7 @@ def run_eval(config: RunConfig) -> dict:
         "message": "Starting...",
     }
 
-    thread = threading.Thread(
-        target=_run_eval_job, args=(config.run_ragas,), daemon=True
-    )
+    thread = threading.Thread(target=_run_eval_job, args=(config.run_ragas,), daemon=True)
     thread.start()
     return {"message": "Evaluation started"}
 
@@ -685,8 +684,7 @@ def _run_eval_job(run_ragas: bool) -> None:
         _job["message"] = "Counting approved rows..."
         rows = _read_all_rows()
         approved = [
-            r for r in rows
-            if r.get("review_status") == "approved" and not r.get("bot_response")
+            r for r in rows if r.get("review_status") == "approved" and not r.get("bot_response")
         ]
         _job["total"] = len(approved)
 
@@ -708,9 +706,7 @@ def _run_eval_job(run_ragas: bool) -> None:
         _invalidate_rows_cache()
 
         _job["status"] = "done"
-        _job["message"] = (
-            f"Done! {_job['progress']}/{_job['total']} rows evaluated."
-        )
+        _job["message"] = f"Done! {_job['progress']}/{_job['total']} rows evaluated."
 
     except Exception as exc:
         _job["status"] = "error"
@@ -732,7 +728,7 @@ _qdrant_cache_lock = threading.Lock()
 _QDRANT_CACHE_TTL = 60  # seconds
 
 
-def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict]:
+def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict[str, Any]]:
     """Return every chunk payload in the collection, cached for _QDRANT_CACHE_TTL.
 
     document_id in Qdrant is a random local_url_<uuid>; the deterministic
@@ -742,9 +738,9 @@ def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict]:
     now = time.monotonic()
     with _qdrant_cache_lock:
         if _qdrant_cache["payloads"] and (now - _qdrant_cache["at"]) < _QDRANT_CACHE_TTL:
-            return _qdrant_cache["payloads"]
+            return _qdrant_cache["payloads"]  # type: ignore[no-any-return]
 
-    payloads: list[dict] = []
+    payloads: list[dict[str, Any]] = []
     offset = None
     while True:
         batch, offset = client.scroll(
@@ -765,7 +761,7 @@ def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict]:
 
 
 @router.get("/api/doc-chunks")
-def get_doc_chunks(chunk_id: str) -> dict:
+def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
     """Query vector store metadata for all chunks from the same document.
 
     Supports both pgvector (langchain_pg_embedding) and Qdrant Cloud backends,
@@ -775,6 +771,7 @@ def get_doc_chunks(chunk_id: str) -> dict:
     import re
 
     from agentic_rag.runtime_env import load_local_env
+
     load_local_env()
 
     # chunk_id = "url_9dd8e94fee25_section_c001" → doc_prefix = "url_9dd8e94fee25"
@@ -811,10 +808,12 @@ def get_doc_chunks(chunk_id: str) -> dict:
             points, _ = client.scroll(
                 collection_name=collection_name,
                 scroll_filter=qmodels.Filter(
-                    must=[qmodels.FieldCondition(
-                        key="document_id",
-                        match=qmodels.MatchValue(value=doc_prefix),
-                    )]
+                    must=[
+                        qmodels.FieldCondition(
+                            key="document_id",
+                            match=qmodels.MatchValue(value=doc_prefix),
+                        )
+                    ]
                 ),
                 limit=500,
                 with_payload=True,
@@ -826,7 +825,8 @@ def get_doc_chunks(chunk_id: str) -> dict:
                 # scan the cached payloads and prefix-match storage_chunk_id.
                 prefix = f"{doc_prefix}_"
                 matched = [
-                    p for p in _all_qdrant_payloads(client, collection_name)
+                    p
+                    for p in _all_qdrant_payloads(client, collection_name)
                     if str(p.get("storage_chunk_id") or p.get("chunk_id") or "").startswith(prefix)
                 ]
         except Exception as exc:
@@ -847,7 +847,7 @@ def get_doc_chunks(chunk_id: str) -> dict:
                 }
                 for p in matched
             ],
-            key=lambda c: _chunk_index(c["chunk_id"]),
+            key=lambda c: _chunk_index(str(c["chunk_id"])),
         )
         return {"document_id": doc_prefix, "found": True, "chunks": chunks}
 
@@ -882,10 +882,11 @@ def get_doc_chunks(chunk_id: str) -> dict:
     if not rows:
         return {"document_id": doc_prefix, "found": False, "chunks": []}
 
-    def _parse_meta(raw: Any) -> dict:
+    def _parse_meta(raw: Any) -> dict[str, Any]:
         if isinstance(raw, str):
             import json as _json
-            return _json.loads(raw)
+
+            return _json.loads(raw)  # type: ignore[no-any-return]
         return raw or {}
 
     chunks = sorted(
@@ -900,15 +901,16 @@ def get_doc_chunks(chunk_id: str) -> dict:
             }
             for text, meta in rows
         ],
-        key=lambda c: _chunk_index(c["chunk_id"]),
+        key=lambda c: _chunk_index(str(c["chunk_id"])),
     )
     return {"document_id": doc_prefix, "found": True, "chunks": chunks}
 
 
 @router.get("/api/chunks")
-def get_chunks(q: str) -> list[dict]:
+def get_chunks(q: str) -> list[dict[str, Any]]:
     try:
         from agentic_rag.runtime_env import load_local_env
+
         load_local_env()
 
         from agentic_rag.generation.evidence import evidence_for_question

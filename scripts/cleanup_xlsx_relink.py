@@ -2,20 +2,33 @@
 Delete 10 rows (missing chunk IDs) from result.xlsx, renumber IDs,
 and remove failed URLs from _relink.txt.
 """
-import sys, io
+
+import io
+import sys
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-from pathlib import Path
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from pathlib import Path  # noqa: E402
 
-XLSX_PATH    = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\guide\reports\result.xlsx"
-RELINK_PATH  = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt"
-FAILED_PATH  = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\scripts\upload_failed.txt"
+import openpyxl  # noqa: E402
+
+XLSX_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\guide\reports\result.xlsx"
+RELINK_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt"
+FAILED_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\scripts\upload_failed.txt"
 
 # IDs to delete
-DELETE_IDS = {"Q694", "Q792", "Q1488", "Q1489", "Q1493", "Q1495",
-              "Q1499", "Q1506", "Q1915", "Q2095"}
+DELETE_IDS = {
+    "Q694",
+    "Q792",
+    "Q1488",
+    "Q1489",
+    "Q1493",
+    "Q1495",
+    "Q1499",
+    "Q1506",
+    "Q1915",
+    "Q2095",
+}
 
 # ── Load xlsx ─────────────────────────────────────────────────────────────────
 print("Loading result.xlsx ...")
@@ -43,7 +56,8 @@ for row_idx in range(header_row_idx + 1, ws.max_row + 1):
     if val and str(val).strip() in DELETE_IDS:
         rows_to_delete.append(row_idx)
 
-print(f"  Found {len(rows_to_delete)} rows to delete: {[ws.cell(r, id_col).value for r in rows_to_delete]}")
+ids = [ws.cell(r, id_col).value for r in rows_to_delete]
+print(f"  Found {len(rows_to_delete)} rows to delete: {ids}")
 
 # Delete rows in reverse order (so indices don't shift)
 for row_idx in reversed(rows_to_delete):
@@ -58,7 +72,9 @@ for row_idx in range(header_row_idx + 1, ws.max_row + 1):
     cell = ws.cell(row=row_idx, column=id_col)
     if cell.value is not None or row_idx <= ws.max_row:
         # Only renumber data rows (skip if entire row is empty)
-        row_vals = [ws.cell(row=row_idx, column=c).value for c in range(1, min(6, ws.max_column + 1))]
+        row_vals = [
+            ws.cell(row=row_idx, column=c).value for c in range(1, min(6, ws.max_column + 1))
+        ]
         if any(v is not None for v in row_vals):
             cell.value = f"Q{counter}"
             counter += 1

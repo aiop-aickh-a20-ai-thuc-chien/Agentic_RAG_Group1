@@ -18,7 +18,7 @@ PRICE_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*$")
-BREADCRUMB_SEP_RE = re.compile(r"\s[/›»>·•]\s|\s\|\s")
+BREADCRUMB_SEP_RE = re.compile(r"\s[/›»>·•]\s|\s\|\s")  # noqa: RUF001
 RELATED_SECTION_RE = re.compile(
     r"\b("
     r"san pham tuong tu|sản phẩm tương tự|related|similar|recommended|"

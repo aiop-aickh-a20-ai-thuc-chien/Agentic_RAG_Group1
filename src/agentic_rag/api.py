@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import warnings
+from typing import Any
 
 warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
 import time  # noqa: E402
@@ -192,9 +193,7 @@ def _allowed_cors_origins() -> list[str]:
         "http://127.0.0.1:3001",
     ]
     extra = os.getenv("CORS_ALLOW_ORIGINS", "")
-    origins.extend(
-        origin.strip().rstrip("/") for origin in extra.split(",") if origin.strip()
-    )
+    origins.extend(origin.strip().rstrip("/") for origin in extra.split(",") if origin.strip())
     return list(dict.fromkeys(origins))
 
 
@@ -209,12 +208,9 @@ api.add_middleware(
 
 
 @api.middleware("http")
-async def private_network_access(request: Request, call_next):
+async def private_network_access(request: Request, call_next: Any) -> Any:
     """Handle Chrome Private Network Access preflight."""
-    if (
-        request.method == "OPTIONS"
-        and "access-control-request-private-network" in request.headers
-    ):
+    if request.method == "OPTIONS" and "access-control-request-private-network" in request.headers:
         from starlette.responses import Response as StarletteResponse
 
         origin = request.headers.get("origin", "*")

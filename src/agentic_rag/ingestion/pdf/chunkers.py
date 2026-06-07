@@ -104,53 +104,6 @@ class DoclingHybridChunker:
         return chunks
 
 
-DOCLING_PAGE_AWARE_CHUNKER = "docling-page-aware"
-
-
-class DoclingPageAwareChunker:
-    """DoclingHybridChunker that also records page numbers in chunk metadata.
-
-    Adds ``pages`` and ``page_range`` to each chunk so that multimodal artifact
-    pipelines can map images/tables/charts to the correct chunks by page.
-    """
-
-    chunker_name = DOCLING_PAGE_AWARE_CHUNKER
-    requires_native_document = True
-
-    def __init__(self, hybrid_chunker_factory: Callable[[], Any] | None = None) -> None:
-        self._hybrid_chunker_factory = hybrid_chunker_factory or _default_hybrid_chunker_factory
-
-    def chunk(self, chunking_input: ChunkingInput) -> list[MarkdownChunk]:
-        if chunking_input.native_document is None:
-            raise ValueError("Docling page-aware chunking requires parser-native document output.")
-
-        hybrid_chunker = self._hybrid_chunker_factory()
-        chunks: list[MarkdownChunk] = []
-        for docling_chunk in hybrid_chunker.chunk(chunking_input.native_document):
-            raw_text = str(getattr(docling_chunk, "text", "")).strip()
-            section_path = _section_path_from_docling_chunk(docling_chunk)
-            text = str(hybrid_chunker.contextualize(docling_chunk)).strip()
-            if not text:
-                text = raw_text
-            if not text:
-                continue
-            pages = _pages_from_docling_chunk(docling_chunk)
-            page_range = [pages[0], pages[-1]] if pages else None
-            chunks.append(
-                MarkdownChunk(
-                    section=_section_from_section_path(section_path),
-                    text=text,
-                    metadata={
-                        "section_path": section_path,
-                        "raw_text": raw_text,
-                        "pages": pages,
-                        "page_range": page_range,
-                    },
-                )
-            )
-        return chunks
-
-
 class MarkdownChunkerDefinition(BaseModel):
     """Registered Markdown chunker factory."""
 
@@ -172,10 +125,6 @@ _MARKDOWN_CHUNKER_REGISTRY: dict[str, MarkdownChunkerDefinition] = {
     DOCLING_HYBRID_CHUNKER: MarkdownChunkerDefinition(
         name=DOCLING_HYBRID_CHUNKER,
         factory=DoclingHybridChunker,
-    ),
-    DOCLING_PAGE_AWARE_CHUNKER: MarkdownChunkerDefinition(
-        name=DOCLING_PAGE_AWARE_CHUNKER,
-        factory=DoclingPageAwareChunker,
     ),
 }
 

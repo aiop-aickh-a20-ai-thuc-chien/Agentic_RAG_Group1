@@ -76,7 +76,7 @@ class LocalSourceStore(Protocol):
 
 
 _LIST_CACHE_TTL = 60  # seconds
-_list_cache: dict[str, tuple[float, list["StoredSourceDocument"]]] = {}
+_list_cache: dict[str, tuple[float, list[StoredSourceDocument]]] = {}
 
 
 class S3LocalSourceStore:
@@ -186,14 +186,15 @@ class S3LocalSourceStore:
             return cached[1]
 
         manifest_keys = [
-            key for key in self._list_keys(self._prefix)
-            if key.endswith("/manifest.json")
+            key for key in self._list_keys(self._prefix) if key.endswith("/manifest.json")
         ]
 
         def _fetch(key: str) -> StoredSourceDocument | None:
             try:
                 manifest = json.loads(self._get_bytes(key).decode())
-                return _stored_document_from_manifest(manifest) if isinstance(manifest, dict) else None
+                return (
+                    _stored_document_from_manifest(manifest) if isinstance(manifest, dict) else None
+                )
             except Exception:
                 return None
 
@@ -205,13 +206,13 @@ class S3LocalSourceStore:
                 if result is not None:
                     documents.append(result)
 
-        result = sorted(
+        sorted_docs = sorted(
             documents,
             key=lambda document: str(document.metadata.get("updated_at") or ""),
             reverse=True,
         )
-        _list_cache[self._cache_key] = (time.monotonic(), result)
-        return result
+        _list_cache[self._cache_key] = (time.monotonic(), sorted_docs)
+        return sorted_docs
 
     def read_markdown(self, document_id: str) -> str:
         manifest = self._read_manifest(document_id)

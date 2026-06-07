@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import unicodedata
@@ -447,7 +448,6 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
 
     embedding_config = resolve_embedding_config()
     embedding = _configured_embedding()
-    client = _qdrant_client_from_env()
 
     try:
         from qdrant_client import models
@@ -456,14 +456,18 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
 
     embedding_profile: object = None
     collection = _configured_qdrant_collection()
+    client: Any = None
 
     for batch_start in range(0, len(chunks), batch_size):
         batch = chunks[batch_start : batch_start + batch_size]
         dense_vectors = _embed_documents(embedding, [c.text for c in batch])
 
+        if client is None:
+            client = _qdrant_client_from_env()
+
         if embedding_profile is None:
             embedding_profile = validate_embedding_vectors(dense_vectors, config=embedding_config)
-            _ensure_qdrant_collection(client=client, embedding_profile=embedding_profile)  # type: ignore[arg-type]
+            _ensure_qdrant_collection(client=client, embedding_profile=embedding_profile)
 
         points = []
         for local_idx, chunk in enumerate(batch):
@@ -589,15 +593,13 @@ def _ensure_qdrant_payload_indexes(*, client: Any, collection: str, models: Any)
     create_payload_index = getattr(client, "create_payload_index", None)
     if not callable(create_payload_index):
         return
-    try:
+    with contextlib.suppress(Exception):
         create_payload_index(
             collection_name=collection,
             field_name="document_id",
             field_schema=models.PayloadSchemaType.KEYWORD,
             wait=True,
         )
-    except Exception:
-        pass
 
 
 def _validate_qdrant_collection_info(
@@ -628,6 +630,7 @@ def _validate_qdrant_collection_info(
 
     try:
         from qdrant_client import models
+
         _ensure_qdrant_payload_indexes(client=client, collection=collection, models=models)
     except Exception:
         pass

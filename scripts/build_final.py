@@ -1,5 +1,9 @@
-import openpyxl, sys
+import contextlib
+import sys
 from pathlib import Path
+
+import openpyxl
+
 sys.stdout.reconfigure(encoding="utf-8")
 
 src = Path("guide/reports/result_final.xlsx")
@@ -7,16 +11,26 @@ wb = openpyxl.load_workbook(src)
 ws = wb.active
 
 headers = [c.value for c in next(ws.iter_rows(min_row=2, max_row=2))]
-col = {h: i+1 for i, h in enumerate(headers) if h}
+col = {h: i + 1 for i, h in enumerate(headers) if h}
 
-numeric_cols = ["recall_at_5","mrr_at_5","citation_chunk_match",
-                "ragas_faithfulness","ragas_answer_relevancy","ragas_context_precision","ragas_context_recall"]
+numeric_cols = [
+    "recall_at_5",
+    "mrr_at_5",
+    "citation_chunk_match",
+    "ragas_faithfulness",
+    "ragas_answer_relevancy",
+    "ragas_context_precision",
+    "ragas_context_recall",
+]
 
 vals = {c: [] for c in numeric_cols}
-total = 0; in_scope = 0; out_scope = 0
+total = 0
+in_scope = 0
+out_scope = 0
 
 for row in ws.iter_rows(min_row=3, values_only=True):
-    if not any(row): continue
+    if not any(row):
+        continue
     total += 1
     oos = row[col.get("is_out_of_scope", 1) - 1]
     if str(oos).upper() == "TRUE":
@@ -26,10 +40,8 @@ for row in ws.iter_rows(min_row=3, values_only=True):
     for c in numeric_cols:
         v = row[col[c] - 1] if c in col else None
         if v is not None:
-            try:
+            with contextlib.suppress(Exception):
                 vals[c].append(float(v))
-            except Exception:
-                pass
 
 # AVERAGE row
 avg_row = ["AVERAGE"] + [None] * (len(headers) - 1)
@@ -38,8 +50,10 @@ for c in numeric_cols:
         avg_row[col[c] - 1] = round(sum(vals[c]) / len(vals[c]), 4)
 ws.append(avg_row)
 
+
 def avg(lst):
     return round(sum(lst) / len(lst), 4) if lst else None
+
 
 # Summary sheet
 if "Summary" in wb.sheetnames:
@@ -55,12 +69,37 @@ summary_data = [
     ("Recall@5 (trung bình)", avg(vals["recall_at_5"]), ">= 0.70", "Trung bình recall_at_5"),
     ("MRR@5 (trung bình)", avg(vals["mrr_at_5"]), ">= 0.50", "Trung bình mrr_at_5"),
     ("", "", "", ""),
-    ("Citation Accuracy", avg(vals["citation_chunk_match"]), ">= 0.80", "Tỉ lệ citation khớp chunk"),
+    (
+        "Citation Accuracy",
+        avg(vals["citation_chunk_match"]),
+        ">= 0.80",
+        "Tỉ lệ citation khớp chunk",
+    ),
     ("", "", "", ""),
-    ("RAGAS Faithfulness", avg(vals["ragas_faithfulness"]), ">= 0.80", "Độ trung thực answer so với context"),
-    ("RAGAS Answer Relevancy", avg(vals["ragas_answer_relevancy"]), ">= 0.80", "Độ liên quan answer so với câu hỏi"),
-    ("RAGAS Context Precision", avg(vals["ragas_context_precision"]), ">= 0.80", "Tỉ lệ context hữu ích"),
-    ("RAGAS Context Recall", avg(vals["ragas_context_recall"]), ">= 0.80", "Khả năng retrieve đủ thông tin"),
+    (
+        "RAGAS Faithfulness",
+        avg(vals["ragas_faithfulness"]),
+        ">= 0.80",
+        "Độ trung thực answer so với context",
+    ),
+    (
+        "RAGAS Answer Relevancy",
+        avg(vals["ragas_answer_relevancy"]),
+        ">= 0.80",
+        "Độ liên quan answer so với câu hỏi",
+    ),
+    (
+        "RAGAS Context Precision",
+        avg(vals["ragas_context_precision"]),
+        ">= 0.80",
+        "Tỉ lệ context hữu ích",
+    ),
+    (
+        "RAGAS Context Recall",
+        avg(vals["ragas_context_recall"]),
+        ">= 0.80",
+        "Khả năng retrieve đủ thông tin",
+    ),
 ]
 
 ws_sum.append(("📊 Evaluation Summary (1002 rows)",))

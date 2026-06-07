@@ -1,23 +1,28 @@
 """Find which URLs the missing chunk IDs belong to in result.xlsx."""
-import sys, io, os
+
+import io
+import os
+import sys
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
+
 load_dotenv()
 
-import openpyxl
-from qdrant_client import QdrantClient
+import openpyxl  # noqa: E402
+from qdrant_client import QdrantClient  # noqa: E402
 
 XLSX_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\guide\reports\result.xlsx"
-RELINK    = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt"
+RELINK = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt"
 
 # Load xlsx
 wb = openpyxl.load_workbook(XLSX_PATH, read_only=True, data_only=True)
 ws = wb.active
 headers = [cell.value for cell in ws[2]]
-col_id    = headers.index("id")
+col_id = headers.index("id")
 col_chunk = headers.index("ground_truth_chunk_ids")
-col_doc   = headers.index("ground_truth_doc")
+col_doc = headers.index("ground_truth_doc")
 
 # Build: chunk_id -> (question_id, url)
 chunk_to_row: dict[str, tuple] = {}
@@ -50,10 +55,11 @@ missing = xlsx_chunk_ids - qdrant_chunk_ids
 
 # Load relink.txt
 relink_urls = set()
-for line in open(RELINK, encoding="utf-8"):
-    line = line.strip()
-    if line.startswith("http"):
-        relink_urls.add(line)
+with open(RELINK, encoding="utf-8") as _f:
+    for line in _f:
+        line = line.strip()
+        if line.startswith("http"):
+            relink_urls.add(line)
 
 print(f"Missing chunk IDs: {len(missing)}")
 print()

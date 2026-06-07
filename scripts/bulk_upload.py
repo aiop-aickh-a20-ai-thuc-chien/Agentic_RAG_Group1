@@ -7,7 +7,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -71,7 +70,7 @@ def main() -> None:
     # Pass 1
     print("\n=== PASS 1 ===", flush=True)
     failed = run_batch(urls, args.workers, "P1")
-    print(f"\nPass 1 done — {len(urls)-len(failed)} OK, {len(failed)} failed", flush=True)
+    print(f"\nPass 1 done — {len(urls) - len(failed)} OK, {len(failed)} failed", flush=True)
 
     # Retry failed
     if failed:
@@ -79,7 +78,11 @@ def main() -> None:
         time.sleep(args.retry_delay)
         print(f"\n=== PASS 2 (retry {len(failed)} URLs) ===", flush=True)
         still_failed = run_batch(failed, max(1, args.workers // 2), "P2")
-        print(f"\nPass 2 done — {len(failed)-len(still_failed)} recovered, {len(still_failed)} still failed", flush=True)
+        recovered = len(failed) - len(still_failed)
+        print(
+            f"\nPass 2 done — {recovered} recovered, {len(still_failed)} still failed",
+            flush=True,
+        )
 
         if still_failed:
             fail_path = Path("scripts/upload_failed.txt")

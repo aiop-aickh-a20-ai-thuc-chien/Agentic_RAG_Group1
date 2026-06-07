@@ -1,12 +1,14 @@
 """Monitor bulk_upload.py progress from its output file."""
-import sys
-import io
-import time
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-import re
-from pathlib import Path
 
-OUTPUT_FILE = r"C:\Users\ACER\AppData\Local\Temp\claude\c--Users-ACER-Downloads-Agentic-RAG-Group1\7cd79017-8e13-48b3-b435-9e096254977c\tasks\b9si1lm5l.output"
+import io
+import sys
+import time
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+import re  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+OUTPUT_FILE = ""
 TOTAL = 323
 
 
@@ -38,10 +40,10 @@ def read_progress(path: str) -> tuple[int, int, int, list[str], bool]:
 def bar(done: int, total: int, width: int = 40) -> str:
     pct = done / total if total else 0
     filled = int(width * pct)
-    return f"[{'#'*filled}{'-'*(width-filled)}] {done}/{total} ({pct*100:.1f}%)"
+    return f"[{'#' * filled}{'-' * (width - filled)}] {done}/{total} ({pct * 100:.1f}%)"
 
 
-print(f"Monitoring upload progress... (Ctrl+C to stop)")
+print("Monitoring upload progress... (Ctrl+C to stop)")
 try:
     while True:
         result = read_progress(OUTPUT_FILE)

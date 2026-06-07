@@ -13,19 +13,17 @@ from agentic_rag.ingestion.chunking.models import (
     MarkdownSection,
 )
 
-DEFAULT_CHUNK_SIZE = 2048  # 512 tokens × ~4 chars/token
+DEFAULT_CHUNK_SIZE = 2048  # 512 tokens x ~4 chars/token
 DEFAULT_CHUNK_OVERLAP = 0
 DEFAULT_PARAGRAPH_MAX_TOKENS = 512
 DEFAULT_PARAGRAPH_OVERLAP = 1
-DEFAULT_HIERARCHICAL_TARGET_MIN = 512  # 128 tokens × ~4 chars/token; min chars before coalescing
+DEFAULT_HIERARCHICAL_TARGET_MIN = 512  # 128 tokens x ~4 chars/token; min chars before coalescing
 DEFAULT_HIERARCHICAL_MIN_CHARS = 40
 
 _HEADING_RE = re.compile(r"^(?P<marker>#{1,6})(?!#)\s*(?P<title>.+?)\s*$")
-_SUBSECTION_NUMBER_RE = re.compile(
-    r"^\s*(?:-\s*)?(\d+(?:\.\d+)*?)[.)]\s+(.{3,120})$")
+_SUBSECTION_NUMBER_RE = re.compile(r"^\s*(?:-\s*)?(\d+(?:\.\d+)*?)[.)]\s+(.{3,120})$")
 _BOLD_LEAD_RE = re.compile(r"^\s*(?:-\s*)?\*\*(.{2,80}?)\*\*:?\s*$")
-_VIETNAMESE_MARKERS = set(
-    "ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
+_VIETNAMESE_MARKERS = set("ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
 
 
 class _TextChunkingStrategy(Protocol):
@@ -70,8 +68,7 @@ def split_markdown_into_sections(markdown: str) -> list[MarkdownSection]:
         flush_current(pos)
         heading_level = len(heading_match.group("marker"))
         heading_title = heading_match.group("title").strip()
-        heading_stack = [
-            heading for heading in heading_stack if heading[0] < heading_level]
+        heading_stack = [heading for heading in heading_stack if heading[0] < heading_level]
         heading_stack.append((heading_level, heading_title))
         current_title = heading_title
         current_level = heading_level
@@ -94,8 +91,7 @@ def chunk_markdown(
     if max_chars <= 0:
         raise ValueError("max_chars must be greater than zero.")
     if overlap_chars < 0:
-        raise ValueError(
-            "overlap_chars must be greater than or equal to zero.")
+        raise ValueError("overlap_chars must be greater than or equal to zero.")
     if overlap_chars >= max_chars:
         raise ValueError("overlap_chars must be smaller than max_chars.")
 
@@ -121,8 +117,7 @@ def split_markdown(
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than 0.")
     if chunk_overlap < 0 or chunk_overlap >= chunk_size:
-        raise ValueError(
-            "chunk_overlap must be non-negative and smaller than chunk_size.")
+        raise ValueError("chunk_overlap must be non-negative and smaller than chunk_size.")
 
     cleaned_text = normalize_space(text)
     if not cleaned_text:
@@ -159,11 +154,9 @@ def paragraph_chunk(
     if max_tokens <= 0:
         raise ValueError("max_tokens must be greater than 0.")
     if overlap_paragraphs < 0:
-        raise ValueError(
-            "overlap_paragraphs must be greater than or equal to 0.")
+        raise ValueError("overlap_paragraphs must be greater than or equal to 0.")
 
-    paragraphs = _split_markdown_paragraph_units(
-        md_text, max_tokens=max_tokens)
+    paragraphs = _split_markdown_paragraph_units(md_text, max_tokens=max_tokens)
     chunks: list[dict[str, int | str]] = []
     buffer: list[str] = []
     buffer_tokens = 0
@@ -171,8 +164,7 @@ def paragraph_chunk(
     for paragraph in paragraphs:
         paragraph_tokens = _count_tokens(paragraph)
         if buffer and buffer_tokens + paragraph_tokens > max_tokens:
-            chunks.append({"text": "\n\n".join(buffer),
-                          "token_count": buffer_tokens})
+            chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
             buffer = buffer[-overlap_paragraphs:] if overlap_paragraphs else []
             buffer_tokens = sum(_count_tokens(item) for item in buffer)
 
@@ -180,8 +172,7 @@ def paragraph_chunk(
         buffer_tokens += paragraph_tokens
 
     if buffer:
-        chunks.append({"text": "\n\n".join(buffer),
-                      "token_count": buffer_tokens})
+        chunks.append({"text": "\n\n".join(buffer), "token_count": buffer_tokens})
 
     return chunks
 
@@ -260,15 +251,13 @@ def chunk_markdown_by_sections(
     if max_chars is not None and max_chars <= 0:
         raise ValueError("max_chars must be greater than zero.")
     if effective_overlap_chars < 0:
-        raise ValueError(
-            "overlap_chars must be greater than or equal to zero.")
+        raise ValueError("overlap_chars must be greater than or equal to zero.")
     if effective_overlap_chars >= effective_max_chars:
         raise ValueError("overlap_chars must be smaller than max_chars.")
     if max_tokens <= 0:
         raise ValueError("max_tokens must be greater than zero.")
     if overlap_paragraphs < 0:
-        raise ValueError(
-            "overlap_paragraphs must be greater than or equal to zero.")
+        raise ValueError("overlap_paragraphs must be greater than or equal to zero.")
 
     chunks: list[MarkdownChunk] = []
     blocks = _merge_blocks_by_major(
@@ -335,8 +324,7 @@ def _flatten_hierarchical_blocks(
     for section in split_markdown_into_sections(markdown):
         if not section.text.strip():
             continue
-        section_path = _section_path_with_root(
-            section.path, root_title=root_title)
+        section_path = _section_path_with_root(section.path, root_title=root_title)
         blocks.extend(_blocks_for_section(section, section_path))
     return blocks
 
@@ -388,10 +376,8 @@ def _blocks_for_section(
         text = subsection_text.strip()
         if not text:
             continue
-        full_path = section_path + \
-            ([subsection_title] if subsection_title else [])
-        src_start, src_end = _subsection_source_range(
-            section, text, search_from)
+        full_path = section_path + ([subsection_title] if subsection_title else [])
+        src_start, src_end = _subsection_source_range(section, text, search_from)
         if subsection_title is not None:
             src_start = _extend_src_start_to_title(section, src_start)
         search_from = src_end - section.source_start
@@ -441,8 +427,7 @@ def _split_subsections(content: str) -> list[tuple[str | None, str]]:
         bold_match = _BOLD_LEAD_RE.match(stripped)
         if numbered_match is not None:
             push_current()
-            current_title = f"{numbered_match.group(1)} {numbered_match.group(2)}".strip(
-            )
+            current_title = f"{numbered_match.group(1)} {numbered_match.group(2)}".strip()
             current_lines = []
             continue
         if bold_match is not None:
@@ -494,8 +479,7 @@ def _coalesce_short_blocks(
             common_path, merged_text = _format_merged_blocks(group)
             merged_start = min(b[3] for b in group)
             merged_end = max(b[4] for b in group)
-            output.append(
-                (common_path, group[0][1], merged_text, merged_start, merged_end))
+            output.append((common_path, group[0][1], merged_text, merged_start, merged_end))
         group = []
         group_parent = None
         group_len = 0
@@ -537,8 +521,7 @@ def _merge_blocks_by_major(
         common_path, merged_text = _format_merged_blocks(buffer)
         merged_start = min(b[3] for b in buffer)
         merged_end = max(b[4] for b in buffer)
-        output.append(
-            (common_path, buffer[0][1], merged_text, merged_start, merged_end))
+        output.append((common_path, buffer[0][1], merged_text, merged_start, merged_end))
         buffer = []
         buffer_len = 0
         buffer_major = None
@@ -566,7 +549,7 @@ def _format_merged_blocks(
     common_path = _common_prefix([b[0] for b in blocks])
     lines: list[str] = []
     for path, _, text, _s, _e in blocks:
-        label = " / ".join(path[len(common_path):])
+        label = " / ".join(path[len(common_path) :])
         lines.append(f"{label}: {text}" if label else text)
     return common_path, "\n".join(lines).strip()
 
@@ -590,10 +573,9 @@ def _split_with_overlap(text: str, *, max_chars: int, overlap_chars: int) -> lis
     parts = [base_parts[0]]
     for index in range(1, len(base_parts)):
         previous = base_parts[index - 1]
-        tail = previous[-overlap_chars:] if len(
-            previous) > overlap_chars else previous
+        tail = previous[-overlap_chars:] if len(previous) > overlap_chars else previous
         if " " in tail:
-            tail = tail[tail.index(" ") + 1:]
+            tail = tail[tail.index(" ") + 1 :]
         parts.append(f"{tail}\n{base_parts[index]}".strip())
     return parts
 
@@ -724,8 +706,7 @@ def _split_section_text(text: str, *, max_chars: int, overlap_chars: int) -> lis
     if len(normalized_text) <= max_chars:
         return [normalized_text]
 
-    paragraphs = [paragraph.strip()
-                  for paragraph in re.split(r"\n\s*\n", normalized_text)]
+    paragraphs = [paragraph.strip() for paragraph in re.split(r"\n\s*\n", normalized_text)]
     paragraphs = [paragraph for paragraph in paragraphs if paragraph]
 
     chunks: list[str] = []
@@ -737,16 +718,13 @@ def _split_section_text(text: str, *, max_chars: int, overlap_chars: int) -> lis
             continue
         if current:
             chunks.extend(
-                _split_windowed(current, max_chars=max_chars,
-                                overlap_chars=overlap_chars)
+                _split_windowed(current, max_chars=max_chars, overlap_chars=overlap_chars)
             )
         current = ""
-        chunks.extend(_split_windowed(
-            paragraph, max_chars=max_chars, overlap_chars=overlap_chars))
+        chunks.extend(_split_windowed(paragraph, max_chars=max_chars, overlap_chars=overlap_chars))
 
     if current:
-        chunks.extend(_split_windowed(
-            current, max_chars=max_chars, overlap_chars=overlap_chars))
+        chunks.extend(_split_windowed(current, max_chars=max_chars, overlap_chars=overlap_chars))
 
     return chunks
 
@@ -778,12 +756,10 @@ def _count_tokens(text: str) -> int:
 
 
 def _split_markdown_paragraph_units(md_text: str, *, max_tokens: int) -> list[str]:
-    paragraphs = [paragraph.strip()
-                  for paragraph in md_text.split("\n\n") if paragraph.strip()]
+    paragraphs = [paragraph.strip() for paragraph in md_text.split("\n\n") if paragraph.strip()]
     units: list[str] = []
     for paragraph in paragraphs:
-        units.extend(_split_oversized_paragraph(
-            paragraph, max_tokens=max_tokens))
+        units.extend(_split_oversized_paragraph(paragraph, max_tokens=max_tokens))
     return units
 
 
@@ -838,8 +814,7 @@ def _split_by_words(text: str, *, max_tokens: int) -> list[str]:
 def _segment_with_pysbd(text: str, language: str) -> list[str]:
     pysbd = cast(Any, import_module("pysbd"))
     segmenter = pysbd.Segmenter(language=language, clean=True)
-    sentences = [sentence.strip()
-                 for sentence in segmenter.segment(text) if sentence.strip()]
+    sentences = [sentence.strip() for sentence in segmenter.segment(text) if sentence.strip()]
     return sentences or [text]
 
 

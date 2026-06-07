@@ -371,7 +371,7 @@ def clean_title(title: str | None) -> str:
     cleaned = (title or "").strip()
     if "|" in cleaned:
         cleaned = cleaned.split("|", 1)[0].strip()
-    for sep in (" – ", " — ", " · ", " • "):
+    for sep in (" – ", " — ", " · ", " • "):  # noqa: RUF001
         if sep in cleaned:
             head = cleaned.split(sep, 1)[0].strip()
             if len(head) >= 4:
