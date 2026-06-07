@@ -263,28 +263,13 @@ export default function CitationChatPage() {
           setSourceStatus("ready");
         }
 
-        restoredSources
-          .filter((source) => source.totalChunks > 0 && source.chunks.length === 0)
-          .forEach((source) => {
-            void fetchSourceChunks(source.documentId)
-              .then((payload) => {
-                if (cancelled) return;
-                setUploadedSources((current) =>
-                  current.map((item) =>
-                    item.documentId === payload.document_id
-                      ? {
-                          ...item,
-                          totalChunks: payload.total_chunks || payload.chunks.length,
-                          chunks: payload.chunks,
-                        }
-                      : item,
-                  ),
-                );
-              })
-              .catch(() => {
-                // Metadata is enough for selection; chunks can be retried lazily.
-              });
-          });
+        // NOTE: We intentionally do NOT eager-fetch chunks for every source
+        // here. With hundreds of documents that fired one GET /sources/{id}/chunks
+        // per doc on every page load (N+1 flood). Chunks are only needed for the
+        // client-side evidence preview / source search — and the answer flow gets
+        // its evidence from the backend (/answer/stream returns evidence_chunks via
+        // server-side Qdrant retrieval). Cached chunks from localStorage are already
+        // merged above; anything else loads lazily (upload polling / on demand).
       } catch (hydrateError) {
         if (!cancelled && !cachedSources.length) {
           setError(
@@ -1096,7 +1081,7 @@ function SourcePanel({
           completed += 1;
         } catch (queueError) {
           failed += 1;
-          if (isHttpStatus(queueError, 502)) {
+          if (isHttpStatus(queueError, 422) || isHttpStatus(queueError, 502)) {
             removeQueuedSource(item.id);
             continue;
           }
@@ -1153,7 +1138,20 @@ function SourcePanel({
         return;
       }
 
-      const queued = urls.map((url) => ({
+      const loadedUrls = new Set(
+        uploadedSources
+          .filter((source) => source.mode === "url")
+          .map((source) => normalizeSourceUrl(source.source || source.name))
+          .filter(Boolean),
+      );
+      const urlsToQueue = urls.filter((url) => !loadedUrls.has(normalizeSourceUrl(url)));
+      const skippedCount = urls.length - urlsToQueue.length;
+      if (!urlsToQueue.length) {
+        setError("Tất cả URL đã được nạp trước đó nên đã skip.");
+        return;
+      }
+
+      const queued = urlsToQueue.map((url) => ({
         id: createMessageId(),
         name: url,
         mode: "url" as const,
@@ -1163,10 +1161,13 @@ function SourcePanel({
       }));
 
       setError("");
+      if (skippedCount > 0) {
+        setFileName(`Đã skip ${skippedCount} URL đã nạp.`);
+      }
       resetSource();
       setQueuedSources((current) => [...queued, ...current]);
       setSourceText("");
-      void processUrlQueue(urls, queued);
+      void processUrlQueue(urlsToQueue, queued);
       return;
     }
 
@@ -1982,7 +1983,8 @@ async function uploadUrlSource(url: string): Promise<SourceUploadResponse> {
   });
 
   if (!response.ok) {
-    throw new HttpRequestError("URL import failed", response.status);
+    const message = await response.text();
+    throw new HttpRequestError(message || "URL import failed", response.status);
   }
 
   return (await response.json()) as SourceUploadResponse;
@@ -2264,6 +2266,17 @@ function displayUrlName(value: string): string {
       .replace(/^https?:\/\//, "")
       .replace(/\.html\.txt$/, "")
       .replace(/\.txt$/, "");
+  }
+}
+
+function normalizeSourceUrl(value: string): string {
+  try {
+    const parsed = new URL(value.trim());
+    parsed.hash = "";
+    parsed.searchParams.sort();
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return value.trim().replace(/\/$/, "");
   }
 }
 
