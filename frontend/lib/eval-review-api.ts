@@ -1,4 +1,4 @@
-import type { Chunk, EvalRowStatus, JobStatus, Row } from "./eval-review-types";
+import type { Chunk, EvalRowStatus, JobStatus, RejectedRow, Row } from "./eval-review-types";
 
 const BASE = `${process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000"}/eval-review`;
 
@@ -12,7 +12,8 @@ async function fetchJSON<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export const evalApi = {
-  getRows: () => fetchJSON<Row[]>(`${BASE}/api/rows`),
+  getRows: (slim = false) =>
+    fetchJSON<Row[]>(`${BASE}/api/rows${slim ? "?slim=true" : ""}`),
 
   updateRow: (excelRow: number, update: Partial<Row>) =>
     fetchJSON<Row>(`${BASE}/api/rows/${excelRow}`, {
@@ -28,6 +29,14 @@ export const evalApi = {
     fetchJSON<{ ok: boolean }>(`${BASE}/api/rows/${excelRow}/reject`, {
       method: "POST",
     }),
+
+  getRejectedRows: () => fetchJSON<RejectedRow[]>(`${BASE}/api/rejected`),
+
+  restoreRejectedRow: (rejectRow: number) =>
+    fetchJSON<{ ok: boolean; restored_row: Row }>(
+      `${BASE}/api/rejected/${rejectRow}/restore`,
+      { method: "POST" },
+    ),
 
   runEval: (runRagas = true) =>
     fetchJSON<{ message: string }>(`${BASE}/api/eval/run`, {
@@ -60,4 +69,7 @@ export const evalApi = {
 
   getRowEvalStatus: (excelRow: number) =>
     fetchJSON<EvalRowStatus>(`${BASE}/api/rows/${excelRow}/eval-status`),
+
+  getActiveEvalStatus: () =>
+    fetchJSON<Record<string, EvalRowStatus>>(`${BASE}/api/eval/active-status`),
 };

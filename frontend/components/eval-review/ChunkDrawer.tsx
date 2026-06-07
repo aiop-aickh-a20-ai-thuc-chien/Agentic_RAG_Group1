@@ -254,22 +254,22 @@ export function ChunkDrawer({ row, onSaveGroundTruth }: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed right-0 top-0 z-40 flex h-full w-[460px] flex-col border-l border-line bg-white shadow-panel">
+    <aside className="flex h-[calc(100dvh-104px)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-line bg-white shadow-panel xl:sticky xl:top-[84px]">
 
       {/* Header */}
-      <div className="flex items-start gap-3 border-b border-line bg-paper/50 px-4 py-3">
+      <div className="flex items-start gap-3 border-b border-line bg-paper/60 px-4 py-3.5">
         <div className="min-w-0 flex-1">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink/40">
             {mode === "doc" ? "Tài liệu" : "Câu hỏi"}
           </p>
           {row ? (
-            <p className="line-clamp-2 text-sm font-medium leading-snug text-ink">
+            <p className="whitespace-pre-wrap break-words text-sm font-medium leading-snug text-ink">
               {mode === "doc"
-                ? (docChunks[0]?.section || docChunks[0]?.url || row.question || "—")
-                : (row.question ?? "—")}
+                ? (docChunks[0]?.section || docChunks[0]?.url || row.question || "-")
+                : (row.question ?? "-")}
             </p>
           ) : (
-            <p className="text-sm italic text-ink/35">Chọn câu hỏi để xem</p>
+            <p className="text-sm italic text-ink/35">Chọn một dòng để xem evidence</p>
           )}
         </div>
         {row && !loading && (
@@ -310,7 +310,9 @@ export function ChunkDrawer({ row, onSaveGroundTruth }: Props) {
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-mist">
               <BookOpen className="h-5 w-5 text-mint/60" />
             </div>
-            <p className="text-sm text-ink/40">Bấm 👁 để xem chunks của câu hỏi</p>
+            <p className="max-w-56 text-sm leading-relaxed text-ink/40">
+              Chọn một câu hỏi trong bảng để xem chunks và ground truth.
+            </p>
           </div>
         ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -322,7 +324,7 @@ export function ChunkDrawer({ row, onSaveGroundTruth }: Props) {
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
             <p className="rounded-lg bg-danger/8 px-3 py-2 text-xs text-danger">{error}</p>
-            <button onClick={refetch} className="flex h-8 items-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-medium text-ink/65 transition hover:bg-paper">
+            <button onClick={refetch} className="flex h-8 items-center gap-2 rounded-lg border border-line bg-white px-3 text-xs font-medium text-ink/65 transition hover:bg-paper active:translate-y-px">
               <RefreshCw className="h-3 w-3" /> Thử lại
             </button>
           </div>
@@ -387,9 +389,9 @@ export function ChunkDrawer({ row, onSaveGroundTruth }: Props) {
                       </div>
                     </div>
                   </div>
-                  <p className="ml-5 line-clamp-3 text-xs leading-relaxed text-ink/70">{chunk.text}</p>
+                  <p className="ml-5 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/70">{chunk.text}</p>
                   <div className="ml-5 mt-1.5 flex items-center gap-2">
-                    {chunk.section && <span className="truncate text-[10px] text-ink/40">{chunk.section}</span>}
+                    {chunk.section && <span className="min-w-0 break-words text-[10px] text-ink/40">{chunk.section}</span>}
                     {hostname && (
                       <a href={chunk.url} target="_blank" rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -427,12 +429,12 @@ export function ChunkDrawer({ row, onSaveGroundTruth }: Props) {
             </button>
           </div>
           {selected.size > 0 && (
-            <p className="mt-1.5 truncate font-mono text-[10px] text-ink/35">
+            <p className="mt-1.5 break-all font-mono text-[10px] text-ink/35">
               {[...selected].join(", ")}
             </p>
           )}
         </div>
       )}
-    </div>
+    </aside>
   );
 }

@@ -2,6 +2,7 @@ export type DisplayStatus = "pending" | "approved" | "evaluated";
 
 export interface Row {
   excel_row: number;
+  id: string | null;
   question: string | null;
   expected_answer: string | null;
   ground_truth_chunk_ids: string | null;
@@ -17,6 +18,11 @@ export interface Row {
   ragas_answer_relevancy: number | null;
   ragas_context_precision: number | null;
   ragas_context_recall: number | null;
+}
+
+export interface RejectedRow extends Omit<Row, "display_status"> {
+  reject_row: number;
+  display_status: "deleted";
 }
 
 export interface Chunk {
