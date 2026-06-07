@@ -4,6 +4,7 @@ let linkQueue = [];
 let isLoadingChunks = false;
 let isBatchRunning = false;
 let activeReviewMode = 'markdown';
+const URL_LOAD_CONCURRENCY = 4;
 
 const btnLoadLinks = document.getElementById('btn-load-links');
 const tbody = document.getElementById('chunk-list-body');
@@ -72,11 +73,7 @@ btnLoadLinks.addEventListener('click', async () => {
             console.error('Lỗi lấy danh sách đã xử lý:', e);
         }
 
-        for (let i = 0; i < linkQueue.length; i++) {
-            if (!isLoadingChunks) break;
-            btnLoadLinks.textContent = `Dừng (đang nạp ${i + 1}/${linkQueue.length})...`;
-            await loadChunksFromUrl(linkQueue[i], processedIds);
-        }
+        await loadChunksConcurrently(linkQueue, processedIds, txtFilePath);
         if (isLoadingChunks) {
             btnLoadLinks.textContent = '+ Nạp Document Chunk';
             statusMsg.textContent = 'Đã cào xong toàn bộ dữ liệu.';
@@ -89,7 +86,31 @@ btnLoadLinks.addEventListener('click', async () => {
     }
 });
 
-async function loadChunksFromUrl(source, processedIds = []) {
+async function loadChunksConcurrently(sources, processedIds, txtFilePath) {
+    let nextIndex = 0;
+    let finished = 0;
+    let skipped = 0;
+    const total = sources.length;
+    const workerCount = Math.min(URL_LOAD_CONCURRENCY, total);
+
+    async function worker() {
+        while (isLoadingChunks) {
+            const sourceIndex = nextIndex;
+            nextIndex += 1;
+            if (sourceIndex >= total) break;
+
+            btnLoadLinks.textContent = `Dừng (đang nạp ${finished + 1}/${total}, song song ${workerCount})...`;
+            const loaded = await loadChunksFromUrl(sources[sourceIndex], processedIds, txtFilePath);
+            finished += 1;
+            if (!loaded) skipped += 1;
+            btnLoadLinks.textContent = `Dừng (đã nạp ${finished}/${total}, bỏ qua ${skipped})...`;
+        }
+    }
+
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
+async function loadChunksFromUrl(source, processedIds = [], txtFilePath = '') {
     const name = source.path;
     statusMsg.textContent = 'Đang cào dữ liệu: ' + name.substring(0, 80) + '...';
     try {
@@ -98,9 +119,20 @@ async function loadChunksFromUrl(source, processedIds = []) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: source.path, type: source.type })
         });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        if (!data.chunks || data.chunks.length === 0) return;
+        const data = await safeJson(res);
+        if (data.error) {
+            if (data.removable) {
+                await removeFailedSource(txtFilePath, source.path, data.reason || data.error);
+                statusMsg.textContent = 'Đã bỏ qua và xóa đúng link lỗi: ' + name.substring(0, 80);
+                return false;
+            }
+            throw new Error(data.error);
+        }
+        if (!data.chunks || data.chunks.length === 0) {
+            await removeFailedSource(txtFilePath, source.path, 'no_chunks');
+            statusMsg.textContent = 'Bỏ qua link không có chunk: ' + name.substring(0, 80);
+            return false;
+        }
 
         const isFirst = chunksData.length === 0;
         const docMarkdown = data.markdown || data.chunks.map(c => c.text).join('\n\n');
@@ -119,9 +151,36 @@ async function loadChunksFromUrl(source, processedIds = []) {
         chunksData = [...chunksData, ...newChunks];
         renderTable();
         if (isFirst && chunksData.length > 0) selectChunk(0);
+        return true;
     } catch (e) {
         console.error('Lỗi cào dữ liệu:', name, e);
-        statusMsg.textContent = 'Lỗi cào dữ liệu: ' + name.substring(0, 80);
+        statusMsg.textContent = 'Lỗi tool/server, chưa xóa link: ' + e.message;
+        return true;
+    }
+}
+
+async function safeJson(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        throw new Error(text ? text.slice(0, 300) : `HTTP ${response.status}`);
+    }
+}
+
+async function removeFailedSource(txtFilePath, sourcePath, reason = 'parse_error') {
+    if (!txtFilePath || !sourcePath || !isHttpUrl(sourcePath)) return false;
+    try {
+        const res = await fetch('/api/remove_source', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ txtFilePath, sourcePath, reason })
+        });
+        const data = await safeJson(res);
+        return Boolean(data.removed);
+    } catch (err) {
+        console.error('Không xóa được link lỗi khỏi file:', err);
+        return false;
     }
 }
 
@@ -288,13 +347,19 @@ async function generateQA(index) {
         const res = await fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunkText: chunk.text, apiKey, modelName, gatewayUrl })
+            body: JSON.stringify({
+                chunk: chunkPayloadForGeneration(chunk),
+                apiKey,
+                modelName,
+                gatewayUrl
+            })
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
         chunk.question = data.question;
         chunk.answer = data.expected_answer;
+        chunk.qaPairs = normalizeQaPairs(data);
         chunk.status = 'Đã duyệt';
         selectChunk(index);
         statusMsg.textContent = 'Sinh thành công. Nhớ bấm Lưu Excel.';
@@ -303,6 +368,26 @@ async function generateQA(index) {
         statusMsg.textContent = 'Lỗi sinh: ' + err.message;
         return false;
     }
+}
+
+function chunkPayloadForGeneration(chunk) {
+    return {
+        id: chunk.id,
+        title: chunk.title,
+        url: chunk.url,
+        sourceType: chunk.sourceType,
+        text: chunk.text
+    };
+}
+
+function normalizeQaPairs(data) {
+    const pairs = Array.isArray(data.qa_pairs) ? data.qa_pairs : [data];
+    return pairs
+        .map(item => ({
+            question: String(item.question || '').trim(),
+            expected_answer: String(item.expected_answer || item.answer || '').trim()
+        }))
+        .filter(item => item.question && item.expected_answer);
 }
 
 async function saveQA(index) {
@@ -350,13 +435,13 @@ async function generateQABatch(indices) {
     const apiKey = document.getElementById('api-key').value;
     const modelName = document.getElementById('model-name').value;
     const gatewayUrl = document.getElementById('gateway-url').value;
-    const chunksTextArray = indices.map(idx => chunksData[idx].text);
+    const chunks = indices.map(idx => chunkPayloadForGeneration(chunksData[idx]));
 
     try {
         const res = await fetch('/api/generate_batch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunksTextArray, apiKey, modelName, gatewayUrl })
+            body: JSON.stringify({ chunks, apiKey, modelName, gatewayUrl })
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -367,7 +452,8 @@ async function generateQABatch(indices) {
         indices.forEach((idx, i) => {
             chunksData[idx].question = data.results[i].question;
             chunksData[idx].answer = data.results[i].expected_answer;
-            chunksData[idx].status = 'Đã duyệt';
+            chunksData[idx].qaPairs = normalizeQaPairs(data.results[i]);
+            chunksData[idx].status = chunksData[idx].qaPairs.length ? 'Đã duyệt' : 'Chờ nhận';
         });
         selectChunk(indices[0]);
         statusMsg.textContent = 'Sinh batch thành công. Đang lưu...';
@@ -380,14 +466,23 @@ async function generateQABatch(indices) {
 
 async function saveQABatch(indices) {
     if (!indices || indices.length === 0) return false;
-    const items = indices.map(idx => ({
-        id: chunksData[idx].id,
-        title: chunksData[idx].title,
-        question: chunksData[idx].question,
-        expected_answer: chunksData[idx].answer,
-        rag_context: chunksData[idx].text,
-        url: chunksData[idx].url
-    }));
+    const items = indices.flatMap(idx => {
+        const chunk = chunksData[idx];
+        const qaPairs = Array.isArray(chunk.qaPairs) && chunk.qaPairs.length
+            ? chunk.qaPairs
+            : [{ question: chunk.question, expected_answer: chunk.answer }];
+        return qaPairs
+            .filter(pair => pair.question && pair.expected_answer)
+            .map(pair => ({
+                id: chunk.id,
+                title: chunk.title,
+                question: pair.question,
+                expected_answer: pair.expected_answer,
+                rag_context: chunk.text,
+                url: chunk.url
+            }));
+    });
+    if (!items.length) return false;
 
     try {
         const res = await fetch('/api/excel_batch', {

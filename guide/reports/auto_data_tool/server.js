@@ -14,8 +14,121 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const LINKS_FILE = path.join(__dirname, '../../../vinfast_vn_vi_links - Copy.txt');
+const LINKS_FILE = path.join(__dirname, '../../../_relink.txt');
 const EXCEL_FILE = path.join(__dirname, '../result.xlsx');
+
+function buildChunkPromptInput(chunk, index = null) {
+    const text = typeof chunk === 'string' ? chunk : (chunk.text || '');
+    const metadata = typeof chunk === 'object' && chunk ? {
+        chunk_id: chunk.id || chunk.chunk_id || '',
+        section_name: chunk.title || chunk.section || '',
+        source_url: chunk.url || '',
+        source_type: chunk.sourceType || chunk.source_type || ''
+    } : {};
+    const label = index === null ? 'CHUNK' : `CHUNK ${index}`;
+    return `${label}
+metadata: ${JSON.stringify(metadata)}
+content:
+${text}`;
+}
+
+function qaGenerationInstructions(outputShape) {
+    return `You are creating grounded QA data for RAG evaluation.
+
+Use only the provided chunk content and its metadata as evidence.
+Create realistic questions that an end user would type into a chat/RAG system.
+
+Rules:
+- The question MUST NOT mention "tai lieu", "van ban", "doan van", "chunk", "context", "nguon tren", "metadata", or phrases like "dua vao".
+- The user does not know which document/chunk will be retrieved, so ask directly about the product, policy, feature, fee, condition, step, or fact.
+- The answer must be fully supported by the chunk. Do not invent facts.
+- If the chunk contains several independent useful facts, create 2-4 QA pairs.
+- If the chunk is too thin/noisy/navigation-only, create exactly 0 QA pairs.
+- Prefer concise Vietnamese questions and answers.
+- Use metadata such as section_name/source_url only to understand context, not as wording in the question.
+
+Return valid JSON only, no markdown, no extra text.
+${outputShape}`;
+}
+
+function normalizeQaPairs(payload) {
+    const pairs = Array.isArray(payload) ? payload : (payload.qa_pairs || [payload]);
+    return pairs
+        .map(item => ({
+            question: String(item.question || '').trim(),
+            expected_answer: String(item.expected_answer || item.answer || '').trim()
+        }))
+        .filter(item => item.question && item.expected_answer);
+}
+
+function parseJsonContent(rawResponse) {
+    const jsonStr = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonStr);
+}
+
+function isRemovableParseError(errorMessage) {
+    const message = String(errorMessage || '').toLowerCase();
+    if (!message) return false;
+    const toolErrors = [
+        'no module named',
+        'importerror',
+        'invalid json from python parser',
+        'spawn',
+        'eperm',
+        'python error',
+        'proxyconnectionerror',
+        'proxy error',
+        'timed out'
+    ];
+    if (toolErrors.some(pattern => message.includes(pattern))) return false;
+    const linkErrors = [
+        'produced no chunks',
+        'no chunks',
+        'readable text',
+        'received a pdf url',
+        'received a pdf response',
+        'http error 404',
+        'http error 410',
+        'not found',
+        'invalid url'
+    ];
+    return linkErrors.some(pattern => message.includes(pattern));
+}
+
+function removeUrlFromTextFile(filePath, targetUrl, reason = '') {
+    if (!filePath || !targetUrl || !fs.existsSync(filePath)) return false;
+    const original = fs.readFileSync(filePath, 'utf8');
+    const backupPath = `${filePath}.bak`;
+    if (!fs.existsSync(backupPath)) {
+        fs.writeFileSync(backupPath, original, 'utf8');
+    }
+
+    const linkRegex = /https?:\/\/[^\s]+/g;
+    const target = targetUrl.trim();
+    let removed = false;
+    const kept = original.split(/\r?\n/).map(line => {
+        const links = line.match(linkRegex) || [];
+        if (!links.some(link => link === target)) return line;
+        removed = true;
+        const remainingLine = links.reduce(
+            (current, link) => link === target ? current.replace(link, '') : current,
+            line
+        ).trim();
+        return remainingLine;
+    }).filter(line => line.trim());
+
+    if (!removed) return false;
+    fs.writeFileSync(filePath, kept.join('\n') + (kept.length ? '\n' : ''), 'utf8');
+
+    const removedLogPath = path.join(__dirname, '../../../storage/auto_data_tool_removed_links.txt');
+    fs.mkdirSync(path.dirname(removedLogPath), { recursive: true });
+    fs.appendFileSync(
+        removedLogPath,
+        `${new Date().toISOString()}\t${target}\t${reason || 'parse_error'}\n`,
+        'utf8'
+    );
+    return true;
+}
 
 function chunkText(text, chunkSize = 1500, overlap = 200) {
     text = text.replace(/\s+/g, ' ').trim();
@@ -41,11 +154,12 @@ function chunkText(text, chunkSize = 1500, overlap = 200) {
 app.post('/api/parse_list', (req, res) => {
     try {
         const { txtFilePath, pdfFolderPath } = req.body;
+        const resolvedTxtFilePath = txtFilePath || LINKS_FILE;
         let sources = [];
         
         // 1. TXT Links
-        if (txtFilePath && fs.existsSync(txtFilePath)) {
-            const data = fs.readFileSync(txtFilePath, 'utf8');
+        if (resolvedTxtFilePath && fs.existsSync(resolvedTxtFilePath)) {
+            const data = fs.readFileSync(resolvedTxtFilePath, 'utf8');
             const linkRegex = /https?:\/\/[^\s]+/g;
             const links = data.match(linkRegex) || [];
             const uniqueLinks = [...new Set(links)];
@@ -87,16 +201,157 @@ app.post('/api/chunk', (req, res) => {
             try {
                 const out = JSON.parse(stdout);
                 if (out.success) {
+                    if (!out.chunks || out.chunks.length === 0) {
+                        return res.status(422).json({
+                            error: 'Parsed source produced no chunks.',
+                            removable: true,
+                            reason: 'no_chunks'
+                        });
+                    }
                     res.json({ chunks: out.chunks, markdown: out.markdown || '' });
                 } else {
-                    res.status(500).json({ error: out.error });
+                    const removable = isRemovableParseError(out.error);
+                    res.status(removable ? 422 : 500).json({
+                        error: out.error,
+                        removable,
+                        reason: removable ? 'parse_error' : 'tool_error'
+                    });
                 }
             } catch (e) {
-                res.status(500).json({ error: "Invalid JSON from python parser: " + e.message });
+                res.status(500).json({
+                    error: "Invalid JSON from python parser: " + e.message,
+                    removable: false,
+                    reason: 'tool_error'
+                });
             }
         });
     } catch (err) {
         console.error("Scrape Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/remove_source', (req, res) => {
+    try {
+        const { txtFilePath, sourcePath, reason } = req.body;
+        const removed = removeUrlFromTextFile(txtFilePath || LINKS_FILE, sourcePath, reason);
+        res.json({ removed });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/generate', async (req, res) => {
+    const { chunkText, chunk, apiKey, modelName, gatewayUrl } = req.body;
+    const chunkInput = chunk || { text: chunkText };
+    if (!chunkInput.text && !chunkText) {
+        return res.status(400).json({ error: 'Chunk text is required.' });
+    }
+
+    try {
+        const prompt = `${qaGenerationInstructions(`Output format:
+{"qa_pairs":[{"question":"...","expected_answer":"..."}]}`)}
+
+${buildChunkPromptInput(chunkInput)}`;
+
+        const url = (gatewayUrl || 'https://token-plan-sgp.xiaomimimo.com/v1').replace(/\/$/, '') + '/chat/completions';
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey || 'sk-dummy'}`
+            },
+            body: JSON.stringify({
+                model: modelName || 'mimo-v2.5',
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+
+        const resultData = await response.json();
+
+        if (!response.ok) {
+            throw new Error(`Proxy error: ${response.status} ${response.statusText} - ${JSON.stringify(resultData)}`);
+        }
+
+        const rawResponse = resultData.choices[0].message.content;
+        const qaPairs = normalizeQaPairs(parseJsonContent(rawResponse));
+        const firstPair = qaPairs[0] || { question: '', expected_answer: '' };
+
+        res.json({
+            question: firstPair.question,
+            expected_answer: firstPair.expected_answer,
+            qa_pairs: qaPairs
+        });
+
+    } catch (err) {
+        console.error("LLM Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/generate_batch', async (req, res) => {
+    const { chunksTextArray, chunks, apiKey, modelName, gatewayUrl } = req.body;
+    const chunkInputs = Array.isArray(chunks) && chunks.length ? chunks : chunksTextArray;
+    if (!chunkInputs || !Array.isArray(chunkInputs)) {
+        return res.status(400).json({ error: 'chunks or chunksTextArray is required and must be an array.' });
+    }
+
+    try {
+        const textsStr = chunkInputs.map((chunk, idx) => buildChunkPromptInput(chunk, idx)).join('\n\n---\n\n');
+
+        const prompt = `${qaGenerationInstructions(`Return one array item per input chunk, in the same order.
+Each item contains qa_pairs. qa_pairs may be empty.
+Format:
+[
+  {"qa_pairs":[{"question":"...","expected_answer":"..."}]},
+  {"qa_pairs":[]}
+]`)}
+
+Input chunks:
+${textsStr}`;
+
+        const url = (gatewayUrl || 'https://token-plan-sgp.xiaomimimo.com/v1').replace(/\/$/, '') + '/chat/completions';
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey || 'sk-dummy'}`
+            },
+            body: JSON.stringify({
+                model: modelName || 'mimo-v2.5',
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+
+        const resultData = await response.json();
+
+        if (!response.ok) {
+            throw new Error(`Proxy error: ${response.status} ${response.statusText} - ${JSON.stringify(resultData)}`);
+        }
+
+        const rawResponse = resultData.choices[0].message.content;
+        const responseArray = parseJsonContent(rawResponse);
+
+        if (!Array.isArray(responseArray) || responseArray.length !== chunkInputs.length) {
+             throw new Error('LLM did not return the correct number of items in the JSON array.');
+        }
+
+        const results = responseArray.map(item => {
+            const qaPairs = normalizeQaPairs(item);
+            const firstPair = qaPairs[0] || { question: '', expected_answer: '' };
+            return {
+                question: firstPair.question,
+                expected_answer: firstPair.expected_answer,
+                qa_pairs: qaPairs
+            };
+        });
+
+        res.json({ results });
+
+    } catch (err) {
+        console.error("LLM Batch Error:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -373,7 +628,7 @@ app.get('/api/label', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3010;
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
