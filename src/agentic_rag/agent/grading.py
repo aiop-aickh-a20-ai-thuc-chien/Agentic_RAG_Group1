@@ -120,6 +120,10 @@ The search results were insufficient to answer the question.
 <evidence_summary chunk_count="{chunk_count}">
 {evidence_summary}
 </evidence_summary>
+
+<missing_coverage>
+{missing_entities}
+</missing_coverage>
 </context>
 
 <rules>
@@ -222,6 +226,7 @@ def transform_query(
     question: str,
     docs: list[SearchResult],
     queries_tried: list[str],
+    missing_entities: list[str] | None = None,
     llm_client: object = None,
 ) -> dict[str, Any]:
     """Return {"method": ..., "query"/"queries": ...} for next retrieval."""
@@ -229,11 +234,17 @@ def transform_query(
         return {"method": "requery", "query": question}
 
     summary = _evidence_summary(docs)
+    missing_text = (
+        "Các phần còn thiếu thông tin: " + ", ".join(missing_entities)
+        if missing_entities
+        else "Không xác định được phần còn thiếu."
+    )
     prompt = _TRANSFORM_QUERY_PROMPT.format(
         question=question,
         queries_tried=", ".join(queries_tried) if queries_tried else "none",
         chunk_count=len(docs),
         evidence_summary=summary,
+        missing_entities=missing_text,
     )
     try:
         raw = _traced_transform_llm(prompt, llm_client)
