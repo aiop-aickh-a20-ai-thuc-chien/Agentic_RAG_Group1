@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,6 +75,10 @@ class LocalSourceStore(Protocol):
         """Delete all source documents and chunks. Returns number of deleted documents."""
 
 
+_LIST_CACHE_TTL = 60  # seconds
+_list_cache: dict[str, tuple[float, list["StoredSourceDocument"]]] = {}
+
+
 class S3LocalSourceStore:
     """Store source documents, chunks, and artifacts in S3-compatible object storage."""
 
@@ -82,6 +88,7 @@ class S3LocalSourceStore:
         self._bucket = bucket.strip()
         self._prefix = _normalize_s3_prefix(prefix)
         self._client: Any = client or _s3_client_from_env()
+        self._cache_key = f"{self._bucket}/{self._prefix}"
 
     @classmethod
     def from_env(cls) -> S3LocalSourceStore:
@@ -148,6 +155,7 @@ class S3LocalSourceStore:
             "metadata": metadata,
         }
         self._put_json(f"{base_key}/manifest.json", manifest)
+        self._invalidate_list_cache()
 
     def read_chunks(self, document_id: str) -> list[Chunk]:
         manifest = self._read_manifest(document_id)
@@ -168,20 +176,42 @@ class S3LocalSourceStore:
     def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
         return [chunk for document_id in document_ids for chunk in self.read_chunks(document_id)]
 
+    def _invalidate_list_cache(self) -> None:
+        _list_cache.pop(self._cache_key, None)
+
     def list_documents(self) -> list[StoredSourceDocument]:
+        now = time.monotonic()
+        cached = _list_cache.get(self._cache_key)
+        if cached is not None and (now - cached[0]) < _LIST_CACHE_TTL:
+            return cached[1]
+
+        manifest_keys = [
+            key for key in self._list_keys(self._prefix)
+            if key.endswith("/manifest.json")
+        ]
+
+        def _fetch(key: str) -> StoredSourceDocument | None:
+            try:
+                manifest = json.loads(self._get_bytes(key).decode())
+                return _stored_document_from_manifest(manifest) if isinstance(manifest, dict) else None
+            except Exception:
+                return None
+
         documents: list[StoredSourceDocument] = []
-        for key in self._list_keys(self._prefix):
-            if not key.endswith("/manifest.json"):
-                continue
-            manifest = json.loads(self._get_bytes(key).decode())
-            if not isinstance(manifest, dict):
-                continue
-            documents.append(_stored_document_from_manifest(manifest))
-        return sorted(
+        with ThreadPoolExecutor(max_workers=_S3_MAX_CONNECTIONS) as pool:
+            futures = {pool.submit(_fetch, key): key for key in manifest_keys}
+            for fut in as_completed(futures):
+                result = fut.result()
+                if result is not None:
+                    documents.append(result)
+
+        result = sorted(
             documents,
             key=lambda document: str(document.metadata.get("updated_at") or ""),
             reverse=True,
         )
+        _list_cache[self._cache_key] = (time.monotonic(), result)
+        return result
 
     def read_markdown(self, document_id: str) -> str:
         manifest = self._read_manifest(document_id)
@@ -209,15 +239,16 @@ class S3LocalSourceStore:
     def delete_document(self, document_id: str) -> None:
         prefix = f"{self._document_prefix(document_id)}/"
         keys = self._list_keys(prefix)
-        if not keys:
-            raise ValueError(f"Document {document_id!r} not found in store.")
-        self._delete_keys(keys)
+        if keys:
+            self._delete_keys(keys)
+        self._invalidate_list_cache()
 
     def delete_all_documents(self) -> int:
         keys = self._list_keys(self._prefix)
         manifest_keys = [key for key in keys if key.endswith("/manifest.json")]
         if keys:
             self._delete_keys(keys)
+        self._invalidate_list_cache()
         return len(manifest_keys)
 
     def _document_prefix(self, document_id: str) -> str:
@@ -562,13 +593,17 @@ def _psycopg_connection_string(connection: str) -> str:
     return connection
 
 
+_S3_MAX_CONNECTIONS = 50
+
+
 def _s3_client_from_env() -> Any:
     try:
         import boto3
+        from botocore.config import Config
     except ImportError as exc:
         raise RuntimeError("LOCAL_SOURCE_STORE=s3 requires boto3 to be installed.") from exc
 
-    return boto3.client("s3")  # type: ignore[no-untyped-call]
+    return boto3.client("s3", config=Config(max_pool_connections=_S3_MAX_CONNECTIONS))  # type: ignore[no-untyped-call]
 
 
 def _normalize_s3_prefix(prefix: str) -> str:
@@ -627,6 +662,9 @@ def _storage_chunk_id(*, chunk: Chunk, fallback_index: int) -> str:
     raw = chunk.metadata.get("storage_chunk_id")
     if isinstance(raw, str) and raw:
         return raw
+    ingestion_id = chunk.metadata.get("chunk_id")
+    if isinstance(ingestion_id, str) and ingestion_id:
+        return ingestion_id
     document_id = str(chunk.metadata.get("document_id") or "document")
     return f"{document_id}:{fallback_index:04d}"
 

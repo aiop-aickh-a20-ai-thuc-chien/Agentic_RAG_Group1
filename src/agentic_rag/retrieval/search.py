@@ -431,6 +431,9 @@ def delete_all_qdrant_points() -> dict[str, object]:
 
 
 def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
+    import os
+    import time
+
     if not chunks:
         return {
             "enabled": True,
@@ -438,53 +441,66 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
             "chunk_count": 0,
             "collection": _configured_qdrant_collection(),
         }
+
+    batch_size = int(os.environ.get("DENSE_EMBED_BATCH_SIZE", "50"))
+    batch_delay = float(os.environ.get("DENSE_EMBED_BATCH_DELAY_SECONDS", "0"))
+
     embedding_config = resolve_embedding_config()
     embedding = _configured_embedding()
-    dense_vectors = _embed_documents(embedding, [chunk.text for chunk in chunks])
-    embedding_profile = validate_embedding_vectors(
-        dense_vectors,
-        config=embedding_config,
-    )
     client = _qdrant_client_from_env()
-    _ensure_qdrant_collection(
-        client=client,
-        embedding_profile=embedding_profile,
-    )
+
     try:
         from qdrant_client import models
     except ImportError as exc:
         raise RuntimeError("DENSE_VECTOR_STORE=qdrant requires qdrant-client.") from exc
-    points = []
-    for index, chunk in enumerate(chunks, start=1):
-        sparse_vector = _sparse_vector(chunk.text)
-        sparse_indices = sparse_vector["indices"]
-        sparse_values = sparse_vector["values"]
-        points.append(
-            models.PointStruct(
-                id=_qdrant_point_id(chunk=chunk, fallback_index=index),
-                vector={
-                    "dense": dense_vectors[index - 1],
-                    "sparse": models.SparseVector(
-                        indices=[int(value) for value in sparse_indices],
-                        values=[float(value) for value in sparse_values],
+
+    embedding_profile: object = None
+    collection = _configured_qdrant_collection()
+
+    for batch_start in range(0, len(chunks), batch_size):
+        batch = chunks[batch_start : batch_start + batch_size]
+        dense_vectors = _embed_documents(embedding, [c.text for c in batch])
+
+        if embedding_profile is None:
+            embedding_profile = validate_embedding_vectors(dense_vectors, config=embedding_config)
+            _ensure_qdrant_collection(client=client, embedding_profile=embedding_profile)  # type: ignore[arg-type]
+
+        points = []
+        for local_idx, chunk in enumerate(batch):
+            global_idx = batch_start + local_idx + 1
+            sparse_vector = _sparse_vector(chunk.text)
+            sparse_indices = sparse_vector["indices"]
+            sparse_values = sparse_vector["values"]
+            points.append(
+                models.PointStruct(
+                    id=_qdrant_point_id(chunk=chunk, fallback_index=global_idx),
+                    vector={
+                        "dense": dense_vectors[local_idx],
+                        "sparse": models.SparseVector(
+                            indices=[int(v) for v in sparse_indices],
+                            values=[float(v) for v in sparse_values],
+                        ),
+                    },
+                    payload=_qdrant_payload(
+                        chunk=chunk,
+                        fallback_index=global_idx,
+                        embedding_profile=embedding_profile,  # type: ignore[arg-type]
                     ),
-                },
-                payload=_qdrant_payload(
-                    chunk=chunk,
-                    fallback_index=index,
-                    embedding_profile=embedding_profile,
-                ),
+                )
             )
-        )
-    client.upsert(collection_name=_configured_qdrant_collection(), points=points)
+        client.upsert(collection_name=collection, points=points)
+
+        if batch_delay > 0 and batch_start + batch_size < len(chunks):
+            time.sleep(batch_delay)
+
     return {
         "enabled": True,
         "vector_store": "qdrant",
         "chunk_count": len(chunks),
-        "collection": _configured_qdrant_collection(),
+        "collection": collection,
         **_embedding_trace_metadata(
             config=embedding_config,
-            profile=embedding_profile,
+            profile=embedding_profile,  # type: ignore[arg-type]
         ),
     }
 
@@ -540,6 +556,7 @@ def _ensure_qdrant_collection(
         },
         sparse_vectors_config={"sparse": models.SparseVectorParams()},
     )
+    _ensure_qdrant_payload_indexes(client=client, collection=collection, models=models)
 
 
 def _validate_qdrant_collection(
@@ -567,6 +584,22 @@ def _validate_qdrant_collection(
     )
 
 
+def _ensure_qdrant_payload_indexes(*, client: Any, collection: str, models: Any) -> None:
+    """Create keyword index on document_id if not already present (idempotent)."""
+    create_payload_index = getattr(client, "create_payload_index", None)
+    if not callable(create_payload_index):
+        return
+    try:
+        create_payload_index(
+            collection_name=collection,
+            field_name="document_id",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+            wait=True,
+        )
+    except Exception:
+        pass
+
+
 def _validate_qdrant_collection_info(
     *,
     client: Any,
@@ -592,6 +625,12 @@ def _validate_qdrant_collection_info(
             f"stored={stored_profile}, active={expected_profile}. "
             "Change QDRANT_COLLECTION or delete the collection and reindex."
         )
+
+    try:
+        from qdrant_client import models
+        _ensure_qdrant_payload_indexes(client=client, collection=collection, models=models)
+    except Exception:
+        pass
 
 
 def _qdrant_dense_vector_size(collection_info: object) -> int:
@@ -865,6 +904,9 @@ def _dense_id(*, chunk: Chunk, fallback_index: int) -> str:
     storage_chunk_id = chunk.metadata.get("storage_chunk_id")
     if isinstance(storage_chunk_id, str) and storage_chunk_id:
         return storage_chunk_id
+    ingestion_id = chunk.metadata.get("chunk_id")
+    if isinstance(ingestion_id, str) and ingestion_id:
+        return ingestion_id
     document_id = str(chunk.metadata.get("document_id") or "document")
     return f"{document_id}:{fallback_index:04d}"
 
