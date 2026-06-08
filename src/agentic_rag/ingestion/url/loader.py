@@ -847,24 +847,23 @@ def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int]:
             "dòng xe quan tâm",
             "mua sắm",
         )
+    source_type = "url" if source_url else "html"
+    title = extracted.title or parsed.title
+    cleaned_markdown = _clean_markdown_noise(extracted.markdown)
+    chunks = _build_markdown_aware_chunks(
+        markdown=cleaned_markdown,
+        source=source,
+        source_type=source_type,
+        title=title,
+        fetched_at=fetched_at,
     )
-    title_score = 0
-    if title and title.strip() and normalize_space(title).lower() in text.lower():
-        title_score = 400
-    short_content_penalty = 300 if token_count < 20 else 0
-    capped_price_count = min(price_count, 25)
-    image_heavy_penalty = max(0, image_count - heading_count - 12) * 45
-    link_heavy_penalty = max(0, link_count - heading_count - 20) * 20
-    score = (
-        token_count
-        + (heading_count * 80)
-        + (capped_price_count * 1000)
-        + title_score
-        - short_content_penalty
-        - (image_count * 12)
-        - image_heavy_penalty
-        - link_heavy_penalty
-        - (boilerplate_hits * 180)
+    chunks = _with_html_metadata(
+        chunks,
+        source_url=source_url,
+        original_url=original_url,
+        final_url=final_url,
+        canonical_url=canonical_url,
+        parsed=parsed,
     )
     return {
         "score": score,
@@ -882,7 +881,6 @@ def _build_markdown_aware_chunks(
     markdown: str,
     source: str,
     source_type: str,
-    url: str | None,
     title: str | None,
     fetched_at: str,
 ) -> list[Chunk]:
@@ -893,42 +891,22 @@ def _build_markdown_aware_chunks(
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
-        chunk_text = markdown_chunk.text
-        search_aliases = _vinfast_model_aliases(
-            " ".join(part for part in (title, chunk_text) if part)
-        )
-        section_path = list(markdown_chunk.section_path)
-        content_origin = _chunk_content_origin(section_path)
+        chunk_id = build_chunk_id(source_type, source, section, chunk_index)
         chunks.append(
             Chunk(
-                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
-                text=chunk_text,
+                chunk_id=chunk_id,
+                text=markdown_chunk.text,
                 metadata={
+                    "chunk_id": chunk_id,
                     "source": source,
                     "source_type": source_type,
-                    "file_name": None,
-                    "url": url,
-                    "page": None,
+                    "title": title,
                     "section": section,
                     "section_level": markdown_chunk.section_level,
-                    "section_path": section_path,
-                    "title": title,
+                    "section_path": list(markdown_chunk.section_path),
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
-                    "dedupe_hash": short_hash(normalize_space(chunk_text)),
-                    "chunk_index": chunk_index,
-                    "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
-                    "search_aliases": list(search_aliases),
-                    "content_origin": content_origin,
-                    "probe_parent_section": _probe_parent_section(
-                        section_path,
-                        content_origin,
-                    ),
-                    "probe_state_label": _probe_state_label(section, content_origin),
                     "chunk_token_count": markdown_chunk.chunk_token_count,
-                    "chunk_overlap_paragraphs": _URL_CHUNK_OVERLAP_PARAGRAPHS,
-                    "chunking_method": "hierarchical-markdown-probe-aware-overlap",
-                    "semantic_unit": markdown_chunk.semantic_unit,
                     **markdown_chunk.metadata,
                 },
             )
@@ -1293,6 +1271,7 @@ def _persist_text_debug_artifacts(
 def _with_html_metadata(
     chunks: list[Chunk],
     *,
+    source_url: str | None,
     original_url: str | None,
     final_url: str | None,
     canonical_url: str | None,
@@ -1302,80 +1281,39 @@ def _with_html_metadata(
     parser_name: str,
     selection: MarkdownSelection,
 ) -> list[Chunk]:
-    updated_chunks: list[Chunk] = []
-    for chunk in chunks:
-        image_references = _image_references_for_chunk(chunk.text, parsed)
-        updated_chunks.append(
-            chunk.model_copy(
-                update={
-                    "metadata": {
-                        **chunk.metadata,
-                        "original_url": original_url,
-                        "final_url": final_url,
-                        "canonical_url": canonical_url,
-                        "language": parsed.metadata.language,
-                        "author": parsed.metadata.author,
-                        "published_at": parsed.metadata.published_at,
-                        "description": parsed.metadata.description
-                        or parsed.metadata.og_description,
-                        "asset_count": len(parsed.assets),
-                        "image_reference_count": len(image_references),
-                        "image_references": image_references,
-                        "crawler": crawler,
-                        "crawler_error": crawler_error,
-                        "parser": parser_name,
-                        "markdown_quality": _markdown_quality_metadata(selection),
-                    }
+    best_url = canonical_url or final_url or source_url or original_url
+    return [
+        chunk.model_copy(
+            update={
+                "metadata": {
+                    **chunk.metadata,
+                    "url": best_url,
+                    "domain": _extract_domain(best_url),
+                    "original_url": original_url,
+                    "canonical_url": canonical_url,
+                    "language": parsed.metadata.language,
+                    "author": parsed.metadata.author,
+                    "published_at": parsed.metadata.published_at,
                 }
             )
         )
     return updated_chunks
 
 
-def _markdown_quality_metadata(selection: MarkdownSelection) -> dict[str, object]:
-    return {
-        "selected_parser": selection.parser,
-        "selected_role": selection.selected_role,
-        "fallback_reason": selection.fallback_reason,
-        "candidates": [
-            {
-                "parser": candidate.parser,
-                "role": candidate.role,
-                "score": candidate.score,
-                "token_count": candidate.token_count,
-                "heading_count": candidate.heading_count,
-                "price_count": candidate.price_count,
-                "boilerplate_hits": candidate.boilerplate_hits,
-                "image_count": candidate.image_count,
-                "link_count": candidate.link_count,
-            }
-            for candidate in selection.candidates
-        ],
-    }
-
-
-def _image_references_for_chunk(text: str, parsed: ParsedHtml) -> list[dict[str, str | None]]:
-    image_assets = [asset for asset in parsed.assets if asset.kind == "image"]
-    if not image_assets:
-        return []
-
-    references: list[dict[str, str | None]] = []
-    text_words = _reference_words(text)
-    for asset in image_assets:
-        reference_text = " ".join(part for part in (asset.alt, asset.title) if part)
-        reference_words = _reference_words(reference_text)
-        overlap = bool(text_words and reference_words and text_words.intersection(reference_words))
-        if not overlap and len(image_assets) > 3:
-            continue
-        reason = "alt_or_title_overlap" if overlap else "page_image_reference"
-        references.append(
-            {
-                "kind": asset.kind,
-                "url": asset.url,
-                "alt": asset.alt,
-                "title": asset.title,
-                "target_url": asset.target_url,
-                "reference_reason": reason,
+def _with_extractor_metadata(
+    chunks: list[Chunk],
+    *,
+    extracted: ExtractedMarkdown,
+) -> list[Chunk]:
+    page_type = str(extracted.normalize_stats.get("content_type", "generic"))
+    return [
+        chunk.model_copy(
+            update={
+                "metadata": {
+                    **chunk.metadata,
+                    "page_type": page_type,
+                    "is_product": bool(extracted.product),
+                }
             }
         )
         if len(references) >= 5:
@@ -1442,6 +1380,12 @@ def _dedupe_chunks(chunks: list[Chunk]) -> list[Chunk]:
         seen_text_hashes.add(text_hash)
         deduped_chunks.append(chunk)
     return deduped_chunks
+
+
+def _extract_domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    return urlparse(url).netloc or None
 
 
 def _raise_if_pdf_url(url: str) -> None:

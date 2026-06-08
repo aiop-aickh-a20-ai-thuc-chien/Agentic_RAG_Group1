@@ -79,6 +79,8 @@ uv.lock
 eval.xlsx
 result.xlsx
 *.xlsx
+!guide/reports/result_final.xlsx
+!guide/reports/reject.xlsx
 
 # Local crawl/chunking review artifacts
 src/agentic_rag/ingestion/Crawl link/.codegraph/
@@ -88,3 +90,17 @@ src/agentic_rag/ingestion/Crawl link/*.json
 src/agentic_rag/ingestion/Crawl link/*.txt
 src/agentic_rag/ingestion/Crawl link/chroma_db/
 src/agentic_rag/ingestion/Crawl link/desktop.ini
+tsconfig.tsbuildinfo
+
+# Local deployment config (machine-specific paths)
+nginx.conf
+
+# Temporary relink/partial files
+_relink*.txt
+guide/reports/_sheet1_partial.xml
+guide/reports/eval_queue.json
+guide/reports/eval_queue.xlsx
+
+# Script logs and debug one-offs
+scripts/upload_failed.txt
+scripts/_*.py

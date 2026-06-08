@@ -86,6 +86,26 @@ DOM_WALKER_JS = r"""
     if (inSkipped(el)) return;
     const tag = el.tagName.toLowerCase();
     const isHeading = /^h[1-6]$/.test(tag);
+    if (tag === 'table') {
+      const rows = [];
+      el.querySelectorAll('tr').forEach(row => {
+        if (inSkipped(row)) return;
+        const cells = Array.from(row.querySelectorAll('th, td')).map(c => txt(c));
+        if (cells.length > 0 && cells.some(c => c)) rows.push(cells);
+      });
+      if (rows.length > 0) {
+        out.push('');
+        out.push('| ' + rows[0].join(' | ') + ' |');
+        out.push('| ' + rows[0].map(() => '---').join(' | ') + ' |');
+        for (let i = 1; i < rows.length; i++) {
+          out.push('| ' + rows[i].join(' | ') + ' |');
+        }
+        out.push('');
+        rows.flat().forEach(c => { if (c) seen.add(c.toLowerCase()); });
+      }
+      return;
+    }
+    if (tag === 'td' || tag === 'th') return;
     if (!isHeading && !isLeafBlock(el)) return;
     if (!isHeading && el.parentElement && !inSkipped(el.parentElement)
         && isLeafBlock(el.parentElement)) return;
@@ -102,8 +122,6 @@ DOM_WALKER_JS = r"""
       out.push('#'.repeat(parseInt(tag[1])) + ' ' + t);
     } else if (tag === 'li') {
       out.push('- ' + t);
-    } else if (tag === 'td' || tag === 'th') {
-      out.push('| ' + t + ' |');
     } else {
       out.push(t);
     }
@@ -132,7 +150,7 @@ PRODUCT_JS = r"""
   const T = s => (s||'').trim().replace(/\s+/g,' ');
   const uniq = a => [...new Set(a)];
   const res = {prices:[], specs:[]};
-  const CUR = /\d[\d.,]*\s*(VND|VNĐ|₫|dong|USD|US\$|\$)\b/i;
+  const CUR = /\d[\d.,]*\s*(VNĐ|VND|₫|đồng|dong|USD|US\$|\$)\b/i;
   document.querySelectorAll('p,span,div,td,li,strong,b,h1,h2,h3,h4,h5,h6').forEach(e=>{
     if (e.children.length > 0) return;
     const t = T(e.innerText);
@@ -364,6 +382,12 @@ def clean_title(title: str | None) -> str:
     cleaned = (title or "").strip()
     if "|" in cleaned:
         cleaned = cleaned.split("|", 1)[0].strip()
+    for sep in (" – ", " — ", " · ", " • "):  # noqa: RUF001
+        if sep in cleaned:
+            head = cleaned.split(sep, 1)[0].strip()
+            if len(head) >= 4:
+                cleaned = head
+            break
     if " - " in cleaned:
         head = cleaned.split(" - ", 1)[0].strip()
         if len(head) >= 8:
@@ -438,6 +462,10 @@ class _DomMarkdownParser(HTMLParser):
         self._strong_depth = 0
         self._lines: list[str] = []
         self._seen: set[str] = set()
+        self._table_depth = 0
+        self._in_tr = False
+        self._current_row_cells: list[str] = []
+        self._table_row_count = 0
 
     @property
     def markdown(self) -> str:
@@ -454,6 +482,8 @@ class _DomMarkdownParser(HTMLParser):
             self._skip_depth += 1
             return
         if self._skip_depth > 0:
+            return
+        if self._start_table_element(normalized_tag):
             return
         if normalized_tag in _HEADING_TAGS:
             self._flush_block()
@@ -478,6 +508,8 @@ class _DomMarkdownParser(HTMLParser):
             self._skip_depth -= 1
             return
         if self._skip_depth > 0:
+            return
+        if self._end_table_element(normalized_tag):
             return
         if normalized_tag == self._current_heading:
             heading = _clean_line(" ".join(self._heading_parts))
@@ -523,6 +555,49 @@ class _DomMarkdownParser(HTMLParser):
         self._lines.append(f"{'#' * level} {text}")
         self._lines.append("")
 
+    def _start_table_element(self, tag: str) -> bool:
+        if tag == "table":
+            self._flush_block()
+            self._table_depth += 1
+            if self._table_depth == 1:
+                self._table_row_count = 0
+            return True
+        if tag == "tr":
+            self._flush_block()
+            if self._table_depth > 0:
+                self._in_tr = True
+                self._current_row_cells = []
+            return True
+        return False
+
+    def _end_table_element(self, tag: str) -> bool:
+        if tag == "table":
+            self._flush_block()
+            if self._table_depth > 0:
+                self._table_depth -= 1
+            if self._table_depth == 0:
+                self._in_tr = False
+                self._current_row_cells = []
+                self._table_row_count = 0
+            return True
+        if tag == "tr" and self._in_tr:
+            self._flush_table_row()
+            self._in_tr = False
+            return True
+        return False
+
+    def _flush_table_row(self) -> None:
+        self._flush_block()
+        if not self._current_row_cells:
+            return
+        row_line = "| " + " | ".join(self._current_row_cells) + " |"
+        self._lines.append(row_line)
+        if self._table_row_count == 0:
+            sep = "| " + " | ".join("---" for _ in self._current_row_cells) + " |"
+            self._lines.append(sep)
+        self._table_row_count += 1
+        self._current_row_cells = []
+
     def _flush_block(self) -> None:
         if self._current_block is None:
             return
@@ -533,6 +608,8 @@ class _DomMarkdownParser(HTMLParser):
                 self._seen.add(key)
                 if self._current_block == "li":
                     self._lines.append(f"- {line}")
+                elif self._current_block in {"td", "th"} and self._in_tr:
+                    self._current_row_cells.append(line)
                 elif self._current_block in {"td", "th"}:
                     self._lines.append(f"| {line} |")
                 else:

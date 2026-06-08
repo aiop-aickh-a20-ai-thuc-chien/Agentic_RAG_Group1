@@ -300,3 +300,16 @@ def _section_path_from_docling_chunk(docling_chunk: Any) -> list[str]:
 
 def _section_from_section_path(section_path: list[str]) -> str | None:
     return " > ".join(section_path) or None
+
+
+def _pages_from_docling_chunk(docling_chunk: Any) -> list[int]:
+    meta = getattr(docling_chunk, "meta", None)
+    if meta is None:
+        return []
+    pages: set[int] = set()
+    for item in getattr(meta, "doc_items", []):
+        for prov in getattr(item, "prov", []):
+            page_no = getattr(prov, "page_no", None)
+            if isinstance(page_no, int):
+                pages.add(page_no)
+    return sorted(pages)
