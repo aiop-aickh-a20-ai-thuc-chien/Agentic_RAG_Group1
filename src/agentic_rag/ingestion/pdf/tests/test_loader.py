@@ -114,6 +114,7 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
     ]
     assert chunks[0].text == "Pin duoc bao hanh 8 nam."
     assert chunks[0].metadata == {
+        "chunk_id": "pdf_vinfast_warranty_c0001",
         "source": str(pdf_path),
         "source_type": "pdf",
         "file_name": "VinFast Warranty.pdf",

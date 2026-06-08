@@ -373,6 +373,71 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
     assert documents[0].chunks[0].text == "Noi dung tu nguoi dung"
 
 
+def test_local_pdf_provider_source_store_mode_does_not_write_local_cache(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+            self.markdown_seen: str | None = None
+
+        def write_document(self, **kwargs: Any) -> None:
+            markdown_path = cast(Path, kwargs["markdown_path"])
+            self.markdown_seen = markdown_path.read_text(encoding="utf-8")
+            self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
+
+        def read_chunks(self, document_id: str) -> list[Chunk]:
+            return self.documents.get(document_id, [])
+
+        def read_all_chunks(self) -> list[Chunk]:
+            return [chunk for chunks in self.documents.values() for chunk in chunks]
+
+        def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+            return [chunk for doc_id in document_ids for chunk in self.documents.get(doc_id, [])]
+
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return []
+
+        def delete_document(self, document_id: str) -> None:
+            self.documents.pop(document_id, None)
+
+        def delete_all_documents(self) -> int:
+            count = len(self.documents)
+            self.documents.clear()
+            return count
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    assert uploaded.document_id in source_store.documents
+    assert source_store.markdown_seen == "Noi dung tu nguoi dung"
+    assert not (tmp_path / "chunks").exists()
+    assert not (tmp_path / "parsed").exists()
+    assert not (tmp_path / "files").exists()
+    assert not (tmp_path / "debug").exists()
+    assert not (tmp_path / "artifacts").exists()
+
+
 def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -428,6 +493,50 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
         "model": "local-model",
         "latency_ms": trace["index_write"]["dense_index"]["latency_ms"],
     }
+
+
+def test_local_pdf_provider_rolls_back_source_store_when_qdrant_index_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+            self.deleted: list[str] = []
+
+        def write_document(self, **kwargs: Any) -> None:
+            self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
+
+        def delete_document(self, document_id: str) -> None:
+            self.deleted.append(document_id)
+            self.documents.pop(document_id, None)
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+
+    with pytest.raises(RuntimeError, match="source storage was rolled back"):
+        provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    assert source_store.documents == {}
+    assert len(source_store.deleted) == 1
 
 
 def test_local_pdf_provider_does_not_delete_source_when_qdrant_document_delete_fails(

@@ -25,6 +25,7 @@ dependencies = [
     "langchain-community>=0.4.2",
     "ragas>=0.2",
     "langchain-google-vertexai>=3.2.3",
+    "playwright>=1.60.0",
 ]
 
 [project.optional-dependencies]
@@ -96,6 +97,7 @@ module = [
     "langchain_huggingface.*",
     "langchain_postgres.*",
     "boto3.*",
+    "botocore.*",
     "langgraph.*",
     "langsmith.*",
     "qdrant_client.*",
@@ -104,4 +106,8 @@ follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
 module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["openpyxl", "openpyxl.*"]
 ignore_missing_imports = true

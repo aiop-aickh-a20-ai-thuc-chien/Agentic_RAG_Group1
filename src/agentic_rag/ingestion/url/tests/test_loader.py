@@ -39,18 +39,19 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
 
     assert all(isinstance(chunk, Chunk) for chunk in chunks)
     assert [chunk.metadata["section"] for chunk in chunks] == ["Admissions"]
+    assert chunks[0].metadata["chunk_id"] == chunks[0].chunk_id
     assert chunks[0].metadata["source_type"] == "url"
     assert chunks[0].metadata["url"] == "https://example.edu/admissions"
+    assert chunks[0].metadata["domain"] == "example.edu"
     assert chunks[0].metadata["title"] == "Admissions Page"
-    assert chunks[0].metadata["chunking_method"] == "hierarchical-markdown-subsection-overlap"
     assert chunks[0].metadata["section_level"] == 1
     assert chunks[0].metadata["section_path"] == ["Admissions Page", "Admissions"]
-    assert chunks[0].metadata["semantic_unit"] == "hierarchical_markdown_subsection"
-    assert chunks[0].metadata["full_path"] == ["Admissions Page", "Admissions"]
-    assert chunks[0].metadata["part_index"] == 1
-    assert chunks[0].metadata["part_total"] == 1
+    assert chunks[0].metadata["chunk_part_index"] == 1
+    assert chunks[0].metadata["chunk_part_total"] == 1
+    assert "chunking_method" not in chunks[0].metadata
+    assert "semantic_unit" not in chunks[0].metadata
     assert "Applications require transcripts." in chunks[0].text
-    assert "Interview: Shortlisted applicants join one interview." in chunks[0].text
+    assert "Shortlisted applicants join one interview." in chunks[0].text
     assert "Home Login Pricing" not in chunks[0].text
     assert "tracking" not in chunks[0].text
 
@@ -109,7 +110,7 @@ def test_load_html_with_artifacts_uses_crawl_link_markdown_cleanup() -> None:
     assert "Cookie consent noise" not in loaded.markdown
     assert "Dang ky tu van" not in loaded.markdown
     assert loaded.chunks
-    assert loaded.chunks[0].metadata["parser"] == "crawl-link-dom-markdown+normalizer"
+    assert "parser" not in loaded.chunks[0].metadata
 
 
 def test_load_html_chunks_writes_data_artifacts(
@@ -268,8 +269,9 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert chunks[0].text == "# Overview\n\nFetched content with enough detail for chunk review."
     assert chunks[0].metadata["source"] == "https://example.edu/final"
     assert chunks[0].metadata["url"] == "https://example.edu/final"
+    assert chunks[0].metadata["domain"] == "example.edu"
     assert chunks[0].metadata["original_url"] == "https://example.edu"
-    assert chunks[0].metadata["final_url"] == "https://example.edu/final"
+    assert "final_url" not in chunks[0].metadata
     assert chunks[0].metadata["section"] == "Overview"
     assert chunks[0].metadata["section_path"] == ["Overview"]
 
@@ -285,6 +287,12 @@ def test_load_url_chunks_rejects_direct_pdf_url() -> None:
 
 
 def test_load_url_chunks_rejects_pdf_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        loader_module,
+        "extract_markdown_with_playwright",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("browser disabled")),
+    )
+
     def fake_fetch_url(url: str) -> loader_module._FetchedPage:
         assert url == "https://example.edu/download"
         return loader_module._FetchedPage(

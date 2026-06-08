@@ -5,13 +5,13 @@ import {
   ArrowRight,
   Bot,
   Check,
+  ClipboardList,
   FileCheck2,
   LockKeyhole,
   Moon,
   ShieldCheck,
   Sparkles,
   Sun,
-  Upload,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -133,7 +133,16 @@ export default function ToolLauncherPage() {
             </Link>
 
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <ComingSoon icon={Upload} label="Tóm tắt tài liệu" />
+              <Link
+                href="/eval-review"
+                className="group rounded-lg border border-line/80 bg-white/64 p-4 text-sm transition hover:-translate-y-0.5 hover:border-mint/40 hover:bg-white hover:shadow-sm dark:border-white/14 dark:bg-slate-900/76"
+              >
+                <ClipboardList className="mb-3 h-4 w-4 text-mint dark:text-emerald-300" aria-hidden="true" />
+                <p className="font-medium text-ink dark:text-slate-100">Eval Review</p>
+                <p className="mt-1 text-xs text-ink/56 dark:text-slate-200">
+                  Duyệt & đánh giá câu hỏi
+                </p>
+              </Link>
               <ComingSoon icon={ShieldCheck} label="So sánh nguồn" />
               <ComingSoon icon={LockKeyhole} label="Quản lý hồ sơ" />
             </div>

@@ -361,12 +361,12 @@ def _load_extracted_markdown_with_artifacts(
         markdown=cleaned_markdown,
         source=source,
         source_type=source_type,
-        url=source_url,
         title=title,
         fetched_at=fetched_at,
     )
     chunks = _with_html_metadata(
         chunks,
+        source_url=source_url,
         original_url=original_url,
         final_url=final_url,
         canonical_url=canonical_url,
@@ -397,7 +397,6 @@ def _build_markdown_aware_chunks(
     markdown: str,
     source: str,
     source_type: str,
-    url: str | None,
     title: str | None,
     fetched_at: str,
 ) -> list[Chunk]:
@@ -408,26 +407,22 @@ def _build_markdown_aware_chunks(
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
+        chunk_id = build_chunk_id(source_type, source, section, chunk_index)
         chunks.append(
             Chunk(
-                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
+                chunk_id=chunk_id,
                 text=markdown_chunk.text,
                 metadata={
+                    "chunk_id": chunk_id,
                     "source": source,
                     "source_type": source_type,
-                    "file_name": None,
-                    "url": url,
-                    "page": None,
+                    "title": title,
                     "section": section,
                     "section_level": markdown_chunk.section_level,
                     "section_path": list(markdown_chunk.section_path),
-                    "title": title,
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
-                    "chunk_index": chunk_index,
                     "chunk_token_count": markdown_chunk.chunk_token_count,
-                    "chunking_method": "hierarchical-markdown-subsection-overlap",
-                    "semantic_unit": markdown_chunk.semantic_unit,
                     **markdown_chunk.metadata,
                 },
             )
@@ -511,24 +506,25 @@ def _persist_text_debug_artifacts(
 def _with_html_metadata(
     chunks: list[Chunk],
     *,
+    source_url: str | None,
     original_url: str | None,
     final_url: str | None,
     canonical_url: str | None,
     parsed: ParsedHtml,
 ) -> list[Chunk]:
+    best_url = canonical_url or final_url or source_url or original_url
     return [
         chunk.model_copy(
             update={
                 "metadata": {
                     **chunk.metadata,
+                    "url": best_url,
+                    "domain": _extract_domain(best_url),
                     "original_url": original_url,
-                    "final_url": final_url,
                     "canonical_url": canonical_url,
                     "language": parsed.metadata.language,
                     "author": parsed.metadata.author,
                     "published_at": parsed.metadata.published_at,
-                    "description": parsed.metadata.description or parsed.metadata.og_description,
-                    "asset_count": len(parsed.assets),
                 }
             }
         )
@@ -541,20 +537,25 @@ def _with_extractor_metadata(
     *,
     extracted: ExtractedMarkdown,
 ) -> list[Chunk]:
+    page_type = str(extracted.normalize_stats.get("content_type", "generic"))
     return [
         chunk.model_copy(
             update={
                 "metadata": {
                     **chunk.metadata,
-                    "parser": extracted.parser_name,
-                    "browser_fetched_ok": extracted.fetched_ok,
+                    "page_type": page_type,
                     "is_product": bool(extracted.product),
-                    "normalize_stats": extracted.normalize_stats,
                 }
             }
         )
         for chunk in chunks
     ]
+
+
+def _extract_domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    return urlparse(url).netloc or None
 
 
 def _raise_if_pdf_url(url: str) -> None:
