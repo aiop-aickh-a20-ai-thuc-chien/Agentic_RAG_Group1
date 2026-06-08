@@ -96,14 +96,16 @@ visual-heavy, nhưng cũng đắt nhất về latency, chi phí và kiểm soát
 - `load_pdf_chunks(path)` vẫn mặc định dùng Docling.
 - Parser khác dùng `load_pdf_chunks(path, parser_name="pypdf")` hoặc
   `LOCAL_PDF_PARSER=pypdf`.
-- Chunker mặc định là `docling-hybrid`. Dùng
-  `load_pdf_chunks(path, chunker_name="deterministic")` hoặc
-  `LOCAL_PDF_CHUNKER=deterministic` khi cần fallback/baseline deterministic.
+- Chunker mặc định là `deterministic`. Dùng
+  `load_pdf_chunks(path, chunker_name="docling-page-aware")` hoặc
+  `LOCAL_PDF_CHUNKER=docling-page-aware` khi cần page-aware citation metadata,
+  và dùng `docling-hybrid` khi cần so sánh với Docling native chunking.
 - `save_pdf_ingestion_artifacts(..., parser_name=...)` dùng để xuất artifact so
   sánh Markdown/chunk.
 - `save_pdf_multimodal_artifacts()` tạm thời Docling-only vì đang phụ thuộc
   document object của Docling để export assets.
-- Generated files trong `.data/` không được commit.
+- Benchmark datasets tải bằng script PDF-local phải nằm dưới
+  `src/agentic_rag/ingestion/pdf/.data/` và không được commit.
 
 ## Tài liệu tham khảo chính
 
