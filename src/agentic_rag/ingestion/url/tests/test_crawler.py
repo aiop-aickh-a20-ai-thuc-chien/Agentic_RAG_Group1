@@ -268,9 +268,7 @@ async def test_crawl4ai_retries_after_short_loading_shell(
         '<a href="/vn_vi/vf7">VF 7</a>'
         '<a href="/vn_vi/vf6">VF 6</a>'
         '<a href="/vn_vi/vf5">VF 5</a>'
-        "<p>"
-        + ("VinFast E-SUV price range battery warranty charging support. " * 8)
-        + "</p>"
+        "<p>" + ("VinFast E-SUV price range battery warranty charging support. " * 8) + "</p>"
         "<p>Dòng xe E-SUV có giá bán từ 1.229.180.000 VNĐ.</p>"
         "</section></body></html>"
     )
@@ -334,10 +332,7 @@ def test_reset_crawl_shell_domain_cache_clears_domain_hint() -> None:
 
 def test_shell_gate_rejects_promo_shell_and_accepts_good_page() -> None:
     shell = _crawl_result(
-        html=(
-            "<html><body><title>VinFast</title>"
-            "<p>Uu dai chi toi 31/12!</p></body></html>"
-        ),
+        html=("<html><body><title>VinFast</title><p>Uu dai chi toi 31/12!</p></body></html>"),
         markdown="Uu dai chi toi 31/12!",
         links={"internal": [], "external": []},
     )

@@ -115,9 +115,7 @@ def build_chunks(
                     "is_usable_for_retrieval": chunk_quality["is_usable"],
                     "structural_clarity": structural_clarity,
                     "has_structural_confusion": not structural_clarity["is_clear"],
-                    "needs_table_reconstruction": structural_clarity[
-                        "needs_table_reconstruction"
-                    ],
+                    "needs_table_reconstruction": structural_clarity["needs_table_reconstruction"],
                     "evidence_diagnostics": evidence_diagnostics,
                     "has_duplicate_evidence": evidence_diagnostics["has_duplicate_evidence"],
                     "has_possible_conflict": evidence_diagnostics["has_possible_conflict"],
@@ -133,9 +131,7 @@ def chunk_evidence_diagnostics(text: str) -> dict[str, object]:
     lines = [_normalize_evidence_line(line) for line in text.splitlines()]
     lines = [line for line in lines if len(line) >= 24]
     duplicate_groups = [
-        {"text": line, "count": count}
-        for line, count in Counter(lines).most_common()
-        if count > 1
+        {"text": line, "count": count} for line, count in Counter(lines).most_common() if count > 1
     ][:3]
 
     numeric_values = [

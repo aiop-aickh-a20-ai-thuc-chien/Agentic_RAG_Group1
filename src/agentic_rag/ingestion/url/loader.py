@@ -732,9 +732,7 @@ def _select_markdown(
         )
     except (ImportError, ModuleNotFoundError, RuntimeError, ValueError):
         crawl_link_extracted = None
-    if crawl_link_extracted is not None and _has_markdown_heading(
-        crawl_link_extracted.markdown
-    ):
+    if crawl_link_extracted is not None and _has_markdown_heading(crawl_link_extracted.markdown):
         candidates.append(
             _build_markdown_candidate(
                 crawl_link_extracted.markdown,
@@ -1134,9 +1132,7 @@ def _build_markdown_aware_chunks(
                     "is_usable_for_retrieval": chunk_quality["is_usable"],
                     "structural_clarity": structural_clarity,
                     "has_structural_confusion": not structural_clarity["is_clear"],
-                    "needs_table_reconstruction": structural_clarity[
-                        "needs_table_reconstruction"
-                    ],
+                    "needs_table_reconstruction": structural_clarity["needs_table_reconstruction"],
                     "evidence_diagnostics": evidence_diagnostics,
                     "has_duplicate_evidence": evidence_diagnostics["has_duplicate_evidence"],
                     "has_possible_conflict": evidence_diagnostics["has_possible_conflict"],

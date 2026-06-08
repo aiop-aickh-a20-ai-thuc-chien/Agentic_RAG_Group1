@@ -115,9 +115,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
     assert chunks[0].metadata["is_usable_for_retrieval"] is False
     assert chunks[0].metadata["chunk_quality"] == chunk_text_quality("Overview content")
-    assert chunks[0].metadata["structural_clarity"] == chunk_structural_clarity(
-        "Overview content"
-    )
+    assert chunks[0].metadata["structural_clarity"] == chunk_structural_clarity("Overview content")
     assert chunks[0].metadata["has_structural_confusion"] is False
     assert chunks[0].metadata["needs_table_reconstruction"] is False
     assert chunks[0].metadata["evidence_diagnostics"]["has_duplicate_evidence"] is False
@@ -126,8 +124,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
 
 def test_chunk_quality_marks_useful_url_evidence() -> None:
     useful_text = (
-        "Dòng xe E-SUV có 6-7 chỗ ngồi, quãng đường lên tới 626 km "
-        "và giá bán từ 1.229.180.000 VNĐ."
+        "Dòng xe E-SUV có 6-7 chỗ ngồi, quãng đường lên tới 626 km và giá bán từ 1.229.180.000 VNĐ."
     )
 
     assert is_usable_chunk_text("Ưu đãi chỉ tới 31/12!") is False
