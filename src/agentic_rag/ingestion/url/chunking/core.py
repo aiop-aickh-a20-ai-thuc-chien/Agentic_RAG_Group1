@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from typing import Any
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import (
@@ -125,12 +126,12 @@ def build_chunks(
     return chunks
 
 
-def chunk_evidence_diagnostics(text: str) -> dict[str, object]:
+def chunk_evidence_diagnostics(text: str) -> dict[str, Any]:
     """Detect repeated or potentially conflicting evidence inside one chunk."""
 
     lines = [_normalize_evidence_line(line) for line in text.splitlines()]
     lines = [line for line in lines if len(line) >= 24]
-    duplicate_groups = [
+    duplicate_groups: list[dict[str, Any]] = [
         {"text": line, "count": count} for line, count in Counter(lines).most_common() if count > 1
     ][:3]
 
@@ -138,7 +139,7 @@ def chunk_evidence_diagnostics(text: str) -> dict[str, object]:
         _normalize_numeric_value(match.group(0))
         for match in _NUMBER_WITH_OPTIONAL_UNIT_RE.finditer(text)
     ]
-    repeated_numeric_values = [
+    repeated_numeric_values: list[dict[str, Any]] = [
         {"value": value, "count": count}
         for value, count in Counter(numeric_values).most_common()
         if count > 1
@@ -156,7 +157,7 @@ def chunk_evidence_diagnostics(text: str) -> dict[str, object]:
         if values:
             values_by_label[label].update(values)
 
-    conflict_groups = [
+    conflict_groups: list[dict[str, Any]] = [
         {"label": label, "values": sorted(values)}
         for label, values in values_by_label.items()
         if len(values) > 1

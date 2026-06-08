@@ -707,7 +707,7 @@ def chunking_text(value: str | ChunkingInput) -> str:
     return _coerce_chunking_input(value).markdown
 
 
-def chunk_text_quality(text: str) -> dict[str, object]:
+def chunk_text_quality(text: str) -> dict[str, Any]:
     """Return deterministic review metrics for one candidate chunk."""
 
     cleaned = normalize_space(text)
@@ -740,7 +740,7 @@ def is_usable_chunk_text(text: str) -> bool:
     return bool(chunk_text_quality(text)["is_usable"])
 
 
-def chunk_structural_clarity(text: str) -> dict[str, object]:
+def chunk_structural_clarity(text: str) -> dict[str, Any]:
     """Detect chunks that are rich in facts but structurally confusing."""
 
     cleaned = normalize_space(text)

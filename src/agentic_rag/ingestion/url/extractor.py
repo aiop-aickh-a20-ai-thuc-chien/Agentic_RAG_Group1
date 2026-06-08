@@ -351,14 +351,14 @@ async def _extract_markdown_with_crawlee_playwright(url: str) -> ExtractedMarkdo
         request_handler_timeout=timedelta(seconds=35),
     )
 
-    @crawler.pre_navigation_hook
+    @cast(Any, crawler.pre_navigation_hook)
     async def block_static_assets(context: Any) -> None:
         await context.page.add_init_script(
             "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
         )
         await context.block_requests()
 
-    @crawler.router.default_handler
+    @cast(Any, crawler.router.default_handler)
     async def request_handler(context: Any) -> None:
         page = context.page
         await page.wait_for_load_state("domcontentloaded", timeout=20_000)

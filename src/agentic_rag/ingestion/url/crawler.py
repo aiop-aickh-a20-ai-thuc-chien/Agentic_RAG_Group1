@@ -62,7 +62,7 @@ class Crawl4AIPage:
 @dataclass(frozen=True)
 class _CrawlAttempt:
     name: str
-    config: object
+    config: Any
     wait_until_target: str
 
 
