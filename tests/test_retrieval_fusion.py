@@ -1,6 +1,8 @@
+from collections.abc import Iterator
 from typing import cast
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 import agentic_rag.retrieval.fusion as fusion_module
 from agentic_rag.core.contracts import Chunk, SearchResult
@@ -17,6 +19,33 @@ from agentic_rag.retrieval.fusion import (
     rrf_fusion,
     weighted_rrf_fusion,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clean_model_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    from agentic_rag.model_runtime.factory import clear_model_runtime_caches
+
+    clear_model_runtime_caches()
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    yield
+    clear_model_runtime_caches()
+
+
+def test_threshold_config_is_pydantic_contract() -> None:
+    config = ThresholdConfig(bm25_min_score=0.2)
+
+    assert isinstance(config, BaseModel)
+    assert config.bm25_min_score == 0.2
+    assert config.min_evidence_count == 0
+
+    with pytest.raises(ValidationError):
+        ThresholdConfig.model_validate({"bm25_min_score": 0.2, "unexpected": True})
+
+    field_name = "bm25_min_score"
+
+    with pytest.raises(ValidationError):
+        setattr(config, field_name, 0.4)
 
 
 def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
@@ -270,7 +299,7 @@ def test_rerank_deduplicates_candidates_by_best_rank(monkeypatch: pytest.MonkeyP
     assert reranked[0].rank == 1
 
 
-def test_rerank_uses_cross_encoder_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rerank_uses_sentence_transformers_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeCrossEncoder:
         def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
             assert pairs == [
@@ -285,10 +314,9 @@ def test_rerank_uses_cross_encoder_when_configured(monkeypatch: pytest.MonkeyPat
         _result(_chunk("chunk-b", "B"), score=0.2, rank=2, retriever="hybrid"),
         _result(_chunk("chunk-c", "C"), score=0.4, rank=3, retriever="hybrid"),
     ]
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
     monkeypatch.setattr(
-        fusion_module,
-        "_load_cross_encoder_model",
+        "agentic_rag.model_runtime.rerankers._load_cross_encoder",
         lambda model_name, device=None: FakeCrossEncoder(),
     )
 
@@ -299,7 +327,7 @@ def test_rerank_uses_cross_encoder_when_configured(monkeypatch: pytest.MonkeyPat
     assert [result.retriever for result in reranked] == ["rerank", "rerank"]
 
 
-def test_rerank_with_metadata_reports_actual_cross_encoder_provider(
+def test_rerank_with_metadata_reports_actual_sentence_transformers_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeCrossEncoder:
@@ -310,45 +338,44 @@ def test_rerank_with_metadata_reports_actual_cross_encoder_provider(
         _result(_chunk("chunk-a", "A"), score=0.2, rank=1, retriever="hybrid"),
         _result(_chunk("chunk-b", "B"), score=0.9, rank=2, retriever="hybrid"),
     ]
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
     monkeypatch.setattr(
-        fusion_module,
-        "_load_cross_encoder_model",
+        "agentic_rag.model_runtime.rerankers._load_cross_encoder",
         lambda model_name, device=None: FakeCrossEncoder(),
     )
 
     reranked, metadata = rerank_with_metadata("warranty question", candidates, top_k=2)
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-a", "chunk-b"]
-    assert metadata["configured_provider"] == "cross-encoder"
-    assert metadata["used_provider"] == "cross-encoder"
+    assert metadata["configured_provider"] == "sentence_transformers"
+    assert metadata["used_provider"] == "sentence_transformers"
 
 
 def test_rerank_metadata_uses_bge_model_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
-    monkeypatch.delenv("RERANK_CROSS_ENCODER_MODEL", raising=False)
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
+    monkeypatch.delenv("RERANK_MODEL", raising=False)
 
     metadata = fusion_module.rerank_metadata()
 
-    assert metadata["provider"] == "cross-encoder"
+    assert metadata["provider"] == "sentence_transformers"
     assert metadata["model"] == "BAAI/bge-reranker-v2-m3"
 
 
 def test_rerank_metadata_reports_configured_bge_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
-    monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "BAAI/bge-reranker-v2-m3")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
+    monkeypatch.setenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
     monkeypatch.setenv("RERANK_DEVICE", "cuda")
 
     metadata = fusion_module.rerank_metadata()
 
-    assert metadata["provider"] == "cross-encoder"
+    assert metadata["provider"] == "sentence_transformers"
     assert metadata["model"] == "BAAI/bge-reranker-v2-m3"
     assert metadata["device"] == "cuda"
     assert metadata["library"] == "sentence-transformers"
 
 
 def test_preload_reranker_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
     monkeypatch.delenv("RERANK_PRELOAD", raising=False)
 
     metadata = preload_reranker()
@@ -365,10 +392,10 @@ def test_preload_reranker_skips_score_provider(monkeypatch: pytest.MonkeyPatch) 
 
     assert metadata["preload"] is True
     assert metadata["status"] == "skipped"
-    assert metadata["reason"] == "provider_not_cross_encoder"
+    assert metadata["reason"] == "provider_not_sentence_transformers"
 
 
-def test_preload_reranker_loads_configured_cross_encoder(
+def test_preload_reranker_loads_configured_sentence_transformers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     loaded_models: list[str] = []
@@ -381,11 +408,11 @@ def test_preload_reranker_loads_configured_cross_encoder(
         loaded_models.append(f"{model_name}:{device}")
         return FakeCrossEncoder()
 
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
-    monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "test-reranker")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
+    monkeypatch.setenv("RERANK_MODEL", "test-reranker")
     monkeypatch.setenv("RERANK_DEVICE", "cuda")
     monkeypatch.setenv("RERANK_PRELOAD", "true")
-    monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", fake_load)
+    monkeypatch.setattr("agentic_rag.model_runtime.rerankers._load_cross_encoder", fake_load)
 
     metadata = preload_reranker()
 
@@ -393,7 +420,7 @@ def test_preload_reranker_loads_configured_cross_encoder(
     assert metadata["status"] == "loaded"
     assert metadata["model"] == "test-reranker"
     assert metadata["device"] == "cuda"
-    assert metadata["used_provider"] == "cross-encoder"
+    assert metadata["used_provider"] == "sentence_transformers"
 
 
 def test_preload_reranker_falls_back_when_cuda_torch_is_unavailable(
@@ -402,11 +429,14 @@ def test_preload_reranker_falls_back_when_cuda_torch_is_unavailable(
     def raise_cuda_error(model_name: str, device: str | None = None) -> object:
         raise AssertionError("Torch not compiled with CUDA enabled")
 
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
-    monkeypatch.setenv("RERANK_CROSS_ENCODER_MODEL", "test-reranker")
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
+    monkeypatch.setenv("RERANK_MODEL", "test-reranker")
     monkeypatch.setenv("RERANK_DEVICE", "cuda")
     monkeypatch.setenv("RERANK_PRELOAD", "true")
-    monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", raise_cuda_error)
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_cross_encoder",
+        raise_cuda_error,
+    )
 
     metadata = preload_reranker()
 
@@ -416,7 +446,7 @@ def test_preload_reranker_falls_back_when_cuda_torch_is_unavailable(
     assert "Torch not compiled with CUDA enabled" in str(metadata["fallback_reason"])
 
 
-def test_rerank_falls_back_to_score_based_when_cross_encoder_is_unavailable(
+def test_rerank_falls_back_to_score_based_when_sentence_transformers_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def raise_import_error(model_name: str, device: str | None = None) -> object:
@@ -426,13 +456,16 @@ def test_rerank_falls_back_to_score_based_when_cross_encoder_is_unavailable(
         _result(_chunk("chunk-a", "A"), score=0.9, rank=1, retriever="hybrid"),
         _result(_chunk("chunk-b", "B"), score=0.2, rank=2, retriever="hybrid"),
     ]
-    monkeypatch.setenv("RERANK_PROVIDER", "cross-encoder")
-    monkeypatch.setattr(fusion_module, "_load_cross_encoder_model", raise_import_error)
+    monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_cross_encoder",
+        raise_import_error,
+    )
 
     reranked, metadata = rerank_with_metadata("warranty question", candidates)
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-a", "chunk-b"]
-    assert metadata["configured_provider"] == "cross-encoder"
+    assert metadata["configured_provider"] == "sentence_transformers"
     assert metadata["used_provider"] == "score"
     assert "fallback_reason" in metadata
 

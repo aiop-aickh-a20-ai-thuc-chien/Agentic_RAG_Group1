@@ -5,7 +5,11 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from agentic_rag.core.contracts import SearchResult
+from agentic_rag.core.contracts import (
+    EvidenceResolutionInput,
+    EvidenceResolutionOutput,
+    RetrievalInput,
+)
 from agentic_rag.core.ports import SourceEvidenceProvider
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.integrations.ragflow.client import RAGFlowClient
@@ -36,14 +40,8 @@ def configured_evidence_provider_name() -> EvidenceProviderName:
 
 
 def evidence_for_question(
-    *,
-    question: str,
-    evidence_context: str | None = None,
-    evidence_chunks: list[SearchResult] | None = None,
-    provider: EvidenceProviderName | None = None,
-    document_ids: list[str] | None = None,
-    use_mock_evidence: bool = False,
-) -> tuple[list[SearchResult], str]:
+    request: EvidenceResolutionInput,
+) -> EvidenceResolutionOutput:
     """Resolve evidence chunks and context for a generation request.
 
     Priority: explicit ``evidence_chunks`` > real provider retrieval >
@@ -53,21 +51,31 @@ def evidence_for_question(
     hallucinating.
     """
 
-    selected_provider = provider or configured_evidence_provider_name()
-    if evidence_chunks is not None:
-        chunks = evidence_chunks
+    selected_provider = request.provider or configured_evidence_provider_name()
+    if request.evidence_chunks is not None:
+        chunks = request.evidence_chunks
     elif selected_provider in {"ragflow", "local_pdf"}:
-        chunks = source_provider_from_env().retrieve(
-            question=question,
-            document_ids=document_ids,
+        chunks = (
+            source_provider_from_env()
+            .retrieve(
+                RetrievalInput(
+                    question=request.question,
+                    document_ids=request.document_ids,
+                )
+            )
+            .results
         )
-    elif use_mock_evidence and selected_provider == "mock":
+    elif request.use_mock_evidence and selected_provider == "mock":
         chunks = sample_search_results()
     else:
         chunks = []
 
-    context = evidence_context if evidence_context is not None else build_evidence_context(chunks)
-    return chunks, context
+    context = (
+        request.evidence_context
+        if request.evidence_context is not None
+        else build_evidence_context(chunks)
+    )
+    return EvidenceResolutionOutput(chunks=chunks, context=context)
 
 
 def source_provider_from_env() -> SourceEvidenceProvider:

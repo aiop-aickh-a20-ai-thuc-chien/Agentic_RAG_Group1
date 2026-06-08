@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -29,6 +30,17 @@ from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 from agentic_rag.integrations.local_pdf.storage import StoredRawSource
 from agentic_rag.testing.fixtures import sample_search_results
+
+
+@pytest.fixture(autouse=True)
+def _disable_model_runtime_env(monkeypatch: MonkeyPatch) -> Iterator[None]:
+    from agentic_rag.model_runtime.factory import clear_model_runtime_caches
+
+    clear_model_runtime_caches()
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    yield
+    clear_model_runtime_caches()
 
 
 class FakeUploadProvider:

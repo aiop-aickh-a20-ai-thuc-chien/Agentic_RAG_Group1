@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agentic_rag.core.contracts import Answer, SearchResult
+from agentic_rag.core.contracts import Answer, LLMCompletionInput, SearchResult
+from agentic_rag.core.ports import LLMClient
+from agentic_rag.generation.answering import GROUNDING_SYSTEM_MESSAGE
 from agentic_rag.retrieval.fusion import build_evidence_context
 
 
@@ -156,7 +158,7 @@ _HISTORY_SIGNALS = {"nó", "cái đó", "điều đó", "thế còn", "còn", "v
 def preprocess_query(
     question: str,
     history: list[dict[str, str]],
-    llm_client: object = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     """Rewrite with history context and/or decompose multi-intent queries.
 
@@ -195,7 +197,7 @@ def grade_hallucination(
     question: str,
     answer: Answer,
     docs: list[SearchResult],
-    llm_client: object = None,
+    llm_client: LLMClient | None = None,
 ) -> bool:
     """Return True if answer is grounded in evidence."""
     if answer.status == "not_found":
@@ -227,7 +229,7 @@ def transform_query(
     docs: list[SearchResult],
     queries_tried: list[str],
     missing_entities: list[str] | None = None,
-    llm_client: object = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     """Return {"method": ..., "query"/"queries": ...} for next retrieval."""
     if llm_client is None:
@@ -268,27 +270,21 @@ def _evidence_summary(docs: list[SearchResult]) -> str:
 
 
 @_ls_traceable(name="preprocess-llm", run_type="llm")
-def _traced_preprocess_llm(prompt: str, llm_client: object) -> str:
-    complete = getattr(llm_client, "complete", None)
-    if not callable(complete):
-        raise TypeError
-    result: str = complete(prompt)
-    return result
+def _traced_preprocess_llm(prompt: str, llm_client: LLMClient) -> str:
+    return _complete_text(prompt, llm_client)
 
 
 @_ls_traceable(name="grade-hallucination-llm", run_type="llm")
-def _traced_hallucination_llm(prompt: str, llm_client: object) -> str:
-    complete = getattr(llm_client, "complete", None)
-    if not callable(complete):
-        raise TypeError
-    result: str = complete(prompt)
-    return result
+def _traced_hallucination_llm(prompt: str, llm_client: LLMClient) -> str:
+    return _complete_text(prompt, llm_client)
 
 
 @_ls_traceable(name="transform-query-llm", run_type="llm")
-def _traced_transform_llm(prompt: str, llm_client: object) -> str:
-    complete = getattr(llm_client, "complete", None)
-    if not callable(complete):
-        raise TypeError
-    result: str = complete(prompt)
-    return result
+def _traced_transform_llm(prompt: str, llm_client: LLMClient) -> str:
+    return _complete_text(prompt, llm_client)
+
+
+def _complete_text(prompt: str, llm_client: LLMClient) -> str:
+    return llm_client.complete(
+        LLMCompletionInput(prompt=prompt, system_message=GROUNDING_SYSTEM_MESSAGE)
+    ).text
