@@ -89,25 +89,28 @@ def build_chunks(
         max_tokens=chunk_size,
         overlap_paragraphs=chunk_overlap,
     )
+    chunk_part_total = len(text_chunks)
     for index, chunk_text in enumerate(text_chunks, start=1):
+        chunk_id = build_chunk_id(source_type, source, section, index)
         chunk_quality = chunk_text_quality(chunk_text)
         structural_clarity = chunk_quality["structural_clarity"]
         evidence_diagnostics = chunk_evidence_diagnostics(chunk_text)
         chunks.append(
             Chunk(
-                chunk_id=build_chunk_id(source_type, source, section, index),
+                chunk_id=chunk_id,
                 text=chunk_text,
                 metadata={
+                    "chunk_id": chunk_id,
                     "source": source,
                     "source_type": source_type,
-                    "file_name": None,
                     "url": url,
-                    "page": None,
                     "section": section,
                     "title": title,
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "chunk_index": index,
+                    "chunk_part_index": index,
+                    "chunk_part_total": chunk_part_total,
                     "chunk_quality": chunk_quality,
                     "is_usable_for_retrieval": chunk_quality["is_usable"],
                     "structural_clarity": structural_clarity,

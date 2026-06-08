@@ -13,11 +13,11 @@ from agentic_rag.ingestion.chunking.models import (
     MarkdownSection,
 )
 
-DEFAULT_CHUNK_SIZE = 1_200
-DEFAULT_CHUNK_OVERLAP = 150
+DEFAULT_CHUNK_SIZE = 2048  # 512 tokens x ~4 chars/token
+DEFAULT_CHUNK_OVERLAP = 0
 DEFAULT_PARAGRAPH_MAX_TOKENS = 512
 DEFAULT_PARAGRAPH_OVERLAP = 1
-DEFAULT_HIERARCHICAL_TARGET_MIN = 300
+DEFAULT_HIERARCHICAL_TARGET_MIN = 512  # 128 tokens x ~4 chars/token; min chars before coalescing
 DEFAULT_HIERARCHICAL_MIN_CHARS = 40
 DEFAULT_USABLE_CHUNK_MIN_CHARS = 80
 DEFAULT_USABLE_CHUNK_MIN_WORDS = 20
@@ -53,27 +53,33 @@ def split_markdown_into_sections(markdown: str) -> list[MarkdownSection]:
     current_title: str | None = None
     current_level = 0
     current_path: tuple[str, ...] = ()
-    current_lines: list[str] = []
+    section_body_start = 0
+    pos = 0
 
-    def flush_current() -> None:
-        text = "\n".join(current_lines).strip()
+    def flush_current(body_end: int) -> None:
+        raw = markdown[section_body_start:body_end]
+        text = raw.strip()
         if text:
+            stripped_offset = len(raw) - len(raw.lstrip())
+            src_start = section_body_start + stripped_offset
             sections.append(
                 MarkdownSection(
                     title=current_title,
                     level=current_level,
                     path=current_path,
                     text=text,
+                    source_start=src_start,
+                    source_end=src_start + len(text),
                 )
             )
 
-    for line in markdown.splitlines():
+    for line in markdown.splitlines(keepends=True):
         heading_match = _HEADING_RE.match(line.strip())
         if heading_match is None:
-            current_lines.append(line)
+            pos += len(line)
             continue
 
-        flush_current()
+        flush_current(pos)
         heading_level = len(heading_match.group("marker"))
         heading_title = heading_match.group("title").strip()
         heading_stack = [heading for heading in heading_stack if heading[0] < heading_level]
@@ -81,9 +87,10 @@ def split_markdown_into_sections(markdown: str) -> list[MarkdownSection]:
         current_title = heading_title
         current_level = heading_level
         current_path = tuple(title for _, title in heading_stack)
-        current_lines = []
+        pos += len(line)
+        section_body_start = pos
 
-    flush_current()
+    flush_current(len(markdown))
     return sections
 
 
@@ -274,17 +281,19 @@ def chunk_markdown_by_sections(
         ),
         max_chars=effective_max_chars,
     )
-    for path, section_level, text in blocks:
+    for path, section_level, _merged_text, src_start, src_end in blocks:
+        body = markdown[src_start:src_end]
         parts = (
             _split_with_overlap(
-                text,
+                body,
                 max_chars=effective_max_chars,
                 overlap_chars=effective_overlap_chars,
             )
-            if len(text) > effective_max_chars
-            else [text]
+            if len(body) > effective_max_chars
+            else [body]
         )
         part_total = len(parts)
+        part_search_from = 0
         for part_index, part in enumerate(parts, start=1):
             chunk_text = part.strip()
             if not chunk_text:
@@ -295,6 +304,10 @@ def chunk_markdown_by_sections(
                 and not any(char.isdigit() for char in chunk_text)
             ):
                 continue
+            part_start, part_end = _part_source_range(
+                chunk_text, body, src_start, src_end, part_search_from
+            )
+            part_search_from = part_start - src_start + len(chunk_text)
             section = path[-1] if path else None
             chunks.append(
                 MarkdownChunk(
@@ -305,11 +318,9 @@ def chunk_markdown_by_sections(
                         path=path, section_level=section_level, text=chunk_text
                     ),
                     metadata={
-                        "full_path": list(path),
-                        "depth": len(path),
-                        "part_index": part_index,
-                        "part_total": part_total,
-                        "n_chars": len(chunk_text),
+                        "chunk_part_index": part_index,
+                        "chunk_part_total": part_total,
+                        "chunk_input_range": [part_start, part_end],
                     },
                     chunk_token_count=_count_tokens(chunk_text),
                     semantic_unit="hierarchical_markdown_subsection",
@@ -322,19 +333,70 @@ def _flatten_hierarchical_blocks(
     markdown: str,
     *,
     root_title: str | None = None,
-) -> list[tuple[list[str], int, str]]:
-    blocks: list[tuple[list[str], int, str]] = []
+) -> list[tuple[list[str], int, str, int, int]]:
+    blocks: list[tuple[list[str], int, str, int, int]] = []
     for section in split_markdown_into_sections(markdown):
         if not section.text.strip():
             continue
         section_path = _section_path_with_root(section.path, root_title=root_title)
-        for subsection_title, subsection_text in _split_subsections(section.text):
-            text = subsection_text.strip()
-            if not text:
-                continue
-            full_path = section_path + ([subsection_title] if subsection_title else [])
-            blocks.append((full_path, section.level, text))
+        blocks.extend(_blocks_for_section(section, section_path))
     return blocks
+
+
+def _subsection_source_range(
+    section: MarkdownSection, text: str, search_from: int
+) -> tuple[int, int]:
+    idx = section.text.find(text, search_from)
+    if idx >= 0:
+        src_start = section.source_start + idx
+        return src_start, src_start + len(text)
+    return section.source_start, section.source_end
+
+
+def _extend_src_start_to_title(section: MarkdownSection, src_start: int) -> int:
+    """Pull src_start back to include the numbered/bold title line that precedes the body.
+
+    _split_subsections strips the title line from the body text, so the default
+    src_start points to the first body character. This helper walks backward through
+    section.text to find the matching title line and returns its start position.
+    """
+    relative_pos = src_start - section.source_start
+    if relative_pos <= 0:
+        return src_start
+    preceding = section.text[:relative_pos].rstrip("\r\n")
+    if not preceding:
+        return src_start
+    lines = preceding.split("\n")
+    last_line = lines[-1].strip()
+    if not (
+        _SUBSECTION_NUMBER_RE.match(last_line)
+        or _BOLD_LEAD_RE.match(last_line)
+        or _is_allcaps_heading_line(last_line)
+    ):
+        return src_start
+    # Compute the offset of the title line in section.text
+    prefix = "\n".join(lines[:-1])
+    title_offset = len(prefix) + (1 if lines[:-1] else 0)
+    return section.source_start + title_offset
+
+
+def _blocks_for_section(
+    section: MarkdownSection,
+    section_path: list[str],
+) -> list[tuple[list[str], int, str, int, int]]:
+    result: list[tuple[list[str], int, str, int, int]] = []
+    search_from = 0
+    for subsection_title, subsection_text in _split_subsections(section.text):
+        text = subsection_text.strip()
+        if not text:
+            continue
+        full_path = section_path + ([subsection_title] if subsection_title else [])
+        src_start, src_end = _subsection_source_range(section, text, search_from)
+        if subsection_title is not None:
+            src_start = _extend_src_start_to_title(section, src_start)
+        search_from = src_end - section.source_start
+        result.append((full_path, section.level, text, src_start, src_end))
+    return result
 
 
 def _section_path_with_root(
@@ -353,6 +415,14 @@ def _section_path_with_root(
 
 def _normalized_heading(value: str) -> str:
     return value.strip().lower()
+
+
+def _is_allcaps_heading_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or len(stripped) > 60 or stripped.startswith(("#", "|", "-")):
+        return False
+    letter_count = sum(1 for c in stripped if c.isalpha())
+    return letter_count >= 3 and stripped.isupper()
 
 
 def _split_subsections(content: str) -> list[tuple[str | None, str]]:
@@ -379,6 +449,11 @@ def _split_subsections(content: str) -> list[tuple[str | None, str]]:
             current_title = bold_match.group(1).strip()
             current_lines = []
             continue
+        if _is_allcaps_heading_line(stripped):
+            push_current()
+            current_title = stripped
+            current_lines = []
+            continue
         current_lines.append(line)
 
     push_current()
@@ -388,12 +463,12 @@ def _split_subsections(content: str) -> list[tuple[str | None, str]]:
 
 
 def _coalesce_short_blocks(
-    blocks: list[tuple[list[str], int, str]],
+    blocks: list[tuple[list[str], int, str, int, int]],
     *,
     max_chars: int,
-) -> list[tuple[list[str], int, str]]:
-    output: list[tuple[list[str], int, str]] = []
-    group: list[tuple[list[str], int, str]] = []
+) -> list[tuple[list[str], int, str, int, int]]:
+    output: list[tuple[list[str], int, str, int, int]] = []
+    group: list[tuple[list[str], int, str, int, int]] = []
     group_parent: tuple[str, ...] | None = None
     group_len = 0
 
@@ -416,38 +491,40 @@ def _coalesce_short_blocks(
             output.append(group[0])
         else:
             common_path, merged_text = _format_merged_blocks(group)
-            output.append((common_path, group[0][1], merged_text))
+            merged_start = min(b[3] for b in group)
+            merged_end = max(b[4] for b in group)
+            output.append((common_path, group[0][1], merged_text, merged_start, merged_end))
         group = []
         group_parent = None
         group_len = 0
 
-    for path, section_level, text in blocks:
+    for path, section_level, text, src_start, src_end in blocks:
         parent = tuple(path[:-1]) if len(path) >= 2 else None
         additional_len = block_len(path, text)
         if is_short_candidate(path, text):
             if group and parent == group_parent and group_len + additional_len <= max_chars:
-                group.append((path, section_level, text))
+                group.append((path, section_level, text, src_start, src_end))
                 group_len += additional_len
                 continue
             flush_group()
-            group = [(path, section_level, text)]
+            group = [(path, section_level, text, src_start, src_end)]
             group_parent = parent
             group_len = additional_len
             continue
         flush_group()
-        output.append((path, section_level, text))
+        output.append((path, section_level, text, src_start, src_end))
 
     flush_group()
     return output
 
 
 def _merge_blocks_by_major(
-    blocks: list[tuple[list[str], int, str]],
+    blocks: list[tuple[list[str], int, str, int, int]],
     *,
     max_chars: int,
-) -> list[tuple[list[str], int, str]]:
-    output: list[tuple[list[str], int, str]] = []
-    buffer: list[tuple[list[str], int, str]] = []
+) -> list[tuple[list[str], int, str, int, int]]:
+    output: list[tuple[list[str], int, str, int, int]] = []
+    buffer: list[tuple[list[str], int, str, int, int]] = []
     buffer_len = 0
     buffer_major: tuple[str, ...] | None = None
 
@@ -456,22 +533,24 @@ def _merge_blocks_by_major(
         if not buffer:
             return
         common_path, merged_text = _format_merged_blocks(buffer)
-        output.append((common_path, buffer[0][1], merged_text))
+        merged_start = min(b[3] for b in buffer)
+        merged_end = max(b[4] for b in buffer)
+        output.append((common_path, buffer[0][1], merged_text, merged_start, merged_end))
         buffer = []
         buffer_len = 0
         buffer_major = None
 
-    for path, section_level, text in blocks:
+    for path, section_level, text, src_start, src_end in blocks:
         major = tuple(path[:2])
         if len(text) > max_chars:
             flush_buffer()
-            output.append((path, section_level, text))
+            output.append((path, section_level, text, src_start, src_end))
             continue
         if buffer and (major != buffer_major or buffer_len + len(text) + 1 > max_chars):
             flush_buffer()
         if not buffer:
             buffer_major = major
-        buffer.append((path, section_level, text))
+        buffer.append((path, section_level, text, src_start, src_end))
         buffer_len += len(text) + 1
 
     flush_buffer()
@@ -479,11 +558,11 @@ def _merge_blocks_by_major(
 
 
 def _format_merged_blocks(
-    blocks: list[tuple[list[str], int, str]],
+    blocks: list[tuple[list[str], int, str, int, int]],
 ) -> tuple[list[str], str]:
-    common_path = _common_prefix([path for path, _, _ in blocks])
+    common_path = _common_prefix([b[0] for b in blocks])
     lines: list[str] = []
-    for path, _, text in blocks:
+    for path, _, text, _s, _e in blocks:
         label = " / ".join(path[len(common_path) :])
         lines.append(f"{label}: {text}" if label else text)
     return common_path, "\n".join(lines).strip()
@@ -863,6 +942,20 @@ def _with_section_heading(*, section: MarkdownSection, text: str) -> str:
         return text
     heading_level = min(max(section.level, 1), 6)
     return f"{'#' * heading_level} {section.title}\n\n{text}"
+
+
+def _part_source_range(
+    chunk_text: str,
+    body: str,
+    src_start: int,
+    src_end: int,
+    search_from: int,
+) -> tuple[int, int]:
+    idx = body.find(chunk_text, search_from)
+    if idx >= 0:
+        part_start = src_start + idx
+        return part_start, part_start + len(chunk_text)
+    return src_start, src_end
 
 
 def _with_path_heading(*, path: list[str], section_level: int, text: str) -> str:

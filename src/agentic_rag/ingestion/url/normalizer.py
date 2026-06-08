@@ -7,22 +7,25 @@ import unicodedata
 from collections.abc import Mapping
 
 PRICE_RE = re.compile(
-    r"(?:\d[\d.,]*\s*(?:VND|VNĐ|₫|dong|USD|US\$|\$|EUR|€|GBP|JPY|KRW|CNY|RMB|AUD|CAD|SGD|THB)\b"
-    r"|(?:VND|VNĐ|₫|dong|USD|US\$|\$|EUR|€|GBP|JPY|KRW|CNY|RMB|AUD|CAD|SGD|THB)\s*\d[\d.,]*)",
+    r"(?:\d[\d.,]*\s*(?:VNĐ|VND|₫|đồng|dong|USD|US\$|\$|EUR|€|GBP|£|JPY|¥|KRW|₩|CNY|RMB|AUD|CAD|SGD|THB)\b"
+    r"|(?:VNĐ|VND|₫|đồng|dong|USD|US\$|\$|EUR|€|GBP|£|JPY|¥|KRW|₩|CNY|RMB|AUD|CAD|SGD|THB)\s*\d[\d.,]*)",
     re.IGNORECASE,
 )
 PRICE_LINE_RE = re.compile(
-    r"^\s*(?:gia\s*(?:ban|tu|niem yet)?\s*:?\s*)?"
-    r"(?:\d[\d.,]*\s*(?:VND|VNĐ|₫|dong|USD|US\$|\$|EUR|€|GBP|JPY|KRW|CNY|RMB|AUD|CAD|SGD|THB)\b"
-    r"|(?:VND|VNĐ|₫|dong|USD|US\$|\$|EUR|€|GBP|JPY|KRW|CNY|RMB|AUD|CAD|SGD|THB)\s*\d[\d.,]*)\s*$",
+    r"^\s*(?:(?:giá|gia)\s*(?:bán|ban|từ|tu|niêm yết|niem yet)?\s*:?\s*)?"
+    r"(?:\d[\d.,]*\s*(?:VNĐ|VND|₫|đồng|dong|USD|US\$|\$|EUR|€|GBP|£|JPY|¥|KRW|₩|CNY|RMB|AUD|CAD|SGD|THB)\b"
+    r"|(?:VNĐ|VND|₫|đồng|dong|USD|US\$|\$|EUR|€|GBP|£|JPY|¥|KRW|₩|CNY|RMB|AUD|CAD|SGD|THB)\s*\d[\d.,]*)\s*$",
     re.IGNORECASE,
 )
 HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*$")
-BREADCRUMB_SEP_RE = re.compile(r"\s(?:/|>)\s")
+BREADCRUMB_SEP_RE = re.compile(r"\s[/›»>·•]\s|\s\|\s")  # noqa: RUF001
 RELATED_SECTION_RE = re.compile(
     r"\b("
     r"san pham tuong tu|sản phẩm tương tự|related|similar|recommended|"
-    r"you may also like|customers also|san pham lien quan|sản phẩm liên quan"
+    r"you may also like|customers also|san pham lien quan|sản phẩm liên quan|"
+    r"kham pha them|khám phá thêm|de xuat|đề xuất|goi y|gợi ý|"
+    r"also viewed|also bought|ban cung co the thich|bạn cũng có thể thích|"
+    r"xem them san pham|xem thêm sản phẩm"
     r")\b",
     re.IGNORECASE,
 )
@@ -34,6 +37,8 @@ UI_NOISE_RE = re.compile(
     r"^("
     r"minus|plus|label|checkbox label|start as guest|new topic|"
     r"tiep tuc|tiếp tục|ve dau trang|về đầu trang|xem them|xem thêm|"
+    r"hien thi them|hiển thị thêm|doc them|đọc thêm|xem chi tiet|xem chi tiết|"
+    r"show more|load more|xem tat ca|xem tất cả|back to top|scroll to top|"
     r"the maximum allowed file size is .+|trai nghiem cua ban the nao\??|"
     r"trải nghiệm của bạn thế nào\??"
     r")$",
@@ -168,6 +173,8 @@ PRODUCT_UI_SECTION_WORDS = {
     "notice",
 }
 
+_INLINE_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((?:[^()\n]|\([^()\n]*\))*\)")
+
 
 def normalize_text(text: str) -> str:
     """Collapse whitespace and lowercase a value for matching."""
@@ -192,6 +199,7 @@ def normalize_markdown(
     """Remove obvious UI/noise lines and compact repeated product cards."""
 
     inferred_page_type = page_type or classify_page(page or {"markdown": markdown})[0]
+    markdown = _INLINE_LINK_RE.sub(r"\1", markdown)
     lines = markdown.split("\n")
     out: list[str] = []
     removed = {

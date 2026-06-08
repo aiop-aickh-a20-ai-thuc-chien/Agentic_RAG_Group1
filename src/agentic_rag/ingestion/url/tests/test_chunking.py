@@ -110,6 +110,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert len(chunks) == 1
     assert isinstance(chunks[0], Chunk)
     assert chunks[0].chunk_id == build_chunk_id("url", "https://example.edu", "Overview", 1)
+    assert chunks[0].metadata["chunk_id"] == chunks[0].chunk_id
     assert chunks[0].metadata["content_hash"] == short_hash("Overview content")
     assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
     assert chunks[0].metadata["is_usable_for_retrieval"] is False

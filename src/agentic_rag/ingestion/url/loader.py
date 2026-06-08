@@ -37,6 +37,7 @@ from agentic_rag.ingestion.url.crawler import (
 )
 from agentic_rag.ingestion.url.extractor import (
     ExtractedMarkdown,
+    extract_markdown_from_html,
     extract_markdown_with_crawlee_playwright,
     extract_markdown_with_trafilatura,
     fetch_html_with_trafilatura,
@@ -357,6 +358,7 @@ def load_html_with_artifacts(
     chunks = _with_html_metadata(
         chunks,
         html=html,
+        source_url=source_url,
         original_url=original_url,
         final_url=final_url,
         canonical_url=canonical_url,
@@ -382,6 +384,7 @@ def load_html_with_artifacts(
         primary_chunks = _with_html_metadata(
             primary_chunks,
             html=html,
+            source_url=source_url,
             original_url=original_url,
             final_url=final_url,
             canonical_url=canonical_url,
@@ -721,6 +724,25 @@ def _select_markdown(
             title=parsed.title,
         )
     ]
+    try:
+        crawl_link_extracted = extract_markdown_from_html(
+            html,
+            title=parsed.title,
+            source_url=source_url,
+        )
+    except (ImportError, ModuleNotFoundError, RuntimeError, ValueError):
+        crawl_link_extracted = None
+    if crawl_link_extracted is not None and _has_markdown_heading(
+        crawl_link_extracted.markdown
+    ):
+        candidates.append(
+            _build_markdown_candidate(
+                crawl_link_extracted.markdown,
+                parser=crawl_link_extracted.parser_name,
+                role="crawl_link_dom_quality_check",
+                title=parsed.title,
+            )
+        )
     if preferred_markdown and preferred_markdown.strip():
         candidates.append(
             _build_markdown_candidate(
@@ -860,6 +882,8 @@ def _select_primary_or_fallback(
             reason = "trafilatura_quality_check_selected_for_lower_noise"
         elif cleaner.role == "crawlee_playwright_quality_gate":
             reason = "crawlee_playwright_quality_gate_selected_for_lower_noise"
+        elif cleaner.role == "crawl_link_dom_quality_check":
+            reason = "crawl_link_dom_quality_check_selected_for_lower_noise"
         elif cleaner.role == "crawl4ai_bm25_filter":
             reason = "crawl4ai_bm25_filter_selected_for_lower_noise"
         return cleaner, reason
@@ -872,6 +896,8 @@ def _select_primary_or_fallback(
         reason = "trafilatura_quality_check_selected_as_fallback"
     elif best.role == "crawlee_playwright_quality_gate":
         reason = "crawlee_playwright_quality_gate_selected_as_fallback"
+    elif best.role == "crawl_link_dom_quality_check":
+        reason = "crawl_link_dom_quality_check_selected_as_fallback"
     elif best.role == "crawl4ai_bm25_filter":
         reason = "crawl4ai_bm25_filter_selected_as_fallback"
     return best, reason
@@ -902,6 +928,7 @@ def _cleaner_quality_fallback(
         if candidate is not primary
         and candidate.role
         in {
+            "crawl_link_dom_quality_check",
             "crawlee_playwright_quality_gate",
             "trafilatura_quality_check",
             "builtin_fallback",
@@ -1070,6 +1097,7 @@ def _build_markdown_aware_chunks(
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
+        chunk_id = build_chunk_id(source_type, source, section, chunk_index)
         chunk_text = markdown_chunk.text
         chunk_quality = chunk_text_quality(chunk_text)
         structural_clarity = chunk_quality["structural_clarity"]
@@ -1081,22 +1109,25 @@ def _build_markdown_aware_chunks(
         content_origin = _chunk_content_origin(section_path)
         chunks.append(
             Chunk(
-                chunk_id=build_chunk_id(source_type, source, section, chunk_index),
+                chunk_id=chunk_id,
                 text=chunk_text,
                 metadata={
+                    "chunk_id": chunk_id,
                     "source": source,
                     "source_type": source_type,
                     "file_name": None,
                     "url": url,
                     "page": None,
+                    "title": title,
                     "section": section,
                     "section_level": markdown_chunk.section_level,
                     "section_path": section_path,
-                    "title": title,
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
                     "dedupe_hash": short_hash(normalize_space(chunk_text)),
                     "chunk_index": chunk_index,
+                    "chunk_part_index": markdown_chunk.metadata.get("part_index", chunk_index),
+                    "chunk_part_total": markdown_chunk.metadata.get("part_total", 1),
                     "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
                     "search_aliases": list(search_aliases),
                     "chunk_quality": chunk_quality,
@@ -1484,6 +1515,7 @@ def _with_html_metadata(
     chunks: list[Chunk],
     *,
     html: str,
+    source_url: str | None,
     original_url: str | None,
     final_url: str | None,
     canonical_url: str | None,
@@ -1508,6 +1540,7 @@ def _with_html_metadata(
         crawler_error=crawler_error,
         raw_crawler_result=raw_crawler_result,
     )
+    best_url = canonical_url or final_url or source_url or original_url
     for chunk in chunks:
         image_references = _image_references_for_chunk(chunk.text, parsed)
         updated_chunks.append(
@@ -1515,6 +1548,8 @@ def _with_html_metadata(
                 update={
                     "metadata": {
                         **chunk.metadata,
+                        "url": best_url,
+                        "domain": _extract_domain(best_url),
                         "original_url": original_url,
                         "final_url": final_url,
                         "canonical_url": canonical_url,
@@ -1672,6 +1707,26 @@ def _image_references_for_chunk(text: str, parsed: ParsedHtml) -> list[dict[str,
     return references
 
 
+def _with_extractor_metadata(
+    chunks: list[Chunk],
+    *,
+    extracted: ExtractedMarkdown,
+) -> list[Chunk]:
+    page_type = str(extracted.normalize_stats.get("content_type", "generic"))
+    return [
+        chunk.model_copy(
+            update={
+                "metadata": {
+                    **chunk.metadata,
+                    "page_type": page_type,
+                    "is_product": bool(extracted.product),
+                }
+            }
+        )
+        for chunk in chunks
+    ]
+
+
 def _reference_words(text: str) -> set[str]:
     stop_words = {
         "the",
@@ -1731,6 +1786,12 @@ def _dedupe_chunks(chunks: list[Chunk]) -> list[Chunk]:
         seen_text_hashes.add(text_hash)
         deduped_chunks.append(chunk)
     return deduped_chunks
+
+
+def _extract_domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    return urlparse(url).netloc or None
 
 
 def _raise_if_pdf_url(url: str) -> None:

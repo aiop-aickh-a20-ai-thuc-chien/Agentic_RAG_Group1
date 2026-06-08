@@ -62,6 +62,25 @@ def test_health_endpoint_shape(monkeypatch: MonkeyPatch) -> None:
     assert result["evidence_provider"] == "local_pdf"
 
 
+def test_health_endpoint_reports_local_pdf_backends(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "s3")
+    monkeypatch.setenv("AWS_S3_BUCKET", "rag-bucket")
+    monkeypatch.setenv("AWS_S3_PREFIX", "sources")
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://example-qdrant")
+    monkeypatch.setenv("QDRANT_COLLECTION", "chunks")
+
+    result = health()
+
+    assert result["source_store"] == "s3"
+    assert result["s3_bucket_configured"] == "true"
+    assert result["s3_prefix"] == "sources"
+    assert result["dense_vector_store"] == "qdrant"
+    assert result["qdrant_url_configured"] == "true"
+    assert result["qdrant_collection"] == "chunks"
+
+
 def test_answer_endpoint_returns_not_found_without_evidence(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("EVIDENCE_PROVIDER", "mock")
 

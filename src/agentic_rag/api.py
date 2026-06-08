@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import warnings
+from typing import Any
 
 warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
 import time  # noqa: E402
@@ -16,9 +17,10 @@ from html.parser import HTMLParser  # noqa: E402
 from urllib.error import HTTPError as UrlHTTPError  # noqa: E402
 from urllib.error import URLError  # noqa: E402
 from urllib.parse import quote, urlparse  # noqa: E402
-from urllib.request import Request, urlopen  # noqa: E402
+from urllib.request import Request as UrlRequest  # noqa: E402
+from urllib.request import urlopen  # noqa: E402
 
-from fastapi import FastAPI, File, HTTPException, UploadFile  # noqa: E402
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse, Response, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
@@ -26,6 +28,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 from agentic_rag.agent.graph import run_agent  # noqa: E402
 from agentic_rag.core.contracts import Answer, Chunk, SearchResult  # noqa: E402
 from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider  # noqa: E402
+from agentic_rag.eval_review import router as eval_review_router  # noqa: E402
 from agentic_rag.generation.answering import (  # noqa: E402
     AnswerDelta,
     AnswerDone,
@@ -39,7 +42,10 @@ from agentic_rag.generation.evidence import (  # noqa: E402
     ragflow_provider_from_env,
     source_provider_from_env,
 )
-from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider  # noqa: E402
+from agentic_rag.integrations.local_pdf.providers import (  # noqa: E402
+    LocalPdfEvidenceProvider,
+    local_pdf_backend_status,
+)
 from agentic_rag.integrations.ragflow.client import RAGFlowClientError  # noqa: E402
 from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError  # noqa: E402
 from agentic_rag.observability.trace import (  # noqa: E402
@@ -179,29 +185,66 @@ class SourceDebugResponse(BaseModel):
     chunks: list[SearchResult]
 
 
-api = FastAPI(title="Agentic RAG Generation API", lifespan=_api_lifespan)
-api.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _allowed_cors_origins() -> list[str]:
+    origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
-    ],
+    ]
+    extra = os.getenv("CORS_ALLOW_ORIGINS", "")
+    origins.extend(origin.strip().rstrip("/") for origin in extra.split(",") if origin.strip())
+    return list(dict.fromkeys(origins))
+
+
+api = FastAPI(title="Agentic RAG Generation API", lifespan=_api_lifespan)
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+@api.middleware("http")
+async def private_network_access(request: Request, call_next: Any) -> Any:
+    """Handle Chrome Private Network Access preflight."""
+    if request.method == "OPTIONS" and "access-control-request-private-network" in request.headers:
+        from starlette.responses import Response as StarletteResponse
+
+        origin = request.headers.get("origin", "*")
+        return StarletteResponse(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Private-Network": "true",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+
+api.include_router(eval_review_router, prefix="/eval-review")
+
+
 @api.get("/health")
 def health() -> dict[str, str]:
     """Return API health and active configuration for the frontend."""
 
-    return {
+    provider_name = configured_evidence_provider_name()
+    payload = {
         "status": "ok",
-        "evidence_provider": configured_evidence_provider_name(),
+        "evidence_provider": provider_name,
     }
+    if provider_name == "local_pdf":
+        payload.update(local_pdf_backend_status())
+    return payload
 
 
 @api.post("/answer", response_model=Answer)
@@ -992,7 +1035,7 @@ def _validated_http_url(raw_url: str) -> str:
 
 
 def _fetch_url_text(url: str) -> str:
-    request = Request(
+    request = UrlRequest(
         url,
         headers={
             "User-Agent": "AgenticRAG/1.0 (+https://local.agentic-rag)",
