@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.url import crawler as crawler_module
 from agentic_rag.ingestion.url import (
     load_html_chunks,
     load_html_with_artifacts,
@@ -14,6 +15,19 @@ from agentic_rag.ingestion.url import (
 )
 from agentic_rag.ingestion.url import loader as loader_module
 from agentic_rag.ingestion.url.crawler import Crawl4AIPage
+from agentic_rag.ingestion.url.extractor import ExtractedMarkdown
+
+
+@pytest.fixture(autouse=True)
+def disable_live_crawlee_quality_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unavailable_crawlee_quality_gate(url: str) -> ExtractedMarkdown:
+        raise RuntimeError(f"Crawlee quality gate disabled in unit tests: {url}")
+
+    monkeypatch.setattr(
+        loader_module,
+        "extract_markdown_with_crawlee_playwright",
+        unavailable_crawlee_quality_gate,
+    )
 
 
 def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None:
@@ -73,6 +87,27 @@ def test_load_html_chunks_stores_search_aliases_in_metadata_not_text() -> None:
     assert "Search aliases:" not in chunks[0].text
     assert "VF9" in chunks[0].metadata["search_aliases"]
     assert "VinFast VF 9" in chunks[0].metadata["search_aliases"]
+
+
+def test_load_html_chunks_records_chunk_usability_metadata() -> None:
+    chunks = load_html_chunks(
+        """
+        <html>
+          <body>
+            <main>
+              <h1>VF 9</h1>
+              <p>Dòng xe E-SUV có 6-7 chỗ ngồi, quãng đường lên tới 626 km
+              và giá bán từ 1.229.180.000 VNĐ cho khách hàng tham khảo.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        source="https://example.edu/vf9",
+        source_url="https://example.edu/vf9",
+    )
+
+    assert chunks[0].metadata["is_usable_for_retrieval"] is True
+    assert chunks[0].metadata["chunk_quality"]["has_structured_signal"] is True
 
 
 def test_load_html_chunks_records_chunk_adjacency_for_split_sections() -> None:
@@ -425,6 +460,25 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert chunks[0].metadata["section_path"] == ["Overview"]
 
 
+def test_load_url_with_artifacts_resets_crawl_shell_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    crawler_module._SHELL_DOMAINS.add("example.edu")
+
+    def fake_fetch_url(url: str) -> loader_module._FetchedPage:
+        assert not crawler_module._SHELL_DOMAINS
+        return loader_module._FetchedPage(
+            html="<html><body><h1>Reset</h1><p>Cache reset content.</p></body></html>",
+            url=url,
+        )
+
+    monkeypatch.setattr(loader_module, "_fetch_url", fake_fetch_url)
+
+    loaded = loader_module.load_url_with_artifacts("https://example.edu/reset")
+
+    assert loaded.chunks
+
+
 def test_load_url_chunks_prefers_crawl4ai_markdown(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
         assert url == "https://example.edu/dynamic"
@@ -432,7 +486,11 @@ def test_load_url_chunks_prefers_crawl4ai_markdown(monkeypatch: pytest.MonkeyPat
             html="<html><body><h1>Server Shell</h1><p>Hydrated later.</p></body></html>",
             markdown="# Rendered Product\n\n## Card A\n\nDynamic card content.",
             url="https://example.edu/dynamic",
-            links=(),
+            links=(
+                "https://example.edu/dynamic/card-a",
+                "https://example.edu/dynamic/card-b",
+                "https://example.edu/dynamic/card-c",
+            ),
         )
 
     monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
@@ -444,7 +502,63 @@ def test_load_url_chunks_prefers_crawl4ai_markdown(monkeypatch: pytest.MonkeyPat
     assert chunks[0].metadata["section_path"] == ["Rendered Product", "Card A"]
     assert chunks[0].metadata["crawler"] == "crawl4ai"
     assert chunks[0].metadata["parser"] == "crawl4ai-markdown+builtin-html-parser"
+    assert chunks[0].metadata["review_status"] == "success"
+    assert chunks[0].metadata["markdown_quality"]["review_status"] == "success"
     assert chunks[0].metadata["markdown_quality"]["selected_role"] == "crawl4ai_primary"
+    primary_candidate = next(
+        candidate
+        for candidate in chunks[0].metadata["markdown_quality"]["candidates"]
+        if candidate["role"] == "crawl4ai_primary"
+    )
+    assert primary_candidate["quality_label"] in {"thin", "marginal", "useful"}
+    assert primary_candidate["noise_count"] >= 0
+    assert primary_candidate["link_density"] >= 0
+
+
+def test_load_url_chunks_preserves_crawl_attempt_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        assert url == "https://example.edu/retry"
+        return Crawl4AIPage(
+            html="<html><body><h1>Retry Page</h1><p>Recovered content.</p></body></html>",
+            markdown="# Retry Page\n\nRecovered content.",
+            url=url,
+            links=(
+                "https://example.edu/retry/a",
+                "https://example.edu/retry/b",
+                "https://example.edu/retry/c",
+            ),
+            raw_result={
+                "crawl_attempt": "secondary",
+                "crawl_attempt_index": 2,
+                "crawl_attempt_count": 2,
+                "configured_crawl_attempt_count": 3,
+                "crawl_attempts_skipped": ["secondary"],
+                "crawl_attempt_errors": ["main: RuntimeError: timeout"],
+                "crawl_attempt_duration_seconds": 1.25,
+                "crawl_duration_seconds": 3.5,
+                "wait_until_target": "networkidle",
+                "status_code": 200,
+            },
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
+    chunks = load_url_chunks("https://example.edu/retry")
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["crawler"] == "crawl4ai"
+    assert chunks[0].metadata["crawl_attempt"] == "secondary"
+    assert chunks[0].metadata["crawl_attempt_index"] == 2
+    assert chunks[0].metadata["configured_crawl_attempt_count"] == 3
+    assert chunks[0].metadata["crawl_attempts_skipped"] == ["secondary"]
+    assert chunks[0].metadata["crawl_attempt_errors"] == ["main: RuntimeError: timeout"]
+    assert chunks[0].metadata["wait_until_target"] == "networkidle"
+    assert chunks[0].metadata["status_code"] == 200
+    assert chunks[0].metadata["review_status"] == "recovered"
+    assert chunks[0].metadata["markdown_quality"]["review_status"] == "recovered"
 
 
 def test_load_html_with_artifacts_uses_trafilatura_as_quality_fallback(
@@ -484,6 +598,148 @@ def test_load_html_with_artifacts_uses_trafilatura_as_quality_fallback(
     assert loaded.chunks[0].metadata["markdown_quality"]["fallback_reason"] == (
         "trafilatura_quality_check_selected_as_fallback"
     )
+    assert loaded.chunks[0].metadata["review_status"] == "recovered"
+    assert loaded.chunks[0].metadata["markdown_quality"]["review_status"] == "recovered"
+
+
+def test_load_html_with_artifacts_prioritizes_crawlee_quality_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract_markdown_with_crawlee_playwright(url: str) -> ExtractedMarkdown:
+        assert url == "https://example.edu/product"
+        return ExtractedMarkdown(
+            markdown=(
+                "# Product Specs\n\n"
+                "This Crawlee Playwright extraction contains battery warranty, range, "
+                "charging, price 1.229.180.000 VND, edition, safety, and technical "
+                "specification details for retrieval quality review."
+            ),
+            parser_name="crawlee-playwright-dom-markdown+normalizer",
+        )
+
+    monkeypatch.setattr(
+        loader_module,
+        "extract_markdown_with_crawlee_playwright",
+        fake_extract_markdown_with_crawlee_playwright,
+    )
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
+    loaded = load_html_with_artifacts(
+        "<html><body><h1>Rendered shell</h1><p>Loading.</p></body></html>",
+        source="https://example.edu/product",
+        source_url="https://example.edu/product",
+        preferred_markdown="Cookie Login Cart",
+        preferred_parser="crawl4ai-markdown+builtin-html-parser",
+    )
+
+    assert loaded.chunks[0].metadata["parser"] == (
+        "crawlee-playwright-dom-markdown+normalizer+builtin-html-parser"
+    )
+    assert loaded.chunks[0].metadata["markdown_quality"]["selected_role"] == (
+        "crawlee_playwright_quality_gate"
+    )
+    assert loaded.chunks[0].metadata["markdown_quality"]["fallback_reason"] == (
+        "crawlee_playwright_quality_gate_selected_as_fallback"
+    )
+
+
+def test_load_html_with_artifacts_marks_low_quality_crawl4ai_primary_as_partial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
+    loaded = load_html_with_artifacts(
+        """
+        <html>
+          <head><title>Homepage</title></head>
+          <body>
+            <main>
+              <h1>Homepage</h1>
+              <p>Useful static content about services, products, locations, and support.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        source="https://example.edu",
+        source_url="https://example.edu",
+        preferred_markdown="Promo",
+        preferred_parser="crawl4ai-markdown+builtin-html-parser",
+    )
+
+    assert loaded.chunks[0].metadata["markdown_quality"]["fallback_reason"] == (
+        "crawl4ai_primary_quality_check_failed"
+    )
+    assert loaded.chunks[0].metadata["review_status"] == "partial"
+    assert loaded.chunks[0].metadata["markdown_quality"]["review_status"] == "partial"
+
+
+def test_load_url_chunks_uses_static_html_when_crawl4ai_returns_shell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_crawl_url_with_crawl4ai(url: str) -> Crawl4AIPage:
+        assert url == "https://vinfastauto.com/vn_vi"
+        return Crawl4AIPage(
+            html="<html><body>Loading...</body></html>",
+            markdown="Loading...",
+            url=url,
+            links=(),
+        )
+
+    def fake_fetch_url_urllib(
+        url: str,
+        *,
+        crawler_error: str | None = None,
+    ) -> object:
+        assert url == "https://vinfastauto.com/vn_vi"
+        assert crawler_error == (
+            "Crawl4AI returned low-signal rendered shell; static HTML fallback selected"
+        )
+        return loader_module._FetchedPage(
+            html=(
+                "<html><body><main><h1>VinFast</h1>"
+                "<p>Dòng xe E-SUV có 6-7 chỗ ngồi, quãng đường lên tới 626 km "
+                "và giá bán từ 1.229.180.000 VNĐ cho khách hàng tham khảo.</p>"
+                '<a href="/vn_vi/vf9">VF 9</a>'
+                "</main></body></html>"
+            ),
+            url=url,
+            content_type="text/html",
+            links=("https://vinfastauto.com/vn_vi/vf9",),
+            crawler="urllib",
+            crawler_error=crawler_error,
+        )
+
+    monkeypatch.setattr(loader_module, "crawl_url_with_crawl4ai", fake_crawl_url_with_crawl4ai)
+    monkeypatch.setattr(loader_module, "_fetch_url_urllib", fake_fetch_url_urllib)
+    monkeypatch.setattr(loader_module, "extract_markdown_with_trafilatura", lambda *_, **__: None)
+
+    chunks = load_url_chunks("https://vinfastauto.com/vn_vi")
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["crawler"] == "urllib"
+    assert chunks[0].metadata["crawler_error"] == (
+        "Crawl4AI returned low-signal rendered shell; static HTML fallback selected"
+    )
+    assert chunks[0].metadata["is_usable_for_retrieval"] is True
+    assert "1.229.180.000 VNĐ" in chunks[0].text
+
+
+def test_static_html_link_extraction_normalizes_urls() -> None:
+    links = loader_module._links_from_static_html(
+        """
+        <html><body>
+          <a href="/vn_vi/vf9">VF 9</a>
+          <a href="https://shop.vinfastauto.com/vn_vi/car-vf8.html">VF 8</a>
+          <a href="/vn_vi/vf9">Duplicate</a>
+        </body></html>
+        """,
+        base_url="https://vinfastauto.com/vn_vi",
+    )
+
+    assert links == (
+        "https://vinfastauto.com/vn_vi/vf9",
+        "https://shop.vinfastauto.com/vn_vi/car-vf8.html",
+    )
 
 
 def test_load_html_with_artifacts_can_use_crawl4ai_bm25_fallback(
@@ -510,6 +766,7 @@ def test_load_html_with_artifacts_can_use_crawl4ai_bm25_fallback(
     assert loaded.chunks[0].metadata["markdown_quality"]["fallback_reason"] == (
         "crawl4ai_bm25_filter_selected_as_fallback"
     )
+    assert loaded.chunks[0].metadata["review_status"] == "recovered"
 
 
 def test_load_html_with_artifacts_appends_structured_parse_markdown(

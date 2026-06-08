@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from agentic_rag.ingestion.url.benchmarking import cli
+from agentic_rag.ingestion.url.benchmarking.custom_benchmark import CUSTOM_HTML_CASES
 
 
 def test_parse_html_cli_emits_parser_output(
@@ -45,4 +46,4 @@ def test_custom_cli_writes_json_output_file(tmp_path: Path) -> None:
     payload = json.loads(output_file.read_text(encoding="utf-8"))
     assert payload["parser"] == "builtin-html-parser"
     assert payload["average_score"] == 1.0
-    assert len(payload["results"]) == 2
+    assert len(payload["results"]) == len(CUSTOM_HTML_CASES)

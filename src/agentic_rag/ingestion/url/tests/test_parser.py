@@ -1,4 +1,4 @@
-from agentic_rag.ingestion.url.parser import Asset, ParsedHtml, Section, parse_html
+from agentic_rag.ingestion.url.parser import Asset, parse_html
 
 
 def test_parse_html_extracts_title_sections_and_removes_noise() -> None:
@@ -20,23 +20,15 @@ def test_parse_html_extracts_title_sections_and_removes_noise() -> None:
         """
     )
 
-    assert parsed == ParsedHtml(
-        title="Example Page",
-        sections=(
-            Section(
-                heading="Overview",
-                text="Overview Main content.",
-                heading_level=1,
-                markdown="# Overview\n\nMain content.",
-            ),
-            Section(
-                heading="Details",
-                text="Details Detailed content.",
-                heading_level=2,
-                markdown="## Details\n\nDetailed content.",
-            ),
-        ),
-    )
+    assert parsed.title == "Example Page"
+    section_summaries = [
+        (section.heading, section.text, section.heading_level, section.markdown)
+        for section in parsed.sections
+    ]
+    assert section_summaries == [
+        ("Overview", "Overview Main content.", 1, "# Overview\n\nMain content."),
+        ("Details", "Details Detailed content.", 2, "## Details\n\nDetailed content."),
+    ]
     assert all("navigation" not in section.text for section in parsed.sections)
     assert all("Related links" not in section.text for section in parsed.sections)
 
@@ -44,9 +36,10 @@ def test_parse_html_extracts_title_sections_and_removes_noise() -> None:
 def test_parse_html_uses_main_section_without_headings() -> None:
     parsed = parse_html("<html><body><p>Plain page content.</p></body></html>")
 
-    assert parsed.sections == (
-        Section(heading="main", text="Plain page content.", markdown="Plain page content."),
-    )
+    assert len(parsed.sections) == 1
+    assert parsed.sections[0].heading == "main"
+    assert parsed.sections[0].text == "Plain page content."
+    assert parsed.sections[0].markdown == "Plain page content."
 
 
 def test_parse_html_preserves_markdown_lists_and_strong_text() -> None:
@@ -72,6 +65,27 @@ def test_parse_html_preserves_markdown_lists_and_strong_text() -> None:
     assert parsed.sections[1].heading == "Child"
     assert parsed.sections[1].heading_level == 2
     assert parsed.sections[1].markdown == ("## Child\n\n- First benefit\n\n- **Second** benefit")
+
+
+def test_parse_html_marks_duplicate_and_conflicting_section_evidence() -> None:
+    parsed = parse_html(
+        """
+        <html>
+          <body>
+            <h1>Pricing</h1>
+            <p>VF 9 Eco: giÃ¡ bÃ¡n 1.229.180.000 VNÄ</p>
+            <p>VF 9 Eco: giÃ¡ bÃ¡n 1.499.000.000 VNÄ</p>
+            <p>VinFast electric vehicle battery warranty policy lasts 10 years</p>
+            <p>VinFast electric vehicle battery warranty policy lasts 10 years</p>
+          </body>
+        </html>
+        """
+    )
+
+    diagnostics = parsed.sections[0].evidence_diagnostics
+
+    assert diagnostics["has_duplicate_evidence"] is True
+    assert diagnostics["has_possible_conflict"] is True
 
 
 def test_parse_html_extracts_canonical_open_graph_and_article_metadata() -> None:

@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -23,13 +24,20 @@ from agentic_rag.ingestion.url.chunking import (
     MarkdownChunk,
     build_chunk_id,
     build_chunks,
+    chunk_evidence_diagnostics,
+    chunk_text_quality,
     normalize_space,
     short_hash,
     split_markdown_into_sections,
     split_markdown_paragraphs,
 )
-from agentic_rag.ingestion.url.crawler import crawl_url_with_crawl4ai
+from agentic_rag.ingestion.url.crawler import (
+    crawl_url_with_crawl4ai,
+    reset_crawl_shell_domain_cache,
+)
 from agentic_rag.ingestion.url.extractor import (
+    ExtractedMarkdown,
+    extract_markdown_with_crawlee_playwright,
     extract_markdown_with_trafilatura,
     fetch_html_with_trafilatura,
 )
@@ -48,6 +56,7 @@ _REQUEST_HEADERS = {
 }
 _PARSER_NAME = "builtin-html-parser"
 _TRAFILATURA_PARSER_NAME = "trafilatura-markdown+builtin-html-parser"
+_CRAWLEE_PARSER_NAME = "crawlee-playwright-dom-markdown+normalizer+builtin-html-parser"
 _CRAWL4AI_PARSER_NAME = "crawl4ai-markdown+builtin-html-parser"
 _CRAWL4AI_BM25_PARSER_NAME = "crawl4ai-bm25-markdown+builtin-html-parser"
 _URL_CHUNK_OVERLAP_PARAGRAPHS = 0
@@ -104,6 +113,9 @@ class MarkdownCandidate:
     boilerplate_hits: int
     image_count: int
     link_count: int
+    link_density: float
+    noise_count: int
+    quality_label: str
 
 
 @dataclass(frozen=True)
@@ -153,11 +165,14 @@ def load_url_with_artifacts(
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
     max_child_pages: int = 0,
+    _reset_crawl_shell_cache: bool = True,
 ) -> LoadedUrlDocument:
     """Fetch, clean, chunk, and expose URL ingestion artifacts."""
 
     if max_child_pages < 0:
         raise ValueError("max_child_pages must be greater than or equal to zero.")
+    if _reset_crawl_shell_cache:
+        reset_crawl_shell_domain_cache()
     _raise_if_pdf_url(url)
     page = _fetch_url(url)
     _raise_if_pdf_response(page)
@@ -341,6 +356,7 @@ def load_html_with_artifacts(
     )
     chunks = _with_html_metadata(
         chunks,
+        html=html,
         original_url=original_url,
         final_url=final_url,
         canonical_url=canonical_url,
@@ -349,6 +365,7 @@ def load_html_with_artifacts(
         crawler_error=crawler_error,
         parser_name=parser_name,
         selection=selection,
+        raw_crawler_result=raw_crawler_result,
     )
     chunks = _with_chunk_adjacency(_dedupe_chunks(chunks))
 
@@ -364,6 +381,7 @@ def load_html_with_artifacts(
         )
         primary_chunks = _with_html_metadata(
             primary_chunks,
+            html=html,
             original_url=original_url,
             final_url=final_url,
             canonical_url=canonical_url,
@@ -372,6 +390,7 @@ def load_html_with_artifacts(
             crawler_error=crawler_error,
             parser_name=primary_candidate.parser,
             selection=selection,
+            raw_crawler_result=raw_crawler_result,
         )
 
     artifacts = persist_ingestion_artifacts(
@@ -466,6 +485,9 @@ def _fetch_url(url: str) -> _FetchedPage:
                 f"{type(trafilatura_exc).__name__}: {trafilatura_exc}"
             )
             return _fetch_url_urllib(url, crawler_error=crawler_error)
+    if _crawl4ai_page_is_low_signal_shell(crawled_page):
+        shell_error = "Crawl4AI returned low-signal rendered shell; static HTML fallback selected"
+        return _fetch_url_urllib(url, crawler_error=shell_error)
     return _FetchedPage(
         html=crawled_page.html,
         url=crawled_page.url,
@@ -499,6 +521,59 @@ def _crawl4ai_page_is_title_only(page: object) -> bool:
     return text == title or (len(text) < 120 and bool(title) and text in title)
 
 
+def _crawl4ai_page_is_low_signal_shell(page: object) -> bool:
+    markdown = normalize_space(str(getattr(page, "markdown", "") or ""))
+    structured_markdown = normalize_space(str(getattr(page, "structured_markdown", "") or ""))
+    probe_markdown = normalize_space(str(getattr(page, "probe_markdown", "") or ""))
+    links = tuple(getattr(page, "links", ()) or ())
+    if len(links) >= 3:
+        return False
+    if any(_has_useful_text(value) for value in (structured_markdown, probe_markdown)):
+        return False
+    html = str(getattr(page, "html", "") or "")
+    if not html:
+        return True
+    try:
+        parsed = parse_html(html, base_url=str(getattr(page, "url", "") or ""))
+    except Exception:
+        return False
+    visible_text = normalize_space("\n".join(section.text for section in parsed.sections))
+    if _has_useful_text(markdown) or _has_useful_text(visible_text):
+        return False
+    return len(links) == 0 or _looks_like_loading_or_promo_shell(f"{markdown} {visible_text}")
+
+
+def _has_useful_text(value: str) -> bool:
+    if not value:
+        return False
+    word_count = len(re.findall(r"\w+", value, flags=re.UNICODE))
+    if word_count >= 30:
+        return True
+    return bool(
+        re.search(
+            r"\d{1,3}(?:[.,]\d{3})+|\d+\s*(?:km|kwh|vnd|vnđ|%)",
+            value,
+            flags=re.IGNORECASE,
+        )
+        and word_count >= 8
+    )
+
+
+def _looks_like_loading_or_promo_shell(value: str) -> bool:
+    cleaned = normalize_space(value).lower()
+    if not cleaned:
+        return True
+    shell_markers = (
+        "loading",
+        "please wait",
+        "\u0111ang t\u1ea3i",
+        "dang tai",
+        "\u01b0u \u0111\u00e3i ch\u1ec9 t\u1edbi",
+        "uu dai chi toi",
+    )
+    return any(marker in cleaned for marker in shell_markers)
+
+
 def _fetch_url_trafilatura(url: str, *, crawler_error: str | None = None) -> _FetchedPage:
     normalized_url = url.strip()
     _validate_http_url(normalized_url)
@@ -509,6 +584,7 @@ def _fetch_url_trafilatura(url: str, *, crawler_error: str | None = None) -> _Fe
         html=html,
         url=normalized_url,
         content_type="text/html",
+        links=_links_from_static_html(html, base_url=normalized_url),
         crawler="trafilatura",
         crawler_error=crawler_error,
     )
@@ -530,13 +606,40 @@ def _fetch_url_urllib(url: str, *, crawler_error: str | None = None) -> _Fetched
     except URLError as exc:
         raise RuntimeError(f"Failed to fetch URL {normalized_url}: {exc.reason}") from exc
 
+    html = _decode_response_content(content, charset)
     return _FetchedPage(
-        html=_decode_response_content(content, charset),
+        html=html,
         url=final_url,
         content_type=content_type,
+        links=_links_from_static_html(html, base_url=final_url),
         crawler="urllib",
         crawler_error=crawler_error,
     )
+
+
+def _links_from_static_html(html: str, *, base_url: str) -> tuple[str, ...]:
+    parser = _StaticHtmlLinkParser(base_url=base_url)
+    try:
+        parser.feed(html)
+    except Exception:
+        return ()
+    return tuple(dict.fromkeys(parser.links))
+
+
+class _StaticHtmlLinkParser(HTMLParser):
+    def __init__(self, *, base_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._base_url = base_url
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        attr_map = {key.lower(): value for key, value in attrs if value}
+        href = attr_map.get("href")
+        if not href:
+            return
+        self.links.append(urljoin(self._base_url, href))
 
 
 def _utc_now() -> str:
@@ -637,6 +740,19 @@ def _select_markdown(
             )
         )
     try:
+        crawlee_markdown = _extract_crawlee_quality_markdown(source_url)
+    except (ImportError, ModuleNotFoundError, RuntimeError):
+        crawlee_markdown = None
+    if crawlee_markdown is not None:
+        candidates.append(
+            _build_markdown_candidate(
+                crawlee_markdown,
+                parser=_CRAWLEE_PARSER_NAME,
+                role="crawlee_playwright_quality_gate",
+                title=parsed.title,
+            )
+        )
+    try:
         trafilatura_markdown = _extract_trafilatura_markdown(
             html,
             source_url=source_url,
@@ -673,6 +789,18 @@ def _extract_trafilatura_markdown(html: str, *, source_url: str | None) -> str |
     return markdown if isinstance(markdown, str) else None
 
 
+def _extract_crawlee_quality_markdown(source_url: str | None) -> str | None:
+    if not source_url:
+        return None
+    extracted = extract_markdown_with_crawlee_playwright(source_url)
+    if isinstance(extracted, ExtractedMarkdown):
+        return extracted.markdown or None
+    if isinstance(extracted, str):
+        return extracted
+    markdown = getattr(extracted, "markdown", None)
+    return markdown if isinstance(markdown, str) else None
+
+
 def _combined_parser_name(
     parser_name: str,
     *,
@@ -702,13 +830,16 @@ def _build_markdown_candidate(
         markdown=markdown,
         parser=parser,
         role=role,
-        score=quality["score"],
-        token_count=quality["token_count"],
-        heading_count=quality["heading_count"],
-        price_count=quality["price_count"],
-        boilerplate_hits=quality["boilerplate_hits"],
-        image_count=quality["image_count"],
-        link_count=quality["link_count"],
+        score=int(quality["score"]),
+        token_count=int(quality["token_count"]),
+        heading_count=int(quality["heading_count"]),
+        price_count=int(quality["price_count"]),
+        boilerplate_hits=int(quality["boilerplate_hits"]),
+        image_count=int(quality["image_count"]),
+        link_count=int(quality["link_count"]),
+        link_density=float(quality["link_density"]),
+        noise_count=int(quality["noise_count"]),
+        quality_label=str(quality["quality_label"]),
     )
 
 
@@ -727,6 +858,8 @@ def _select_primary_or_fallback(
         reason = "content_quality_selected_for_lower_noise"
         if cleaner.role == "trafilatura_quality_check":
             reason = "trafilatura_quality_check_selected_for_lower_noise"
+        elif cleaner.role == "crawlee_playwright_quality_gate":
+            reason = "crawlee_playwright_quality_gate_selected_for_lower_noise"
         elif cleaner.role == "crawl4ai_bm25_filter":
             reason = "crawl4ai_bm25_filter_selected_for_lower_noise"
         return cleaner, reason
@@ -737,6 +870,8 @@ def _select_primary_or_fallback(
     reason = "crawl4ai_primary_quality_check_failed"
     if best.role == "trafilatura_quality_check":
         reason = "trafilatura_quality_check_selected_as_fallback"
+    elif best.role == "crawlee_playwright_quality_gate":
+        reason = "crawlee_playwright_quality_gate_selected_as_fallback"
     elif best.role == "crawl4ai_bm25_filter":
         reason = "crawl4ai_bm25_filter_selected_as_fallback"
     return best, reason
@@ -766,7 +901,12 @@ def _cleaner_quality_fallback(
         for candidate in candidates
         if candidate is not primary
         and candidate.role
-        in {"trafilatura_quality_check", "builtin_fallback", "crawl4ai_bm25_filter"}
+        in {
+            "crawlee_playwright_quality_gate",
+            "trafilatura_quality_check",
+            "builtin_fallback",
+            "crawl4ai_bm25_filter",
+        }
         and _candidate_has_enough_signal(candidate, primary)
         and _candidate_is_materially_cleaner(candidate, primary)
     ]
@@ -823,10 +963,10 @@ def _has_markdown_heading(markdown: str) -> bool:
 
 
 def _markdown_quality_score(markdown: str, *, title: str | None) -> int:
-    return _markdown_quality(markdown, title=title)["score"]
+    return int(_markdown_quality(markdown, title=title)["score"])
 
 
-def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int]:
+def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int | float | str]:
     cleaned = _clean_markdown_noise(markdown)
     text = normalize_space(cleaned)
     token_count = len(re.findall(r"\w+", text))
@@ -855,6 +995,16 @@ def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int]:
     capped_price_count = min(price_count, 25)
     image_heavy_penalty = max(0, image_count - heading_count - 12) * 45
     link_heavy_penalty = max(0, link_count - heading_count - 20) * 20
+    link_density = _safe_ratio(link_count, token_count)
+    noise_count = boilerplate_hits + image_count + max(0, link_count - heading_count - 12)
+    quality_label = _markdown_quality_label(
+        token_count=token_count,
+        heading_count=heading_count,
+        price_count=price_count,
+        boilerplate_hits=boilerplate_hits,
+        image_count=image_count,
+        link_density=link_density,
+    )
     score = (
         token_count
         + (heading_count * 80)
@@ -874,7 +1024,34 @@ def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int]:
         "boilerplate_hits": boilerplate_hits,
         "image_count": image_count,
         "link_count": link_count,
+        "link_density": link_density,
+        "noise_count": noise_count,
+        "quality_label": quality_label,
     }
+
+
+def _safe_ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
+
+
+def _markdown_quality_label(
+    *,
+    token_count: int,
+    heading_count: int,
+    price_count: int,
+    boilerplate_hits: int,
+    image_count: int,
+    link_density: float,
+) -> str:
+    if token_count < 20 and price_count == 0:
+        return "thin"
+    if boilerplate_hits >= 5 or image_count >= 30 or link_density >= 0.12:
+        return "noisy"
+    if token_count >= 80 and (heading_count > 0 or price_count > 0):
+        return "useful"
+    return "marginal"
 
 
 def _build_markdown_aware_chunks(
@@ -894,6 +1071,9 @@ def _build_markdown_aware_chunks(
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
         chunk_text = markdown_chunk.text
+        chunk_quality = chunk_text_quality(chunk_text)
+        structural_clarity = chunk_quality["structural_clarity"]
+        evidence_diagnostics = chunk_evidence_diagnostics(chunk_text)
         search_aliases = _vinfast_model_aliases(
             " ".join(part for part in (title, chunk_text) if part)
         )
@@ -919,6 +1099,16 @@ def _build_markdown_aware_chunks(
                     "chunk_index": chunk_index,
                     "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
                     "search_aliases": list(search_aliases),
+                    "chunk_quality": chunk_quality,
+                    "is_usable_for_retrieval": chunk_quality["is_usable"],
+                    "structural_clarity": structural_clarity,
+                    "has_structural_confusion": not structural_clarity["is_clear"],
+                    "needs_table_reconstruction": structural_clarity[
+                        "needs_table_reconstruction"
+                    ],
+                    "evidence_diagnostics": evidence_diagnostics,
+                    "has_duplicate_evidence": evidence_diagnostics["has_duplicate_evidence"],
+                    "has_possible_conflict": evidence_diagnostics["has_possible_conflict"],
                     "content_origin": content_origin,
                     "probe_parent_section": _probe_parent_section(
                         section_path,
@@ -1293,6 +1483,7 @@ def _persist_text_debug_artifacts(
 def _with_html_metadata(
     chunks: list[Chunk],
     *,
+    html: str,
     original_url: str | None,
     final_url: str | None,
     canonical_url: str | None,
@@ -1301,8 +1492,22 @@ def _with_html_metadata(
     crawler_error: str | None,
     parser_name: str,
     selection: MarkdownSelection,
+    raw_crawler_result: dict[str, Any] | None = None,
 ) -> list[Chunk]:
     updated_chunks: list[Chunk] = []
+    crawl_diagnostics = _crawl_diagnostics_metadata(raw_crawler_result)
+    snapshot_metadata = _source_snapshot_metadata(
+        html=html,
+        parsed=parsed,
+        selection=selection,
+        crawler=crawler,
+        crawler_error=crawler_error,
+    )
+    review_status = _ingestion_review_status(
+        selection,
+        crawler_error=crawler_error,
+        raw_crawler_result=raw_crawler_result,
+    )
     for chunk in chunks:
         image_references = _image_references_for_chunk(chunk.text, parsed)
         updated_chunks.append(
@@ -1323,8 +1528,14 @@ def _with_html_metadata(
                         "image_references": image_references,
                         "crawler": crawler,
                         "crawler_error": crawler_error,
+                        **crawl_diagnostics,
+                        "source_snapshot": snapshot_metadata,
+                        "review_status": review_status,
                         "parser": parser_name,
-                        "markdown_quality": _markdown_quality_metadata(selection),
+                        "markdown_quality": _markdown_quality_metadata(
+                            selection,
+                            review_status=review_status,
+                        ),
                     }
                 }
             )
@@ -1332,11 +1543,86 @@ def _with_html_metadata(
     return updated_chunks
 
 
-def _markdown_quality_metadata(selection: MarkdownSelection) -> dict[str, object]:
+def _source_snapshot_metadata(
+    *,
+    html: str,
+    parsed: ParsedHtml,
+    selection: MarkdownSelection,
+    crawler: str,
+    crawler_error: str | None,
+) -> dict[str, object]:
+    parsed_text = normalize_space("\n".join(section.text for section in parsed.sections))
+    parsed_word_count = len(re.findall(r"\w+", parsed_text, flags=re.UNICODE))
+    return {
+        "crawler": crawler,
+        "html_length": len(html),
+        "parsed_section_count": len(parsed.sections),
+        "parsed_text_length": len(parsed_text),
+        "parsed_word_count": parsed_word_count,
+        "selected_role": selection.selected_role,
+        "fallback_reason": selection.fallback_reason,
+        "static_html_recovery": bool(
+            crawler == "urllib"
+            and crawler_error
+            and "static HTML fallback selected" in crawler_error
+        ),
+        "low_signal_snapshot": parsed_word_count < 30 and not _has_useful_text(parsed_text),
+    }
+
+
+def _crawl_diagnostics_metadata(raw_crawler_result: dict[str, Any] | None) -> dict[str, Any]:
+    if not raw_crawler_result:
+        return {}
+    keys = (
+        "crawl_attempt",
+        "crawl_attempt_index",
+        "crawl_attempt_count",
+        "configured_crawl_attempt_count",
+        "crawl_attempts_skipped",
+        "crawl_attempt_errors",
+        "crawl_attempt_duration_seconds",
+        "crawl_duration_seconds",
+        "wait_until_target",
+        "status_code",
+    )
+    return {
+        key: raw_crawler_result[key]
+        for key in keys
+        if key in raw_crawler_result and raw_crawler_result[key] is not None
+    }
+
+
+def _ingestion_review_status(
+    selection: MarkdownSelection,
+    *,
+    crawler_error: str | None,
+    raw_crawler_result: dict[str, Any] | None,
+) -> str:
+    if crawler_error:
+        return "recovered"
+    if (
+        isinstance(raw_crawler_result, dict)
+        and isinstance(raw_crawler_result.get("crawl_attempt_errors"), list)
+        and raw_crawler_result["crawl_attempt_errors"]
+    ):
+        return "recovered"
+    if selection.fallback_reason == "crawl4ai_primary_quality_check_failed":
+        return "partial"
+    if selection.fallback_reason:
+        return "recovered"
+    return "success"
+
+
+def _markdown_quality_metadata(
+    selection: MarkdownSelection,
+    *,
+    review_status: str,
+) -> dict[str, object]:
     return {
         "selected_parser": selection.parser,
         "selected_role": selection.selected_role,
         "fallback_reason": selection.fallback_reason,
+        "review_status": review_status,
         "candidates": [
             {
                 "parser": candidate.parser,
@@ -1348,6 +1634,9 @@ def _markdown_quality_metadata(selection: MarkdownSelection) -> dict[str, object
                 "boilerplate_hits": candidate.boilerplate_hits,
                 "image_count": candidate.image_count,
                 "link_count": candidate.link_count,
+                "link_density": candidate.link_density,
+                "noise_count": candidate.noise_count,
+                "quality_label": candidate.quality_label,
             }
             for candidate in selection.candidates
         ],

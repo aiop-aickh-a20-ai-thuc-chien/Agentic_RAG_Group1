@@ -1,5 +1,315 @@
 # Worklog - URL Ingestion
 
+## [2026-06-07] Follow-up: Low-Content Shell Timeout Reduction
+
+Implemented the proposal from `guide/crawl-shell-timeout-fix.md` to reduce the
+long VinFast review runs where `max_child_pages=5` spent most of its time on
+browser attempts that were later discarded as low-content shells.
+
+### Problem
+
+Live review showed that `https://vinfastauto.com/vn_vi` and same-domain child
+pages often followed this pattern:
+
+```text
+main: Crawl4AI returned low-content shell HTML
+secondary: Crawl4AI returned low-content shell HTML
+last: recovered useful content
+```
+
+The content quality was acceptable after recovery, but `secondary` used
+`wait_until=networkidle` with a long timeout. VinFast pages keep background
+trackers/widgets active, so `networkidle` can wait until timeout on each URL
+before the shell gate rejects the result.
+
+### Changes
+
+- Reduced the `secondary` Crawl4AI attempt from `page_timeout=90000` to
+  `page_timeout=20000`.
+- Reduced `secondary` `delay_before_return_html` from `10.0` to `2.0`.
+- Added a per-session shell-domain cache in `crawler.py`.
+  - When a domain returns a low-content shell on the `main` attempt, later URLs
+    from that same domain skip directly to `last`.
+  - This is intended for one seed review/crawl session, especially when child
+    pages are discovered from the same domain.
+- Added `crawl_attempts_skipped` to raw Crawl4AI diagnostics so demo/review
+  tooling can explain when `main` and `secondary` were intentionally skipped.
+- Tightened the shell gate so promo/loading shells with tiny visible text or too
+  few links are rejected before chunking.
+- Added `reset_crawl_shell_domain_cache()` and reset it for normal top-level
+  `load_url_with_artifacts()` calls so a long-running process does not leak
+  domain hints between independent user requests.
+- Updated `guide/demo/url-crawl-review/run_review.py` to keep one shell-cache
+  session across the seed plus reviewed child URLs, so child pages benefit from
+  the seed diagnosis.
+
+### Expected Impact
+
+- Seed URL still records the important shell signal.
+- Same-domain child URLs should avoid repeatedly spending time on `main` and
+  `secondary` when the seed already proved that pattern.
+- `review_status` should remain `recovered`, because useful content is still
+  produced by retry/recovery rather than by Crawl4AI primary.
+
+### Verification
+
+Focused deterministic tests passed:
+
+```bash
+uv run pytest src/agentic_rag/ingestion/url/tests/test_crawler.py src/agentic_rag/ingestion/url/tests/test_loader.py -q
+# 43 passed
+```
+
+Focused Ruff check passed:
+
+```bash
+uv run ruff check src/agentic_rag/ingestion/url/crawler.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/tests/test_crawler.py src/agentic_rag/ingestion/url/tests/test_loader.py guide/demo/url-crawl-review/run_review.py
+# All checks passed
+```
+
+No live VinFast crawl was rerun for this entry; behavior is covered with faked
+Crawl4AI results so CI remains deterministic and network-free.
+
+## [2026-06-06] Feature: Crawl4AI Main, Secondary, And Last Retry Flow
+
+This feature makes browser crawling more resilient before URL ingestion switches
+to non-browser fallback fetchers.
+
+### Summary of Changes
+
+1. **Added runtime Crawl4AI retry stages**
+   - `crawler.py` now builds three named Crawl4AI attempts:
+     - `main`: full SPA-aware crawl with robots checks, user simulation,
+       rendered Markdown, JS probing, and URL-aware wait selector.
+     - `secondary`: browser retry with `networkidle` for pages where the main
+       wait strategy fails or returns empty HTML.
+     - `last`: minimal Crawl4AI retry with cache bypass and Markdown generation
+       only.
+   - Runtime failures, unsuccessful `CrawlResult` objects, and empty HTML now
+     move to the next Crawl4AI attempt instead of failing immediately.
+
+2. **Preserved loader fallback order**
+   - `loader.py` still keeps the outer fetch strategy order:
+     Crawl4AI attempts -> Trafilatura fetch -> `urllib`.
+   - Title-only Crawl4AI output is still treated as a quality failure and routes
+     to Trafilatura before final `urllib` fallback.
+
+3. **Added diagnostics for review**
+   - `raw_crawler_result` now records `crawl_attempt`,
+     `crawl_attempt_index`, `crawl_attempt_count`,
+     `configured_crawl_attempt_count`, `crawl_attempt_errors`,
+     `crawl_attempt_duration_seconds`, and `wait_until_target`.
+   - Human review tools can use this to explain whether content came from the
+     main, secondary, or last browser crawl.
+   - Crawl4AI link groups are now supplemented with links parsed from returned
+     HTML anchors, improving discovery for nav/footer-heavy sites.
+
+4. **Added deterministic tests**
+   - New crawler tests fake Crawl4AI and verify:
+     - main error -> secondary success,
+     - main failure + secondary empty HTML -> last success.
+     - Crawl4AI link groups plus raw HTML links are both preserved.
+   - Tests do not use live URLs.
+
+### Live Review Notes From `guide/img`
+
+Manual review screenshots captured three useful crawler behaviors:
+
+- `https://shop.vinfastauto.com/vn_vi/o-to-vinfast-president.html`
+  - Crawl4AI `main` succeeds and produces chunks.
+  - The selected parser may still be `builtin-html-parser+crawl4ai-rendered-html`
+    with `content_quality_selected_for_lower_noise`.
+  - This is a recovered/quality-switch case, not a hard crawl failure.
+
+- `https://vinfastauto.com/vn_vi`
+  - Crawl4AI `main` can return a technically successful result that is too small
+    to be useful for discovery or chunking.
+  - Example symptom: one short title/promo-like chunk and
+    `crawl4ai_primary_quality_check_failed`.
+  - This should be treated as low-content/partial crawl output, then routed to
+    fallback discovery or sitemap/deep-crawl support in a later feature.
+
+- `https://market.vinhomes.vn/`
+  - Crawl4AI primary can chunk the seed page well.
+  - Child pages are mixed: some are clean Crawl4AI-primary successes, while
+    others are better served by Trafilatura or rendered-HTML fallback because
+    they contain noisier layouts, lazy-loaded sections, or article/detail content.
+  - The review app should label these as `success`, `recovered`, `partial`, or
+    `fail` instead of treating every fallback as an error.
+
+Conclusion: Crawl4AI primary is valuable and can produce high-quality chunks, but
+browser execution success is not the same as content-quality success. The loader
+should continue recording crawler attempt diagnostics separately from parser
+quality decisions so reviewers can see whether the issue is crawl failure,
+low-content browser output, or intentional fallback to cleaner extracted text.
+
+### Follow-up: Review Status Metadata And Demo Labels
+
+Implemented explicit review statuses for URL ingestion and the local crawl
+review demo:
+
+- `success`: Crawl4AI primary content was selected directly.
+- `recovered`: browser retry or parser/fetch fallback produced usable chunks.
+- `partial`: Crawl4AI browser output loaded, but primary content quality failed.
+- `fail`: used by review tooling when no document/chunks are produced.
+
+Chunks now expose `review_status` at top level and inside
+`markdown_quality["review_status"]`. The guide demo displays this status in both
+the discovery table and document cards, making mixed pages such as
+`https://market.vinhomes.vn/` easier to review without mislabeling every fallback
+as a hard error.
+
+### Follow-up: VinFast Homepage Low-Content Shell Recovery
+
+Investigated `https://vinfastauto.com/` and `https://vinfastauto.com/vn_vi` after
+review showed only:
+
+```md
+# VinFast - Website chính thức tại Việt Nam
+
+Ưu đãi chỉ tới 31/12!
+```
+
+Findings:
+
+- Raw HTTP HTML contains the real homepage content, `VF 9`, and more than 200
+  links.
+- Crawl4AI `main` and `secondary` configs returned large browser snapshots, but
+  those snapshots had no anchors, no `main`/`section` content, and only promo-like
+  visible text. This happened before `_best_html_attr()` and before loader
+  quality selection.
+- Crawl4AI `last` minimal config returned the useful homepage HTML and links.
+
+Fix:
+
+- The Crawl4AI retry loop now rejects large low-content shell HTML when it has
+  almost no visible text and fewer than three links.
+- This lets the existing `last` browser retry run instead of accepting a
+  technically non-empty but unusable `main` result.
+- Follow-up: the same gate now also rejects short loading/promo shell snapshots,
+  which can happen when the browser captures the VinFast homepage before the
+  real DOM opens.
+- The VinFast homepage crawl uses a less destructive main config that keeps page
+  anchors and waits for enough links plus vehicle/homepage text before accepting
+  the snapshot.
+
+Live verification after the fix:
+
+```text
+https://vinfastauto.com/vn_vi -> chunks 6, markdown length 7274, attempt last
+https://vinfastauto.com/      -> chunks 6, markdown length 7274, attempt last
+```
+
+Both runs record:
+
+```text
+main: Crawl4AI returned low-content shell HTML
+secondary: Crawl4AI returned low-content shell HTML
+```
+
+and finish as `review_status=recovered`.
+
+### Follow-up: Usable Chunk Review Signal And Demo Default
+
+Added deterministic chunk usability metrics so reviewers can distinguish
+"chunks were generated" from "chunks are useful for retrieval review".
+
+- Shared chunking now exposes `chunk_text_quality()` and
+  `is_usable_chunk_text()`.
+- URL chunks record `chunk_quality` and `is_usable_for_retrieval` metadata.
+- The crawl review demo shows usable/unusable chunk counts and marks a document
+  as `fail` when all chunks are low signal.
+- The demo form defaults to `https://vinfastauto.com/` with
+  `max_child_pages=5` for the live homepage regression check.
+- URL benchmarking JSON now includes `chunk_count` and `usable_chunk_count`.
+
+### Follow-up: Static HTML Baseline For Rendered Shell Failures
+
+The VinFast homepage showed that static HTML can be more useful than an early or
+over-cleaned browser snapshot. Raw static HTML contained product cards and links,
+while Crawl4AI sometimes returned only a loading/promo shell.
+
+Update:
+
+- URL ingestion now detects low-signal rendered shells from Crawl4AI.
+- When this happens, the loader fetches static HTML with `urllib` and records:
+
+```text
+Crawl4AI returned low-signal rendered shell; static HTML fallback selected
+```
+
+- Static HTML fallback now extracts page links too, so `max_child_pages` can still
+  discover child URLs after browser recovery.
+- The VinFast homepage-specific Crawl4AI config remains tuned to wait for many
+  anchors and meaningful body text, but static HTML is the recovery baseline when
+  the rendered DOM is worse than the server HTML.
+
+### Follow-up: Source Snapshot Diagnostics In Demo
+
+The crawl review demo now surfaces `source_snapshot` metadata for each document:
+
+- source crawler,
+- HTML length,
+- parsed section count,
+- parsed text/word count,
+- low-signal snapshot flag,
+- static HTML recovery flag.
+
+This is intended to explain why a page can appear as `Review OK` while the final
+chunk text is still only a title/promo shell. For the VinFast homepage, reviewers
+should expect either `static recovery` with usable chunks or a `fail` status when
+the only output is `Ưu đãi chỉ tới 31/12!`.
+
+### Follow-up: External Debug Packet For Assistant Review
+
+The crawl review demo now exposes an **External Debug Packet** per document.
+Reviewers can paste this JSON into Gemini, ChatGPT, Claude, or another assistant
+to ask for help debugging a failing URL ingestion case. The packet includes:
+
+- URL/source/review status,
+- crawler attempt and attempt errors,
+- parser and crawler error,
+- source snapshot diagnostics,
+- markdown quality decision,
+- usable chunk count,
+- markdown preview,
+- first chunk previews,
+- a focused fix question.
+
+### Follow-up: Crawl Diagnosis Guide Alignment
+
+Applied `guide/crawl-diagnosis` to the crawl review output. The outside diagnosis
+of the VinFast homepage as a JavaScript-heavy SPA with anti-bot/fingerprinting
+pressure matches the repo signals, but the actionable local framing is:
+
+- HTTP 200 is not enough.
+- A rendered browser snapshot can be a loading/promo shell even when raw static
+  HTML contains useful product cards and links.
+- `wait_until=load`, `builtin_fallback`, negative/low Crawl4AI candidate scores,
+  low parsed word count, and zero usable chunks should trigger diagnosis and
+  render-tier escalation.
+- Static HTML should remain the recovery baseline when Crawl4AI rendered HTML is
+  worse than the server HTML.
+
+The demo's External Debug Packet now includes `crawl_diagnosis` with quality
+score, verdict, detected issues, render tier used, recommended tier, and
+recommended action so outside assistants can reason from the same signals.
+
+### Follow-up: Demo Runtime Visibility
+
+The interactive crawl review server now sends no-cache headers and exposes:
+
+```text
+/api/health
+```
+
+The browser UI calls this endpoint on load and reports when the server cannot be
+reached or when the HTML template and JavaScript are out of sync. This addresses
+the confusing case where `run_review.py` works from the CLI, but an already
+running `server.py` process still serves old imports or mixed cached frontend
+assets. Reviewers must still stop and restart `server.py` after source changes;
+`Ctrl+F5` only reloads browser files.
+
 ## [2026-06-03] Implementation of Hybrid Markdown-aware Chunking
 
 Based on the recommendations from `guide/reports/vinfast_url_chunking_strategy_test.md`, the URL ingestion pipeline has been updated to improve RAG retrieval quality and reduce noise.
@@ -615,4 +925,99 @@ crawler.
 ```text
 URL: https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9
 Result: chunks 22, markdown_len 27131, crawler crawl4ai, has_probe True, has_color True
+```
+
+## [2026-06-08] Parser And Chunk Evidence Diagnostics
+
+Applied `guide/crawl-strategy-skill/SKILL.md` to make parser/chunk review more
+explicit about duplicate and conflicting information.
+
+### Summary of Changes
+
+- Added deterministic `chunk_evidence_diagnostics()` to URL chunking.
+- Parser `Section` objects now include `evidence_diagnostics`.
+- URL chunk metadata now records:
+  - `evidence_diagnostics`;
+  - `has_duplicate_evidence`;
+  - `has_possible_conflict`.
+- The diagnostics count repeated long evidence lines, repeated numeric values,
+  and same-label lines that contain different numeric values. This gives the
+  demo/evaluator a lightweight way to flag duplicated listings or conflicting
+  prices/specs without using an LLM in the ingestion path.
+- Added parser and chunking regression tests for duplicate/conflict metadata.
+
+### Verification
+
+```text
+uv run ruff check src/agentic_rag/ingestion/url/chunking src/agentic_rag/ingestion/url/parser.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/tests/test_chunking.py src/agentic_rag/ingestion/url/tests/test_parser.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_chunking.py src/agentic_rag/ingestion/url/tests/test_parser.py src/agentic_rag/ingestion/url/tests/test_loader.py -q
+
+Result: 49 passed
+```
+
+## [2026-06-08] Crawlee Priority Quality Gate
+
+Applied `guide/crawl-strategy-skill/SKILL.md` to promote Crawlee + Playwright
+from research-only to a priority secondary parser/quality gate.
+
+### Summary of Changes
+
+- Added `extract_markdown_with_crawlee_playwright()` in `extractor.py`.
+- The Crawlee adapter reuses the existing DOM walker, product extraction,
+  Markdown normalizer, and product/spec pairing logic.
+- Loader candidate order is now:
+  1. builtin fallback baseline;
+  2. Crawl4AI primary;
+  3. Crawl4AI BM25 view;
+  4. Crawlee + Playwright quality gate;
+  5. Trafilatura quality check.
+- Crawlee can now win parser selection with:
+  - `crawlee_playwright_quality_gate_selected_as_fallback`;
+  - `crawlee_playwright_quality_gate_selected_for_lower_noise`.
+- Added `crawlee[playwright]>=1.0,<2` to the root and URL subproject
+  dependency manifests.
+- Unit tests disable live Crawlee browser calls by default and include a fake
+  Crawlee candidate test proving Crawlee wins when Crawl4AI primary is too thin.
+
+### Verification
+
+```text
+uv run ruff check src/agentic_rag/ingestion/url/extractor.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/tests/test_loader.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_loader.py -q
+```
+
+Live Crawlee verification still requires dependency sync and browser install:
+
+```text
+uv sync
+uv run playwright install chromium
+```
+
+## [2026-06-08] Structural Clarity Gate For URL Chunks
+
+Added the next quality gate after reviewing VinFast homepage chunks where
+Crawlee produced cleaner text than Crawl4AI but still flattened product cards
+and prices into confusing paragraphs.
+
+### Summary of Changes
+
+- Added shared `chunk_structural_clarity()` in ingestion chunking.
+- `chunk_text_quality()` now includes `structural_clarity`.
+- Severe structural confusion makes `is_usable` false even when the chunk has
+  many prices or ranges.
+- URL chunk metadata now exposes:
+  - `structural_clarity`;
+  - `has_structural_confusion`;
+  - `needs_table_reconstruction`.
+- The gate catches:
+  - flattened numeric tables with high numeric density;
+  - repeated phrase blocks that should be deduplicated before retrieval.
+
+### Verification
+
+```text
+uv run ruff check src/agentic_rag/ingestion/chunking src/agentic_rag/ingestion/url/chunking src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/tests/test_chunking.py tests/test_ingestion_chunking.py
+uv run pytest tests/test_ingestion_chunking.py src/agentic_rag/ingestion/url/tests/test_chunking.py src/agentic_rag/ingestion/url/tests/test_loader.py -q
+
+Result: 55 passed
 ```

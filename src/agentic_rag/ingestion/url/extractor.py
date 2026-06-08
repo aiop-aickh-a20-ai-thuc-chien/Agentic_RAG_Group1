@@ -1,11 +1,11 @@
 # ruff: noqa: E501
 """Main-content extraction adapters for URL ingestion."""
 
-from __future__ import annotations
-
+import asyncio
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 from html.parser import HTMLParser
 from importlib import import_module
 from typing import Any, cast
@@ -43,6 +43,7 @@ _BLOCK_TAGS = {"p", "li", "td", "th", "dt", "dd"}
 _STRONG_TAGS = {"strong", "b"}
 _PARSER_NAME = "crawl-link-dom-markdown+normalizer"
 _BROWSER_PARSER_NAME = "crawl-link-playwright-dom-markdown+normalizer"
+_CRAWLEE_BROWSER_PARSER_NAME = "crawlee-playwright-dom-markdown+normalizer"
 
 DOM_WALKER_JS = r"""
 () => {
@@ -287,6 +288,119 @@ def extract_markdown_with_playwright(url: str) -> ExtractedMarkdown:
         final_url=final_url,
         rendered_html=rendered_html,
         fetched_ok=fetched_ok,
+        product=clean_product,
+        normalize_stats=stats,
+    )
+
+
+def extract_markdown_with_crawlee_playwright(url: str) -> ExtractedMarkdown:
+    """Render a URL with Crawlee PlaywrightCrawler and extract normalized Markdown."""
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_extract_markdown_with_crawlee_playwright(url))
+
+    raise RuntimeError("Crawlee cannot run inside an active event loop from this sync API.")
+
+
+async def _extract_markdown_with_crawlee_playwright(url: str) -> ExtractedMarkdown:
+    try:
+        crawlers = import_module("crawlee.crawlers")
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise RuntimeError("Crawlee with the playwright extra is not installed.") from exc
+
+    playwright_crawler = crawlers.PlaywrightCrawler
+    extracted: dict[str, object] = {}
+    crawler = playwright_crawler(
+        headless=True,
+        browser_type="chromium",
+        browser_launch_options={
+            "args": ["--disable-blink-features=AutomationControlled"],
+        },
+        browser_new_context_options={
+            "user_agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "viewport": {"width": 1366, "height": 900},
+            "locale": "vi-VN",
+            "extra_http_headers": {"Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8"},
+        },
+        max_requests_per_crawl=1,
+        max_request_retries=0,
+        navigation_timeout=timedelta(seconds=20),
+        request_handler_timeout=timedelta(seconds=35),
+    )
+
+    @crawler.pre_navigation_hook
+    async def block_static_assets(context: Any) -> None:
+        await context.page.add_init_script(
+            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
+        )
+        await context.block_requests()
+
+    @crawler.router.default_handler
+    async def request_handler(context: Any) -> None:
+        page = context.page
+        await page.wait_for_load_state("domcontentloaded", timeout=20_000)
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(500)
+            await page.evaluate("window.scrollTo(0, 0)")
+            await page.evaluate(EXPAND_JS)
+            await page.wait_for_timeout(300)
+        except Exception:
+            pass
+        data = cast(dict[str, object], await page.evaluate(DOM_WALKER_JS))
+        try:
+            product = cast(dict[str, object], await page.evaluate(PRODUCT_JS))
+        except Exception:
+            product = {}
+        extracted.update(
+            {
+                "data": data,
+                "product": product,
+                "rendered_html": await page.content(),
+                "final_url": page.url,
+            }
+        )
+
+    await crawler.run([url])
+    if not extracted:
+        raise RuntimeError("Crawlee returned no extracted page data.")
+
+    data = cast(dict[str, object], extracted.get("data") or {})
+    product = cast(dict[str, object], extracted.get("product") or {})
+    rendered_html = str(extracted.get("rendered_html") or "")
+    final_url = str(extracted.get("final_url") or url)
+    main_title = clean_title(str(data.get("title", "")))
+    markdown = pair_specs(str(data.get("markdown", "")))
+    clean_product = product if is_product_data(product) else None
+    if main_title and not _has_h1(markdown):
+        markdown = f"# {main_title}\n\n{markdown}" if markdown else f"# {main_title}"
+    if clean_product:
+        product_markdown = build_product_markdown(clean_product)
+        if product_markdown:
+            markdown = f"{markdown}\n\n{product_markdown}" if markdown else product_markdown
+    normalized, stats = normalize_markdown(
+        markdown,
+        page={
+            "url": final_url,
+            "title": str(data.get("title", "")),
+            "main_title": main_title,
+            "markdown": markdown,
+            "product": clean_product,
+            "is_product": bool(clean_product),
+        },
+    )
+    return ExtractedMarkdown(
+        markdown=normalized,
+        parser_name=_CRAWLEE_BROWSER_PARSER_NAME,
+        title=main_title or str(data.get("title", "")) or None,
+        final_url=final_url,
+        rendered_html=rendered_html,
+        fetched_ok=True,
         product=clean_product,
         normalize_stats=stats,
     )

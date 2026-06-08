@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
-from agentic_rag.ingestion.url.chunking import normalize_space
+from agentic_rag.ingestion.url.chunking import chunk_evidence_diagnostics, normalize_space
 
 _NOISE_TAGS = {"script", "style", "nav", "footer", "header", "aside"}
 _HEADING_TAGS = {"h1", "h2", "h3"}
@@ -32,6 +32,7 @@ class Section:
     text: str
     heading_level: int = 0
     markdown: str | None = None
+    evidence_diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -318,6 +319,7 @@ class MainContentParser(HTMLParser):
                     text=text,
                     heading_level=self._current_section_level,
                     markdown=markdown or text,
+                    evidence_diagnostics=chunk_evidence_diagnostics(markdown or text),
                 )
             )
         self._section_parts = []

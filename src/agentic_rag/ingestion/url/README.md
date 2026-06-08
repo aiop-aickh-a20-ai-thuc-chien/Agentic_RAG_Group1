@@ -14,8 +14,9 @@ PDF responses are rejected here and should be routed to the PDF ingestion module
   important data is stored in JavaScript state rather than visible Markdown.
 - `parser.py`: stdlib HTML parser that extracts headings, body text, metadata,
   links, images, and other page assets.
-- `extractor.py`: Trafilatura adapter used for lightweight fallback fetching,
-  precision-oriented quality checks, and main-content Markdown extraction.
+- `extractor.py`: Crawlee/Playwright and Trafilatura adapters used for
+  priority quality gates, lightweight fallback fetching, and main-content
+  Markdown extraction.
 - `chunking/`: deterministic Markdown chunking strategies.
 - `artifact.py`: persistence for `parsed.md`, `chunks.jsonl`, and
   `manifest.json`.
@@ -33,51 +34,152 @@ The default URL path is:
 2. The page is fetched with Crawl4AI first so rendered/dynamic pages, card-heavy
    layouts, browser-discovered links, and structured table output can be
    captured.
-3. If Crawl4AI is unavailable or fails, the loader tries Trafilatura's lightweight
+3. Crawl4AI itself now has three runtime attempts before the loader switches
+   strategy:
+   - `main`: the full SPA-aware crawl with robots checks, rendered Markdown,
+     React/accordion/tabs JS probing, user simulation, and the URL-aware wait
+     selector.
+   - `secondary`: a short bounded browser retry using `networkidle` and the same
+     Markdown generator/exclusion policy for pages whose first wait strategy
+     times out or returns empty HTML. This attempt intentionally uses a much
+     shorter timeout than `main`; tracker-heavy SPAs can keep the network active
+     forever, so `networkidle` must not be allowed to dominate child-page runs.
+   - `last`: the minimal Crawl4AI retry with cache bypass and Markdown
+     generation only, used as the final browser-backed attempt before leaving
+     Crawl4AI.
+4. Crawl diagnostics record the selected attempt, configured attempt count,
+   skipped attempts, attempt errors, attempt duration, and wait target in
+   `raw_crawler_result`. This gives the review app enough information to explain
+   why a page used the secondary or last browser retry.
+   Crawl4AI link groups are combined with raw HTML `<a href>` extraction so
+   navigation/footer links remain discoverable even when the crawler's structured
+   link groups are sparse.
+5. If all Crawl4AI attempts are unavailable or fail, the loader tries Trafilatura's lightweight
    URL fetcher next.
-4. If Trafilatura fetch returns empty HTML or fails, the loader falls back to the
+6. If Trafilatura fetch returns empty HTML or fails, the loader falls back to the
    deterministic `urllib` fetch path with the project user agent.
-5. `parse_html()` extracts structured page metadata and section boundaries from
+7. `parse_html()` extracts structured page metadata and section boundaries from
    the HTML.
-6. Crawl4AI generates primary cleaned Markdown with common VinFast/SFCC noise
+8. Crawl4AI generates primary cleaned Markdown with common VinFast/SFCC noise
    selectors removed. It also builds an optional BM25-filtered Markdown view with
    an English/Vietnamese vehicle query and stemming disabled so Vietnamese words
    are not mangled.
-7. Trafilatura runs as a precision-oriented quality check. Crawl4AI remains the
-   selected parser when its primary Markdown is usable; Trafilatura or the
-   Crawl4AI BM25 view is selected only when the primary Crawl4AI output fails the
-   quality check or when another candidate has enough content with materially
-   lower image/link/boilerplate noise.
-8. Candidate Markdown is scored for useful content, headings, title match, price
+9. Crawlee + Playwright runs as the priority rendered quality gate when a source
+   URL is available. It reuses the project DOM walker and normalizer while
+   letting Crawlee own browser setup, request blocking, timeouts, and retry
+   boundaries. Trafilatura remains the lightweight precision check after
+   Crawlee. Crawl4AI remains the selected parser when its primary Markdown is
+   usable; Crawlee, Trafilatura, or the Crawl4AI BM25 view is selected when the
+   primary Crawl4AI output fails the quality check or when another candidate has
+   enough content with materially lower image/link/boilerplate noise.
+10. Candidate Markdown is scored for useful content, headings, title match, price
    values, image/link density, and boilerplate risk. Price score is capped so a
    long gallery/listing page with many prices does not automatically beat a
    cleaner main-content extraction. The selected parser and candidate scores are
    stored in `Chunk.metadata["markdown_quality"]`.
-9. Crawl4AI table output is appended as `# Structured Page Data` Markdown when
+11. Each chunk also records `Chunk.metadata["review_status"]` so reviewers can
+   distinguish crawl/runtime health from content-quality recovery:
+   - `success`: Crawl4AI primary content was selected without retry/fallback.
+   - `recovered`: ingestion produced chunks after a browser retry, fallback
+     fetch, BM25 view, Trafilatura extraction, or lower-noise parser selection.
+   - `partial`: the browser result loaded, but the primary Crawl4AI content
+     failed quality checks and should be reviewed as incomplete or low signal.
+   - `fail`: used by review tooling when no document/chunks are produced.
+12. Crawl4AI table output is appended as `# Structured Page Data` Markdown when
    available. Chunks from this supplement use
    `Chunk.metadata["content_origin"] == "structured_parse"`.
-10. The loader removes common script/config/cookie/login/cart/menu boilerplate
+13. The loader removes common script/config/cookie/login/cart/menu boilerplate
    from Markdown.
-11. Supported interactive pages are probed for important JS state that is not
+14. Supported interactive pages are probed for important JS state that is not
    reliably visible in the default rendered page.
-12. VinFast vehicle price-card text is normalized so current prices and old
+15. VinFast vehicle price-card text is normalized so current prices and old
    crossed prices remain explicit in Markdown.
-13. The loader chunks global Markdown with heading-aware metadata and enriches
+16. The loader chunks global Markdown with heading-aware metadata and enriches
    each `Chunk.metadata` with URL metadata such as original URL, final URL,
    canonical URL, language, author, description, crawler name, parser name,
    source URL, section path, asset count, and dedupe hash.
+17. Each chunk records `chunk_quality` and `is_usable_for_retrieval` so review
+   tools can flag pages that technically produced chunks but only low-signal
+   promo/title text.
+18. Parser sections and URL chunks also record `evidence_diagnostics`,
+   `has_duplicate_evidence`, and `has_possible_conflict`. These deterministic
+   hints help review tools separate repeated carousel/listing text from chunks
+   that may contain conflicting prices, specs, dates, or other numeric facts.
+19. `chunk_quality["structural_clarity"]` and top-level metadata
+   `has_structural_confusion` / `needs_table_reconstruction` flag chunks that
+   contain many useful-looking numbers but were flattened from cards or tables.
+   Severe flattened numeric tables and repeated phrase blocks are marked not
+   usable for retrieval until the parser reconstructs clearer rows/cards.
 
-Crawl4AI is preferred for live URLs because it can capture rendered content that
-static HTML fetches often miss. Trafilatura remains useful as the lightweight
-fetch fallback, quality check, and fallback extractor. `urllib` is the final
+Crawl4AI is preferred for the first live URL crawl because it can capture
+rendered content that static HTML fetches often miss. Crawlee + Playwright is
+the priority secondary parser/quality gate because it can produce an independent
+rendered DOM extraction with faster request blocking and explicit browser
+timeouts. Trafilatura remains useful as the lightweight fetch fallback,
+precision quality check, and fallback extractor. `urllib` is the final
 deterministic fetch fallback, and the builtin parser remains the deterministic
 parser fallback for local HTML and tests.
 
+Install/update the Crawlee browser runtime after syncing dependencies:
+
+```text
+uv sync
+uv run playwright install chromium
+```
+
 If Crawl4AI succeeds but returns title-only content, URL ingestion treats that
 as a quality failure and falls back to Trafilatura fetch before returning
-chunks. This is different from retrying the same crawl in a loop: the module
-switches extraction strategy because the rendered/cleaned source is not useful
-for RAG.
+chunks. The internal Crawl4AI attempts handle browser/runtime instability first;
+the Trafilatura and `urllib` fallbacks handle cases where browser crawling still
+cannot produce useful source content.
+
+If Crawl4AI returns a rendered loading/promo shell with too few links and too
+little useful text, ingestion now treats that as a rendered-source failure and
+uses static HTML via `urllib`. This keeps pages such as the VinFast homepage
+usable when the raw server HTML contains product cards and links but the browser
+snapshot was captured before the React/Drupal page opened fully. The static HTML
+result becomes the recovery baseline for tuning Crawl4AI and builtin parsing:
+rendered HTML should be selected only when it adds useful hydrated content rather
+than replacing the static page with a low-signal shell.
+
+For one seed-plus-child crawl session, the crawler also remembers domains that
+returned a low-content shell on the `main` attempt. Later URLs from that same
+domain can skip directly to `last`, and the raw metadata records this in
+`crawl_attempts_skipped`. Normal top-level ingestion calls reset this shell
+domain cache so one user's failed rendered snapshot does not affect an
+independent request in a long-running server.
+
+## Crawl Attempts Versus Parser Quality
+
+`crawl_attempt` and `review_status` answer different questions:
+
+- `crawl_attempt` says which browser strategy produced the HTML/Markdown source:
+  `main`, `secondary`, or `last`.
+- `review_status` says whether the selected content was direct primary content,
+  recovered content, partial content, or a failure for review.
+
+For example, a page can show:
+
+```text
+crawl_attempt = main
+review_status = recovered
+fallback_reason = content_quality_selected_for_lower_noise
+```
+
+This means Crawl4AI `main` successfully loaded useful rendered HTML, but the
+quality selector chose a cleaner parser candidate such as the builtin HTML
+parser or Trafilatura. This is not a browser retry failure.
+
+Use this quick interpretation table:
+
+| Report signal | Interpretation |
+| --- | --- |
+| `crawl_attempt_errors` has values | Browser attempt problem or shell gate fired. |
+| `crawl_attempt=main`, `review_status=success` | Crawl4AI primary Markdown was selected directly. |
+| `crawl_attempt=main`, `review_status=recovered` | Crawl worked; parser/content-quality fallback won. |
+| `crawl_attempt=last`, `review_status=recovered` | Earlier browser attempts were rejected; final browser recovery worked. |
+| `static_html_recovery=True` | Static HTML was better than rendered browser HTML. |
+| `usable_chunk_count=0` | Treat as review failure even if HTML was fetched. |
 
 ## Interactive Probes
 
@@ -137,12 +239,69 @@ Child crawling intentionally skips:
 - the original URL,
 - duplicate normalized chunk text.
 
+During one seed/child session, repeated low-content shell behavior is also
+cached by domain. If the seed page proves that `main` returns a rendered shell,
+same-domain child pages can skip `main` and `secondary` and go straight to
+`last`. This keeps `max_child_pages=5` review runs from spending most of their
+time on predictable shell attempts. The skipped attempt names are recorded in
+`raw_crawler_result["crawl_attempts_skipped"]`.
+
 This is useful for listing/card pages where the parent page links to product or
 article detail pages. Keep `max_child_pages=0` for deterministic single-page
 ingestion. For human review or frontend demos where a pasted landing/listing URL
 is expected to gather enough product/article detail, pass an explicit value such
 as `max_child_pages=10` from the caller rather than changing the ingestion
 default.
+
+## Crawl Strategy Research
+
+The current default stack remains:
+
+```text
+Crawl4AI attempts -> source snapshot gate -> parser candidate scoring -> chunks
+```
+
+Additional crawler frameworks should be evaluated only when this stack cannot
+produce usable chunks:
+
+- Crawlee + Playwright is now the priority secondary quality gate. Its queue,
+  concurrency, depth-limit, and retry features are still candidates for a larger
+  crawl-frontier rewrite.
+- Playwright-style readiness checks are preferred for exact page-state probes;
+  avoid long generic `networkidle` waits on SPAs with trackers.
+- Scrapling may be evaluated as an optional Python fetcher ladder for dynamic or
+  protected pages, but should not be added just because a page is `recovered` by
+  a healthy parser fallback.
+
+The repo-local strategy note lives at:
+
+```text
+guide/crawl-strategy-skill/
+guide/research/crawlee-playwright-scrapling-strategy.md
+```
+
+## Crawl Review Evaluation
+
+After running `guide/demo/url-crawl-review/run_review.py` or the browser demo,
+score the payload with deterministic checks and an OpenAI review:
+
+```bash
+uv run python guide/demo/url-crawl-review/evaluate_review.py --input guide/demo/url-crawl-review/output/crawl_review_payload.json --output guide/demo/url-crawl-review/output/crawl_review_evaluation.json
+```
+
+The evaluator reads `OPENAI_API_KEY` from the process environment or from `.env`.
+It writes JSON with:
+
+- local document scores,
+- usable chunk ratios,
+- parser/fallback flags,
+- OpenAI evaluator scores and recommended tuning actions.
+
+For a no-network/local-only pass:
+
+```bash
+uv run python guide/demo/url-crawl-review/evaluate_review.py --offline
+```
 
 ## Chunking Strategy
 

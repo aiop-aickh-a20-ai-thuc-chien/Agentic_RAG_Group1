@@ -19,7 +19,21 @@ DEFAULT_PARAGRAPH_MAX_TOKENS = 512
 DEFAULT_PARAGRAPH_OVERLAP = 1
 DEFAULT_HIERARCHICAL_TARGET_MIN = 300
 DEFAULT_HIERARCHICAL_MIN_CHARS = 40
+DEFAULT_USABLE_CHUNK_MIN_CHARS = 80
+DEFAULT_USABLE_CHUNK_MIN_WORDS = 20
+DEFAULT_USABLE_CHUNK_SIGNAL_MIN_WORDS = 8
 
+_STRUCTURED_SIGNAL_RE = re.compile(
+    r"\d{1,3}(?:[.,]\d{3})+|\d+\s*(?:km|kwh|vnd|vnđ|%|năm|tháng|year|month)",
+    flags=re.IGNORECASE,
+)
+_NUMERIC_VALUE_RE = re.compile(
+    r"(?<![\w])"
+    r"(?:\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)"
+    r"(?:\s*(?:%|km|kwh|kw|vnd|m2|w|l|year|month))?"
+    r"(?![\w])",
+    flags=re.IGNORECASE,
+)
 _HEADING_RE = re.compile(r"^(?P<marker>#{1,6})(?!#)\s*(?P<title>.+?)\s*$")
 _SUBSECTION_NUMBER_RE = re.compile(r"^\s*(?:-\s*)?(\d+(?:\.\d+)*?)[.)]\s+(.{3,120})$")
 _BOLD_LEAD_RE = re.compile(r"^\s*(?:-\s*)?\*\*(.{2,80}?)\*\*:?\s*$")
@@ -612,6 +626,104 @@ def chunking_text(value: str | ChunkingInput) -> str:
     """Return Markdown/text from either raw text or shared chunking input."""
 
     return _coerce_chunking_input(value).markdown
+
+
+def chunk_text_quality(text: str) -> dict[str, object]:
+    """Return deterministic review metrics for one candidate chunk."""
+
+    cleaned = normalize_space(text)
+    word_count = len(re.findall(r"\w+", cleaned, flags=re.UNICODE))
+    char_count = len(cleaned)
+    has_structured_signal = bool(_STRUCTURED_SIGNAL_RE.search(cleaned))
+    structural_clarity = chunk_structural_clarity(text)
+    is_usable = (
+        word_count >= DEFAULT_USABLE_CHUNK_MIN_WORDS
+        and char_count >= DEFAULT_USABLE_CHUNK_MIN_CHARS
+    ) or (
+        word_count >= DEFAULT_USABLE_CHUNK_SIGNAL_MIN_WORDS
+        and char_count >= DEFAULT_USABLE_CHUNK_MIN_CHARS // 2
+        and has_structured_signal
+    )
+    if not structural_clarity["is_clear"]:
+        is_usable = False
+    return {
+        "char_count": char_count,
+        "word_count": word_count,
+        "has_structured_signal": has_structured_signal,
+        "structural_clarity": structural_clarity,
+        "is_usable": is_usable,
+    }
+
+
+def is_usable_chunk_text(text: str) -> bool:
+    """Return whether a candidate chunk has enough signal for retrieval review."""
+
+    return bool(chunk_text_quality(text)["is_usable"])
+
+
+def chunk_structural_clarity(text: str) -> dict[str, object]:
+    """Detect chunks that are rich in facts but structurally confusing."""
+
+    cleaned = normalize_space(text)
+    word_count = len(re.findall(r"\w+", cleaned, flags=re.UNICODE))
+    numeric_value_count = len(_NUMERIC_VALUE_RE.findall(cleaned))
+    numeric_density = round(numeric_value_count / max(word_count, 1), 4)
+    nonempty_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    line_count = len(nonempty_lines)
+    repeated_phrase_density = _repeated_phrase_density(cleaned)
+
+    issue_codes: list[str] = []
+    needs_table_reconstruction = (
+        word_count >= 80
+        and numeric_value_count >= 18
+        and numeric_density >= 0.12
+        and line_count <= 4
+    )
+    if needs_table_reconstruction:
+        issue_codes.append("flattened_numeric_table")
+
+    needs_deduplication = repeated_phrase_density >= 0.12
+    if needs_deduplication:
+        issue_codes.append("repeated_phrase_blocks")
+
+    if not needs_table_reconstruction and numeric_value_count >= 12 and numeric_density >= 0.08:
+        issue_codes.append("numeric_dense_review")
+
+    label = "clear"
+    if needs_table_reconstruction or needs_deduplication:
+        label = "low"
+    elif issue_codes:
+        label = "review"
+
+    return {
+        "label": label,
+        "issue_codes": issue_codes,
+        "numeric_value_count": numeric_value_count,
+        "numeric_density": numeric_density,
+        "line_count": line_count,
+        "repeated_phrase_density": repeated_phrase_density,
+        "needs_table_reconstruction": needs_table_reconstruction,
+        "needs_deduplication": needs_deduplication,
+        "is_clear": label != "low",
+    }
+
+
+def _repeated_phrase_density(text: str, *, shingle_size: int = 8) -> float:
+    words = [word.casefold() for word in re.findall(r"\w+", text, flags=re.UNICODE)]
+    if len(words) < shingle_size * 2:
+        return 0.0
+    shingles = [
+        " ".join(words[index : index + shingle_size])
+        for index in range(0, len(words) - shingle_size + 1)
+    ]
+    seen: set[str] = set()
+    duplicate_count = 0
+    for shingle in shingles:
+        if shingle in seen:
+            duplicate_count += 1
+        else:
+            seen.add(shingle)
+    return round(duplicate_count / max(len(shingles), 1), 4)
 
 
 def _coerce_chunking_input(value: str | ChunkingInput) -> ChunkingInput:
