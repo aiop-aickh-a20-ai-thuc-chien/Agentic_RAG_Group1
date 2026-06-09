@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import tempfile
 import time
 import unicodedata
@@ -178,7 +177,11 @@ class LocalPdfEvidenceProvider:
         self._debug_dir = store_dir / "debug"
         self._artifacts_dir = store_dir / "artifacts"
         if self._source_store is None:
-            self._ensure_local_dirs()
+            self._files_dir.mkdir(parents=True, exist_ok=True)
+            self._chunks_dir.mkdir(parents=True, exist_ok=True)
+            self._parsed_dir.mkdir(parents=True, exist_ok=True)
+            self._debug_dir.mkdir(parents=True, exist_ok=True)
+            self._artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_env(cls) -> LocalPdfEvidenceProvider:
@@ -319,11 +322,10 @@ class LocalPdfEvidenceProvider:
                     "latency_ms": chunk_latency_ms,
                 },
                 "index_write": {
-                    "type": _index_write_type(source_store_trace),
-                    "path": _index_write_path(
-                        source_store_trace=source_store_trace,
-                        chunk_path=self._chunk_path(document_id),
-                    ),
+                    "type": "jsonl" if self._source_store is None else "source_store",
+                    "path": str(self._chunk_path(document_id))
+                    if self._source_store is None
+                    else None,
                     "source_store": source_store_trace,
                     "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
@@ -444,11 +446,10 @@ class LocalPdfEvidenceProvider:
                     "latency_ms": chunk_latency_ms,
                 },
                 "index_write": {
-                    "type": _index_write_type(source_store_trace),
-                    "path": _index_write_path(
-                        source_store_trace=source_store_trace,
-                        chunk_path=self._chunk_path(document_id),
-                    ),
+                    "type": "jsonl" if self._source_store is None else "source_store",
+                    "path": str(self._chunk_path(document_id))
+                    if self._source_store is None
+                    else None,
                     "source_store": source_store_trace,
                     "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
@@ -536,11 +537,10 @@ class LocalPdfEvidenceProvider:
                     "latency_ms": chunk_latency_ms,
                 },
                 "index_write": {
-                    "type": _index_write_type(source_store_trace),
-                    "path": _index_write_path(
-                        source_store_trace=source_store_trace,
-                        chunk_path=self._chunk_path(document_id),
-                    ),
+                    "type": "jsonl" if self._source_store is None else "source_store",
+                    "path": str(self._chunk_path(document_id))
+                    if self._source_store is None
+                    else None,
                     "source_store": source_store_trace,
                     "dense_index": dense_index_trace,
                     "latency_ms": write_latency_ms,
@@ -577,13 +577,10 @@ class LocalPdfEvidenceProvider:
         """Return stored documents for frontend hydration."""
 
         if self._source_store is not None:
-            try:
-                return [
-                    self._stored_document_from_source_store(item, include_chunks=include_chunks)
-                    for item in self._source_store.list_documents()
-                ]
-            except Exception:
-                pass
+            return [
+                self._stored_document_from_source_store(item, include_chunks=include_chunks)
+                for item in self._source_store.list_documents()
+            ]
 
         documents: list[LocalPdfStoredDocument] = []
         for chunk_path in sorted(
@@ -603,8 +600,7 @@ class LocalPdfEvidenceProvider:
         count = 0
         _delete_all_dense_embeddings()
         if self._source_store is not None:
-            with suppress(Exception):
-                count = self._source_store.delete_all_documents()
+            count = self._source_store.delete_all_documents()
 
         for path in list(self._chunks_dir.glob("*.jsonl")):
             path.unlink(missing_ok=True)
@@ -625,8 +621,7 @@ class LocalPdfEvidenceProvider:
 
         _delete_dense_document(document_id)
         if self._source_store is not None:
-            with suppress(Exception):
-                self._source_store.delete_document(document_id)
+            self._source_store.delete_document(document_id)
 
         safe_id = _safe_document_id(document_id)
         for path in (
@@ -658,8 +653,7 @@ class LocalPdfEvidenceProvider:
         if not markdown and self._source_store is not None:
             read_markdown = getattr(self._source_store, "read_markdown", None)
             if callable(read_markdown):
-                with suppress(Exception):
-                    markdown = str(read_markdown(document_id))
+                markdown = str(read_markdown(document_id))
         chunk_input, chunk_input_type = self._debug_chunk_input(
             document_id=document_id,
             source_type=source_type,
@@ -827,34 +821,6 @@ class LocalPdfEvidenceProvider:
         payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
         chunk_path.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
 
-    def _ensure_local_dirs(self) -> None:
-        self._files_dir.mkdir(parents=True, exist_ok=True)
-        self._chunks_dir.mkdir(parents=True, exist_ok=True)
-        self._parsed_dir.mkdir(parents=True, exist_ok=True)
-        self._debug_dir.mkdir(parents=True, exist_ok=True)
-        self._artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    def _write_local_fallback_source(
-        self,
-        *,
-        document_id: str,
-        source_type: str,
-        raw_path: Path | None,
-        markdown_path: Path | None,
-        chunks: list[Chunk],
-    ) -> None:
-        self._ensure_local_dirs()
-        self._write_chunks(document_id=document_id, chunks=chunks)
-        if markdown_path is not None and markdown_path.exists():
-            local_markdown_path = self._markdown_path(document_id)
-            if markdown_path.resolve(strict=False) != local_markdown_path.resolve(strict=False):
-                shutil.copyfile(markdown_path, local_markdown_path)
-        if raw_path is not None and raw_path.exists():
-            suffix = raw_path.suffix or (".pdf" if source_type == "pdf" else ".bin")
-            raw_output_path = self._files_dir / f"{_safe_document_id(document_id)}{suffix}"
-            if raw_path.resolve(strict=False) != raw_output_path.resolve(strict=False):
-                shutil.copyfile(raw_path, raw_output_path)
-
     def _write_source_store(
         self,
         *,
@@ -869,38 +835,19 @@ class LocalPdfEvidenceProvider:
     ) -> dict[str, object]:
         if self._source_store is None:
             return {"type": "jsonl", "enabled": False}
-        requested_type = _source_store_trace_type(self._source_store)
-        try:
-            self._source_store.write_document(
-                document_id=document_id,
-                dataset_id=self.dataset_id,
-                name=name,
-                source_type=source_type,
-                source=source,
-                raw_path=raw_path,
-                markdown_path=markdown_path,
-                metadata=metadata,
-                chunks=chunks,
-            )
-        except Exception as exc:
-            self._write_local_fallback_source(
-                document_id=document_id,
-                source_type=source_type,
-                raw_path=raw_path,
-                markdown_path=markdown_path,
-                chunks=chunks,
-            )
-            return {
-                "type": "jsonl",
-                "enabled": False,
-                "requested_type": requested_type,
-                "fallback_to_local": True,
-                "fallback_reason": str(exc),
-                "document_id": document_id,
-                "chunk_count": len(chunks),
-            }
+        self._source_store.write_document(
+            document_id=document_id,
+            dataset_id=self.dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=chunks,
+        )
         return {
-            "type": requested_type,
+            "type": _source_store_trace_type(self._source_store),
             "enabled": True,
             "document_id": document_id,
             "chunk_count": len(chunks),
@@ -931,11 +878,7 @@ class LocalPdfEvidenceProvider:
         try:
             dense_index_trace = _upsert_dense_embeddings_safely(chunks)
         except Exception as exc:
-            if (
-                _qdrant_vector_store_enabled()
-                and self._source_store is not None
-                and source_store_trace.get("enabled") is True
-            ):
+            if _qdrant_vector_store_enabled() and self._source_store is not None:
                 try:
                     self._source_store.delete_document(document_id)
                 except Exception as rollback_exc:
@@ -987,12 +930,7 @@ class LocalPdfEvidenceProvider:
 
     def _read_chunks(self, document_id: str) -> list[Chunk]:
         if self._source_store is not None:
-            try:
-                source_store_chunks = self._source_store.read_chunks(document_id)
-            except Exception:
-                source_store_chunks = []
-            if source_store_chunks:
-                return source_store_chunks
+            return self._source_store.read_chunks(document_id)
 
         chunk_path = self._chunk_path(document_id)
         if not chunk_path.exists():
@@ -1008,10 +946,7 @@ class LocalPdfEvidenceProvider:
     def _chunks_for_documents(self, document_ids: list[str] | None) -> list[Chunk]:
         if document_ids:
             if self._source_store is not None:
-                try:
-                    stored = self._source_store.read_chunks_for_documents(document_ids)
-                except Exception:
-                    stored = []
+                stored = self._source_store.read_chunks_for_documents(document_ids)
                 if stored:
                     return stored
             fallback: list[Chunk] = []
@@ -1020,10 +955,7 @@ class LocalPdfEvidenceProvider:
             return fallback
 
         if self._source_store is not None:
-            try:
-                chunks = self._source_store.read_all_chunks()
-            except Exception:
-                chunks = []
+            chunks = self._source_store.read_all_chunks()
             if chunks:
                 return chunks
 
@@ -1150,10 +1082,7 @@ def _chunks_with_local_metadata(
 def _source_store_from_env() -> LocalSourceStore | None:
     raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
     if raw_store == "s3":
-        try:
-            return S3LocalSourceStore.from_env()
-        except Exception:
-            return None
+        return S3LocalSourceStore.from_env()
     if raw_store not in {"postgres", "postgresql", "pg"}:
         return None
 
@@ -1162,12 +1091,12 @@ def _source_store_from_env() -> LocalSourceStore | None:
         or os.getenv("DENSE_PGVECTOR_CONNECTION", "").strip()
     )
     if not connection:
-        return None
+        raise ValueError(
+            "LOCAL_SOURCE_STORE=postgres requires LOCAL_SOURCE_POSTGRES_CONNECTION "
+            "or DENSE_PGVECTOR_CONNECTION."
+        )
     table_prefix = os.getenv("LOCAL_SOURCE_POSTGRES_TABLE_PREFIX", "local_rag").strip()
-    try:
-        return PostgresLocalSourceStore(connection=connection, table_prefix=table_prefix)
-    except Exception:
-        return None
+    return PostgresLocalSourceStore(connection=connection, table_prefix=table_prefix)
 
 
 def _source_store_trace_type(source_store: LocalSourceStore) -> str:
@@ -1176,14 +1105,6 @@ def _source_store_trace_type(source_store: LocalSourceStore) -> str:
     if isinstance(source_store, PostgresLocalSourceStore):
         return "postgres"
     return source_store.__class__.__name__
-
-
-def _index_write_type(source_store_trace: dict[str, object]) -> str:
-    return str(source_store_trace.get("type") or "jsonl")
-
-
-def _index_write_path(*, source_store_trace: dict[str, object], chunk_path: Path) -> str | None:
-    return str(chunk_path) if source_store_trace.get("type") == "jsonl" else None
 
 
 def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:

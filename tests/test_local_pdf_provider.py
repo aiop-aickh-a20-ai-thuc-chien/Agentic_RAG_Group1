@@ -15,7 +15,6 @@ from agentic_rag.integrations.local_pdf.providers import (
     LocalPdfDocumentChunks,
     LocalPdfEvidenceProvider,
     LocalPdfUploadedDocument,
-    _source_store_from_env,
 )
 from agentic_rag.integrations.local_pdf.storage import StoredRawSource, StoredSourceDocument
 from agentic_rag.retrieval.search import Store
@@ -288,95 +287,6 @@ def test_local_pdf_provider_uploads_url_chunks(
     assert debug.chunk_input_type == "parsed_sections"
     assert debug.source_type == "url"
     assert debug.source == "https://example.com/chinh-sach"
-
-
-def test_local_pdf_provider_from_env_falls_back_to_local_when_source_store_missing(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("LOCAL_PDF_STORE_DIR", str(tmp_path))
-    monkeypatch.setenv("LOCAL_SOURCE_STORE", "s3")
-    monkeypatch.delenv("AWS_S3_BUCKET", raising=False)
-
-    provider = LocalPdfEvidenceProvider.from_env()
-
-    assert provider._source_store is None
-    assert (tmp_path / "chunks").exists()
-    assert _source_store_from_env() is None
-
-
-def test_local_pdf_provider_upload_url_falls_back_to_local_when_source_store_fails(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    class DisconnectedSourceStore:
-        def write_document(self, **_kwargs: Any) -> None:
-            raise ConnectionError("storage disconnected")
-
-        def read_chunks(self, _document_id: str) -> list[Chunk]:
-            raise ConnectionError("storage disconnected")
-
-        def read_all_chunks(self) -> list[Chunk]:
-            raise ConnectionError("storage disconnected")
-
-        def read_chunks_for_documents(self, _document_ids: list[str]) -> list[Chunk]:
-            raise ConnectionError("storage disconnected")
-
-        def list_documents(self) -> list[StoredSourceDocument]:
-            raise ConnectionError("storage disconnected")
-
-        def delete_document(self, _document_id: str) -> None:
-            raise ConnectionError("storage disconnected")
-
-        def delete_all_documents(self) -> int:
-            raise ConnectionError("storage disconnected")
-
-    url = "https://example.com/chinh-sach"
-    monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.load_url_with_artifacts",
-        lambda *_args, **_kwargs: LoadedUrlDocument(
-            markdown="# Trang chinh sach\n\nNoi dung URL.",
-            chunks=[
-                Chunk(
-                    chunk_id="url_doc_c0001",
-                    text="Noi dung URL.",
-                    metadata={
-                        "source": url,
-                        "source_type": "url",
-                        "url": url,
-                        "title": "Trang chinh sach",
-                        "section": "main",
-                    },
-                )
-            ],
-            artifacts=None,
-        ),
-    )
-    monkeypatch.setattr(
-        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
-        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
-    )
-    provider = LocalPdfEvidenceProvider(
-        store_dir=tmp_path,
-        source_store=cast(Any, DisconnectedSourceStore()),
-    )
-
-    uploaded = provider.upload_url(url=url)
-    trace = cast(dict[str, dict[str, Any]], uploaded.trace)
-    chunks = provider.document_chunks(document_id=uploaded.document_id).chunks
-    debug = provider.document_debug(document_id=uploaded.document_id)
-
-    assert trace["index_write"]["type"] == "jsonl"
-    assert trace["index_write"]["path"] == str(
-        tmp_path / "chunks" / f"{uploaded.document_id}.jsonl"
-    )
-    assert trace["index_write"]["source_store"]["fallback_to_local"] is True
-    assert trace["index_write"]["source_store"]["requested_type"] == "DisconnectedSourceStore"
-    assert "storage disconnected" in str(trace["index_write"]["source_store"]["fallback_reason"])
-    assert chunks[0].text == "Noi dung URL."
-    assert debug.markdown == "# Trang chinh sach\n\nNoi dung URL."
-    assert (tmp_path / "parsed" / f"{uploaded.document_id}.md").exists()
-    assert (tmp_path / "chunks" / f"{uploaded.document_id}.jsonl").exists()
 
 
 def test_local_pdf_provider_uploads_text_chunks(
