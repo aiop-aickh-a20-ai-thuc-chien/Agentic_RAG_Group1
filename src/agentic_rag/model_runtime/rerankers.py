@@ -133,12 +133,15 @@ class LiteLLMReranker(BaseModel):
             kwargs["api_base"] = self.config.api_base
         if self.config.api_key is not None:
             kwargs["api_key"] = self.config.api_key
+        if self.config.provider == "local":
+            kwargs["custom_llm_provider"] = "hosted_vllm"
         return kwargs
 
     def _model_name(self) -> str:
         model_name = self.config.model_name
-        provider = "hosted_vllm" if self.config.provider == "local" else self.config.provider
-        prefix = f"{provider}/"
+        if self.config.provider == "local":
+            return model_name
+        prefix = f"{self.config.provider}/"
         if model_name.startswith(prefix):
             return model_name
         return f"{prefix}{model_name}"

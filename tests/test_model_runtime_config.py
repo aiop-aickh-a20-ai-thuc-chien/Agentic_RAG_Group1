@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 from pytest import MonkeyPatch
@@ -83,6 +85,20 @@ def _clear_model_runtime_env(monkeypatch: MonkeyPatch) -> None:
     for name in _MODEL_RUNTIME_ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+
+
+def test_env_example_keeps_llm_disabled_without_credentials() -> None:
+    env_example = Path(__file__).resolve().parents[1] / ".env.example"
+    values = {
+        key.strip(): value.strip()
+        for line in env_example.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and "=" in line
+        for key, value in [line.split("=", 1)]
+    }
+
+    assert values["LLM_PROVIDER"] == "none"
+    assert values["LLM_MODEL"] == ""
+    assert values["LLM_API_KEY"] == ""
 
 
 def test_global_llm_defaults_to_disabled_profile(monkeypatch: MonkeyPatch) -> None:

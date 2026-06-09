@@ -15,7 +15,10 @@ from agentic_rag.model_runtime.embeddings import (
     LiteLLMEmbeddingClient,
     validate_embedding_output,
 )
-from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
+from agentic_rag.model_runtime.errors import (
+    ModelInvocationError,
+    ModelRuntimeConfigurationError,
+)
 
 
 def _config(
@@ -94,6 +97,34 @@ def test_local_embedding_provider_uses_openai_compatible_litellm_model(
     assert output.model == "openai/local-embedding-model"
 
 
+def test_litellm_embedding_normalizes_invalid_provider_response(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(embedding=lambda **_kwargs: {"unexpected": []}),
+    )
+    client = LiteLLMEmbeddingClient(config=_config())
+
+    with pytest.raises(ModelInvocationError, match="response must contain a data list"):
+        client.embed(EmbeddingInput(texts=["query"]))
+
+
+def test_litellm_embedding_normalizes_dimension_mismatch(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(embedding=lambda **_kwargs: {"data": [{"embedding": [0.1, 0.2]}]}),
+    )
+    client = LiteLLMEmbeddingClient(config=_config(dimensions=3))
+
+    with pytest.raises(ModelInvocationError, match="expected 3, received 2"):
+        client.embed(EmbeddingInput(texts=["query"]))
+
+
 def test_embedding_validation_rejects_bad_vectors() -> None:
     config = _config(dimensions=3)
 
@@ -153,6 +184,56 @@ def test_sentence_transformers_embedding_reports_missing_local_extra(
     )
 
     with pytest.raises(ModelRuntimeConfigurationError, match="uv sync --extra local-models"):
+        client.embed(EmbeddingInput(texts=["text"]))
+
+
+def test_sentence_transformers_embedding_normalizes_model_load_failure(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FailingSentenceTransformer:
+        def __init__(self, _model_name: str, device: str | None = None) -> None:
+            del device
+            raise OSError("model unavailable")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        SimpleNamespace(SentenceTransformer=FailingSentenceTransformer),
+    )
+    client = HuggingFaceEmbeddingClient(
+        config=_config(
+            provider="sentence_transformers",
+            model="sentence-transformers/unavailable-test-model",
+        )
+    )
+
+    with pytest.raises(ModelInvocationError, match="model unavailable"):
+        client.embed(EmbeddingInput(texts=["text"]))
+
+
+def test_sentence_transformers_embedding_normalizes_invalid_vectors(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class InvalidSentenceTransformer:
+        def __init__(self, _model_name: str, device: str | None = None) -> None:
+            del device
+
+        def encode(self, _texts: list[str], **_kwargs: Any) -> object:
+            return "not vectors"
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        SimpleNamespace(SentenceTransformer=InvalidSentenceTransformer),
+    )
+    client = HuggingFaceEmbeddingClient(
+        config=_config(
+            provider="sentence_transformers",
+            model="sentence-transformers/invalid-vector-test-model",
+        )
+    )
+
+    with pytest.raises(ModelInvocationError, match="must be an iterable of vectors"):
         client.embed(EmbeddingInput(texts=["text"]))
 
 

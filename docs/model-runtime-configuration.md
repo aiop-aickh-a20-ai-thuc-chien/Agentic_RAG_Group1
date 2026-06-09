@@ -10,9 +10,10 @@ The runtime reads simple `KEY=VALUE` entries from `.env`. Values already present
 in the process environment take precedence over `.env` values. Blank values are
 treated as unset.
 
-The checked-in `.env.example` is a runnable sample, not the complete set of
-runtime defaults. In particular, an omitted LLM provider defaults to `none`,
-while `.env.example` may select an API provider for a development setup.
+The checked-in `.env.example` is a runnable keyless sample. It keeps the LLM
+provider set to `none`, matching the runtime default when the provider is
+omitted. Enable a provider only after configuring a usable model and any
+required credentials.
 
 Timeout values must be positive numbers. `EMBEDDING_DIMENSIONS`, when set, must
 be a positive integer. Invalid settings raise `ModelRuntimeConfigurationError`
@@ -28,13 +29,17 @@ before a provider call is made.
 | `none` | Disable LLM calls. |
 | `score` | Use deterministic score sorting instead of a model reranker. |
 
-`local` has a protocol-specific internal mapping:
+`local` has a protocol-specific internal LiteLLM mapping:
 
-| Component | Required server contract | LiteLLM model prefix |
+| Component | Required server contract | Internal LiteLLM routing |
 | --- | --- | --- |
-| LLM | OpenAI-compatible chat completion API | `openai/<model>` |
-| Embedding | OpenAI-compatible embeddings API | `openai/<model>` |
-| Reranker | Jina/vLLM-compatible `/rerank` API | `hosted_vllm/<model>` |
+| LLM | OpenAI-compatible chat completion API | Model prefix `openai/<model>` |
+| Embedding | OpenAI-compatible embeddings API | Model prefix `openai/<model>` |
+| Reranker | Jina/vLLM-compatible `/rerank` API | `custom_llm_provider=hosted_vllm`; model remains `<model>` |
+
+`hosted_vllm` is not an environment provider value. The reranker adapter passes
+it directly to LiteLLM as an internal routing argument when
+`RERANK_PROVIDER=local`.
 
 Every `local` profile requires an explicit model and API base. API keys remain
 optional because self-hosted servers may not require authentication.
@@ -65,6 +70,12 @@ The following roles can override each field independently:
 A blank role-specific value inherits the corresponding global `LLM_*` value.
 For example, `GENERATION_LLM_MODEL=` inherits `LLM_MODEL`, while a nonblank
 `GENERATION_LLM_MODEL` replaces it only for generation.
+
+Blank role-specific values do not clear global values. In particular,
+`GENERATION_LLM_API_KEY=` inherits `LLM_API_KEY`; it must not be used to remove
+a global credential before calling a different backend. Use a separate complete
+runtime profile when a role must use an incompatible provider, API base, or
+credential set.
 
 If the resolved provider is `none`, the resolved model is ignored and no
 LiteLLM client is created. Generation then uses the deterministic fallback that
@@ -205,14 +216,11 @@ LLM_MODEL=gpt-4o-mini
 LLM_API_KEY=your_api_key
 
 QUERY_REWRITE_LLM_MODEL=gpt-4o
-GENERATION_LLM_PROVIDER=local
-GENERATION_LLM_MODEL=local-chat-model
-GENERATION_LLM_API_BASE=http://127.0.0.1:8000/v1
-GENERATION_LLM_API_KEY=
 ```
 
 The query rewrite role inherits the global provider and credentials while using
-its own model. Generation uses the separately hosted local service.
+its own model. Use the complete hosted-local profile above when running against
+a local HTTP backend so global API credentials are not inherited accidentally.
 
 ## Migration from Legacy Values
 
