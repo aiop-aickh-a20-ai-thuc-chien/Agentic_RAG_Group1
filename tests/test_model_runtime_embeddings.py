@@ -117,7 +117,7 @@ def test_embedding_validation_rejects_bad_vectors() -> None:
         )
 
 
-def test_huggingface_embedding_loads_one_cached_model_per_model_device(
+def test_sentence_transformers_embedding_loads_one_cached_model_per_model_device(
     monkeypatch: MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, str | None]] = []
@@ -135,7 +135,7 @@ def test_huggingface_embedding_loads_one_cached_model_per_model_device(
         "sentence_transformers",
         SimpleNamespace(SentenceTransformer=FakeSentenceTransformer),
     )
-    config = _config(provider="huggingface", model="sentence-transformers/test")
+    config = _config(provider="sentence_transformers", model="sentence-transformers/test")
     first = HuggingFaceEmbeddingClient(config=config, device="cpu")
     second = HuggingFaceEmbeddingClient(config=config, device="cpu")
 
@@ -144,10 +144,12 @@ def test_huggingface_embedding_loads_one_cached_model_per_model_device(
     assert calls == [("sentence-transformers/test", "cpu")]
 
 
-def test_huggingface_embedding_reports_missing_local_extra(monkeypatch: MonkeyPatch) -> None:
+def test_sentence_transformers_embedding_reports_missing_local_extra(
+    monkeypatch: MonkeyPatch,
+) -> None:
     monkeypatch.delitem(sys.modules, "sentence_transformers", raising=False)
     client = HuggingFaceEmbeddingClient(
-        config=_config(provider="huggingface", model="sentence-transformers/test")
+        config=_config(provider="sentence_transformers", model="sentence-transformers/test")
     )
 
     with pytest.raises(ModelRuntimeConfigurationError, match="uv sync --extra local-models"):

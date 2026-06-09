@@ -40,9 +40,17 @@ _ENV_NAMES = (
     "QUERY_REWRITE_LLM_MODEL",
     "EMBEDDING_PROVIDER",
     "EMBEDDING_MODEL",
+    "EMBEDDING_API_BASE",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_DIMENSIONS",
+    "EMBEDDING_TIMEOUT_SECONDS",
     "EMBEDDING_DEVICE",
     "RERANK_PROVIDER",
     "RERANK_MODEL",
+    "RERANK_API_BASE",
+    "RERANK_API_KEY",
+    "RERANK_TIMEOUT_SECONDS",
+    "RERANK_DEVICE",
     "RERANK_PRELOAD",
 )
 
@@ -153,7 +161,7 @@ def test_preload_configured_models_only_loads_local_reranker(
         SimpleNamespace(CrossEncoder=FakeCrossEncoder),
     )
     skipped = cast(dict[str, object], preload_configured_models()["reranker"])
-    assert skipped["status"] == "skipped"
+    assert skipped["status"] == "disabled"
     assert calls == []
 
     monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")

@@ -28,6 +28,23 @@ def _clean_model_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from agentic_rag.model_runtime.factory import clear_model_runtime_caches
 
     clear_model_runtime_caches()
+    for name in (
+        "EMBEDDING_PROVIDER",
+        "EMBEDDING_MODEL",
+        "EMBEDDING_API_BASE",
+        "EMBEDDING_API_KEY",
+        "EMBEDDING_DIMENSIONS",
+        "EMBEDDING_TIMEOUT_SECONDS",
+        "EMBEDDING_DEVICE",
+        "RERANK_PROVIDER",
+        "RERANK_MODEL",
+        "RERANK_API_BASE",
+        "RERANK_API_KEY",
+        "RERANK_TIMEOUT_SECONDS",
+        "RERANK_DEVICE",
+        "RERANK_PRELOAD",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "none")
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
     yield
