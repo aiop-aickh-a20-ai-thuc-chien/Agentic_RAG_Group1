@@ -85,7 +85,7 @@ def test_s3_source_store_persists_manifest_chunks_markdown_and_raw_file(
     raw_path = tmp_path / "source.pdf"
     markdown_path = tmp_path / "source.md"
     raw_path.write_bytes(b"%PDF-1.4")
-    markdown_path.write_text("# Warranty\nPin VF8", encoding="utf-8")
+    markdown_path.write_text("# Warranty\nPin VF8", encoding="utf-8", newline="\n")
     chunk = Chunk(
         chunk_id="chunk-1",
         text="Pin VF8",

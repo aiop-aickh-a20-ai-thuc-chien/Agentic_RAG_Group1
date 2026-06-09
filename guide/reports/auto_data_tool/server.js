@@ -1,4 +1,8 @@
 require('dotenv').config();
+const { Blob, File } = require('node:buffer');
+if (!globalThis.Blob) globalThis.Blob = Blob;
+if (!globalThis.File) globalThis.File = File;
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');

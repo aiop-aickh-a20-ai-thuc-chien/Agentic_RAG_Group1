@@ -37,4 +37,6 @@ def test_custom_benchmark_report_is_json_serializable() -> None:
     assert report.average_score == 1.0
     assert payload["average_score"] == 1.0
     assert all(result["missing_terms"] == [] for result in payload["results"])
+    assert all(result["chunk_count"] >= 1 for result in payload["results"])
+    assert all("usable_chunk_count" in result for result in payload["results"])
     json.dumps(payload)

@@ -6,9 +6,11 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from agentic_rag.core.contracts import Chunk
@@ -19,17 +21,26 @@ from agentic_rag.ingestion.url.artifact import (
     persist_ingestion_artifacts,
 )
 from agentic_rag.ingestion.url.chunking import (
+    MarkdownChunk,
     build_chunk_id,
     build_chunks,
-    chunk_markdown_by_sections,
+    chunk_evidence_diagnostics,
+    chunk_text_quality,
     normalize_space,
     short_hash,
+    split_markdown_into_sections,
+    split_markdown_paragraphs,
+)
+from agentic_rag.ingestion.url.crawler import (
+    crawl_url_with_crawl4ai,
+    reset_crawl_shell_domain_cache,
 )
 from agentic_rag.ingestion.url.extractor import (
     ExtractedMarkdown,
     extract_markdown_from_html,
-    extract_markdown_with_playwright,
+    extract_markdown_with_crawlee_playwright,
     extract_markdown_with_trafilatura,
+    fetch_html_with_trafilatura,
 )
 from agentic_rag.ingestion.url.parser import ParsedHtml, parse_html
 
@@ -46,6 +57,33 @@ _REQUEST_HEADERS = {
 }
 _PARSER_NAME = "builtin-html-parser"
 _TRAFILATURA_PARSER_NAME = "trafilatura-markdown+builtin-html-parser"
+_CRAWLEE_PARSER_NAME = "crawlee-playwright-dom-markdown+normalizer+builtin-html-parser"
+_CRAWL4AI_PARSER_NAME = "crawl4ai-markdown+builtin-html-parser"
+_CRAWL4AI_BM25_PARSER_NAME = "crawl4ai-bm25-markdown+builtin-html-parser"
+_URL_CHUNK_OVERLAP_PARAGRAPHS = 0
+_BOILERPLATE_SECTION_SLUGS = {
+    "page-not-found",
+    "ti-n-ch",
+    "th-o-lu-n",
+    "ng-k-nh-n-th-ng-tin",
+    "hotline-1900-23-23-89",
+    "quy-n-ri-ng-t-c-a-b-n",
+    "cookie-ho-n-to-n-c-n-thi-t",
+    "cookie-hi-u-su-t",
+    "cookie-ch-c-n-ng",
+    "cookie-qu-ng-c-o",
+    "gi-h-ng-kh-ng-h-p-l",
+    "h-tr",
+    "ki-m-tra-email",
+    "i-m-t-kh-u-th-nh-c-ng",
+    "qu-n-m-t-kh-u",
+    "qu-kh-ch-vui-l-ng-i-m-t-kh-u-m-b-o-an-to-n-th-ng-tin",
+    "ng-nh-p-ng-k",
+    "ng-k-th-nh-c-ng",
+    "d-ng-xe-quan-t-m",
+    "filter-button",
+}
+_VINFAST_MODEL_RE = re.compile(r"\bVF\s*-?\s*(\d{1,2})\b", flags=re.IGNORECASE)
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
@@ -54,6 +92,40 @@ class _FetchedPage:
     html: str
     url: str
     content_type: str | None = None
+    markdown: str | None = None
+    bm25_markdown: str | None = None
+    structured_markdown: str | None = None
+    links: tuple[str, ...] = ()
+    crawler: str = "urllib"
+    crawler_error: str | None = None
+    probe_markdown: str | None = None
+    raw_crawler_result: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class MarkdownCandidate:
+    markdown: str
+    parser: str
+    role: str
+    score: int
+    token_count: int
+    heading_count: int
+    price_count: int
+    boilerplate_hits: int
+    image_count: int
+    link_count: int
+    link_density: float
+    noise_count: int
+    quality_label: str
+
+
+@dataclass(frozen=True)
+class MarkdownSelection:
+    markdown: str
+    parser: str
+    selected_role: str
+    fallback_reason: str | None
+    candidates: tuple[MarkdownCandidate, ...]
 
 
 @dataclass(frozen=True)
@@ -63,6 +135,9 @@ class LoadedUrlDocument:
     markdown: str
     chunks: list[Chunk]
     artifacts: IngestionArtifacts | None
+    selection: MarkdownSelection | None = None
+    primary_chunks: list[Chunk] | None = None
+    raw_crawler_result: dict[str, Any] | None = None
 
 
 def load_url_chunks(
@@ -71,7 +146,7 @@ def load_url_chunks(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    use_browser_extractor: bool = True,
+    max_child_pages: int = 0,
 ) -> list[Chunk]:
     """Fetch, clean, and chunk URL content into shared Chunk objects."""
 
@@ -80,7 +155,7 @@ def load_url_chunks(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
-        use_browser_extractor=use_browser_extractor,
+        max_child_pages=max_child_pages,
     ).chunks
 
 
@@ -90,23 +165,19 @@ def load_url_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "url_ingestion",
-    use_browser_extractor: bool = True,
+    max_child_pages: int = 0,
+    _reset_crawl_shell_cache: bool = True,
 ) -> LoadedUrlDocument:
     """Fetch, clean, chunk, and expose URL ingestion artifacts."""
 
+    if max_child_pages < 0:
+        raise ValueError("max_child_pages must be greater than or equal to zero.")
+    if _reset_crawl_shell_cache:
+        reset_crawl_shell_domain_cache()
     _raise_if_pdf_url(url)
-    if use_browser_extractor:
-        browser_loaded = _try_load_url_with_browser_extractor(
-            url,
-            debug_artifact_dir=debug_artifact_dir,
-            data_artifact_dir=data_artifact_dir,
-            run_id=run_id,
-        )
-        if browser_loaded is not None:
-            return browser_loaded
     page = _fetch_url(url)
     _raise_if_pdf_response(page)
-    return load_html_with_artifacts(
+    loaded = load_html_with_artifacts(
         page.html,
         source=page.url,
         source_url=page.url,
@@ -115,37 +186,78 @@ def load_url_with_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         data_artifact_dir=data_artifact_dir,
         run_id=run_id,
+        preferred_markdown=page.markdown,
+        preferred_parser=_CRAWL4AI_PARSER_NAME if page.markdown else None,
+        bm25_markdown=page.bm25_markdown,
+        structured_markdown=page.structured_markdown,
+        crawler=page.crawler,
+        crawler_error=page.crawler_error,
+        probe_markdown=page.probe_markdown,
+        raw_crawler_result=page.raw_crawler_result,
+    )
+    if max_child_pages == 0:
+        return loaded
+
+    child_documents: list[LoadedUrlDocument] = []
+    for child_url in _same_origin_child_urls(
+        page.links,
+        base_url=page.url,
+        max_child_pages=max_child_pages,
+    ):
+        try:
+            child_page = _fetch_url(child_url)
+            _raise_if_pdf_response(child_page)
+        except (RuntimeError, ValueError):
+            continue
+        child_documents.append(
+            load_html_with_artifacts(
+                child_page.html,
+                source=child_page.url,
+                source_url=child_page.url,
+                original_url=child_url,
+                final_url=child_page.url,
+                debug_artifact_dir=None,
+                data_artifact_dir=None,
+                run_id=f"{run_id}_child",
+                preferred_markdown=child_page.markdown,
+                preferred_parser=_CRAWL4AI_PARSER_NAME if child_page.markdown else None,
+                bm25_markdown=child_page.bm25_markdown,
+                structured_markdown=child_page.structured_markdown,
+                crawler=child_page.crawler,
+                crawler_error=child_page.crawler_error,
+                probe_markdown=child_page.probe_markdown,
+                raw_crawler_result=child_page.raw_crawler_result,
+            )
+        )
+
+    if not child_documents:
+        return loaded
+
+    # Merge chunks
+    all_chunks = _with_chunk_adjacency(
+        _dedupe_chunks(
+            [*loaded.chunks, *(chunk for document in child_documents for chunk in document.chunks)]
+        )
     )
 
+    # Aggregate primary chunks for demo comparison across children
+    all_primary: list[Chunk] | None = None
+    if loaded.primary_chunks is not None or any(d.primary_chunks for d in child_documents):
+        primary_list = list(loaded.primary_chunks or [])
+        for doc in child_documents:
+            primary_list.extend(doc.primary_chunks or [])
+        all_primary = _dedupe_chunks(primary_list)
 
-def _try_load_url_with_browser_extractor(
-    url: str,
-    *,
-    debug_artifact_dir: str | Path | None,
-    data_artifact_dir: str | Path | None,
-    run_id: str,
-) -> LoadedUrlDocument | None:
-    try:
-        extracted = extract_markdown_with_playwright(url)
-    except Exception:
-        return None
-    final_url = extracted.final_url or url
-    parsed = (
-        parse_html(extracted.rendered_html, base_url=final_url)
-        if extracted.rendered_html
-        else ParsedHtml(title=extracted.title, sections=())
+    all_markdown = "\n\n".join(
+        document.markdown.strip() for document in [loaded, *child_documents] if document.markdown
     )
-    return _load_extracted_markdown_with_artifacts(
-        extracted=extracted,
-        source=final_url,
-        source_url=final_url,
-        original_url=url,
-        final_url=final_url,
-        parsed=parsed,
-        html=extracted.rendered_html,
-        debug_artifact_dir=debug_artifact_dir,
-        data_artifact_dir=data_artifact_dir,
-        run_id=run_id,
+    return LoadedUrlDocument(
+        markdown=all_markdown,
+        chunks=all_chunks,
+        artifacts=loaded.artifacts,
+        selection=loaded.selection,
+        primary_chunks=all_primary,
+        raw_crawler_result=loaded.raw_crawler_result,
     )
 
 
@@ -184,15 +296,42 @@ def load_html_with_artifacts(
     debug_artifact_dir: str | Path | None = None,
     data_artifact_dir: str | Path | None = None,
     run_id: str = "html_ingestion",
+    preferred_markdown: str | None = None,
+    preferred_parser: str | None = None,
+    bm25_markdown: str | None = None,
+    structured_markdown: str | None = None,
+    crawler: str = "static-html",
+    crawler_error: str | None = None,
+    probe_markdown: str | None = None,
+    raw_crawler_result: dict[str, Any] | None = None,
 ) -> LoadedUrlDocument:
     """Clean and chunk one HTML document while exposing persisted artifacts."""
 
     parsed = parse_html(html, base_url=source_url or source)
-    parsed_markdown, parser_name = _extract_markdown(
+    fetched_at = _utc_now()
+    selection = _extract_markdown(
         html=html,
         parsed=parsed,
         source_url=source_url or source,
+        preferred_markdown=preferred_markdown,
+        preferred_parser=preferred_parser,
+        bm25_markdown=bm25_markdown,
     )
+    parsed_markdown = selection.markdown
+    parser_name = selection.parser
+    parser_name = _combined_parser_name(
+        parser_name,
+        crawler=crawler,
+        structured_markdown=structured_markdown,
+        probe_markdown=probe_markdown,
+    )
+
+    primary_candidate = next(
+        (c for c in selection.candidates if c.role == "crawl4ai_primary"), None
+    )
+    primary_chunks: list[Chunk] | None = None
+
+    canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
     _persist_html_debug_artifacts(
         debug_artifact_dir=debug_artifact_dir,
         source=source,
@@ -200,21 +339,86 @@ def load_html_with_artifacts(
         parsed_sections="\n\n".join(section.text for section in parsed.sections),
     )
 
-    return _load_extracted_markdown_with_artifacts(
-        extracted=ExtractedMarkdown(
-            markdown=parsed_markdown,
-            parser_name=parser_name,
+    source_type = "url" if source_url else "html"
+    cleaned_markdown = _clean_markdown_noise(
+        _append_supplemental_markdown(
+            parsed_markdown,
+            structured_markdown,
+            probe_markdown,
+        )
+    )
+    chunks = _build_markdown_aware_chunks(
+        markdown=cleaned_markdown,
+        source=source,
+        source_type=source_type,
+        url=source_url,
+        title=parsed.title,
+        fetched_at=fetched_at,
+    )
+    chunks = _with_html_metadata(
+        chunks,
+        html=html,
+        source_url=source_url,
+        original_url=original_url,
+        final_url=final_url,
+        canonical_url=canonical_url,
+        parsed=parsed,
+        crawler=crawler,
+        crawler_error=crawler_error,
+        parser_name=parser_name,
+        selection=selection,
+        raw_crawler_result=raw_crawler_result,
+    )
+    chunks = _with_chunk_adjacency(_dedupe_chunks(chunks))
+
+    # If a fallback was used, generate chunks for the primary to allow comparison in demo
+    if primary_candidate and selection.selected_role != "crawl4ai_primary":
+        primary_chunks = _build_markdown_aware_chunks(
+            markdown=_clean_markdown_noise(primary_candidate.markdown),
+            source=source,
+            source_type=source_type,
+            url=source_url,
             title=parsed.title,
-        ),
+            fetched_at=fetched_at,
+        )
+        primary_chunks = _with_html_metadata(
+            primary_chunks,
+            html=html,
+            source_url=source_url,
+            original_url=original_url,
+            final_url=final_url,
+            canonical_url=canonical_url,
+            parsed=parsed,
+            crawler=crawler,
+            crawler_error=crawler_error,
+            parser_name=primary_candidate.parser,
+            selection=selection,
+            raw_crawler_result=raw_crawler_result,
+        )
+
+    artifacts = persist_ingestion_artifacts(
+        data_dir=data_artifact_dir,
+        input_type="url" if source_url else "html",
         source=source,
         source_url=source_url,
         original_url=original_url,
         final_url=final_url,
-        parsed=parsed,
-        html=None,
-        debug_artifact_dir=None,
-        data_artifact_dir=data_artifact_dir,
+        canonical_url=canonical_url,
+        parser=parser_name,
         run_id=run_id,
+        created_at=fetched_at,
+        markdown=cleaned_markdown,
+        chunks=chunks,
+        page_metadata=parsed.metadata,
+        assets=parsed.assets,
+    )
+    return LoadedUrlDocument(
+        markdown=cleaned_markdown,
+        chunks=chunks,
+        artifacts=artifacts,
+        selection=selection,
+        primary_chunks=primary_chunks,
+        raw_crawler_result=raw_crawler_result,
     )
 
 
@@ -261,10 +465,137 @@ def load_text_chunks(
 
 
 def _fetch_url(url: str) -> _FetchedPage:
+    _validate_http_url(url)
+    try:
+        crawled_page = crawl_url_with_crawl4ai(url)
+    except Exception as exc:
+        crawl4ai_error = f"{type(exc).__name__}: {exc}"
+        try:
+            return _fetch_url_trafilatura(url, crawler_error=crawl4ai_error)
+        except Exception as trafilatura_exc:
+            crawler_error = (
+                f"{crawl4ai_error}; trafilatura fetch failed: "
+                f"{type(trafilatura_exc).__name__}: {trafilatura_exc}"
+            )
+            return _fetch_url_urllib(url, crawler_error=crawler_error)
+    if _crawl4ai_page_is_title_only(crawled_page):
+        title_only_error = "Crawl4AI returned title-only content"
+        try:
+            return _fetch_url_trafilatura(url, crawler_error=title_only_error)
+        except Exception as trafilatura_exc:
+            crawler_error = (
+                f"{title_only_error}; trafilatura fetch failed: "
+                f"{type(trafilatura_exc).__name__}: {trafilatura_exc}"
+            )
+            return _fetch_url_urllib(url, crawler_error=crawler_error)
+    if _crawl4ai_page_is_low_signal_shell(crawled_page):
+        shell_error = "Crawl4AI returned low-signal rendered shell; static HTML fallback selected"
+        return _fetch_url_urllib(url, crawler_error=shell_error)
+    return _FetchedPage(
+        html=crawled_page.html,
+        url=crawled_page.url,
+        content_type=crawled_page.content_type,
+        markdown=crawled_page.markdown,
+        bm25_markdown=crawled_page.bm25_markdown,
+        structured_markdown=crawled_page.structured_markdown,
+        links=crawled_page.links,
+        crawler="crawl4ai",
+        probe_markdown=crawled_page.probe_markdown,
+        raw_crawler_result=crawled_page.raw_result,
+    )
+
+
+def _crawl4ai_page_is_title_only(page: object) -> bool:
+    markdown = normalize_space(str(getattr(page, "markdown", "") or ""))
+    bm25_markdown = normalize_space(str(getattr(page, "bm25_markdown", "") or ""))
+    structured_markdown = normalize_space(str(getattr(page, "structured_markdown", "") or ""))
+    probe_markdown = normalize_space(str(getattr(page, "probe_markdown", "") or ""))
+    if markdown or bm25_markdown or structured_markdown or probe_markdown:
+        return False
+    html = str(getattr(page, "html", "") or "")
+    try:
+        parsed = parse_html(html, base_url=str(getattr(page, "url", "") or ""))
+    except Exception:
+        return False
+    text = normalize_space("\n".join(section.text for section in parsed.sections))
+    if not text:
+        return True
+    title = normalize_space(parsed.title or "")
+    return text == title or (len(text) < 120 and bool(title) and text in title)
+
+
+def _crawl4ai_page_is_low_signal_shell(page: object) -> bool:
+    markdown = normalize_space(str(getattr(page, "markdown", "") or ""))
+    structured_markdown = normalize_space(str(getattr(page, "structured_markdown", "") or ""))
+    probe_markdown = normalize_space(str(getattr(page, "probe_markdown", "") or ""))
+    links = tuple(getattr(page, "links", ()) or ())
+    if len(links) >= 3:
+        return False
+    if any(_has_useful_text(value) for value in (structured_markdown, probe_markdown)):
+        return False
+    html = str(getattr(page, "html", "") or "")
+    if not html:
+        return True
+    try:
+        parsed = parse_html(html, base_url=str(getattr(page, "url", "") or ""))
+    except Exception:
+        return False
+    visible_text = normalize_space("\n".join(section.text for section in parsed.sections))
+    if _has_useful_text(markdown) or _has_useful_text(visible_text):
+        return False
+    return len(links) == 0 or _looks_like_loading_or_promo_shell(f"{markdown} {visible_text}")
+
+
+def _has_useful_text(value: str) -> bool:
+    if not value:
+        return False
+    word_count = len(re.findall(r"\w+", value, flags=re.UNICODE))
+    if word_count >= 30:
+        return True
+    return bool(
+        re.search(
+            r"\d{1,3}(?:[.,]\d{3})+|\d+\s*(?:km|kwh|vnd|vnđ|%)",
+            value,
+            flags=re.IGNORECASE,
+        )
+        and word_count >= 8
+    )
+
+
+def _looks_like_loading_or_promo_shell(value: str) -> bool:
+    cleaned = normalize_space(value).lower()
+    if not cleaned:
+        return True
+    shell_markers = (
+        "loading",
+        "please wait",
+        "\u0111ang t\u1ea3i",
+        "dang tai",
+        "\u01b0u \u0111\u00e3i ch\u1ec9 t\u1edbi",
+        "uu dai chi toi",
+    )
+    return any(marker in cleaned for marker in shell_markers)
+
+
+def _fetch_url_trafilatura(url: str, *, crawler_error: str | None = None) -> _FetchedPage:
     normalized_url = url.strip()
-    parsed_url = urlparse(normalized_url)
-    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-        raise ValueError("URL ingestion requires an absolute http or https URL.")
+    _validate_http_url(normalized_url)
+    html = fetch_html_with_trafilatura(normalized_url)
+    if not html:
+        raise RuntimeError("trafilatura returned empty HTML")
+    return _FetchedPage(
+        html=html,
+        url=normalized_url,
+        content_type="text/html",
+        links=_links_from_static_html(html, base_url=normalized_url),
+        crawler="trafilatura",
+        crawler_error=crawler_error,
+    )
+
+
+def _fetch_url_urllib(url: str, *, crawler_error: str | None = None) -> _FetchedPage:
+    normalized_url = url.strip()
+    _validate_http_url(normalized_url)
 
     request = Request(normalized_url, headers=_REQUEST_HEADERS)
     try:
@@ -278,15 +609,67 @@ def _fetch_url(url: str) -> _FetchedPage:
     except URLError as exc:
         raise RuntimeError(f"Failed to fetch URL {normalized_url}: {exc.reason}") from exc
 
+    html = _decode_response_content(content, charset)
     return _FetchedPage(
-        html=content.decode(charset, errors="replace"),
+        html=html,
         url=final_url,
         content_type=content_type,
+        links=_links_from_static_html(html, base_url=final_url),
+        crawler="urllib",
+        crawler_error=crawler_error,
     )
+
+
+def _links_from_static_html(html: str, *, base_url: str) -> tuple[str, ...]:
+    parser = _StaticHtmlLinkParser(base_url=base_url)
+    try:
+        parser.feed(html)
+    except Exception:
+        return ()
+    return tuple(dict.fromkeys(parser.links))
+
+
+class _StaticHtmlLinkParser(HTMLParser):
+    def __init__(self, *, base_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._base_url = base_url
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        attr_map = {key.lower(): value for key, value in attrs if value}
+        href = attr_map.get("href")
+        if not href:
+            return
+        self.links.append(urljoin(self._base_url, href))
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _decode_response_content(content: bytes, charset: str) -> str:
+    candidates: list[str] = []
+    for candidate_charset in (charset, "utf-8", "utf-8-sig"):
+        if candidate_charset and candidate_charset not in candidates:
+            candidates.append(candidate_charset)
+
+    decoded_candidates: list[str] = []
+    for candidate_charset in candidates:
+        try:
+            decoded_candidates.append(content.decode(candidate_charset, errors="strict"))
+        except (LookupError, UnicodeDecodeError):
+            continue
+
+    if decoded_candidates:
+        return min(decoded_candidates, key=_mojibake_score)
+    return content.decode(charset or "utf-8", errors="replace")
+
+
+def _mojibake_score(text: str) -> int:
+    suspicious_markers = ("Ã", "Â", "Ä", "Æ", "áº", "á»", "ï¿½", "\ufffd")
+    return sum(text.count(marker) for marker in suspicious_markers)
 
 
 def _parsed_markdown(parsed: ParsedHtml) -> str:
@@ -309,87 +692,431 @@ def _extract_markdown(
     html: str,
     parsed: ParsedHtml,
     source_url: str | None,
-) -> tuple[str, str]:
+    preferred_markdown: str | None = None,
+    preferred_parser: str | None = None,
+    bm25_markdown: str | None = None,
+) -> MarkdownSelection:
+    return _select_markdown(
+        html=html,
+        parsed=parsed,
+        source_url=source_url,
+        preferred_markdown=preferred_markdown,
+        preferred_parser=preferred_parser,
+        bm25_markdown=bm25_markdown,
+    )
+
+
+def _select_markdown(
+    *,
+    html: str,
+    parsed: ParsedHtml,
+    source_url: str | None,
+    preferred_markdown: str | None,
+    preferred_parser: str | None,
+    bm25_markdown: str | None,
+) -> MarkdownSelection:
     fallback_markdown = _parsed_markdown(parsed)
-    extracted = extract_markdown_from_html(html, title=parsed.title, source_url=source_url)
-    if extracted is not None and _has_markdown_heading(extracted.markdown):
-        return extracted.markdown, extracted.parser_name
+    candidates = [
+        _build_markdown_candidate(
+            fallback_markdown,
+            parser=_PARSER_NAME,
+            role="builtin_fallback",
+            title=parsed.title,
+        )
+    ]
     try:
-        trafilatura_markdown = extract_markdown_with_trafilatura(
+        crawl_link_extracted = extract_markdown_from_html(
+            html,
+            title=parsed.title,
+            source_url=source_url,
+        )
+    except (ImportError, ModuleNotFoundError, RuntimeError, ValueError):
+        crawl_link_extracted = None
+    if crawl_link_extracted is not None and _has_markdown_heading(crawl_link_extracted.markdown):
+        candidates.append(
+            _build_markdown_candidate(
+                crawl_link_extracted.markdown,
+                parser=crawl_link_extracted.parser_name,
+                role="crawl_link_dom_quality_check",
+                title=parsed.title,
+            )
+        )
+    if preferred_markdown and preferred_markdown.strip():
+        candidates.append(
+            _build_markdown_candidate(
+                preferred_markdown.strip(),
+                parser=preferred_parser or _CRAWL4AI_PARSER_NAME,
+                role="crawl4ai_primary",
+                title=parsed.title,
+            )
+        )
+    if bm25_markdown and bm25_markdown.strip():
+        candidates.append(
+            _build_markdown_candidate(
+                bm25_markdown.strip(),
+                parser=_CRAWL4AI_BM25_PARSER_NAME,
+                role="crawl4ai_bm25_filter",
+                title=parsed.title,
+            )
+        )
+    try:
+        crawlee_markdown = _extract_crawlee_quality_markdown(source_url)
+    except (ImportError, ModuleNotFoundError, RuntimeError):
+        crawlee_markdown = None
+    if crawlee_markdown is not None:
+        candidates.append(
+            _build_markdown_candidate(
+                crawlee_markdown,
+                parser=_CRAWLEE_PARSER_NAME,
+                role="crawlee_playwright_quality_gate",
+                title=parsed.title,
+            )
+        )
+    try:
+        trafilatura_markdown = _extract_trafilatura_markdown(
             html,
             source_url=source_url,
         )
     except (ImportError, ModuleNotFoundError, RuntimeError):
-        return fallback_markdown, _PARSER_NAME
-    if trafilatura_markdown is None:
-        return fallback_markdown, _PARSER_NAME
-    if not _has_markdown_heading(trafilatura_markdown) and _has_markdown_heading(fallback_markdown):
-        return fallback_markdown, _PARSER_NAME
-    return trafilatura_markdown, _TRAFILATURA_PARSER_NAME
+        trafilatura_markdown = None
+    if trafilatura_markdown is not None:
+        candidates.append(
+            _build_markdown_candidate(
+                trafilatura_markdown,
+                parser=_TRAFILATURA_PARSER_NAME,
+                role="trafilatura_quality_check",
+                title=parsed.title,
+            )
+        )
+
+    selected, fallback_reason = _select_primary_or_fallback(candidates)
+    return MarkdownSelection(
+        markdown=selected.markdown,
+        parser=selected.parser,
+        selected_role=selected.role,
+        fallback_reason=fallback_reason,
+        candidates=tuple(candidates),
+    )
+
+
+def _extract_trafilatura_markdown(html: str, *, source_url: str | None) -> str | None:
+    extracted = extract_markdown_with_trafilatura(html, source_url=source_url)
+    if extracted is None:
+        return None
+    if isinstance(extracted, str):
+        return extracted
+    markdown = getattr(extracted, "markdown", None)
+    return markdown if isinstance(markdown, str) else None
+
+
+def _extract_crawlee_quality_markdown(source_url: str | None) -> str | None:
+    if not source_url:
+        return None
+    extracted = extract_markdown_with_crawlee_playwright(source_url)
+    if isinstance(extracted, ExtractedMarkdown):
+        return extracted.markdown or None
+    if isinstance(extracted, str):
+        return extracted
+    markdown = getattr(extracted, "markdown", None)
+    return markdown if isinstance(markdown, str) else None
+
+
+def _combined_parser_name(
+    parser_name: str,
+    *,
+    crawler: str,
+    structured_markdown: str | None,
+    probe_markdown: str | None,
+) -> str:
+    parts = [parser_name]
+    if crawler == "crawl4ai" and not parser_name.startswith("crawl4ai"):
+        parts.append("crawl4ai-rendered-html")
+    if structured_markdown and structured_markdown.strip():
+        parts.append("structured-data")
+    if probe_markdown and probe_markdown.strip():
+        parts.append("interactive-probe")
+    return "+".join(dict.fromkeys(parts))
+
+
+def _build_markdown_candidate(
+    markdown: str,
+    *,
+    parser: str,
+    role: str,
+    title: str | None,
+) -> MarkdownCandidate:
+    quality = _markdown_quality(markdown, title=title)
+    return MarkdownCandidate(
+        markdown=markdown,
+        parser=parser,
+        role=role,
+        score=int(quality["score"]),
+        token_count=int(quality["token_count"]),
+        heading_count=int(quality["heading_count"]),
+        price_count=int(quality["price_count"]),
+        boilerplate_hits=int(quality["boilerplate_hits"]),
+        image_count=int(quality["image_count"]),
+        link_count=int(quality["link_count"]),
+        link_density=float(quality["link_density"]),
+        noise_count=int(quality["noise_count"]),
+        quality_label=str(quality["quality_label"]),
+    )
+
+
+def _select_primary_or_fallback(
+    candidates: list[MarkdownCandidate],
+) -> tuple[MarkdownCandidate, str | None]:
+    primary = next(
+        (candidate for candidate in candidates if candidate.role == "crawl4ai_primary"), None
+    )
+    best = max(candidates, key=lambda candidate: candidate.score)
+    if primary is None:
+        builtin = next(
+            (candidate for candidate in candidates if candidate.role == "builtin_fallback"),
+            None,
+        )
+        if builtin is not None:
+            crawl_link = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate.role == "crawl_link_dom_quality_check"
+                ),
+                None,
+            )
+            if crawl_link is not None and _static_dom_candidate_is_cleaner(crawl_link, builtin):
+                return crawl_link, "crawl_link_dom_quality_check_selected_for_lower_noise"
+            cleaner = _cleaner_quality_fallback(builtin, candidates)
+            if cleaner is not None:
+                reason = "content_quality_selected_for_lower_noise"
+                if cleaner.role == "trafilatura_quality_check":
+                    reason = "trafilatura_quality_check_selected_for_lower_noise"
+                elif cleaner.role == "crawlee_playwright_quality_gate":
+                    reason = "crawlee_playwright_quality_gate_selected_for_lower_noise"
+                elif cleaner.role == "crawl_link_dom_quality_check":
+                    reason = "crawl_link_dom_quality_check_selected_for_lower_noise"
+                elif cleaner.role == "crawl4ai_bm25_filter":
+                    reason = "crawl4ai_bm25_filter_selected_for_lower_noise"
+                return cleaner, reason
+        return best, None
+
+    cleaner = _cleaner_quality_fallback(primary, candidates)
+    if cleaner is not None:
+        reason = "content_quality_selected_for_lower_noise"
+        if cleaner.role == "trafilatura_quality_check":
+            reason = "trafilatura_quality_check_selected_for_lower_noise"
+        elif cleaner.role == "crawlee_playwright_quality_gate":
+            reason = "crawlee_playwright_quality_gate_selected_for_lower_noise"
+        elif cleaner.role == "crawl_link_dom_quality_check":
+            reason = "crawl_link_dom_quality_check_selected_for_lower_noise"
+        elif cleaner.role == "crawl4ai_bm25_filter":
+            reason = "crawl4ai_bm25_filter_selected_for_lower_noise"
+        return cleaner, reason
+
+    if _crawl4ai_primary_is_usable(primary, best):
+        return primary, None
+
+    reason = "crawl4ai_primary_quality_check_failed"
+    if best.role == "trafilatura_quality_check":
+        reason = "trafilatura_quality_check_selected_as_fallback"
+    elif best.role == "crawlee_playwright_quality_gate":
+        reason = "crawlee_playwright_quality_gate_selected_as_fallback"
+    elif best.role == "crawl_link_dom_quality_check":
+        reason = "crawl_link_dom_quality_check_selected_as_fallback"
+    elif best.role == "crawl4ai_bm25_filter":
+        reason = "crawl4ai_bm25_filter_selected_as_fallback"
+    return best, reason
+
+
+def _crawl4ai_primary_is_usable(
+    primary: MarkdownCandidate,
+    best: MarkdownCandidate,
+) -> bool:
+    if best is primary:
+        return True
+    if _is_image_heavy_candidate(primary):
+        return False
+    if primary.token_count >= 80 and primary.boilerplate_hits <= 5:
+        return best.score < primary.score + 900
+    if primary.token_count >= 20 and primary.price_count > 0:
+        return best.score < primary.score + 1200
+    return False
+
+
+def _cleaner_quality_fallback(
+    primary: MarkdownCandidate,
+    candidates: list[MarkdownCandidate],
+) -> MarkdownCandidate | None:
+    cleaner_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate is not primary
+        and candidate.role
+        in {
+            "crawl_link_dom_quality_check",
+            "crawlee_playwright_quality_gate",
+            "trafilatura_quality_check",
+            "builtin_fallback",
+            "crawl4ai_bm25_filter",
+        }
+        and _candidate_has_enough_signal(candidate, primary)
+        and _candidate_is_materially_cleaner(candidate, primary)
+    ]
+    if not cleaner_candidates:
+        return None
+    return max(cleaner_candidates, key=lambda candidate: candidate.score)
+
+
+def _static_dom_candidate_is_cleaner(
+    candidate: MarkdownCandidate,
+    builtin: MarkdownCandidate,
+) -> bool:
+    if candidate.token_count < 20 or candidate.heading_count == 0:
+        return False
+    if candidate.token_count < max(12, int(builtin.token_count * 0.15)):
+        return False
+    if builtin.boilerplate_hits - candidate.boilerplate_hits >= 1:
+        return True
+    return candidate.score >= builtin.score and candidate.noise_count < builtin.noise_count
+
+
+def _candidate_has_enough_signal(
+    candidate: MarkdownCandidate,
+    primary: MarkdownCandidate,
+) -> bool:
+    if candidate.token_count < 80 and candidate.price_count == 0:
+        return False
+    minimum_tokens = 30 if candidate.price_count > 0 else 80
+    if candidate.token_count < max(minimum_tokens, int(primary.token_count * 0.10)):
+        return False
+    if primary.price_count > 0 and candidate.price_count < max(1, int(primary.price_count * 0.4)):
+        return False
+    return candidate.score >= primary.score - 20000
+
+
+def _candidate_is_materially_cleaner(
+    candidate: MarkdownCandidate,
+    primary: MarkdownCandidate,
+) -> bool:
+    if primary.boilerplate_hits - candidate.boilerplate_hits >= 2:
+        return True
+    return (
+        _is_image_heavy_candidate(primary) and candidate.image_count * 3 + 10 <= primary.image_count
+    )
+
+
+def _is_image_heavy_candidate(candidate: MarkdownCandidate) -> bool:
+    if candidate.image_count < 20:
+        return False
+    return candidate.image_count > candidate.heading_count + 12
+
+
+def _append_supplemental_markdown(markdown: str, *supplements: str | None) -> str:
+    combined = markdown.strip()
+    for supplement in supplements:
+        if not supplement or not supplement.strip():
+            continue
+        cleaned_supplement = supplement.strip()
+        if cleaned_supplement in combined:
+            continue
+        combined = f"{combined}\n\n{cleaned_supplement}" if combined else cleaned_supplement
+    return combined
 
 
 def _has_markdown_heading(markdown: str) -> bool:
     return any(re.match(r"^#{1,6}(?!#)\s+\S", line.strip()) for line in markdown.splitlines())
 
 
-def _load_extracted_markdown_with_artifacts(
-    *,
-    extracted: ExtractedMarkdown,
-    source: str,
-    source_url: str | None,
-    original_url: str | None,
-    final_url: str | None,
-    parsed: ParsedHtml,
-    html: str | None,
-    debug_artifact_dir: str | Path | None,
-    data_artifact_dir: str | Path | None,
-    run_id: str,
-) -> LoadedUrlDocument:
-    fetched_at = _utc_now()
-    canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
-    if html is not None:
-        _persist_html_debug_artifacts(
-            debug_artifact_dir=debug_artifact_dir,
-            source=source,
-            html=html,
-            parsed_sections="\n\n".join(section.text for section in parsed.sections),
+def _markdown_quality_score(markdown: str, *, title: str | None) -> int:
+    return int(_markdown_quality(markdown, title=title)["score"])
+
+
+def _markdown_quality(markdown: str, *, title: str | None) -> dict[str, int | float | str]:
+    cleaned = _clean_markdown_noise(markdown)
+    text = normalize_space(cleaned)
+    token_count = len(re.findall(r"\w+", text))
+    heading_count = sum(
+        1 for line in cleaned.splitlines() if re.match(r"^#{1,6}(?!#)\s+\S", line.strip())
+    )
+    image_count = cleaned.count("![")
+    link_count = len(re.findall(r"\[[^\]]+\]\([^)]+\)", cleaned))
+    price_count = len(re.findall(r"\d{1,3}(?:\.\d{3})+\s*(?:VNĐ|VND)?", cleaned, re.IGNORECASE))
+    boilerplate_hits = sum(
+        cleaned.lower().count(marker)
+        for marker in (
+            "cookie",
+            "đăng nhập",
+            "đăng ký",
+            "quên mật khẩu",
+            "giỏ hàng",
+            "dòng xe quan tâm",
+            "mua sắm",
         )
-    source_type = "url" if source_url else "html"
-    title = extracted.title or parsed.title
-    cleaned_markdown = _clean_markdown_noise(extracted.markdown)
-    chunks = _build_markdown_aware_chunks(
-        markdown=cleaned_markdown,
-        source=source,
-        source_type=source_type,
-        title=title,
-        fetched_at=fetched_at,
     )
-    chunks = _with_html_metadata(
-        chunks,
-        source_url=source_url,
-        original_url=original_url,
-        final_url=final_url,
-        canonical_url=canonical_url,
-        parsed=parsed,
+    title_score = 0
+    if title and title.strip() and normalize_space(title).lower() in text.lower():
+        title_score = 400
+    short_content_penalty = 300 if token_count < 20 else 0
+    capped_price_count = min(price_count, 25)
+    image_heavy_penalty = max(0, image_count - heading_count - 12) * 45
+    link_heavy_penalty = max(0, link_count - heading_count - 20) * 20
+    link_density = _safe_ratio(link_count, token_count)
+    noise_count = boilerplate_hits + image_count + max(0, link_count - heading_count - 12)
+    quality_label = _markdown_quality_label(
+        token_count=token_count,
+        heading_count=heading_count,
+        price_count=price_count,
+        boilerplate_hits=boilerplate_hits,
+        image_count=image_count,
+        link_density=link_density,
     )
-    chunks = _with_extractor_metadata(chunks, extracted=extracted)
-    artifacts = persist_ingestion_artifacts(
-        data_dir=data_artifact_dir,
-        input_type="url" if source_url else "html",
-        source=source,
-        source_url=source_url,
-        original_url=original_url,
-        final_url=final_url,
-        canonical_url=canonical_url,
-        parser=extracted.parser_name,
-        run_id=run_id,
-        created_at=fetched_at,
-        markdown=cleaned_markdown,
-        chunks=chunks,
-        page_metadata=parsed.metadata,
-        assets=parsed.assets,
+    score = (
+        token_count
+        + (heading_count * 80)
+        + (capped_price_count * 1000)
+        + title_score
+        - short_content_penalty
+        - (image_count * 12)
+        - image_heavy_penalty
+        - link_heavy_penalty
+        - (boilerplate_hits * 180)
     )
-    return LoadedUrlDocument(markdown=cleaned_markdown, chunks=chunks, artifacts=artifacts)
+    return {
+        "score": score,
+        "token_count": token_count,
+        "heading_count": heading_count,
+        "price_count": price_count,
+        "boilerplate_hits": boilerplate_hits,
+        "image_count": image_count,
+        "link_count": link_count,
+        "link_density": link_density,
+        "noise_count": noise_count,
+        "quality_label": quality_label,
+    }
+
+
+def _safe_ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
+
+
+def _markdown_quality_label(
+    *,
+    token_count: int,
+    heading_count: int,
+    price_count: int,
+    boilerplate_hits: int,
+    image_count: int,
+    link_density: float,
+) -> str:
+    if token_count < 20 and price_count == 0:
+        return "thin"
+    if boilerplate_hits >= 5 or image_count >= 30 or link_density >= 0.12:
+        return "noisy"
+    if token_count >= 80 and (heading_count > 0 or price_count > 0):
+        return "useful"
+    return "marginal"
 
 
 def _build_markdown_aware_chunks(
@@ -397,37 +1124,218 @@ def _build_markdown_aware_chunks(
     markdown: str,
     source: str,
     source_type: str,
+    url: str | None,
     title: str | None,
     fetched_at: str,
 ) -> list[Chunk]:
     content_hash = short_hash(markdown)
     section_indexes: dict[str, int] = defaultdict(int)
     chunks: list[Chunk] = []
-    for markdown_chunk in chunk_markdown_by_sections(markdown, root_title=title):
+    for markdown_chunk in _chunk_markdown_for_url(markdown):
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
         chunk_id = build_chunk_id(source_type, source, section, chunk_index)
+        chunk_text = markdown_chunk.text
+        chunk_quality = chunk_text_quality(chunk_text)
+        structural_clarity = chunk_quality["structural_clarity"]
+        evidence_diagnostics = chunk_evidence_diagnostics(chunk_text)
+        search_aliases = _vinfast_model_aliases(
+            " ".join(part for part in (title, chunk_text) if part)
+        )
+        section_path = list(markdown_chunk.section_path)
+        content_origin = _chunk_content_origin(section_path)
         chunks.append(
             Chunk(
                 chunk_id=chunk_id,
-                text=markdown_chunk.text,
+                text=chunk_text,
                 metadata={
                     "chunk_id": chunk_id,
                     "source": source,
                     "source_type": source_type,
+                    "file_name": None,
+                    "url": url,
+                    "page": None,
                     "title": title,
                     "section": section,
                     "section_level": markdown_chunk.section_level,
-                    "section_path": list(markdown_chunk.section_path),
+                    "section_path": section_path,
                     "fetched_at": fetched_at,
                     "content_hash": content_hash,
+                    "dedupe_hash": short_hash(normalize_space(chunk_text)),
+                    "chunk_index": chunk_index,
+                    "chunk_part_index": markdown_chunk.metadata.get("part_index", chunk_index),
+                    "chunk_part_total": markdown_chunk.metadata.get("part_total", 1),
+                    "chunk_group_id": short_hash(f"{source}|{' > '.join(section_path)}"),
+                    "search_aliases": list(search_aliases),
+                    "chunk_quality": chunk_quality,
+                    "is_usable_for_retrieval": chunk_quality["is_usable"],
+                    "structural_clarity": structural_clarity,
+                    "has_structural_confusion": not structural_clarity["is_clear"],
+                    "needs_table_reconstruction": structural_clarity["needs_table_reconstruction"],
+                    "evidence_diagnostics": evidence_diagnostics,
+                    "has_duplicate_evidence": evidence_diagnostics["has_duplicate_evidence"],
+                    "has_possible_conflict": evidence_diagnostics["has_possible_conflict"],
+                    "content_origin": content_origin,
+                    "probe_parent_section": _probe_parent_section(
+                        section_path,
+                        content_origin,
+                    ),
+                    "probe_state_label": _probe_state_label(section, content_origin),
                     "chunk_token_count": markdown_chunk.chunk_token_count,
+                    "chunk_overlap_paragraphs": _URL_CHUNK_OVERLAP_PARAGRAPHS,
+                    "chunking_method": "hierarchical-markdown-probe-aware-overlap",
+                    "semantic_unit": markdown_chunk.semantic_unit,
                     **markdown_chunk.metadata,
                 },
             )
         )
     return chunks
+
+
+def _chunk_markdown_for_url(markdown: str) -> list[MarkdownChunk]:
+    markdown_chunks: list[MarkdownChunk] = []
+    for section in split_markdown_into_sections(markdown):
+        section_text = section.text.strip()
+        if not section_text:
+            continue
+        section_path = tuple(section.path)
+        section_title = section.title or (section_path[-1] if section_path else "main")
+        section_level = section.level or 1
+        parts = split_markdown_paragraphs(
+            section_text,
+            overlap_paragraphs=_URL_CHUNK_OVERLAP_PARAGRAPHS,
+        )
+        for part_index, part in enumerate(parts or [section_text], start=1):
+            chunk_text = _section_chunk_text(
+                title=section_title,
+                level=section_level,
+                text=part,
+            )
+            markdown_chunks.append(
+                MarkdownChunk(
+                    section=section_title,
+                    text=chunk_text,
+                    metadata={
+                        "full_path": list(section_path),
+                        "depth": len(section_path),
+                        "part_index": part_index,
+                        "part_total": len(parts) if parts else 1,
+                        "n_chars": len(part),
+                    },
+                    section_level=section_level,
+                    section_path=section_path,
+                    chunk_token_count=len(re.findall(r"\w+", part)),
+                    semantic_unit="url_markdown_section_paragraph",
+                )
+            )
+    if markdown_chunks:
+        return markdown_chunks
+    stripped_markdown = markdown.strip()
+    if not stripped_markdown:
+        return []
+    return [
+        MarkdownChunk(
+            section="main",
+            text=stripped_markdown,
+            metadata={
+                "full_path": ["main"],
+                "depth": 1,
+                "part_index": 1,
+                "part_total": 1,
+                "n_chars": len(stripped_markdown),
+            },
+            section_level=0,
+            section_path=("main",),
+            chunk_token_count=len(re.findall(r"\w+", stripped_markdown)),
+            semantic_unit="url_markdown_document_fallback",
+        )
+    ]
+
+
+def _section_chunk_text(*, title: str | None, level: int, text: str) -> str:
+    stripped_text = text.strip()
+    if not title:
+        return stripped_text
+    heading = f"{'#' * max(1, min(level, 6))} {title}"
+    if stripped_text.startswith(heading):
+        return stripped_text
+    return f"{heading}\n\n{stripped_text}".strip()
+
+
+def _chunk_content_origin(section_path: list[str]) -> str:
+    if section_path and section_path[0] == "Probed Interactive State":
+        return "interactive_probe"
+    if section_path and section_path[0] == "Structured Page Data":
+        return "structured_parse"
+    return "document"
+
+
+def _probe_parent_section(section_path: list[str], content_origin: str) -> str | None:
+    if content_origin != "interactive_probe":
+        return None
+    return section_path[1] if len(section_path) > 1 else None
+
+
+def _probe_state_label(section: str, content_origin: str) -> str | None:
+    if content_origin != "interactive_probe":
+        return None
+    return section
+
+
+def _with_chunk_adjacency(chunks: list[Chunk]) -> list[Chunk]:
+    grouped_indexes: dict[str, list[int]] = defaultdict(list)
+    for index, chunk in enumerate(chunks):
+        grouped_indexes[str(chunk.metadata.get("chunk_group_id", ""))].append(index)
+
+    updated_chunks = list(chunks)
+    for indexes in grouped_indexes.values():
+        group_size = len(indexes)
+        for position, chunk_index in enumerate(indexes):
+            chunk = updated_chunks[chunk_index]
+            previous_chunk_id = (
+                updated_chunks[indexes[position - 1]].chunk_id if position > 0 else None
+            )
+            next_chunk_id = (
+                updated_chunks[indexes[position + 1]].chunk_id
+                if position < group_size - 1
+                else None
+            )
+            updated_chunks[chunk_index] = chunk.model_copy(
+                update={
+                    "metadata": {
+                        **chunk.metadata,
+                        "chunk_group_index": position + 1,
+                        "chunk_group_size": group_size,
+                        "previous_chunk_id": previous_chunk_id,
+                        "next_chunk_id": next_chunk_id,
+                        "is_continuation": position > 0,
+                        "continues_to_next": next_chunk_id is not None,
+                    }
+                }
+            )
+    return updated_chunks
+
+
+def _vinfast_model_aliases(text: str) -> tuple[str, ...]:
+    model_numbers = sorted(
+        {match.group(1).lstrip("0") for match in _VINFAST_MODEL_RE.finditer(text)}
+    )
+    aliases: list[str] = []
+    for number in model_numbers:
+        if not number:
+            continue
+        aliases.extend(
+            [
+                f"VF{number}",
+                f"VF {number}",
+                f"VinFast VF{number}",
+                f"VinFast VF {number}",
+                f"xe VF{number}",
+                f"xe VF {number}",
+            ]
+        )
+    return tuple(dict.fromkeys(aliases))
 
 
 def _clean_markdown_noise(markdown: str) -> str:
@@ -454,7 +1362,118 @@ def _clean_markdown_noise(markdown: str) -> str:
         cleaned_lines.append(line)
     cleaned = "\n".join(cleaned_lines)
     cleaned = re.sub(r"\n\s*\n", "\n\n", cleaned)
-    return cleaned.strip()
+    cleaned = _normalize_price_cards(cleaned)
+    cleaned = _normalize_product_price_links(cleaned)
+    return _remove_boilerplate_sections(cleaned.strip())
+
+
+def _normalize_price_cards(markdown: str) -> str:
+    lines = markdown.splitlines()
+    normalized_lines: list[str] = []
+    index = 0
+    while index < len(lines):
+        price_card = _price_card_from_lines(lines, index)
+        if price_card is None:
+            normalized_lines.append(lines[index])
+            index += 1
+            continue
+
+        normalized_lines.append(price_card[0])
+        index = price_card[1]
+
+    normalized = "\n".join(normalized_lines)
+    normalized = re.sub(r"\n\s*\n", "\n\n", normalized)
+    return normalized
+
+
+def _normalize_product_price_links(markdown: str) -> str:
+    normalized_lines = [_product_price_link_line(line) or line for line in markdown.splitlines()]
+    normalized = "\n".join(normalized_lines)
+    return re.sub(r"\n\s*\n", "\n\n", normalized)
+
+
+def _product_price_link_line(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped or stripped.count("[") != 1:
+        return None
+    match = re.fullmatch(
+        r"\[\s*(?P<label>.+?)\s+(?P<price>\d{1,3}(?:\.\d{3})+)\s*(?P<currency>VNĐ|VND)\s*\]"
+        r"\((?P<url>[^\s)]+)(?:\s+\"[^\"]*\")?\)",
+        stripped,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+
+    label = normalize_space(match.group("label"))
+    if not label or len(label) > 120 or label.startswith("!"):
+        return None
+    price = match.group("price")
+    currency = _normalize_currency(match.group("currency"))
+    url = match.group("url")
+    return f"- {label}: giá bán hiện tại / current price {price} {currency}. Link: {url}"
+
+
+def _price_card_from_lines(lines: list[str], index: int) -> tuple[str, int] | None:
+    variant = lines[index].strip()
+    if not _looks_like_vehicle_variant(variant):
+        return None
+
+    next_index = _next_nonblank_line_index(lines, index + 1)
+    if next_index is None or not re.search(r"giá\s+bán\s+từ", lines[next_index], re.IGNORECASE):
+        return None
+
+    current_price_index = _next_nonblank_line_index(lines, next_index + 1)
+    if current_price_index is None:
+        return None
+    current_price = _price_value(lines[current_price_index])
+    if current_price is None:
+        return None
+
+    current_currency_index = _next_nonblank_line_index(lines, current_price_index + 1)
+    if current_currency_index is None or not _is_vnd_currency_line(lines[current_currency_index]):
+        return None
+
+    old_price_index = _next_nonblank_line_index(lines, current_currency_index + 1)
+    if old_price_index is None:
+        return None
+    old_price = _price_value(lines[old_price_index])
+    if old_price is None:
+        return None
+
+    old_currency_index = _next_nonblank_line_index(lines, old_price_index + 1)
+    if old_currency_index is None or not _is_vnd_currency_line(lines[old_currency_index]):
+        return None
+
+    normalized = (
+        f"- {variant}: Giá bán từ {current_price} VNĐ; giá niêm yết cũ ~~{old_price} VNĐ~~."
+    )
+    return normalized, old_currency_index + 1
+
+
+def _looks_like_vehicle_variant(value: str) -> bool:
+    return bool(re.search(r"\bVF\s*-?\s*\d{1,2}\b", value, flags=re.IGNORECASE))
+
+
+def _next_nonblank_line_index(lines: list[str], start_index: int) -> int | None:
+    for index in range(start_index, len(lines)):
+        if lines[index].strip():
+            return index
+    return None
+
+
+def _price_value(value: str) -> str | None:
+    match = re.search(r"\d{1,3}(?:\.\d{3})+", value)
+    return match.group(0) if match is not None else None
+
+
+def _is_vnd_currency_line(value: str) -> bool:
+    return normalize_space(value).upper() in {"VND", "VNĐ"}
+
+
+def _normalize_currency(value: str) -> str:
+    normalized = normalize_space(value).upper()
+    return "VND" if normalized == "VND" else "VNĐ"
 
 
 def _looks_like_json_config_line(line: str) -> bool:
@@ -472,6 +1491,31 @@ def _looks_like_json_config_line(line: str) -> bool:
         '"data"',
     )
     return any(marker in lowered for marker in config_markers)
+
+
+def _remove_boilerplate_sections(markdown: str) -> str:
+    cleaned_lines: list[str] = []
+    skip_level: int | None = None
+    for line in markdown.splitlines():
+        heading_match = re.match(r"^(#{1,6})(?!#)\s+(.+?)\s*$", line.strip())
+        if heading_match is not None:
+            heading_level = len(heading_match.group(1))
+            heading_slug = _heading_slug(heading_match.group(2))
+            if heading_slug in _BOILERPLATE_SECTION_SLUGS:
+                skip_level = heading_level
+                continue
+            if skip_level is not None and heading_level <= skip_level:
+                skip_level = None
+        if skip_level is not None:
+            continue
+        cleaned_lines.append(line)
+    cleaned = "\n".join(cleaned_lines)
+    cleaned = re.sub(r"\n\s*\n", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _heading_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
 def _persist_html_debug_artifacts(
@@ -506,30 +1550,197 @@ def _persist_text_debug_artifacts(
 def _with_html_metadata(
     chunks: list[Chunk],
     *,
+    html: str,
     source_url: str | None,
     original_url: str | None,
     final_url: str | None,
     canonical_url: str | None,
     parsed: ParsedHtml,
+    crawler: str,
+    crawler_error: str | None,
+    parser_name: str,
+    selection: MarkdownSelection,
+    raw_crawler_result: dict[str, Any] | None = None,
 ) -> list[Chunk]:
+    updated_chunks: list[Chunk] = []
+    crawl_diagnostics = _crawl_diagnostics_metadata(raw_crawler_result)
+    snapshot_metadata = _source_snapshot_metadata(
+        html=html,
+        parsed=parsed,
+        selection=selection,
+        crawler=crawler,
+        crawler_error=crawler_error,
+    )
+    review_status = _ingestion_review_status(
+        selection,
+        crawler_error=crawler_error,
+        raw_crawler_result=raw_crawler_result,
+    )
     best_url = canonical_url or final_url or source_url or original_url
-    return [
-        chunk.model_copy(
-            update={
-                "metadata": {
-                    **chunk.metadata,
-                    "url": best_url,
-                    "domain": _extract_domain(best_url),
-                    "original_url": original_url,
-                    "canonical_url": canonical_url,
-                    "language": parsed.metadata.language,
-                    "author": parsed.metadata.author,
-                    "published_at": parsed.metadata.published_at,
+    for chunk in chunks:
+        image_references = _image_references_for_chunk(chunk.text, parsed)
+        updated_chunks.append(
+            chunk.model_copy(
+                update={
+                    "metadata": {
+                        **chunk.metadata,
+                        "url": best_url,
+                        "domain": _extract_domain(best_url),
+                        "original_url": original_url,
+                        "final_url": final_url,
+                        "canonical_url": canonical_url,
+                        "language": parsed.metadata.language,
+                        "author": parsed.metadata.author,
+                        "published_at": parsed.metadata.published_at,
+                        "description": parsed.metadata.description
+                        or parsed.metadata.og_description,
+                        "asset_count": len(parsed.assets),
+                        "image_reference_count": len(image_references),
+                        "image_references": image_references,
+                        "crawler": crawler,
+                        "crawler_error": crawler_error,
+                        **crawl_diagnostics,
+                        "source_snapshot": snapshot_metadata,
+                        "review_status": review_status,
+                        "parser": parser_name,
+                        "markdown_quality": _markdown_quality_metadata(
+                            selection,
+                            review_status=review_status,
+                        ),
+                    }
                 }
+            )
+        )
+    return updated_chunks
+
+
+def _source_snapshot_metadata(
+    *,
+    html: str,
+    parsed: ParsedHtml,
+    selection: MarkdownSelection,
+    crawler: str,
+    crawler_error: str | None,
+) -> dict[str, object]:
+    parsed_text = normalize_space("\n".join(section.text for section in parsed.sections))
+    parsed_word_count = len(re.findall(r"\w+", parsed_text, flags=re.UNICODE))
+    return {
+        "crawler": crawler,
+        "html_length": len(html),
+        "parsed_section_count": len(parsed.sections),
+        "parsed_text_length": len(parsed_text),
+        "parsed_word_count": parsed_word_count,
+        "selected_role": selection.selected_role,
+        "fallback_reason": selection.fallback_reason,
+        "static_html_recovery": bool(
+            crawler == "urllib"
+            and crawler_error
+            and "static HTML fallback selected" in crawler_error
+        ),
+        "low_signal_snapshot": parsed_word_count < 30 and not _has_useful_text(parsed_text),
+    }
+
+
+def _crawl_diagnostics_metadata(raw_crawler_result: dict[str, Any] | None) -> dict[str, Any]:
+    if not raw_crawler_result:
+        return {}
+    keys = (
+        "crawl_attempt",
+        "crawl_attempt_index",
+        "crawl_attempt_count",
+        "configured_crawl_attempt_count",
+        "crawl_attempts_skipped",
+        "crawl_attempt_errors",
+        "crawl_attempt_duration_seconds",
+        "crawl_duration_seconds",
+        "wait_until_target",
+        "status_code",
+    )
+    return {
+        key: raw_crawler_result[key]
+        for key in keys
+        if key in raw_crawler_result and raw_crawler_result[key] is not None
+    }
+
+
+def _ingestion_review_status(
+    selection: MarkdownSelection,
+    *,
+    crawler_error: str | None,
+    raw_crawler_result: dict[str, Any] | None,
+) -> str:
+    if crawler_error:
+        return "recovered"
+    if (
+        isinstance(raw_crawler_result, dict)
+        and isinstance(raw_crawler_result.get("crawl_attempt_errors"), list)
+        and raw_crawler_result["crawl_attempt_errors"]
+    ):
+        return "recovered"
+    if selection.fallback_reason == "crawl4ai_primary_quality_check_failed":
+        return "partial"
+    if selection.fallback_reason:
+        return "recovered"
+    return "success"
+
+
+def _markdown_quality_metadata(
+    selection: MarkdownSelection,
+    *,
+    review_status: str,
+) -> dict[str, object]:
+    return {
+        "selected_parser": selection.parser,
+        "selected_role": selection.selected_role,
+        "fallback_reason": selection.fallback_reason,
+        "review_status": review_status,
+        "candidates": [
+            {
+                "parser": candidate.parser,
+                "role": candidate.role,
+                "score": candidate.score,
+                "token_count": candidate.token_count,
+                "heading_count": candidate.heading_count,
+                "price_count": candidate.price_count,
+                "boilerplate_hits": candidate.boilerplate_hits,
+                "image_count": candidate.image_count,
+                "link_count": candidate.link_count,
+                "link_density": candidate.link_density,
+                "noise_count": candidate.noise_count,
+                "quality_label": candidate.quality_label,
+            }
+            for candidate in selection.candidates
+        ],
+    }
+
+
+def _image_references_for_chunk(text: str, parsed: ParsedHtml) -> list[dict[str, str | None]]:
+    image_assets = [asset for asset in parsed.assets if asset.kind == "image"]
+    if not image_assets:
+        return []
+
+    references: list[dict[str, str | None]] = []
+    text_words = _reference_words(text)
+    for asset in image_assets:
+        reference_text = " ".join(part for part in (asset.alt, asset.title) if part)
+        reference_words = _reference_words(reference_text)
+        overlap = bool(text_words and reference_words and text_words.intersection(reference_words))
+        if not overlap and len(image_assets) > 3:
+            continue
+        reason = "alt_or_title_overlap" if overlap else "page_image_reference"
+        references.append(
+            {
+                "kind": asset.kind,
+                "url": asset.url,
+                "alt": asset.alt,
+                "title": asset.title,
+                "target_url": asset.target_url,
+                "reference_reason": reason,
             }
         )
-        for chunk in chunks
-    ]
+        if len(references) >= 5:
+            break
+    return references
 
 
 def _with_extractor_metadata(
@@ -550,6 +1761,67 @@ def _with_extractor_metadata(
         )
         for chunk in chunks
     ]
+
+
+def _reference_words(text: str) -> set[str]:
+    stop_words = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "cua",
+        "cho",
+        "mau",
+        "hinh",
+        "anh",
+        "xe",
+        "vinfast",
+    }
+    return {word for word in re.findall(r"[a-zA-Z0-9]{3,}", text.lower()) if word not in stop_words}
+
+
+def _validate_http_url(url: str) -> None:
+    parsed_url = urlparse(url.strip())
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError("URL ingestion requires an absolute http or https URL.")
+
+
+def _same_origin_child_urls(
+    links: tuple[str, ...],
+    *,
+    base_url: str,
+    max_child_pages: int,
+) -> tuple[str, ...]:
+    base = urlparse(base_url)
+    base_without_fragment = urldefrag(base_url).url.rstrip("/")
+    child_urls: list[str] = []
+    for link in links:
+        absolute_url = urldefrag(urljoin(base_url, link)).url.rstrip("/")
+        parsed_link = urlparse(absolute_url)
+        if parsed_link.scheme not in {"http", "https"}:
+            continue
+        if parsed_link.netloc != base.netloc:
+            continue
+        if absolute_url == base_without_fragment:
+            continue
+        if parsed_link.path.lower().endswith(".pdf"):
+            continue
+        child_urls.append(absolute_url)
+        if len(dict.fromkeys(child_urls)) >= max_child_pages:
+            break
+    return tuple(dict.fromkeys(child_urls))
+
+
+def _dedupe_chunks(chunks: list[Chunk]) -> list[Chunk]:
+    seen_text_hashes: set[str] = set()
+    deduped_chunks: list[Chunk] = []
+    for chunk in chunks:
+        text_hash = short_hash(normalize_space(chunk.text))
+        if text_hash in seen_text_hashes:
+            continue
+        seen_text_hashes.add(text_hash)
+        deduped_chunks.append(chunk)
+    return deduped_chunks
 
 
 def _extract_domain(url: str | None) -> str | None:

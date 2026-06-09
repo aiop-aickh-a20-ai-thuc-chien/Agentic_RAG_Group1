@@ -12,6 +12,10 @@ from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     report_to_dict,
     run_custom_benchmark,
 )
+from agentic_rag.ingestion.url.chunking import (
+    is_usable_chunk_text,
+    split_markdown_paragraphs,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,11 +54,14 @@ def main(argv: list[str] | None = None) -> int:
 def _parse_html_file(path: Path, source_url: str | None) -> dict[str, Any]:
     html = path.read_text(encoding="utf-8")
     output = parse_html_builtin(html)
+    chunks = split_markdown_paragraphs(output.text)
     return {
         "parser": output.parser,
         "source": source_url or str(path),
         "source_type": "html",
         "extracted_chars": len(output.text),
+        "chunk_count": len(chunks),
+        "usable_chunk_count": sum(1 for chunk in chunks if is_usable_chunk_text(chunk)),
         "sections": list(output.sections),
         "text": output.text,
     }

@@ -122,18 +122,18 @@ def _supported_strategies() -> tuple[str, ...]:
 
 def _parse_pdf(args: argparse.Namespace) -> int:
     if args.write_multimodal_artifacts:
-        manifest = save_pdf_multimodal_artifacts(
+        multimodal_manifest = save_pdf_multimodal_artifacts(
             str(args.path),
             output_root=args.output_root,
             run_id=args.run_id,
         )
         if args.output_json:
             _write_payload(
-                {"artifacts": manifest.model_dump(mode="json")},
+                {"artifacts": multimodal_manifest.model_dump(mode="json")},
                 force_json=True,
             )
         else:
-            print(f"Wrote multimodal parser artifacts to {manifest.run_dir}")
+            print(f"Wrote multimodal parser artifacts to {multimodal_manifest.run_dir}")
         return 0
 
     config = PdfIngestionConfig.from_env()

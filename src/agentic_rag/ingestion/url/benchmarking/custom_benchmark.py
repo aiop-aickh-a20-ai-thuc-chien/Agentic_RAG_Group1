@@ -13,6 +13,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+from agentic_rag.ingestion.url.chunking import (
+    is_usable_chunk_text,
+    split_markdown_paragraphs,
+)
+
 _NOISE_TAGS = {"script", "style", "nav", "footer", "header", "aside"}
 _SECTION_TAGS = {"h1", "h2", "h3"}
 
@@ -46,6 +51,8 @@ class BenchmarkResult:
     matched_terms: tuple[str, ...]
     missing_terms: tuple[str, ...]
     detected_sections: tuple[str, ...]
+    chunk_count: int
+    usable_chunk_count: int
     score: float
 
 
@@ -145,6 +152,23 @@ CUSTOM_HTML_CASES: tuple[BenchmarkCase, ...] = (
         expected_terms=("Installation", "uv sync", "Quality Gate", "pytest"),
         expected_sections=("Installation", "Quality Gate"),
     ),
+    BenchmarkCase(
+        case_id="static_homepage_vehicle_cards",
+        html="""
+        <html>
+          <body>
+            <div class="vehicle-card">
+              <h2>VF 9</h2>
+              <p>Dòng xe E-SUV, 6-7 chỗ ngồi, quãng đường lên tới 626 km.</p>
+              <p>Giá bán từ 1.229.180.000 VNĐ.</p>
+              <a href="https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html">Xem chi tiết</a>
+            </div>
+          </body>
+        </html>
+        """,
+        expected_terms=("VF 9", "E-SUV", "626 km", "1.229.180.000 VNĐ"),
+        expected_sections=("VF 9",),
+    ),
 )
 
 
@@ -191,6 +215,8 @@ def report_to_dict(report: BenchmarkReport) -> dict[str, Any]:
                 "matched_terms": list(result.matched_terms),
                 "missing_terms": list(result.missing_terms),
                 "detected_sections": list(result.detected_sections),
+                "chunk_count": result.chunk_count,
+                "usable_chunk_count": result.usable_chunk_count,
                 "score": result.score,
             }
             for result in report.results
@@ -225,6 +251,8 @@ def _score_case(case: BenchmarkCase, output: ParserOutput) -> BenchmarkResult:
     matched_sections = tuple(
         section for section in case.expected_sections if section in output.sections
     )
+    chunks = split_markdown_paragraphs(output.text)
+    usable_chunk_count = sum(1 for chunk in chunks if is_usable_chunk_text(chunk))
     term_score = len(matched_terms) / len(case.expected_terms) if case.expected_terms else 1.0
     section_score = (
         len(matched_sections) / expected_section_count if expected_section_count else 1.0
@@ -237,6 +265,8 @@ def _score_case(case: BenchmarkCase, output: ParserOutput) -> BenchmarkResult:
         matched_terms=matched_terms,
         missing_terms=missing_terms,
         detected_sections=output.sections,
+        chunk_count=len(chunks),
+        usable_chunk_count=usable_chunk_count,
         score=score,
     )
 

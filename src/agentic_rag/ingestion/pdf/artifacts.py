@@ -376,19 +376,28 @@ def _write_referenced_image_markdown(
         markdown_path.write_text(fallback_markdown, encoding="utf-8")
         return
 
-    from importlib import import_module
+    image_ref_mode = None
+    try:
+        import importlib
 
-    image_ref_mode_name = "ImageRefMode"
-    image_ref_mode = getattr(
-        import_module("docling_core.types.doc.document"),
-        image_ref_mode_name,
-    )
+        document_types = importlib.import_module("docling_core.types.doc.document")
+        image_ref_mode = getattr(document_types, "ImageRefMode", None)
+        if image_ref_mode is not None:
+            image_ref_mode = getattr(image_ref_mode, "REFERENCED", None)
+    except Exception:
+        image_ref_mode = None
 
-    cast(Callable[..., object], save_as_markdown)(
-        markdown_path,
-        artifacts_dir=Path("assets/images"),
-        image_mode=image_ref_mode.REFERENCED,
-    )
+    if image_ref_mode is None:
+        cast(Callable[..., object], save_as_markdown)(
+            markdown_path,
+            artifacts_dir=Path("assets/images"),
+        )
+    else:
+        cast(Callable[..., object], save_as_markdown)(
+            markdown_path,
+            artifacts_dir=Path("assets/images"),
+            image_mode=image_ref_mode,
+        )
 
 
 def _iter_docling_items(doc: Any) -> list[Any]:

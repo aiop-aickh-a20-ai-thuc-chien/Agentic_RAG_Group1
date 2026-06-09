@@ -117,7 +117,7 @@ def test_default_chunker_is_deterministic() -> None:
     assert chunker.requires_native_document is False
 
 
-def test_supported_markdown_chunkers_lists_registered_chunkers() -> None:
+def test_supported_markdown_chunkers_lists_default_docling_aliases() -> None:
     assert supported_markdown_chunkers() == (
         "deterministic",
         "docling-hybrid",

@@ -3,6 +3,7 @@ from agentic_rag.ingestion.chunking.chunkers import DeterministicMarkdownChunker
 from agentic_rag.ingestion.chunking.models import ChunkCandidate, ChunkingInput
 from agentic_rag.ingestion.chunking.splitters import (
     chunk_markdown_by_sections,
+    chunk_structural_clarity,
     detect_lang,
     paragraph_chunk,
     split_markdown,
@@ -47,10 +48,28 @@ def test_chunking_package_exposes_focused_submodules_and_compat_exports() -> Non
     assert chunking.DeterministicMarkdownChunker is DeterministicMarkdownChunker
     assert chunking.split_markdown is split_markdown
     assert chunking.paragraph_chunk is paragraph_chunk
+    assert chunking.chunk_text_quality("tiny") == {
+        "char_count": 4,
+        "word_count": 1,
+        "has_structured_signal": False,
+        "structural_clarity": {
+            "label": "clear",
+            "issue_codes": [],
+            "numeric_value_count": 0,
+            "numeric_density": 0.0,
+            "line_count": 1,
+            "repeated_phrase_density": 0.0,
+            "needs_table_reconstruction": False,
+            "needs_deduplication": False,
+            "is_clear": True,
+        },
+        "is_usable": False,
+    }
     assert chunking.split_markdown_paragraphs is split_markdown_paragraphs
     assert chunking.split_sentences is split_sentences
     assert chunking.detect_lang is detect_lang
     assert chunking.chunk_markdown_by_sections is chunk_markdown_by_sections
+    assert chunking.chunk_structural_clarity is chunk_structural_clarity
 
 
 def test_url_chunking_reuses_shared_text_helpers() -> None:
@@ -67,6 +86,55 @@ def test_url_chunking_reuses_shared_text_helpers() -> None:
     assert url_chunking.split_sentences is chunking.split_sentences
     assert url_chunking.detect_lang is chunking.detect_lang
     assert url_chunking.chunk_markdown_by_sections is chunking.chunk_markdown_by_sections
+    assert url_chunking.chunk_text_quality is chunking.chunk_text_quality
+    assert url_chunking.is_usable_chunk_text is chunking.is_usable_chunk_text
+
+
+def test_shared_chunk_quality_marks_low_signal_and_useful_chunks() -> None:
+    assert chunking.is_usable_chunk_text("Ưu đãi chỉ tới 31/12!") is False
+    assert (
+        chunking.is_usable_chunk_text(
+            "Dòng xe E-SUV có 6-7 chỗ ngồi, quãng đường lên tới 626 km "
+            "và giá bán từ 1.229.180.000 VNĐ."
+        )
+        is True
+    )
+
+
+def test_shared_chunk_quality_rejects_flattened_numeric_tables() -> None:
+    flattened_table = (
+        "# VinFast\n\n"
+        "D-SUV 5 cho 480 km 819.180.000 VND 999.000.000 VND "
+        "MPV 7 cho 450 km 704.340.000 VND 819.000.000 VND "
+        "A-SUV 326 km 411.940.000 VND 479.000.000 VND "
+        "B-SUV 318 km 644.140.000 VND 749.000.000 VND "
+        "C-SUV 496 km 678.540.000 VND 789.000.000 VND "
+        "E-SUV 626 km 1.229.180.000 VND 1.499.000.000 VND "
+        "MiniCar 170 km 231.340.000 VND 269.000.000 VND "
+        "Van 150 km 245.100.000 VND 285.000.000 VND "
+        "Scooter 49 km/h 78 km 14.400.000 VND 2300 W "
+        "Scooter 70 km/h 156 km 39.900.000 VND 3000 W"
+    )
+
+    quality = chunking.chunk_text_quality(flattened_table)
+
+    assert quality["is_usable"] is False
+    assert quality["structural_clarity"]["label"] == "low"
+    assert quality["structural_clarity"]["needs_table_reconstruction"] is True
+
+
+def test_shared_chunk_quality_rejects_repeated_phrase_blocks() -> None:
+    repeated = (
+        "Pin va tram sac o to dien voi phuong cham luon dat loi ich khach hang len dau. "
+        "VinFast ap dung chinh sach cho thue pin doc dao uu viet va khac biet. "
+        "Pin va tram sac o to dien voi phuong cham luon dat loi ich khach hang len dau. "
+        "VinFast ap dung chinh sach cho thue pin doc dao uu viet va khac biet."
+    )
+
+    quality = chunking.chunk_text_quality(repeated)
+
+    assert quality["is_usable"] is False
+    assert quality["structural_clarity"]["needs_deduplication"] is True
 
 
 def test_shared_paragraph_chunking_uses_boundaries_and_overlap() -> None:
