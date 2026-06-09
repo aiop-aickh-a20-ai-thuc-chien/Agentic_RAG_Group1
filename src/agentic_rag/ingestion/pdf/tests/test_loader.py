@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import ChunkingInput
@@ -98,6 +99,17 @@ def test_loaded_pdf_document_defaults_parser_and_chunker() -> None:
     assert loaded.pipeline == "ocr"
     assert loaded.strategy == "docling"
     assert loaded.chunker == "deterministic"
+
+
+def test_loaded_pdf_document_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        LoadedPdfDocument.model_validate(
+            {
+                "markdown": "# Intro",
+                "chunks": [],
+                "unexpected": True,
+            }
+        )
 
 
 def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:

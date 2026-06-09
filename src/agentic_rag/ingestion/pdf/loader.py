@@ -28,7 +28,7 @@ from .pipelines import (
 class LoadedPdfDocument(BaseModel):
     """Parsed PDF Markdown and the shared chunks derived from it."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     markdown: str
     chunks: list[Chunk]

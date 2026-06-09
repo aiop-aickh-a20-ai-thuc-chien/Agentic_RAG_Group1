@@ -6,18 +6,23 @@ import contextlib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 from psycopg.types.json import Jsonb
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
 
 
-@dataclass(frozen=True)
-class StoredSourceDocument:
+class _LocalPdfStorageModel(BaseModel):
+    """Base model for immutable local source storage DTOs."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class StoredSourceDocument(_LocalPdfStorageModel):
     """Stored source document metadata plus its chunk count."""
 
     document_id: str
@@ -29,8 +34,7 @@ class StoredSourceDocument:
     metadata: dict[str, object]
 
 
-@dataclass(frozen=True)
-class StoredRawSource:
+class StoredRawSource(_LocalPdfStorageModel):
     """Raw source bytes plus the content type needed by the API response."""
 
     content: bytes

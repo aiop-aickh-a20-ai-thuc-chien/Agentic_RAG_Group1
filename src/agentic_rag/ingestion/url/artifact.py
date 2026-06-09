@@ -4,26 +4,29 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.chunking import short_hash, slugify
 from agentic_rag.ingestion.url.parser import Asset, PageMetadata
 
 
-@dataclass(frozen=True)
-class DebugArtifact:
+class DebugArtifact(BaseModel):
     """A debug artifact that can be written to a local directory."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
     content: str
 
 
-@dataclass(frozen=True)
-class IngestionArtifacts:
+class IngestionArtifacts(BaseModel):
     """Paths for persisted URL ingestion artifacts."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     run_dir: Path
     markdown_path: Path
@@ -131,11 +134,11 @@ def _serialize_chunks_jsonl(chunks: Iterable[Chunk]) -> str:
 def _page_metadata_dict(metadata: PageMetadata | None) -> dict[str, str | None]:
     if metadata is None:
         return {}
-    return asdict(metadata)
+    return metadata.model_dump(mode="json")
 
 
 def _asset_dict(asset: Asset) -> dict[str, Any]:
-    return asdict(asset)
+    return asset.model_dump(mode="json")
 
 
 def _source_slug(source: str) -> str:

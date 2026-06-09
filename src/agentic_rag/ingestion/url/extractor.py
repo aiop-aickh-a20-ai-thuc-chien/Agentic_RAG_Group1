@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from importlib import import_module
 from typing import Any, cast
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.ingestion.url.normalizer import normalize_markdown, normalize_text
 
@@ -176,9 +177,10 @@ PRODUCT_JS = r"""
 """
 
 
-@dataclass(frozen=True)
-class ExtractedMarkdown:
+class ExtractedMarkdown(BaseModel):
     """Clean Markdown plus extractor metadata."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     markdown: str
     parser_name: str
@@ -187,7 +189,7 @@ class ExtractedMarkdown:
     rendered_html: str | None = None
     fetched_ok: bool = True
     product: dict[str, object] | None = None
-    normalize_stats: dict[str, object] = field(default_factory=dict)
+    normalize_stats: dict[str, object] = Field(default_factory=dict)
 
 
 def extract_markdown_from_html(

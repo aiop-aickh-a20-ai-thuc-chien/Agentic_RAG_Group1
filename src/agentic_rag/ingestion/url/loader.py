@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.artifact import (
@@ -49,16 +50,20 @@ _TRAFILATURA_PARSER_NAME = "trafilatura-markdown+builtin-html-parser"
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
-@dataclass(frozen=True)
-class _FetchedPage:
+class _FetchedPage(BaseModel):
+    """Fetched URL response payload used by the URL ingestion boundary."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     html: str
     url: str
     content_type: str | None = None
 
 
-@dataclass(frozen=True)
-class LoadedUrlDocument:
+class LoadedUrlDocument(BaseModel):
     """Parsed URL/text Markdown, generated chunks, and optional artifact paths."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     markdown: str
     chunks: list[Chunk]
