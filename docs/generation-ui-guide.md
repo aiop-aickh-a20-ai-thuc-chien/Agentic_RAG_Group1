@@ -39,6 +39,8 @@ NEXT_PUBLIC_AGENTIC_RAG_API_URL=http://127.0.0.1:8000
 ```
 
 Không commit file `.env` thật. Dùng `.env.example` ở root repo và `frontend/.env.example` làm mẫu.
+Xem [`model-runtime-configuration.md`](model-runtime-configuration.md) để cấu
+hình LLM, embedding và reranker.
 
 ## Backend
 
@@ -258,9 +260,11 @@ artifacts, source manifests, and chunk manifests. Qdrant stores the persistent
 chunk retrieval index and is used for cloud-mode hybrid search, so normal answer
 retrieval does not rebuild BM25 from S3 chunk manifests on each request.
 
-`EMBEDDING_PROVIDER=huggingface` runs in process. Other providers route through
-LiteLLM; `EMBEDDING_PROVIDER=local` uses an OpenAI-compatible local endpoint
-configured by `EMBEDDING_API_BASE`.
+`EMBEDDING_PROVIDER=sentence_transformers` runs in process. Named providers
+route through LiteLLM; `EMBEDDING_PROVIDER=local` uses a separately hosted
+OpenAI-compatible endpoint configured by `EMBEDDING_API_BASE`. See
+[`model-runtime-configuration.md`](model-runtime-configuration.md) for the
+shared provider semantics.
 
 Serve a pooling/embedding model with vLLM in an isolated uv environment:
 

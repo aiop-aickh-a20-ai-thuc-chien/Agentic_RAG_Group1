@@ -77,6 +77,8 @@ Hướng dẫn bàn giao cho thành viên mới nằm ở
   answer and citations.
 
 Đọc tài liệu này trước khi chạy demo local, cloud prototype hoặc so sánh RAGFlow.
+Các biến môi trường cho LLM, embedding và reranker được định nghĩa tập trung tại
+[docs/model-runtime-configuration.md](docs/model-runtime-configuration.md).
 
 ## Ranh giới module
 
@@ -99,13 +101,14 @@ Qdrant stores the persistent hybrid retrieval index.
 
 ## Dense embedding providers
 
-`EMBEDDING_PROVIDER=huggingface` runs the default in-process multilingual model.
-Set another provider such as `openai` or `local_openai` to route embeddings
-through LiteLLM. Local OpenAI-compatible `/v1/embeddings` services use
-`EMBEDDING_API_BASE`:
+`EMBEDDING_PROVIDER=sentence_transformers` runs the default in-process
+multilingual model. Named providers route through LiteLLM, while
+`EMBEDDING_PROVIDER=local` uses a separately hosted OpenAI-compatible service.
+See [docs/model-runtime-configuration.md](docs/model-runtime-configuration.md)
+for the complete provider contract.
 
 ```env
-EMBEDDING_PROVIDER=local_openai
+EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL=your-embedding-model
 EMBEDDING_API_BASE=http://127.0.0.1:8000/v1
 EMBEDDING_API_KEY=

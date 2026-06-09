@@ -7,6 +7,9 @@ pipeline locally. It separates two workflows:
 - Online search: run the API, retrieve indexed chunks, fuse/rerank evidence, and
   generate grounded answers.
 
+For the complete LLM, embedding, and reranker environment contract, read
+[`model-runtime-configuration.md`](model-runtime-configuration.md).
+
 ## 1. Install
 
 Use `uv` from the repository root:
@@ -18,7 +21,7 @@ uv sync
 Optional extras:
 
 ```bash
-# Local HuggingFace embedding and sentence-transformers reranker.
+# In-process sentence-transformers embedding and reranker.
 uv sync --extra local-models
 
 # Evaluation workbook tooling and deferred RAGAS dependencies.
@@ -33,8 +36,8 @@ PR.
 
 ### Local Model Torch Setup
 
-`local-models` installs `sentence-transformers` and `torch` for local
-HuggingFace embeddings and sentence-transformers reranking:
+`local-models` installs `sentence-transformers` and `torch` for in-process
+embeddings and reranking:
 
 ```bash
 uv sync --extra local-models
@@ -70,7 +73,7 @@ LOCAL_PDF_CHUNKER=deterministic
 LOCAL_SOURCE_STORE=jsonl
 
 DENSE_VECTOR_STORE=turbovec
-EMBEDDING_PROVIDER=huggingface
+EMBEDDING_PROVIDER=sentence_transformers
 EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 
 RERANK_PROVIDER=score
