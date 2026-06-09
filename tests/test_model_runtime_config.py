@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
+from agentic_rag.core.contracts import ModelRole
 from agentic_rag.model_runtime.config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_RERANKER_MODEL,
@@ -157,12 +158,12 @@ def test_enabled_litellm_provider_requires_model(monkeypatch: MonkeyPatch) -> No
         resolve_llm_profile("generation")
 
 
-def test_huggingface_embedding_defaults(monkeypatch: MonkeyPatch) -> None:
+def test_sentence_transformers_embedding_defaults(monkeypatch: MonkeyPatch) -> None:
     _clear_model_runtime_env(monkeypatch)
 
     config = resolve_embedding_config()
 
-    assert config.provider == "huggingface"
+    assert config.provider == "sentence_transformers"
     assert config.model == DEFAULT_EMBEDDING_MODEL
     assert config.expected_dimensions is None
     assert config.timeout_seconds == 60.0
@@ -198,15 +199,57 @@ def test_local_embedding_provider_is_supported(monkeypatch: MonkeyPatch) -> None
     assert config.api_base == "http://127.0.0.1:8000/v1"
 
 
-def test_legacy_local_openai_embedding_provider_fails_fast(
+@pytest.mark.parametrize("provider", ["huggingface", "local_openai"])
+def test_legacy_embedding_provider_values_fail_with_migration_message(
     monkeypatch: MonkeyPatch,
+    provider: str,
 ) -> None:
     _clear_model_runtime_env(monkeypatch)
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("EMBEDDING_MODEL", "local-embedding-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", provider)
 
-    with pytest.raises(ModelRuntimeConfigurationError, match="EMBEDDING_PROVIDER=local"):
+    with pytest.raises(ModelRuntimeConfigurationError, match=r"sentence_transformers|local"):
         resolve_embedding_config()
+
+
+@pytest.mark.parametrize(
+    ("role", "missing_name"),
+    [("generation", "GENERATION_LLM_API_BASE")],
+)
+def test_local_llm_requires_api_base(
+    monkeypatch: MonkeyPatch,
+    role: ModelRole,
+    missing_name: str,
+) -> None:
+    _clear_model_runtime_env(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "local")
+    monkeypatch.setenv("LLM_MODEL", "local-chat-model")
+
+    with pytest.raises(ModelRuntimeConfigurationError, match=missing_name):
+        resolve_llm_profile(role)
+
+
+def test_local_embedding_requires_model_and_api_base(monkeypatch: MonkeyPatch) -> None:
+    _clear_model_runtime_env(monkeypatch)
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+
+    with pytest.raises(ModelRuntimeConfigurationError, match="EMBEDDING_MODEL"):
+        resolve_embedding_config()
+
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-embedding-model")
+    with pytest.raises(ModelRuntimeConfigurationError, match="EMBEDDING_API_BASE"):
+        resolve_embedding_config()
+
+
+def test_local_reranker_requires_model_and_api_base(monkeypatch: MonkeyPatch) -> None:
+    _clear_model_runtime_env(monkeypatch)
+    monkeypatch.setenv("RERANK_PROVIDER", "local")
+
+    with pytest.raises(ModelRuntimeConfigurationError, match="RERANK_MODEL"):
+        resolve_reranker_config()
+
+    monkeypatch.setenv("RERANK_MODEL", "local-reranker")
+    with pytest.raises(ModelRuntimeConfigurationError, match="RERANK_API_BASE"):
+        resolve_reranker_config()
 
 
 def test_embedding_device_parsing(monkeypatch: MonkeyPatch) -> None:
@@ -294,7 +337,7 @@ def test_legacy_model_environment_variables_have_no_effect(monkeypatch: MonkeyPa
 
     assert resolve_llm_profile("generation").provider == "none"
     assert resolve_llm_profile("generation").model is None
-    assert resolve_embedding_config().provider == "huggingface"
+    assert resolve_embedding_config().provider == "sentence_transformers"
     assert resolve_embedding_config().model == DEFAULT_EMBEDDING_MODEL
     assert resolve_reranker_config().provider == "score"
     assert resolve_reranker_config().model is None
