@@ -37,6 +37,7 @@ from agentic_rag.core.contracts import (  # noqa: E402
 )
 from agentic_rag.core.ports import SourceEvidenceProvider  # noqa: E402
 from agentic_rag.eval_review import router as eval_review_router  # noqa: E402
+from agentic_rag.autodata_eval.router import router as autodata_eval_router  # noqa: E402
 from agentic_rag.generation.answering import (  # noqa: E402
     AnswerDelta,
     AnswerDone,
@@ -242,6 +243,7 @@ async def private_network_access(request: Request, call_next: Any) -> Any:
 
 
 api.include_router(eval_review_router, prefix="/eval-review")
+api.include_router(autodata_eval_router, prefix="/internal")
 
 
 @api.get("/health")
