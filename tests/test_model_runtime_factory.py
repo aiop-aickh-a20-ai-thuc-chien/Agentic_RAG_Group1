@@ -94,10 +94,10 @@ def test_factories_choose_reserved_local_and_litellm_adapters(
     assert isinstance(get_reranker(), SentenceTransformersReranker)
 
 
-def test_huggingface_embedding_factory_passes_configured_device(
+def test_sentence_transformers_embedding_factory_passes_configured_device(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
     monkeypatch.setenv("EMBEDDING_DEVICE", "cuda")
     clear_model_runtime_caches()
 
@@ -127,7 +127,7 @@ def test_validate_model_runtime_config_returns_all_profiles(monkeypatch: MonkeyP
         "ingestion",
         "evaluation",
     }
-    assert config.embedding.provider == "huggingface"
+    assert config.embedding.provider == "sentence_transformers"
     assert config.reranker.provider == "score"
 
     monkeypatch.setenv("GENERATION_LLM_PROVIDER", "openai")

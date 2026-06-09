@@ -217,8 +217,10 @@ def dense_embedding_metadata() -> dict[str, object]:
     except ValueError as exc:
         return {
             "provider": None,
-            "requested_provider": os.getenv("EMBEDDING_PROVIDER", "huggingface").strip().lower()
-            or "huggingface",
+            "requested_provider": os.getenv("EMBEDDING_PROVIDER", "sentence_transformers")
+            .strip()
+            .lower()
+            or "sentence_transformers",
             "resolved_provider": None,
             "configuration_error": str(exc),
             "vector_store": vector_store,
@@ -229,7 +231,9 @@ def dense_embedding_metadata() -> dict[str, object]:
         "requested_provider": config.provider,
         "resolved_provider": config.provider,
         "fallback_reason": None,
-        "library": ("sentence-transformers" if config.provider == "huggingface" else "litellm"),
+        "library": (
+            "sentence-transformers" if config.provider == "sentence_transformers" else "litellm"
+        ),
         "model": config.model,
         **(
             {"expected_dimensions": config.expected_dimensions}

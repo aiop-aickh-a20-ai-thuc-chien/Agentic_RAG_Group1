@@ -72,7 +72,7 @@ def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
             return object()
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "pgvector")
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
     monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example")
     monkeypatch.setenv("DENSE_PGVECTOR_COLLECTION", "agentic_chunks")
     monkeypatch.setattr("agentic_rag.retrieval.search._configured_embedding", lambda: object())
