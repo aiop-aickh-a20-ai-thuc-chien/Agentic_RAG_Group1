@@ -272,6 +272,16 @@ def test_embedding_device_auto_and_blank_resolve_to_auto(
     assert resolve_embedding_config().device is None
 
 
+def test_embedding_device_is_ignored_for_http_provider(monkeypatch: MonkeyPatch) -> None:
+    _clear_model_runtime_env(monkeypatch)
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-embedding-model")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_DEVICE", "cuda")
+
+    assert resolve_embedding_config().device is None
+
+
 def test_reranker_reserved_defaults(monkeypatch: MonkeyPatch) -> None:
     _clear_model_runtime_env(monkeypatch)
 
@@ -295,6 +305,22 @@ def test_reranker_preload_and_device_parsing(monkeypatch: MonkeyPatch) -> None:
 
     assert config.device == "cuda"
     assert config.preload is True
+
+
+def test_reranker_device_and_preload_are_ignored_for_http_provider(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _clear_model_runtime_env(monkeypatch)
+    monkeypatch.setenv("RERANK_PROVIDER", "local")
+    monkeypatch.setenv("RERANK_MODEL", "local-reranker")
+    monkeypatch.setenv("RERANK_API_BASE", "http://127.0.0.1:8001")
+    monkeypatch.setenv("RERANK_DEVICE", "cuda")
+    monkeypatch.setenv("RERANK_PRELOAD", "true")
+
+    config = resolve_reranker_config()
+
+    assert config.device is None
+    assert config.preload is False
 
 
 def test_configs_are_strict_frozen_and_hide_secrets() -> None:

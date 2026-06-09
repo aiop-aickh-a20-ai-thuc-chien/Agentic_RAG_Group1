@@ -147,7 +147,11 @@ def resolve_embedding_config() -> EmbeddingConfig:
             "EMBEDDING_TIMEOUT_SECONDS",
             default=DEFAULT_TIMEOUT_SECONDS,
         ),
-        device=_optional_device("EMBEDDING_DEVICE"),
+        device=(
+            _optional_device("EMBEDDING_DEVICE")
+            if provider == SENTENCE_TRANSFORMERS_PROVIDER
+            else None
+        ),
     )
 
 
@@ -181,8 +185,14 @@ def resolve_reranker_config() -> RerankerConfig:
             "RERANK_TIMEOUT_SECONDS",
             default=DEFAULT_TIMEOUT_SECONDS,
         ),
-        device=_optional_device("RERANK_DEVICE"),
-        preload=_bool_env("RERANK_PRELOAD"),
+        device=(
+            _optional_device("RERANK_DEVICE")
+            if provider == SENTENCE_TRANSFORMERS_PROVIDER
+            else None
+        ),
+        preload=(
+            _bool_env("RERANK_PRELOAD") if provider == SENTENCE_TRANSFORMERS_PROVIDER else False
+        ),
     )
 
 
