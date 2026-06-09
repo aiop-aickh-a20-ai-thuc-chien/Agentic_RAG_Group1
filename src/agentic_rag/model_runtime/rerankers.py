@@ -137,7 +137,8 @@ class LiteLLMReranker(BaseModel):
 
     def _model_name(self) -> str:
         model_name = self.config.model_name
-        prefix = f"{self.config.provider}/"
+        provider = "hosted_vllm" if self.config.provider == "local" else self.config.provider
+        prefix = f"{provider}/"
         if model_name.startswith(prefix):
             return model_name
         return f"{prefix}{model_name}"
