@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import SearchResult
 
 
-@dataclass(frozen=True)
-class ThresholdConfig:
+class ThresholdConfig(BaseModel):
     """Optional retrieval thresholds; `None` keeps the stage backward-compatible."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     bm25_min_score: float | None = None
     dense_min_score: float | None = None

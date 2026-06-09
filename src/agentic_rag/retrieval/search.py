@@ -15,14 +15,15 @@ from uuid import NAMESPACE_URL, uuid5
 from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
-from agentic_rag.core.contracts import Chunk, SearchResult
-from agentic_rag.retrieval.embeddings import (
-    EmbeddingConfig,
-    EmbeddingProfile,
-    create_embedding_client,
-    resolve_embedding_config,
-    validate_embedding_vectors,
+from agentic_rag.core.contracts import Chunk, EmbeddingOutput, SearchResult
+from agentic_rag.model_runtime.config import EmbeddingConfig, resolve_embedding_config
+from agentic_rag.model_runtime.embeddings import (
+    EmbeddingCompatibilityAdapter,
+    validate_embedding_output,
 )
+from agentic_rag.model_runtime.factory import get_embedding_client
+
+EmbeddingProfile = EmbeddingOutput
 
 DENSE_VECTOR_STORE_ENV = "DENSE_VECTOR_STORE"
 DENSE_PGVECTOR_CONNECTION_ENV = "DENSE_PGVECTOR_CONNECTION"
@@ -216,24 +217,19 @@ def dense_embedding_metadata() -> dict[str, object]:
     except ValueError as exc:
         return {
             "provider": None,
-            "requested_provider": (
-                os.getenv("DENSE_EMBEDDING_PROVIDER", "auto").strip().lower() or "auto"
-            ),
+            "requested_provider": os.getenv("EMBEDDING_PROVIDER", "huggingface").strip().lower()
+            or "huggingface",
             "resolved_provider": None,
             "configuration_error": str(exc),
             "vector_store": vector_store,
             **({"collection": _configured_qdrant_collection()} if vector_store == "qdrant" else {}),
         }
     return {
-        "provider": config.resolved_provider,
-        "requested_provider": config.requested_provider,
-        "resolved_provider": config.resolved_provider,
-        "fallback_reason": config.fallback_reason,
-        "library": (
-            "langchain-huggingface"
-            if config.resolved_provider == "huggingface"
-            else "langchain-openai"
-        ),
+        "provider": config.provider,
+        "requested_provider": config.provider,
+        "resolved_provider": config.provider,
+        "fallback_reason": None,
+        "library": ("sentence-transformers" if config.provider == "huggingface" else "litellm"),
         "model": config.model,
         **(
             {"expected_dimensions": config.expected_dimensions}
@@ -285,7 +281,7 @@ def _configured_vector_store() -> str:
 
 
 def _configured_embedding() -> Any:
-    return create_embedding_client(resolve_embedding_config())
+    return EmbeddingCompatibilityAdapter(client=get_embedding_client())
 
 
 def _build_pgvector_store(
@@ -355,10 +351,7 @@ def qdrant_hybrid_search(
     embedding_config = resolve_embedding_config()
     embedding = _configured_embedding()
     dense_vector = _embed_query(embedding, query)
-    embedding_profile = validate_embedding_vectors(
-        [dense_vector],
-        config=embedding_config,
-    )
+    embedding_profile = _validate_embedding_vectors([dense_vector], config=embedding_config)
     sparse_vector = _sparse_vector(query)
     client = _qdrant_client_from_env()
     _validate_qdrant_collection(
@@ -466,7 +459,7 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
             client = _qdrant_client_from_env()
 
         if embedding_profile is None:
-            embedding_profile = validate_embedding_vectors(dense_vectors, config=embedding_config)
+            embedding_profile = _validate_embedding_vectors(dense_vectors, config=embedding_config)
             _ensure_qdrant_collection(client=client, embedding_profile=embedding_profile)
 
         points = []
@@ -801,6 +794,19 @@ def _embed_query(embedding: object, query: str) -> list[float]:
     return _embed_documents(embedding, [query])[0]
 
 
+def _validate_embedding_vectors(
+    vectors: list[list[float]],
+    *,
+    config: EmbeddingConfig,
+) -> EmbeddingProfile:
+    return validate_embedding_output(
+        vectors,
+        config=config,
+        input_count=len(vectors),
+        model_name=config.model,
+    )
+
+
 def _sparse_vector(text: str) -> dict[str, list[int] | list[float]]:
     counts = Counter(_tokenize(text))
     indices = [_stable_sparse_index(token) for token in counts]
@@ -851,9 +857,9 @@ def _embedding_trace_metadata(
     profile: EmbeddingProfile,
 ) -> dict[str, object]:
     return {
-        "requested_provider": config.requested_provider,
-        "resolved_provider": config.resolved_provider,
-        "fallback_reason": config.fallback_reason,
+        "requested_provider": config.provider,
+        "resolved_provider": config.provider,
+        "fallback_reason": None,
         "model": profile.model,
         "dimensions": profile.dimensions,
     }

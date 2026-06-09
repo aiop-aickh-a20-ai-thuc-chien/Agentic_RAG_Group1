@@ -4,15 +4,17 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.url import crawler as crawler_module
 from agentic_rag.ingestion.url import (
+    LoadedUrlDocument,
     load_html_chunks,
     load_html_with_artifacts,
     load_text_chunks,
     load_url_chunks,
 )
+from agentic_rag.ingestion.url import crawler as crawler_module
 from agentic_rag.ingestion.url import loader as loader_module
 from agentic_rag.ingestion.url.crawler import Crawl4AIPage
 from agentic_rag.ingestion.url.extractor import ExtractedMarkdown
@@ -318,6 +320,18 @@ def test_load_html_with_artifacts_returns_markdown_and_paths(
     assert loaded.artifacts is not None
     assert loaded.artifacts.markdown_path.read_text(encoding="utf-8").rstrip() == loaded.markdown
     assert loaded.artifacts.chunks_path.exists()
+
+
+def test_loaded_url_document_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        LoadedUrlDocument.model_validate(
+            {
+                "markdown": "# Intro",
+                "chunks": [],
+                "artifacts": None,
+                "unexpected": True,
+            }
+        )
 
 
 def test_load_html_chunks_prefers_trafilatura_markdown_for_artifacts(

@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections.abc import Iterable, Iterator, Mapping
-from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agentic_rag.core.contracts import Answer, Citation, SearchResult
-from agentic_rag.generation.llm import (
-    DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OPENAI_MODEL,
-    LLMClient,
-    configured_llm_client,
+from agentic_rag.core.contracts import (
+    Answer,
+    Citation,
+    LLMCompletionInput,
+    SearchResult,
+)
+from agentic_rag.core.ports import LLMClient
+from agentic_rag.model_runtime.config import LLMProfileConfig, resolve_llm_profile
+from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
+from agentic_rag.model_runtime.factory import get_llm_client
+
+GROUNDING_SYSTEM_MESSAGE = (
+    "You answer only from the provided evidence. "
+    "If evidence is insufficient, say the information is not in the documents."
 )
 
 
@@ -37,31 +43,31 @@ MIN_EVIDENCE_TEXT_LENGTH = 12
 MAX_AUTO_CITATIONS = 3
 
 
-@dataclass(frozen=True)
-class AnswerDelta:
+class _GenerationModel(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class AnswerDelta(_GenerationModel):
     """A streamed answer text delta."""
 
     text: str
 
 
-@dataclass(frozen=True)
-class AnswerDone:
+class AnswerDone(_GenerationModel):
     """The final validated answer for a streamed generation."""
 
     answer: Answer
-    trace: dict[str, object] = field(default_factory=dict)
+    trace: dict[str, object] = Field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class GenerationResult:
+class GenerationResult(_GenerationModel):
     """Final answer plus internal trace details for observability."""
 
     answer: Answer
     trace: dict[str, object]
 
 
-@dataclass(frozen=True)
-class ParsedGenerationText:
+class ParsedGenerationText(_GenerationModel):
     """Normalized answer text parsed from a raw LLM response."""
 
     answer_text: str
@@ -76,7 +82,9 @@ AnswerStreamEvent = AnswerDelta | AnswerDone
 
 @_ls_traceable(name="llm-call", run_type="llm")
 def _traced_complete(prompt: str, client: LLMClient) -> str:
-    return client.complete(prompt).strip()
+    return client.complete(
+        LLMCompletionInput(prompt=prompt, system_message=GROUNDING_SYSTEM_MESSAGE)
+    ).text.strip()
 
 
 @_ls_traceable(name="answer-parse", run_type="tool")
@@ -150,7 +158,7 @@ def generate_answer_with_trace(
     prompt = build_grounded_prompt(
         question=question, evidence_context=context, original_question=original_question
     )
-    client = configured_llm_client()
+    client = get_llm_client("generation")
     llm_source = "configured_llm" if client else "deterministic_fallback"
     answer_text = _traced_complete(prompt, client) if client else _fallback_answer(usable_evidence)
     answer, parse_trace = _traced_parse(answer_text, usable_evidence)
@@ -183,8 +191,8 @@ def stream_answer(
     if not question.strip() or not usable_evidence:
         answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
         yield AnswerDone(
-            answer,
-            _build_generation_trace(
+            answer=answer,
+            trace=_build_generation_trace(
                 question=question,
                 evidence_chunks=usable_evidence,
                 evidence_context=evidence_context,
@@ -203,8 +211,8 @@ def stream_answer(
     if len(context) < MIN_EVIDENCE_TEXT_LENGTH:
         answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
         yield AnswerDone(
-            answer,
-            _build_generation_trace(
+            answer=answer,
+            trace=_build_generation_trace(
                 question=question,
                 evidence_chunks=usable_evidence,
                 evidence_context=context,
@@ -220,7 +228,7 @@ def stream_answer(
         return
 
     prompt = build_grounded_prompt(question=question, evidence_context=context)
-    client = configured_llm_client()
+    client = get_llm_client("generation")
     if client is None:
         raw_answer = _fallback_answer(usable_evidence)
         final_answer, parse_trace = _answer_from_text_with_trace(
@@ -240,15 +248,19 @@ def stream_answer(
             streaming=True,
         )
         for delta in _chunk_text(final_answer.answer):
-            yield AnswerDelta(delta)
-        yield AnswerDone(final_answer, trace)
+            yield AnswerDelta(text=delta)
+        yield AnswerDone(answer=final_answer, trace=trace)
         return
 
     answer_text = ""
 
-    for delta in client.stream_complete(prompt):
-        answer_text += delta
-        yield AnswerDelta(delta)
+    stream_request = LLMCompletionInput(
+        prompt=prompt,
+        system_message=GROUNDING_SYSTEM_MESSAGE,
+    )
+    for stream_delta in client.stream(stream_request):
+        answer_text += stream_delta.text
+        yield AnswerDelta(text=stream_delta.text)
 
     final_answer, parse_trace = _answer_from_text_with_trace(
         answer_text=answer_text.strip(), usable_evidence=usable_evidence
@@ -256,11 +268,11 @@ def stream_answer(
     if final_answer.status == "answered" and final_answer.answer.startswith(answer_text):
         marker_delta = final_answer.answer[len(answer_text) :]
         if marker_delta:
-            yield AnswerDelta(marker_delta)
+            yield AnswerDelta(text=marker_delta)
 
     yield AnswerDone(
-        final_answer,
-        _build_generation_trace(
+        answer=final_answer,
+        trace=_build_generation_trace(
             question=question,
             evidence_chunks=usable_evidence,
             evidence_context=context,
@@ -880,12 +892,15 @@ def _build_generation_trace(
 
 
 def _configured_generation_model() -> str:
-    provider = _configured_llm_provider()
-    if provider == "ollama":
-        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
-    return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    return _generation_profile().model or ""
 
 
 def _configured_llm_provider() -> str:
-    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
-    return provider or "openai"
+    return _generation_profile().provider
+
+
+def _generation_profile() -> LLMProfileConfig:
+    try:
+        return resolve_llm_profile("generation")
+    except ModelRuntimeConfigurationError:
+        return LLMProfileConfig(role="generation", provider="invalid", model=None)

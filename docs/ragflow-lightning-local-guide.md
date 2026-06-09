@@ -91,7 +91,6 @@ Lightning có thể không publish trực tiếp port `9380` vì root `/` trả 
 Trong terminal Lightning:
 
 ```bash
-python -m pip install fastapi uvicorn httpx
 cat > ragflow_proxy.py <<'PY'
 from fastapi import FastAPI, Request, Response
 import httpx
@@ -122,7 +121,8 @@ async def proxy(path: str, request: Request):
         headers={k: v for k, v in resp.headers.items() if k.lower() not in excluded},
     )
 PY
-uvicorn ragflow_proxy:app --host 0.0.0.0 --port 18080
+uv run --no-project --with fastapi --with uvicorn --with httpx \
+  uvicorn ragflow_proxy:app --host 0.0.0.0 --port 18080
 ```
 
 Giữ terminal proxy này chạy.
@@ -154,8 +154,8 @@ RAG_TRACE_ENABLED=true
 RAG_TRACE_PATH=logs/rag_runs.jsonl
 
 LLM_PROVIDER=openai
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4o-mini
+LLM_MODEL=gpt-4o-mini
+LLM_API_KEY=your_openai_api_key
 ```
 
 Tạo/sửa `frontend/.env.local`:

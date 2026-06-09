@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from agentic_rag.ingestion.pdf.models import PdfPipelineCapabilities, PdfPipelineName
-from agentic_rag.ingestion.pdf.parser import DoclingMarkdownParser, PdfMarkdownParser
+from .models import PdfPipelineCapabilities, PdfPipelineName
+from .parser import DoclingMarkdownParser, PdfMarkdownParser
 
 DEFAULT_PDF_PIPELINE: PdfPipelineName = "ocr"
 DEFAULT_PDF_STRATEGY = "docling"

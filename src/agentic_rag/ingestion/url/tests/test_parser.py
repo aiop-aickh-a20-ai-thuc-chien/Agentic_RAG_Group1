@@ -88,6 +88,30 @@ def test_parse_html_marks_duplicate_and_conflicting_section_evidence() -> None:
     assert diagnostics["has_possible_conflict"] is True
 
 
+def test_parse_html_strips_utm_banners_and_promotes_anchor_sections() -> None:
+    parsed = parse_html(
+        """
+        <html>
+          <body>
+            <main>
+              <h1>VinFast</h1>
+              <a href="/promo?utm_source=banner"><p>Promotional campaign noise</p></a>
+              <a id="dong_co_dien_content"></a>
+              <p>D-SUV electric vehicle details.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        base_url="https://vinfastauto.com/vn_vi",
+    )
+
+    markdown = "\n\n".join(section.markdown or "" for section in parsed.sections)
+
+    assert "Promotional campaign noise" not in markdown
+    assert any(section.heading == "O to dien" for section in parsed.sections)
+    assert "D-SUV electric vehicle details." in markdown
+
+
 def test_parse_html_extracts_canonical_open_graph_and_article_metadata() -> None:
     parsed = parse_html(
         """

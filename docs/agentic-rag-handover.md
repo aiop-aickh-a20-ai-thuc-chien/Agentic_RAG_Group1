@@ -11,11 +11,11 @@ Bật/tắt qua env var `AGENT_MODE=true/false` — giữ nguyên linear pipelin
 
 ```
 src/agentic_rag/agent/
-├── __init__.py          exports: AgentResult, AgentState, build_agent, run_agent
+├── __init__.py          exports: AgentState, build_agent, run_agent
 ├── state.py             AgentState TypedDict — toàn bộ state qua các nodes
 ├── grading.py           preprocess_query, grade_hallucination, transform_query
 ├── nodes.py             tất cả LangGraph node functions + routing functions
-└── graph.py             build_agent(), run_agent(), AgentResult dataclass
+└── graph.py             build_agent(), run_agent(), WorkflowRunInput/WorkflowRunOutput
 ```
 
 ---
@@ -79,7 +79,7 @@ AGENT_MAX_GENERATE_ATTEMPTS=2     # max regen khi hallucinate
 
 | File | Thay đổi |
 |---|---|
-| `api.py` | Thêm `history` vào `AnswerRequest`; gọi `run_agent` với history |
+| `api.py` | `AnswerRequest.history` dùng `ConversationMessage`; gọi `run_agent` với `WorkflowRunInput` |
 | `integrations/local_pdf/providers.py` | Dense dùng original query (có dấu); bỏ provider-rerank; thêm `@traceable` |
 | `retrieval/search.py` | Embedding configurable (openai/huggingface) |
 | `generation/answering.py` | Thêm `@traceable` cho llm-call, answer-parse |

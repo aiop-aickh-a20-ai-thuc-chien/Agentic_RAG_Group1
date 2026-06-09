@@ -17,11 +17,19 @@ import time
 import unicodedata
 import uuid
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agentic_rag.core.contracts import Chunk, SearchResult
+from pydantic import BaseModel, ConfigDict
+
+from agentic_rag.core.contracts import (
+    Chunk,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+    SourceDocumentChunks,
+    SourceDocumentUpload,
+)
 from agentic_rag.ingestion.chunking.splitters import short_hash
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
@@ -105,27 +113,21 @@ def _traced_post_fusion_threshold(
     return apply_fusion_threshold(fused_results, config=config)
 
 
-@dataclass(frozen=True)
-class LocalPdfUploadedDocument:
+class _LocalPdfProviderModel(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class LocalPdfUploadedDocument(SourceDocumentUpload):
     """Normalized upload result returned to the UI/API layer."""
 
-    document_id: str
-    name: str
-    dataset_id: str
-    parse_started: bool
     trace: dict[str, object]
 
 
-@dataclass(frozen=True)
-class LocalPdfDocumentChunks:
+class LocalPdfDocumentChunks(SourceDocumentChunks):
     """One page of local PDF chunks plus the full chunk count."""
 
-    chunks: list[Chunk]
-    total_chunks: int
 
-
-@dataclass(frozen=True)
-class LocalPdfDocumentDebug:
+class LocalPdfDocumentDebug(_LocalPdfProviderModel):
     """Debug view of one locally ingested source."""
 
     document_id: str
@@ -140,8 +142,7 @@ class LocalPdfDocumentDebug:
     metadata: dict[str, object]
 
 
-@dataclass(frozen=True)
-class LocalPdfStoredDocument:
+class LocalPdfStoredDocument(_LocalPdfProviderModel):
     """Stored local source document plus chunks for UI hydration."""
 
     document_id: str
@@ -737,40 +738,39 @@ class LocalPdfEvidenceProvider:
 
     def retrieve(
         self,
-        *,
-        question: str,
-        document_ids: list[str] | None = None,
-        page_size: int | None = None,
-    ) -> list[SearchResult]:
+        request: RetrievalInput,
+    ) -> RetrievalOutput:
         """Run PDF chunks through BM25, dense retrieval, RRF, and rerank."""
 
         if _qdrant_vector_store_enabled():
-            return qdrant_hybrid_search(
-                question,
-                document_ids=document_ids,
-                top_k=page_size or _default_page_size(),
+            return RetrievalOutput(
+                results=qdrant_hybrid_search(
+                    request.question,
+                    document_ids=request.document_ids,
+                    top_k=request.page_size or _default_page_size(),
+                )
             )
 
-        chunks = self._chunks_for_documents(document_ids)
+        chunks = self._chunks_for_documents(request.document_ids)
         if not chunks:
-            return []
+            return RetrievalOutput()
 
         store = Store(chunks)
         preprocess_started_at = time.perf_counter()
-        preprocessed_query = _traced_preprocess(store, question)
+        preprocessed_query = _traced_preprocess(store, request.question)
         preprocess_latency_ms = _latency_ms(preprocess_started_at)
         normalized_query = preprocessed_query["normalized"]
         if not normalized_query:
-            return []
+            return RetrievalOutput()
 
-        top_k = page_size or _default_page_size()
+        top_k = request.page_size or _default_page_size()
         candidate_k = max(_default_candidate_count(), top_k)
         bm25_started_at = time.perf_counter()
         bm25_results = _traced_bm25(store, normalized_query, candidate_k)
         bm25_latency_ms = _latency_ms(bm25_started_at)
         dense_started_at = time.perf_counter()
         # Dense uses original question (with diacritics) for better embedding quality
-        dense_results, dense_error = _traced_dense(store, question, candidate_k)
+        dense_results, dense_error = _traced_dense(store, request.question, candidate_k)
         dense_latency_ms = _latency_ms(dense_started_at)
         threshold_config = _threshold_config_from_env()
         bm25_results, dense_results, pre_fusion_threshold_trace = _traced_pre_fusion_threshold(
@@ -791,27 +791,29 @@ class LocalPdfEvidenceProvider:
         rerank_trace: dict[str, object] = {"provider": "skipped", "reason": "agent_reranks"}
         rerank_threshold_trace: dict[str, object] = {}
         rerank_latency_ms = 0
-        return _with_pipeline_metadata(
-            results=final_results,
-            question=question,
-            chunks=chunks,
-            top_k=top_k,
-            candidate_k=candidate_k,
-            preprocess_latency_ms=preprocess_latency_ms,
-            bm25_latency_ms=bm25_latency_ms,
-            dense_latency_ms=dense_latency_ms,
-            fusion_latency_ms=fusion_latency_ms,
-            rerank_latency_ms=rerank_latency_ms,
-            pre_fusion_threshold_trace=pre_fusion_threshold_trace,
-            fusion_method_trace=fusion_method_trace,
-            fusion_threshold_trace=fusion_threshold_trace,
-            rerank_threshold_trace=rerank_threshold_trace,
-            rerank_trace=rerank_trace,
-            preprocessed_query=preprocessed_query,
-            bm25_results=bm25_results,
-            dense_results=dense_results,
-            fused_results=fused_results,
-            dense_error=dense_error,
+        return RetrievalOutput(
+            results=_with_pipeline_metadata(
+                results=final_results,
+                question=request.question,
+                chunks=chunks,
+                top_k=top_k,
+                candidate_k=candidate_k,
+                preprocess_latency_ms=preprocess_latency_ms,
+                bm25_latency_ms=bm25_latency_ms,
+                dense_latency_ms=dense_latency_ms,
+                fusion_latency_ms=fusion_latency_ms,
+                rerank_latency_ms=rerank_latency_ms,
+                pre_fusion_threshold_trace=pre_fusion_threshold_trace,
+                fusion_method_trace=fusion_method_trace,
+                fusion_threshold_trace=fusion_threshold_trace,
+                rerank_threshold_trace=rerank_threshold_trace,
+                rerank_trace=rerank_trace,
+                preprocessed_query=preprocessed_query,
+                bm25_results=bm25_results,
+                dense_results=dense_results,
+                fused_results=fused_results,
+                dense_error=dense_error,
+            )
         )
 
     def _write_chunks(self, *, document_id: str, chunks: list[Chunk]) -> None:

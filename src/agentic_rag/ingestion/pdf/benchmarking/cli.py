@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from agentic_rag.ingestion.pdf.benchmarking.omnidocbench import (
+from .omnidocbench import (
     OmniDocBenchBackend,
     OmniDocBenchMatchMethod,
     OmniDocBenchRunConfig,

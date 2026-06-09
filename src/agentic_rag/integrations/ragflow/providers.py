@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
-from agentic_rag.core.contracts import Chunk, SearchResult
+from agentic_rag.core.contracts import (
+    Chunk,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+    SourceDocumentChunks,
+    SourceDocumentUpload,
+)
 from agentic_rag.integrations.ragflow.adapters import (
     chunk_from_ragflow_payload,
     search_result_from_ragflow_hit,
@@ -13,23 +19,12 @@ from agentic_rag.integrations.ragflow.adapters import (
 from agentic_rag.integrations.ragflow.client import RAGFlowClient
 
 
-@dataclass(frozen=True)
-class RAGFlowUploadedDocument:
+class RAGFlowUploadedDocument(SourceDocumentUpload):
     """Normalized upload result returned to the UI/API layer."""
 
-    document_id: str
-    name: str
-    dataset_id: str
-    parse_started: bool
-    trace: dict[str, object] | None = None
 
-
-@dataclass(frozen=True)
-class RAGFlowDocumentChunks:
+class RAGFlowDocumentChunks(SourceDocumentChunks):
     """One page of normalized chunks plus RAGFlow's full chunk count."""
-
-    chunks: list[Chunk]
-    total_chunks: int
 
 
 class RAGFlowEvidenceProvider:
@@ -158,27 +153,24 @@ class RAGFlowEvidenceProvider:
 
     def retrieve(
         self,
-        *,
-        question: str,
-        document_ids: list[str] | None = None,
-        page_size: int | None = None,
-    ) -> list[SearchResult]:
+        request: RetrievalInput,
+    ) -> RetrievalOutput:
         """Retrieve evidence chunks from RAGFlow without using RAGFlow chat generation."""
 
         payload = self._client.retrieve(
-            question=question,
+            question=request.question,
             dataset_ids=[self._dataset_id],
-            document_ids=document_ids,
-            page_size=page_size,
+            document_ids=request.document_ids,
+            page_size=request.page_size,
         )
         data = payload.get("data")
         if not isinstance(data, dict):
-            return []
+            return RetrievalOutput()
 
         doc_names = _document_names_by_id(data.get("doc_aggs"))
         raw_chunks = data.get("chunks")
         if not isinstance(raw_chunks, list):
-            return []
+            return RetrievalOutput()
 
         results: list[SearchResult] = []
         for rank, raw_chunk in enumerate(raw_chunks, start=1):
@@ -198,7 +190,7 @@ class RAGFlowEvidenceProvider:
                     retriever="ragflow",
                 )
             )
-        return results
+        return RetrievalOutput(results=results)
 
 
 def _required_text(payload: dict[str, object], key: str) -> str:

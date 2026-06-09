@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
 from html.parser import HTMLParser
 from urllib.parse import urljoin
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.ingestion.url.chunking import chunk_evidence_diagnostics, normalize_space
 
@@ -22,21 +24,33 @@ _PUBLISHED_META_NAMES = {
     "publish_date",
 }
 _AUTHOR_META_NAMES = {"author", "article:author", "dc.creator"}
+_UTM_BANNER_RE = re.compile(r"utm_source=banner", re.IGNORECASE)
+_ANCHOR_SECTION_HEADINGS = {
+    "dong_co_dien_content": "O to dien",
+    "dong_co_xang_content": "O to xang",
+    "xe_dich_vu_content": "Dong xe dich vu",
+    "dich_vu_oto": "Dich vu hau mai - O to",
+    "dich_vu_xe_may": "Dich vu hau mai - Xe may",
+}
 
 
-@dataclass(frozen=True)
-class Section:
+class _UrlParserModel(BaseModel):
+    """Base model for immutable URL parser DTOs."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class Section(_UrlParserModel):
     """A parsed page section."""
 
     heading: str
     text: str
     heading_level: int = 0
     markdown: str | None = None
-    evidence_diagnostics: dict[str, object] = field(default_factory=dict)
+    evidence_diagnostics: dict[str, object] = Field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class Asset:
+class Asset(_UrlParserModel):
     """A related URL asset discovered in HTML."""
 
     kind: str
@@ -46,8 +60,7 @@ class Asset:
     target_url: str | None = None
 
 
-@dataclass(frozen=True)
-class PageMetadata:
+class PageMetadata(_UrlParserModel):
     """Metadata discovered from canonical, Open Graph, and article tags."""
 
     canonical_url: str | None = None
@@ -60,13 +73,12 @@ class PageMetadata:
     language: str | None = None
 
 
-@dataclass(frozen=True)
-class ParsedHtml:
+class ParsedHtml(_UrlParserModel):
     """HTML parser output for ingestion."""
 
     title: str | None
     sections: tuple[Section, ...]
-    metadata: PageMetadata = PageMetadata()
+    metadata: PageMetadata = Field(default_factory=PageMetadata)
     assets: tuple[Asset, ...] = ()
 
 
@@ -129,8 +141,16 @@ class MainContentParser(HTMLParser):
             return
         if normalized_tag == "a":
             href = self._absolute_url(attr_map.get("href"))
+            section_heading = _ANCHOR_SECTION_HEADINGS.get(attr_map.get("id", ""))
+            if href is None and section_heading:
+                self._flush_section()
+                self._current_section = section_heading
+                self._current_section_level = 2
+                self._section_parts = [section_heading]
+                self._markdown_lines = [f"## {section_heading}"]
+                return
             self._link_stack.append(href)
-            if self._capture_pdf_link(attr_map, href):
+            if self._is_utm_banner_href(href) or self._capture_pdf_link(attr_map, href):
                 self._skip_depth += 1
                 self._suppressed_anchor_depth += 1
             return
@@ -286,6 +306,9 @@ class MainContentParser(HTMLParser):
             )
         )
         return True
+
+    def _is_utm_banner_href(self, href: str | None) -> bool:
+        return bool(href and _UTM_BANNER_RE.search(href))
 
     def _capture_embedded_asset(self, tag: str, attrs: dict[str, str]) -> None:
         raw_url = attrs.get("data") if tag == "object" else attrs.get("src")

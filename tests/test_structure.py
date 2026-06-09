@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 
 from agentic_rag.core import Answer, Chunk, Citation, SearchResult
 
@@ -19,3 +20,17 @@ def test_pdf_and_url_ingestion_are_separate_packages() -> None:
 
     assert hasattr(pdf_module, "__path__")
     assert hasattr(url_module, "__path__")
+
+
+def test_production_code_does_not_use_dataclasses() -> None:
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    ignored_dirs = {".venv", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__"}
+    offenders: list[str] = []
+    for path in source_root.rglob("*.py"):
+        if ignored_dirs.intersection(path.relative_to(source_root).parts):
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "@dataclass" in text or "from dataclasses" in text or "import dataclasses" in text:
+            offenders.append(path.relative_to(source_root).as_posix())
+
+    assert offenders == []

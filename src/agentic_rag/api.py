@@ -26,8 +26,16 @@ from fastapi.responses import FileResponse, Response, StreamingResponse  # noqa:
 from pydantic import BaseModel, Field  # noqa: E402
 
 from agentic_rag.agent.graph import run_agent  # noqa: E402
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult  # noqa: E402
-from agentic_rag.core.ports import SourceDocumentChunks, SourceEvidenceProvider  # noqa: E402
+from agentic_rag.core.contracts import (  # noqa: E402
+    Answer,
+    Chunk,
+    ConversationMessage,
+    EvidenceResolutionInput,
+    SearchResult,
+    SourceDocumentChunks,
+    WorkflowRunInput,
+)
+from agentic_rag.core.ports import SourceEvidenceProvider  # noqa: E402
 from agentic_rag.eval_review import router as eval_review_router  # noqa: E402
 from agentic_rag.generation.answering import (  # noqa: E402
     AnswerDelta,
@@ -48,6 +56,7 @@ from agentic_rag.integrations.local_pdf.providers import (  # noqa: E402
 )
 from agentic_rag.integrations.ragflow.client import RAGFlowClientError  # noqa: E402
 from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError  # noqa: E402
+from agentic_rag.model_runtime.factory import preload_configured_models  # noqa: E402
 from agentic_rag.observability.trace import (  # noqa: E402
     new_run_id,
     write_rag_trace,
@@ -56,7 +65,6 @@ from agentic_rag.observability.trace import (  # noqa: E402
 from agentic_rag.retrieval.fusion import (  # noqa: E402
     build_evidence_context as _build_evidence_context,
 )
-from agentic_rag.retrieval.fusion import preload_reranker  # noqa: E402
 from agentic_rag.runtime_env import load_local_env  # noqa: E402
 
 load_local_env()
@@ -74,17 +82,20 @@ async def _api_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def _preload_configured_models() -> None:
-    result = preload_reranker()
-    status = result.get("status")
+    result = preload_configured_models()
+    reranker_result = result.get("reranker", {})
+    if not isinstance(reranker_result, dict):
+        return
+    status = reranker_result.get("status")
     if status == "loaded":
         LOGGER.info(
             "Preloaded reranker model %s.",
-            result.get("model"),
+            reranker_result.get("model"),
         )
     elif status == "failed":
         LOGGER.warning(
             "Reranker preload failed; falling back at request time: %s",
-            result.get("fallback_reason"),
+            reranker_result.get("fallback_reason"),
         )
 
 
@@ -92,7 +103,7 @@ class AnswerRequest(BaseModel):
     """Request body for the answer endpoint."""
 
     question: str = Field(min_length=1)
-    history: list[dict[str, str]] | None = Field(
+    history: list[ConversationMessage] | None = Field(
         default=None,
         description=(
             "Conversation history for context-aware query rewriting. "
@@ -277,9 +288,11 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
         provider = source_provider_from_env()
         result = run_agent(
             provider=provider,
-            question=request.question,
-            document_ids=request.document_ids,
-            history=request.history or [],
+            request=WorkflowRunInput(
+                question=request.question,
+                document_ids=request.document_ids,
+                history=request.history or [],
+            ),
         )
         return StreamingResponse(
             _stream_direct_answer_events(
@@ -746,9 +759,11 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
         provider = source_provider_from_env()
         result = run_agent(
             provider=provider,
-            question=request.question,
-            document_ids=request.document_ids,
-            history=request.history or [],
+            request=WorkflowRunInput(
+                question=request.question,
+                document_ids=request.document_ids,
+                history=request.history or [],
+            ),
         )
         write_rag_trace(
             run_id=run_id,
@@ -928,14 +943,17 @@ def _normalized_small_talk_text(text: str) -> str:
 
 
 def _evidence_for_request(request: AnswerRequest) -> tuple[list[SearchResult], str]:
-    return evidence_for_question(
-        question=request.question,
-        evidence_context=request.evidence_context,
-        evidence_chunks=request.evidence_chunks,
-        provider=request.evidence_provider,
-        document_ids=request.document_ids,
-        use_mock_evidence=request.use_mock_evidence,
+    resolved = evidence_for_question(
+        EvidenceResolutionInput(
+            question=request.question,
+            evidence_context=request.evidence_context,
+            evidence_chunks=request.evidence_chunks,
+            provider=request.evidence_provider,
+            document_ids=request.document_ids,
+            use_mock_evidence=request.use_mock_evidence,
+        )
     )
+    return resolved.chunks, resolved.context
 
 
 def _provider_name(request: AnswerRequest) -> str:

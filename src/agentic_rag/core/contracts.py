@@ -8,6 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 AnswerStatus = Literal["answered", "not_found"]
 RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
+ModelRole = Literal[
+    "query_rewrite",
+    "query_transform",
+    "generation",
+    "ingestion",
+    "evaluation",
+]
 
 
 class _ContractModel(BaseModel):
@@ -49,3 +56,128 @@ class Answer(_ContractModel):
     answer: str
     status: AnswerStatus
     citations: list[Citation] = Field(default_factory=list)
+
+
+class ConversationMessage(_ContractModel):
+    """One conversation message passed into the Workflow Module."""
+
+    role: str
+    content: str
+
+
+class WorkflowRunInput(_ContractModel):
+    """Validated input for one Workflow run."""
+
+    question: str
+    history: list[ConversationMessage] = Field(default_factory=list)
+    document_ids: list[str] | None = None
+
+
+class WorkflowRunOutput(_ContractModel):
+    """Answer plus evidence and trace for one Workflow run."""
+
+    answer: Answer
+    evidence_chunks: list[SearchResult] = Field(default_factory=list)
+    queries_tried: list[str] = Field(default_factory=list)
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RetrievalInput(_ContractModel):
+    """Validated retrieval request passed to a source evidence provider."""
+
+    question: str
+    document_ids: list[str] | None = None
+    page_size: int | None = None
+
+
+class RetrievalOutput(_ContractModel):
+    """Normalized retrieval results returned by a source evidence provider."""
+
+    results: list[SearchResult] = Field(default_factory=list)
+
+
+class EvidenceResolutionInput(_ContractModel):
+    """Validated input for resolving evidence before generation."""
+
+    question: str
+    evidence_context: str | None = None
+    evidence_chunks: list[SearchResult] | None = None
+    provider: str | None = None
+    document_ids: list[str] | None = None
+    use_mock_evidence: bool = False
+
+
+class EvidenceResolutionOutput(_ContractModel):
+    """Resolved evidence chunks and final evidence context."""
+
+    chunks: list[SearchResult] = Field(default_factory=list)
+    context: str
+
+
+class SourceDocumentUpload(_ContractModel):
+    """Result returned after a source document is accepted for indexing."""
+
+    document_id: str
+    name: str
+    dataset_id: str
+    parse_started: bool
+    trace: dict[str, object] | None = None
+
+
+class SourceDocumentChunks(_ContractModel):
+    """Chunks for one source document plus its full chunk count."""
+
+    chunks: list[Chunk]
+    total_chunks: int
+
+
+class LLMCompletionInput(_ContractModel):
+    """Typed prompt request for one model completion."""
+
+    prompt: str
+    system_message: str
+    temperature: float = 0.0
+
+
+class LLMCompletionOutput(_ContractModel):
+    """Normalized text returned from a model completion provider."""
+
+    text: str
+    provider: str
+    model: str
+
+
+class LLMStreamDelta(_ContractModel):
+    """One normalized text delta from a streaming model call."""
+
+    text: str
+
+
+class EmbeddingInput(_ContractModel):
+    """Typed request for embedding one or more texts."""
+
+    texts: list[str] = Field(min_length=1)
+
+
+class EmbeddingOutput(_ContractModel):
+    """Normalized embedding vectors returned by one embedding provider."""
+
+    vectors: list[list[float]]
+    provider: str
+    model: str
+    dimensions: int
+
+
+class RerankInput(_ContractModel):
+    """Typed reranking request over retrieval candidates."""
+
+    query: str
+    candidates: list[SearchResult]
+    top_k: int = Field(default=5, ge=0)
+
+
+class RerankOutput(_ContractModel):
+    """Normalized reranking results and trace metadata."""
+
+    results: list[SearchResult]
+    metadata: dict[str, object] = Field(default_factory=dict)

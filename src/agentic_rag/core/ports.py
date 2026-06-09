@@ -2,9 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from collections.abc import Iterator
+from typing import Any, Protocol, runtime_checkable
 
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    EmbeddingInput,
+    EmbeddingOutput,
+    EvidenceResolutionInput,
+    EvidenceResolutionOutput,
+    LLMCompletionInput,
+    LLMCompletionOutput,
+    LLMStreamDelta,
+    RerankInput,
+    RerankOutput,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+    SourceDocumentChunks,
+    SourceDocumentUpload,
+    WorkflowRunInput,
+    WorkflowRunOutput,
+)
 
 
 class PdfIngestor(Protocol):
@@ -60,42 +80,6 @@ class HybridFusion(Protocol):
         """Fuse sparse and dense results using Reciprocal Rank Fusion or equivalent."""
 
 
-class SourceDocumentUpload(Protocol):
-    """Result returned after a source document is accepted for indexing."""
-
-    @property
-    def document_id(self) -> str:
-        """Stable document identifier used by follow-up chunk/retrieval calls."""
-
-    @property
-    def name(self) -> str:
-        """Display name for the uploaded document."""
-
-    @property
-    def dataset_id(self) -> str:
-        """Provider dataset or namespace identifier."""
-
-    @property
-    def parse_started(self) -> bool:
-        """Whether ingestion/chunking was started by the provider."""
-
-    @property
-    def trace(self) -> dict[str, object] | None:
-        """Provider-specific ingestion trace payload."""
-
-
-class SourceDocumentChunks(Protocol):
-    """Chunks for one source document plus its full chunk count."""
-
-    @property
-    def chunks(self) -> list[Chunk]:
-        """The returned page or collection of normalized chunks."""
-
-    @property
-    def total_chunks(self) -> int:
-        """Total chunks available for this document before pagination."""
-
-
 class SourceEvidenceProvider(Protocol):
     """Combined source upload, chunk inspection, and retrieval provider."""
 
@@ -121,24 +105,39 @@ class SourceEvidenceProvider(Protocol):
 
     def retrieve(
         self,
-        *,
-        question: str,
-        document_ids: list[str] | None = None,
-        page_size: int | None = None,
-    ) -> list[SearchResult]:
+        request: RetrievalInput,
+    ) -> RetrievalOutput:
         """Retrieve evidence chunks for generation."""
 
 
+@runtime_checkable
+class LLMClient(Protocol):
+    """Model completion boundary."""
+
+    def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+        """Return one normalized completion for a prompt request."""
+
+    def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+        """Yield normalized streaming text deltas for a prompt request."""
+
+
+@runtime_checkable
+class EmbeddingClient(Protocol):
+    """Embedding provider boundary."""
+
+    def embed(self, request: EmbeddingInput) -> EmbeddingOutput:
+        """Return normalized embedding vectors for the input texts."""
+
+
+@runtime_checkable
 class Reranker(Protocol):
     """Optional reranking over fused candidates."""
 
     def rerank(
         self,
-        query: str,
-        candidates: list[SearchResult],
-        top_k: int = 5,
-    ) -> list[SearchResult]:
-        """Return final ranked evidence candidates."""
+        request: RerankInput,
+    ) -> RerankOutput:
+        """Return final ranked evidence candidates and reranker metadata."""
 
 
 class EvidenceContextBuilder(Protocol):
@@ -166,3 +165,25 @@ class Generator(Protocol):
         evidence_chunks: list[SearchResult],
     ) -> bool:
         """Validate that answer citations refer only to provided evidence chunks."""
+
+
+class WorkflowRunner(Protocol):
+    """One answer-turn Workflow boundary."""
+
+    def run(
+        self,
+        *,
+        provider: SourceEvidenceProvider,
+        request: WorkflowRunInput,
+    ) -> WorkflowRunOutput:
+        """Run one Workflow turn and return its normalized output."""
+
+
+class EvidenceResolver(Protocol):
+    """Resolve evidence chunks and context before generation."""
+
+    def resolve(
+        self,
+        request: EvidenceResolutionInput,
+    ) -> EvidenceResolutionOutput:
+        """Return normalized evidence chunks and evidence context."""

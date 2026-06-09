@@ -1,4 +1,7 @@
-from agentic_rag.ingestion.url.extractor import normalize_extracted_markdown
+from agentic_rag.ingestion.url.extractor import (
+    extract_markdown_from_html,
+    normalize_extracted_markdown,
+)
 
 
 def test_normalize_extracted_markdown_adds_space_after_link() -> None:
@@ -40,3 +43,26 @@ def test_normalize_extracted_markdown_handles_link_urls_with_parentheses() -> No
         "[honeypot](https://en.wikipedia.org/wiki/Honeypot_(computing)) or "
         "[Python](https://en.wikipedia.org/wiki/Python_(programming_language)) script"
     )
+
+
+def test_extract_markdown_from_html_strips_utm_banners_and_promotes_anchor_sections() -> None:
+    extracted = extract_markdown_from_html(
+        """
+        <html>
+          <body>
+            <main>
+              <h1>VinFast</h1>
+              <a href="/promo?utm_source=banner"><p>Promotional campaign noise</p></a>
+              <a id="dong_co_dien_content"></a>
+              <p>D-SUV electric vehicle details.</p>
+            </main>
+          </body>
+        </html>
+        """,
+        source_url="https://vinfastauto.com/vn_vi",
+    )
+
+    assert extracted is not None
+    assert "Promotional campaign noise" not in extracted.markdown
+    assert "## O to dien" in extracted.markdown
+    assert "D-SUV electric vehicle details." in extracted.markdown

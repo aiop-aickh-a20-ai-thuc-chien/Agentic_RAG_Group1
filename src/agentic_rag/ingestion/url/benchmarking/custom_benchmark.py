@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.ingestion.url.chunking import (
     is_usable_chunk_text,
@@ -22,8 +23,13 @@ _NOISE_TAGS = {"script", "style", "nav", "footer", "header", "aside"}
 _SECTION_TAGS = {"h1", "h2", "h3"}
 
 
-@dataclass(frozen=True)
-class ParserOutput:
+class _UrlBenchmarkModel(BaseModel):
+    """Base model for immutable URL benchmark DTOs."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class ParserOutput(_UrlBenchmarkModel):
     """Clean text and section metadata returned by a parser."""
 
     parser: str
@@ -31,8 +37,7 @@ class ParserOutput:
     sections: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class BenchmarkCase:
+class BenchmarkCase(_UrlBenchmarkModel):
     """A deterministic HTML benchmark case."""
 
     case_id: str
@@ -41,8 +46,7 @@ class BenchmarkCase:
     expected_sections: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class BenchmarkResult:
+class BenchmarkResult(_UrlBenchmarkModel):
     """Score for one parser on one benchmark case."""
 
     case_id: str
@@ -56,8 +60,7 @@ class BenchmarkResult:
     score: float
 
 
-@dataclass(frozen=True)
-class BenchmarkReport:
+class BenchmarkReport(_UrlBenchmarkModel):
     """Aggregated benchmark output for JSON reporting."""
 
     parser: str

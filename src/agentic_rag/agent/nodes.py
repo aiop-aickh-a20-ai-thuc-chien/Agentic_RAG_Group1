@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -10,11 +11,19 @@ from agentic_rag.agent.grading import (
     preprocess_query,
     transform_query,
 )
+from agentic_rag.agent.node_contracts import (
+    CheckAnswerNodeOutput,
+    GenerateNodeOutput,
+    PreprocessNodeOutput,
+    RerankNodeOutput,
+    RetrieveNodeOutput,
+    TransformQueryNodeOutput,
+)
 from agentic_rag.agent.state import AgentState
-from agentic_rag.core.contracts import SearchResult
+from agentic_rag.core.contracts import RetrievalInput, SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
 from agentic_rag.generation.answering import generate_answer_with_trace
-from agentic_rag.generation.llm import configured_llm_client
+from agentic_rag.model_runtime.factory import get_llm_client
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
     rerank_with_metadata,
@@ -121,35 +130,37 @@ def _effective_question(state: AgentState) -> str:
 # ---------------------------------------------------------------------------
 
 
-def preprocess_node(state: AgentState) -> dict[str, Any]:
+def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
     """Resolve history context and/or decompose multi-intent queries."""
     question = state["question"]
     history = state.get("history", [])
-    llm_client = configured_llm_client()
+    llm_client = get_llm_client("query_rewrite")
 
     result = preprocess_query(question, history, llm_client)
 
     if result["type"] == "multi":
         questions: list[str] = result.get("questions", [question])
         if len(questions) > 1:
-            return {
-                "rewritten_question": questions[0],
-                "queries_tried": [questions[0]],
-                "pending_queries": questions[1:],
-                "trace": [{"node": "preprocess", "type": "multi", "questions": questions}],
-            }
+            return PreprocessNodeOutput(
+                rewritten_question=questions[0],
+                queries_tried=[questions[0]],
+                pending_queries=questions[1:],
+                trace=[{"node": "preprocess", "type": "multi", "questions": questions}],
+            )
 
     rewritten: str = result.get("question", question)
     extra = [rewritten] if rewritten != question else []
-    return {
-        "rewritten_question": rewritten,
-        "queries_tried": extra,
-        "trace": [{"node": "preprocess", "type": "single", "question": rewritten}],
-    }
+    return PreprocessNodeOutput(
+        rewritten_question=rewritten,
+        queries_tried=extra,
+        trace=[{"node": "preprocess", "type": "single", "question": rewritten}],
+    )
 
 
-def make_retrieve_node(provider: SourceEvidenceProvider) -> Any:
-    def retrieve_node(state: AgentState) -> dict[str, Any]:
+def make_retrieve_node(
+    provider: SourceEvidenceProvider,
+) -> Callable[[AgentState], RetrieveNodeOutput]:
+    def retrieve_node(state: AgentState) -> RetrieveNodeOutput:
         current_query = state["queries_tried"][-1] if state["queries_tried"] else state["question"]
         pending = state.get("pending_queries", [])
         queries_this_round = [current_query, *pending]
@@ -198,29 +209,29 @@ def make_retrieve_node(provider: SourceEvidenceProvider) -> Any:
             }
         )
 
-        return {
-            "fused_results": new_fused,
-            "queries_tried": extra_tried,
-            "pending_queries": [],
-            "step_count": state.get("step_count", 0) + 1,
-            "retrieval_exhausted": False,
-            "trace": [{"node": "retrieve", **aggregate_trace}],
-        }
+        return RetrieveNodeOutput(
+            fused_results=new_fused,
+            queries_tried=extra_tried,
+            pending_queries=[],
+            step_count=state.get("step_count", 0) + 1,
+            retrieval_exhausted=False,
+            trace=[{"node": "retrieve", **aggregate_trace}],
+        )
 
     return retrieve_node
 
 
-def rerank_node(state: AgentState) -> dict[str, Any]:
+def rerank_node(state: AgentState) -> RerankNodeOutput:
     """Rerank all accumulated docs via per-group cross-encoder."""
     raw_docs = state.get("fused_results", [])
     if not raw_docs:
-        return {
-            "relevant_docs": [],
-            "pinned_docs": [],
-            "missing_entities": [],
-            "rejected_chunk_ids": [],
-            "trace": [{"node": "rerank", "total": 0, "kept": 0}],
-        }
+        return RerankNodeOutput(
+            relevant_docs=[],
+            pinned_docs=[],
+            missing_entities=[],
+            rejected_chunk_ids=[],
+            trace=[{"node": "rerank", "total": 0, "kept": 0}],
+        )
 
     rejected = set(state.get("rejected_chunk_ids") or [])
     filtered_docs = [d for d in raw_docs if d.chunk.chunk_id not in rejected]
@@ -253,12 +264,12 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
     reranked_ids = {r.chunk.chunk_id for r in reranked}
     new_rejected = [d.chunk.chunk_id for d in filtered_docs if d.chunk.chunk_id not in reranked_ids]
 
-    return {
-        "relevant_docs": reranked,
-        "pinned_docs": pinned,
-        "missing_entities": missing_entities,
-        "rejected_chunk_ids": new_rejected,
-        "trace": [
+    return RerankNodeOutput(
+        relevant_docs=reranked,
+        pinned_docs=pinned,
+        missing_entities=missing_entities,
+        rejected_chunk_ids=new_rejected,
+        trace=[
             {
                 "node": "rerank",
                 "total": len(raw_docs),
@@ -270,12 +281,12 @@ def rerank_node(state: AgentState) -> dict[str, Any]:
                 **rerank_meta,
             }
         ],
-    }
+    )
 
 
-def transform_query_node(state: AgentState) -> dict[str, Any]:
+def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
     """Expand or requery — only runs when truly stuck (no chunks or not_found)."""
-    llm_client = configured_llm_client()
+    llm_client = get_llm_client("query_transform")
     context_docs = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
     effective_question = _effective_question(state)
     queries_tried = state.get("queries_tried", [])
@@ -304,11 +315,11 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
         if isinstance(queries, list) and len(queries) > 1:
             fresh = [q for q in queries if q not in queries_tried]
             if fresh:
-                return {
-                    "queries_tried": [fresh[0]],
-                    "pending_queries": list(fresh[1:]),
-                    "retrieval_exhausted": False,
-                    "trace": [
+                return TransformQueryNodeOutput(
+                    queries_tried=[fresh[0]],
+                    pending_queries=list(fresh[1:]),
+                    retrieval_exhausted=False,
+                    trace=[
                         {
                             **trace_base,
                             "queries": queries,
@@ -316,11 +327,11 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
                             "next_route_hint": "retrieve",
                         }
                     ],
-                }
-            return {
-                "relevant_docs": context_docs,
-                "retrieval_exhausted": True,
-                "trace": [
+                )
+            return TransformQueryNodeOutput(
+                relevant_docs=context_docs,
+                retrieval_exhausted=True,
+                trace=[
                     {
                         **trace_base,
                         "skipped": True,
@@ -329,14 +340,14 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
                         "next_route_hint": skip_next_route,
                     }
                 ],
-            }
+            )
 
     query = result.get("query", effective_question)
     if not isinstance(query, str):
-        return {
-            "relevant_docs": context_docs,
-            "retrieval_exhausted": True,
-            "trace": [
+        return TransformQueryNodeOutput(
+            relevant_docs=context_docs,
+            retrieval_exhausted=True,
+            trace=[
                 {
                     **trace_base,
                     "skipped": True,
@@ -344,13 +355,13 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
                     "next_route_hint": skip_next_route,
                 }
             ],
-        }
+        )
 
     if query in queries_tried:
-        return {
-            "relevant_docs": context_docs,
-            "retrieval_exhausted": True,
-            "trace": [
+        return TransformQueryNodeOutput(
+            relevant_docs=context_docs,
+            retrieval_exhausted=True,
+            trace=[
                 {
                     **trace_base,
                     "skipped": True,
@@ -359,17 +370,17 @@ def transform_query_node(state: AgentState) -> dict[str, Any]:
                     "next_route_hint": skip_next_route,
                 }
             ],
-        }
+        )
 
-    return {
-        "queries_tried": [query],
-        "pending_queries": [],
-        "retrieval_exhausted": False,
-        "trace": [{**trace_base, "query": query, "next_route_hint": "retrieve"}],
-    }
+    return TransformQueryNodeOutput(
+        queries_tried=[query],
+        pending_queries=[],
+        retrieval_exhausted=False,
+        trace=[{**trace_base, "query": query, "next_route_hint": "retrieve"}],
+    )
 
 
-def generate_node(state: AgentState) -> dict[str, Any]:
+def generate_node(state: AgentState) -> GenerateNodeOutput:
     """Generate grounded answer from reranked docs + pinned docs from previous loops."""
     relevant = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
     pinned = state.get("pinned_docs") or []
@@ -385,10 +396,10 @@ def generate_node(state: AgentState) -> dict[str, Any]:
         _effective_question(state), evidence_context, docs, original_question=state["question"]
     )
 
-    return {
-        "answer": result.answer,
-        "relevant_docs": docs,
-        "trace": [
+    return GenerateNodeOutput(
+        answer=result.answer,
+        relevant_docs=docs,
+        trace=[
             {
                 "node": "generate",
                 "answer_status": result.answer.status,
@@ -396,15 +407,15 @@ def generate_node(state: AgentState) -> dict[str, Any]:
                 "docs_used": len(docs),
             }
         ],
-    }
+    )
 
 
-def check_answer_node(state: AgentState) -> dict[str, Any]:
+def check_answer_node(state: AgentState) -> CheckAnswerNodeOutput:
     """Pass-through node: log answer status for trace observability."""
     answer = state.get("answer")
     if answer is None:
-        return {"trace": [{"node": "check_answer", "skipped": True}]}
-    return {"trace": [{"node": "check_answer", "status": answer.status}]}
+        return CheckAnswerNodeOutput(trace=[{"node": "check_answer", "skipped": True}])
+    return CheckAnswerNodeOutput(trace=[{"node": "check_answer", "status": answer.status}])
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +471,7 @@ def _search_via_provider(
     query: str,
     document_ids: list[str] | None,
 ) -> tuple[list[SearchResult], list[SearchResult]]:
-    chunks = provider.retrieve(question=query, document_ids=document_ids)
+    chunks = provider.retrieve(RetrievalInput(question=query, document_ids=document_ids)).results
     bm25 = [r for r in chunks if r.retriever == "bm25"]
     dense = [r for r in chunks if r.retriever == "dense"]
     if not bm25 and not dense:

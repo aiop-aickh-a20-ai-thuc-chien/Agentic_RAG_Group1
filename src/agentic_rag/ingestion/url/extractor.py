@@ -4,11 +4,12 @@
 import asyncio
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from datetime import timedelta
 from html.parser import HTMLParser
 from importlib import import_module
 from typing import Any, cast
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.ingestion.url.normalizer import normalize_markdown, normalize_text
 
@@ -18,6 +19,7 @@ _WORD_CHAR_RE = r"\w"
 _HEADING_RE = re.compile(r"^#{1,6}\s+\S")
 _SPEC_VALUE_RE = re.compile(r"^[\d.,]+(?:\s*[x/+\-]\s*[\d.,]+)*\*?$")
 _PRICE_RE = re.compile(r"\d[\d.,]*\s*(?:VND|VNĐ|₫|dong|USD|US\$|\$)\b", re.IGNORECASE)
+_UTM_BANNER_RE = re.compile(r"utm_source=banner", re.IGNORECASE)
 _SKIP_CLASS_RE = re.compile(
     r"(^|[\s_-])(nav|navbar|menu|header|footer|breadcrumb|cookie|popup|modal-backdrop|"
     r"topbar|megamenu|sidebar)([\s_-]|$)",
@@ -41,6 +43,13 @@ _SKIP_TAGS = {
 _HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 _BLOCK_TAGS = {"p", "li", "td", "th", "dt", "dd"}
 _STRONG_TAGS = {"strong", "b"}
+_ANCHOR_SECTION_HEADINGS = {
+    "dong_co_dien_content": "O to dien",
+    "dong_co_xang_content": "O to xang",
+    "xe_dich_vu_content": "Dong xe dich vu",
+    "dich_vu_oto": "Dich vu hau mai - O to",
+    "dich_vu_xe_may": "Dich vu hau mai - Xe may",
+}
 _PARSER_NAME = "crawl-link-dom-markdown+normalizer"
 _BROWSER_PARSER_NAME = "crawl-link-playwright-dom-markdown+normalizer"
 _CRAWLEE_BROWSER_PARSER_NAME = "crawlee-playwright-dom-markdown+normalizer"
@@ -56,6 +65,8 @@ DOM_WALKER_JS = r"""
     let p = el;
     while (p && p.tagName) {
       if (SKIP_TAGS.has(p.tagName)) return true;
+      const href = (p.getAttribute && p.getAttribute('href')) || '';
+      if (p.tagName === 'A' && /utm_source=banner/i.test(href)) return true;
       const cls = (p.getAttribute && p.getAttribute('class')) || '';
       if (cls && SKIP_CLASS.test(cls)) return true;
       const role = (p.getAttribute && p.getAttribute('role')) || '';
@@ -177,9 +188,10 @@ PRODUCT_JS = r"""
 """
 
 
-@dataclass(frozen=True)
-class ExtractedMarkdown:
+class ExtractedMarkdown(BaseModel):
     """Clean Markdown plus extractor metadata."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     markdown: str
     parser_name: str
@@ -188,7 +200,7 @@ class ExtractedMarkdown:
     rendered_html: str | None = None
     fetched_ok: bool = True
     product: dict[str, object] | None = None
-    normalize_stats: dict[str, object] = field(default_factory=dict)
+    normalize_stats: dict[str, object] = Field(default_factory=dict)
 
 
 def extract_markdown_from_html(
@@ -569,6 +581,7 @@ class _DomMarkdownParser(HTMLParser):
         self._title_parts: list[str] = []
         self._capture_title = False
         self._skip_depth = 0
+        self._skip_anchor_depth = 0
         self._current_heading: str | None = None
         self._heading_parts: list[str] = []
         self._current_block: str | None = None
@@ -588,6 +601,17 @@ class _DomMarkdownParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         normalized_tag = tag.lower()
         attr_map = {name.lower(): value or "" for name, value in attrs}
+        if normalized_tag == "a" and not attr_map.get("href"):
+            section_heading = _ANCHOR_SECTION_HEADINGS.get(attr_map.get("id", ""))
+            if section_heading:
+                self._flush_block()
+                self._append_heading(2, section_heading)
+                return
+        if normalized_tag == "a" and _is_utm_banner_href(attr_map.get("href", "")):
+            self._flush_block()
+            self._skip_depth += 1
+            self._skip_anchor_depth += 1
+            return
         if normalized_tag == "title":
             self._capture_title = True
             self._title_parts = []
@@ -617,6 +641,11 @@ class _DomMarkdownParser(HTMLParser):
         if normalized_tag == "title":
             self._capture_title = False
             self.title = _clean_line(" ".join(self._title_parts)) or None
+            return
+        if normalized_tag == "a" and self._skip_anchor_depth > 0:
+            self._skip_anchor_depth -= 1
+            if self._skip_depth > 0:
+                self._skip_depth -= 1
             return
         if normalized_tag in _SKIP_TAGS and self._skip_depth > 0:
             self._skip_depth -= 1
@@ -764,6 +793,10 @@ def _should_skip(tag: str, attrs: dict[str, str]) -> bool:
     class_name = attrs.get("class", "")
     role = attrs.get("role", "")
     return bool(_SKIP_CLASS_RE.search(class_name) or role in {"navigation", "banner"})
+
+
+def _is_utm_banner_href(href: str) -> bool:
+    return bool(href and _UTM_BANNER_RE.search(href))
 
 
 def _clean_line(value: str) -> str:

@@ -6,10 +6,11 @@ Tài liệu bổ sung cho `docs/git-workflow.md`.
 ## Quản lý package
 
 - Dùng `uv` cho mọi thao tác quản lý dependency và môi trường Python.
-- Không commit virtual environment, cache, local index, file upload hoặc secret.
+- Không commit virtual environment, cache, local index, file upload, secret hoặc
+  lockfile cục bộ.
 - Chỉ thêm runtime dependency khi module thật sự cần.
 - Thêm development tool vào dependency group `dev`.
-- Commit `uv.lock` và dùng `uv sync ` trong CI.
+- Dùng `uv sync` trong CI; không enforce lockfile trong workflow hiện tại.
 
 ## Style Python
 

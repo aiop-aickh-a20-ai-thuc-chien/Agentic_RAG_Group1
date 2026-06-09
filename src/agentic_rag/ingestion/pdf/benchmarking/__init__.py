@@ -1,6 +1,6 @@
 """PDF-local OmniDocBench helpers for parser backend selection."""
 
-from agentic_rag.ingestion.pdf.benchmarking.omnidocbench import (
+from .omnidocbench import (
     OmniDocBenchCommand,
     OmniDocBenchRunConfig,
     build_omnidocbench_command,

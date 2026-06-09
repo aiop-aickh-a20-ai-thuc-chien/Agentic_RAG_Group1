@@ -1,7 +1,32 @@
-import pytest
-from pydantic import ValidationError
+from typing import get_args
 
-from agentic_rag.core.contracts import Answer, Chunk, Citation, SearchResult
+import pytest
+from pydantic import BaseModel, ValidationError
+
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    Citation,
+    ConversationMessage,
+    EmbeddingInput,
+    EmbeddingOutput,
+    EvidenceResolutionInput,
+    EvidenceResolutionOutput,
+    LLMCompletionInput,
+    LLMCompletionOutput,
+    LLMStreamDelta,
+    ModelRole,
+    RerankInput,
+    RerankOutput,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+    SourceDocumentChunks,
+    SourceDocumentUpload,
+    WorkflowRunInput,
+    WorkflowRunOutput,
+)
+from agentic_rag.testing.fixtures import sample_search_results
 
 
 def test_chunk_keeps_stack_neutral_metadata() -> None:
@@ -103,3 +128,151 @@ def test_contract_models_are_frozen() -> None:
 
     with pytest.raises(ValidationError):
         setattr(chunk, field_name, "Mutated")
+
+
+def test_source_document_upload_is_frozen_and_strict() -> None:
+    upload = SourceDocumentUpload(
+        document_id="doc-1",
+        name="warranty.pdf",
+        dataset_id="local_pdf",
+        parse_started=True,
+        trace={"parser": "docling"},
+    )
+
+    assert upload.document_id == "doc-1"
+    assert upload.trace == {"parser": "docling"}
+
+    with pytest.raises(ValidationError):
+        SourceDocumentUpload.model_validate(
+            {
+                "document_id": "doc-1",
+                "name": "warranty.pdf",
+                "dataset_id": "local_pdf",
+                "parse_started": True,
+                "unexpected": True,
+            }
+        )
+
+    field_name = "name"
+
+    with pytest.raises(ValidationError):
+        setattr(upload, field_name, "changed.pdf")
+
+
+def test_source_document_chunks_validates_nested_chunk_dicts() -> None:
+    chunk_dict = {
+        "chunk_id": "chunk-1",
+        "text": "Pin cao ap duoc bao hanh 8 nam.",
+        "metadata": {"source_type": "pdf"},
+    }
+
+    page = SourceDocumentChunks(chunks=[chunk_dict], total_chunks=1)
+
+    assert page.chunks == [
+        Chunk(
+            chunk_id="chunk-1",
+            text="Pin cao ap duoc bao hanh 8 nam.",
+            metadata={"source_type": "pdf"},
+        )
+    ]
+    assert page.total_chunks == 1
+
+
+def test_workflow_and_retrieval_contracts_are_strict_and_nested() -> None:
+    workflow = WorkflowRunInput(
+        question="Pin bao hanh bao lau?",
+        history=[{"role": "user", "content": "Hoi ve VF8"}],
+        document_ids=["doc-1"],
+    )
+    retrieval = RetrievalOutput(
+        results=[
+            {
+                "chunk": {"chunk_id": "c1", "text": "Noi dung", "metadata": {}},
+                "score": 0.8,
+                "rank": 1,
+                "retriever": "bm25",
+            }
+        ]
+    )
+    resolved = EvidenceResolutionOutput(chunks=retrieval.results, context="context")
+    run = WorkflowRunOutput(
+        answer=Answer(answer="Duoc bao hanh 8 nam.", status="answered"),
+        evidence_chunks=retrieval.results,
+        queries_tried=["Pin bao hanh bao lau?"],
+        steps=[{"node": "generate"}],
+    )
+
+    assert workflow.history == [ConversationMessage(role="user", content="Hoi ve VF8")]
+    assert retrieval.results[0].chunk.chunk_id == "c1"
+    assert resolved.context == "context"
+    assert run.answer.status == "answered"
+
+    with pytest.raises(ValidationError):
+        WorkflowRunInput.model_validate({"question": "q", "unexpected": True})
+
+    with pytest.raises(ValidationError):
+        RetrievalInput.model_validate({"question": "q", "page_size": "bad"})
+
+    with pytest.raises(ValidationError):
+        EvidenceResolutionInput.model_validate({"question": "q", "unknown": True})
+
+
+def test_model_runtime_contracts_are_strict_and_frozen() -> None:
+    request = LLMCompletionInput(prompt="Question", system_message="System")
+    output = LLMCompletionOutput(text="Answer", provider="openai", model="gpt-4o-mini")
+    delta = LLMStreamDelta(text="chunk")
+
+    assert isinstance(request, BaseModel)
+    assert output.provider == "openai"
+    assert delta.text == "chunk"
+
+    with pytest.raises(ValidationError):
+        LLMCompletionInput.model_validate(
+            {"prompt": "Question", "system_message": "System", "unexpected": True}
+        )
+
+    field_name = "prompt"
+
+    with pytest.raises(ValidationError):
+        setattr(request, field_name, "changed")
+
+
+def test_embedding_contract_rejects_empty_texts() -> None:
+    with pytest.raises(ValidationError):
+        EmbeddingInput(texts=[])
+
+    output = EmbeddingOutput(
+        vectors=[[0.1, 0.2], [0.3, 0.4]],
+        provider="huggingface",
+        model="sentence-transformers/test",
+        dimensions=2,
+    )
+
+    assert output.dimensions == 2
+
+
+def test_rerank_contract_validates_nested_search_results_and_top_k() -> None:
+    candidates = [result.model_dump() for result in sample_search_results()]
+
+    request = RerankInput(
+        query="Pin bao hanh bao lau?",
+        candidates=candidates,
+        top_k=1,
+    )
+    output = RerankOutput(results=candidates[:1], metadata={"used_provider": "score"})
+
+    assert isinstance(request.candidates[0], SearchResult)
+    assert output.results[0].chunk.chunk_id == request.candidates[0].chunk.chunk_id
+
+    with pytest.raises(ValidationError):
+        RerankInput(query="q", candidates=[], top_k=-1)
+
+
+def test_model_role_values_are_exact() -> None:
+    assert get_args(ModelRole) == (
+        "query_rewrite",
+        "query_transform",
+        "generation",
+        "ingestion",
+        "evaluation",
+    )

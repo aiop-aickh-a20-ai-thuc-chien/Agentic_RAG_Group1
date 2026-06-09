@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -12,6 +11,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.request import Request, urlopen
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.artifact import (
@@ -87,8 +88,11 @@ _VINFAST_MODEL_RE = re.compile(r"\bVF\s*-?\s*(\d{1,2})\b", flags=re.IGNORECASE)
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
-@dataclass(frozen=True)
-class _FetchedPage:
+class _FetchedPage(BaseModel):
+    """Fetched URL response payload used by the URL ingestion boundary."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     html: str
     url: str
     content_type: str | None = None
@@ -102,8 +106,11 @@ class _FetchedPage:
     raw_crawler_result: dict[str, Any] | None = None
 
 
-@dataclass(frozen=True)
-class MarkdownCandidate:
+class MarkdownCandidate(BaseModel):
+    """Quality-scored Markdown candidate for URL ingestion selection."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     markdown: str
     parser: str
     role: str
@@ -119,8 +126,11 @@ class MarkdownCandidate:
     quality_label: str
 
 
-@dataclass(frozen=True)
-class MarkdownSelection:
+class MarkdownSelection(BaseModel):
+    """Selected Markdown plus candidate diagnostics."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     markdown: str
     parser: str
     selected_role: str
@@ -128,9 +138,10 @@ class MarkdownSelection:
     candidates: tuple[MarkdownCandidate, ...]
 
 
-@dataclass(frozen=True)
-class LoadedUrlDocument:
+class LoadedUrlDocument(BaseModel):
     """Parsed URL/text Markdown, generated chunks, and optional artifact paths."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     markdown: str
     chunks: list[Chunk]

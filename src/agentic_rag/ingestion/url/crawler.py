@@ -8,11 +8,12 @@ import re
 import time
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import dataclass
 from html.parser import HTMLParser
 from importlib import import_module
 from typing import Any, Protocol, cast
 from urllib.parse import urljoin, urlparse
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.ingestion.url.probe import (
     probe_interactive_markdown,
@@ -44,9 +45,10 @@ class _MarkdownGenerator(Protocol):
     def generate_markdown(self, input_html: str, **kwargs: object) -> object: ...
 
 
-@dataclass(frozen=True)
-class Crawl4AIPage:
+class Crawl4AIPage(BaseModel):
     """Rendered page content returned by Crawl4AI."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     html: str
     markdown: str | None
@@ -59,8 +61,11 @@ class Crawl4AIPage:
     raw_result: dict[str, Any] | None = None
 
 
-@dataclass(frozen=True)
-class _CrawlAttempt:
+class _CrawlAttempt(BaseModel):
+    """One configured Crawl4AI attempt in the fallback ladder."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+
     name: str
     config: Any
     wait_until_target: str

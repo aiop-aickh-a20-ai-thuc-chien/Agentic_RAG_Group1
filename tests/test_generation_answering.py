@@ -1,10 +1,22 @@
+from collections.abc import Iterator
+
+import pytest
+from pydantic import BaseModel, ValidationError
 from pytest import MonkeyPatch
 
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    LLMCompletionInput,
+    LLMCompletionOutput,
+    LLMStreamDelta,
+    SearchResult,
+)
 from agentic_rag.generation.answering import (
     NOT_FOUND_ANSWER,
     AnswerDelta,
     AnswerDone,
+    GenerationResult,
     apply_citation_markers,
     build_grounded_prompt,
     format_evidence_context,
@@ -15,32 +27,71 @@ from agentic_rag.generation.answering import (
 from agentic_rag.testing.fixtures import sample_answer, sample_search_results
 
 
-class FakeClientWithReferenceList:
-    def complete(self, prompt: str) -> str:
-        return "Pin bao hanh 8 nam. [1]\n\n[1] vinfast_warranty.pdf\n[2] vinfast_warranty.pdf"
+@pytest.fixture(autouse=True)
+def _disable_model_runtime_env(monkeypatch: MonkeyPatch) -> Iterator[None]:
+    from agentic_rag.model_runtime.factory import clear_model_runtime_caches
 
-    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
-        yield self.complete(prompt)
+    clear_model_runtime_caches()
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    yield
+    clear_model_runtime_caches()
+
+
+class FakeClientWithReferenceList:
+    def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+        return LLMCompletionOutput(
+            text=("Pin bao hanh 8 nam. [1]\n\n[1] vinfast_warranty.pdf\n[2] vinfast_warranty.pdf"),
+            provider="test",
+            model="test",
+        )
+
+    def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+        yield LLMStreamDelta(text=self.complete(request).text)
 
 
 class FakeClientWithStructuredAnswer:
-    def complete(self, prompt: str) -> str:
-        return (
-            '{"answer": "Noi dung chinh tu website ve chinh sach bao hanh.", '
-            '"status": "answered", "used_citation_ids": [2], '
-            '"reason": "supported by URL chunk"}'
+    def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+        return LLMCompletionOutput(
+            text=(
+                '{"answer": "Noi dung chinh tu website ve chinh sach bao hanh.", '
+                '"status": "answered", "used_citation_ids": [2], '
+                '"reason": "supported by URL chunk"}'
+            ),
+            provider="test",
+            model="test",
         )
 
-    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
-        yield self.complete(prompt)
+    def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+        yield LLMStreamDelta(text=self.complete(request).text)
 
 
 class FakeClientWithInvalidCitation:
-    def complete(self, prompt: str) -> str:
-        return "Pin bao hanh 8 nam. [99]"
+    def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+        return LLMCompletionOutput(text="Pin bao hanh 8 nam. [99]", provider="test", model="test")
 
-    def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
-        yield self.complete(prompt)
+    def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+        yield LLMStreamDelta(text=self.complete(request).text)
+
+
+def test_generation_stream_models_are_pydantic_contracts() -> None:
+    answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+    delta = AnswerDelta(text="Tra loi")
+    done = AnswerDone(answer=answer)
+    result = GenerationResult(answer=answer, trace={"llm_source": "skipped"})
+
+    assert isinstance(delta, BaseModel)
+    assert isinstance(done, BaseModel)
+    assert isinstance(result, BaseModel)
+    assert done.trace == {}
+
+    with pytest.raises(ValidationError):
+        AnswerDelta.model_validate({"text": "Tra loi", "unexpected": True})
+
+    field_name = "text"
+
+    with pytest.raises(ValidationError):
+        setattr(delta, field_name, "changed")
 
 
 def test_generate_answer_returns_not_found_without_evidence() -> None:
@@ -58,8 +109,8 @@ def test_generate_answer_uses_evidence_fallback_without_openai_key(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: None,
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: None,
     )
     evidence_chunks = sample_search_results()
 
@@ -80,8 +131,8 @@ def test_generate_answer_removes_llm_reference_list(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: FakeClientWithReferenceList(),
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: FakeClientWithReferenceList(),
     )
 
     answer = generate_answer(
@@ -98,8 +149,8 @@ def test_generate_answer_accepts_structured_citation_ids(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: FakeClientWithStructuredAnswer(),
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: FakeClientWithStructuredAnswer(),
     )
 
     answer = generate_answer(
@@ -118,15 +169,19 @@ def test_generate_answer_renumbers_non_sequential_inline_citations(
     monkeypatch: MonkeyPatch,
 ) -> None:
     class FakeClientWithSecondCitation:
-        def complete(self, prompt: str) -> str:
-            return "Noi dung website noi ve chinh sach bao hanh. [2]"
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text="Noi dung website noi ve chinh sach bao hanh. [2]",
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str):  # type: ignore[no-untyped-def]
-            yield self.complete(prompt)
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text=self.complete(request).text)
 
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: FakeClientWithSecondCitation(),
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: FakeClientWithSecondCitation(),
     )
 
     answer = generate_answer(
@@ -144,8 +199,8 @@ def test_generate_answer_rejects_invalid_inline_citation_marker(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: FakeClientWithInvalidCitation(),
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: FakeClientWithInvalidCitation(),
     )
 
     answer = generate_answer(
@@ -288,8 +343,8 @@ def test_stream_answer_yields_deltas_and_final_answer_without_llm_key(
 ) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(
-        "agentic_rag.generation.answering.configured_llm_client",
-        lambda: None,
+        "agentic_rag.generation.answering.get_llm_client",
+        lambda role: None,
     )
     evidence_chunks = sample_search_results()
 

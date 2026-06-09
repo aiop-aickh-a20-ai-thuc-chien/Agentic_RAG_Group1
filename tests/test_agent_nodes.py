@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import cast
+from typing import Any, NotRequired, TypedDict, cast
 
+import pytest
+from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
+
+from agentic_rag.agent.node_contracts import GenerateNodeOutput, PreprocessNodeOutput
 from agentic_rag.agent.nodes import (
     check_answer_node,
     generate_node,
@@ -17,8 +22,28 @@ from agentic_rag.agent.nodes import (
     transform_query_node,
 )
 from agentic_rag.agent.state import AgentState
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    LLMCompletionInput,
+    LLMCompletionOutput,
+    LLMStreamDelta,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+)
 from agentic_rag.core.ports import SourceEvidenceProvider
+
+
+@pytest.fixture(autouse=True)
+def _disable_model_runtime_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    from agentic_rag.model_runtime.factory import clear_model_runtime_caches
+
+    clear_model_runtime_caches()
+    monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    yield
+    clear_model_runtime_caches()
 
 
 def _chunk(chunk_id: str, text: str = "test evidence text long enough for grounding") -> Chunk:
@@ -49,12 +74,9 @@ class _FakeProvider:
 
     def retrieve(
         self,
-        *,
-        question: str,
-        document_ids: list[str] | None = None,
-        page_size: int | None = None,
-    ) -> list[SearchResult]:
-        return self._results
+        request: RetrievalInput,
+    ) -> RetrievalOutput:
+        return RetrievalOutput(results=self._results)
 
     def upload_document(
         self,
@@ -98,51 +120,65 @@ def _base_state(**overrides: object) -> AgentState:
     return state
 
 
+class _GraphState(TypedDict):
+    answer: NotRequired[Answer]
+    relevant_docs: list[SearchResult]
+    trace: list[dict[str, Any]]
+
+
 # --- preprocess_node ---
 
 
 def test_preprocess_passthrough_simple_no_llm(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: None)  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: None)  # type: ignore[attr-defined]
     update = preprocess_node(_base_state())
-    assert update["rewritten_question"] == "Pin bảo hành bao lâu?"
-    assert update["queries_tried"] == []  # no new entry when unchanged
+    assert update.rewritten_question == "Pin bảo hành bao lâu?"
+    assert update.queries_tried == []  # no new entry when unchanged
 
 
 def test_preprocess_resolves_history_via_llm(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"type": "single", "question": "Pin VF8 bảo hành bao lâu?"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"type": "single", "question": "Pin VF8 bảo hành bao lâu?"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: _FakeLLM())  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: _FakeLLM())  # type: ignore[attr-defined]
     history = [{"role": "user", "content": "VF8 thông số thế nào?"}]
     state = _base_state(question="Còn pin nó thì sao?", history=history)
     update = preprocess_node(state)
-    assert update["rewritten_question"] == "Pin VF8 bảo hành bao lâu?"
-    assert update["queries_tried"] == ["Pin VF8 bảo hành bao lâu?"]
+    assert update.rewritten_question == "Pin VF8 bảo hành bao lâu?"
+    assert update.queries_tried == ["Pin VF8 bảo hành bao lâu?"]
 
 
 def test_preprocess_decomposes_via_llm(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"type": "multi", "questions": ["pin VF8 bảo hành", "pin VF9 bảo hành"]}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"type": "multi", "questions": ["pin VF8 bảo hành", "pin VF9 bảo hành"]}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: _FakeLLM())  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: _FakeLLM())  # type: ignore[attr-defined]
     state = _base_state(question="So sánh pin VF8 và VF9")
     update = preprocess_node(state)
-    assert update["queries_tried"] == ["pin VF8 bảo hành"]
-    assert update["pending_queries"] == ["pin VF9 bảo hành"]
+    assert update.queries_tried == ["pin VF8 bảo hành"]
+    assert update.pending_queries == ["pin VF9 bảo hành"]
 
 
 # --- retrieve_node ---
@@ -152,12 +188,12 @@ def test_retrieve_node_appends_results() -> None:
     provider = _FakeProvider([_result("c1", 0.8)])
     node = make_retrieve_node(cast(SourceEvidenceProvider, provider))
     update = node(_base_state())
-    assert len(update["fused_results"]) > 0
-    assert update["step_count"] == 1
-    assert update["trace"][0]["query_count"] == 1
-    assert update["trace"][0]["per_query"][0]["returned_chunks"] == 1
+    assert len(update.fused_results) > 0
+    assert update.step_count == 1
+    assert update.trace[0]["query_count"] == 1
+    assert update.trace[0]["per_query"][0]["returned_chunks"] == 1
     assert (
-        update["fused_results"][0].chunk.metadata["agent_retrieval_query"]
+        update.fused_results[0].chunk.metadata["agent_retrieval_query"]
         == _base_state()["queries_tried"][0]
     )
 
@@ -168,13 +204,14 @@ def test_retrieve_node_adds_all_chunks() -> None:
     node = make_retrieve_node(cast(SourceEvidenceProvider, provider))
     state = _base_state(queries_tried=["q1"], pending_queries=["q2"])
     update = node(state)
-    chunk_ids = [r.chunk.chunk_id for r in update["fused_results"]]
+    chunk_ids = [r.chunk.chunk_id for r in update.fused_results]
     assert chunk_ids.count("c1") == 2  # c1 from q1 and q2 both kept
     assert chunk_ids.count("c2") == 2
-    assert update["trace"][0]["added_chunks_total"] == 4
+    assert update.trace[0]["added_chunks_total"] == 4
 
 
-def test_retrieve_node_traces_multi_query_aggregation() -> None:
+def test_retrieve_node_traces_multi_query_aggregation(monkeypatch: object) -> None:
+    monkeypatch.delenv("AGENT_RETRIEVE_WORKERS", raising=False)  # type: ignore[attr-defined]
     provider = _FakeProvider([_result("c1"), _result("c2")])
     node = make_retrieve_node(cast(SourceEvidenceProvider, provider))
     state = _base_state(
@@ -182,7 +219,7 @@ def test_retrieve_node_traces_multi_query_aggregation() -> None:
         pending_queries=["q2", "q3"],
     )
     update = node(state)
-    trace = update["trace"][0]
+    trace = update.trace[0]
     assert trace["queries"] == ["q1", "q2", "q3"]
     assert trace["query_count"] == 3
     assert trace["parallel"] is True
@@ -196,8 +233,8 @@ def test_retrieve_node_respects_worker_limit(monkeypatch: object) -> None:
     provider = _FakeProvider([_result("c1")])
     node = make_retrieve_node(cast(SourceEvidenceProvider, provider))
     update = node(_base_state(queries_tried=["q1"], pending_queries=["q2", "q3"]))
-    assert update["trace"][0]["parallel"] is True
-    assert update["trace"][0]["worker_count"] == 2
+    assert update.trace[0]["parallel"] is True
+    assert update.trace[0]["worker_count"] == 2
 
 
 # --- rerank_node ---
@@ -206,8 +243,8 @@ def test_retrieve_node_respects_worker_limit(monkeypatch: object) -> None:
 def test_rerank_node_sets_relevant_docs() -> None:
     docs = [_result(f"c{i}", 0.9) for i in range(3)]
     update = rerank_node(_base_state(fused_results=docs))
-    assert len(update["relevant_docs"]) > 0
-    assert update["trace"][0]["rerank_strategy"] == "per_query_group"
+    assert len(update.relevant_docs) > 0
+    assert update.trace[0]["rerank_strategy"] == "per_query_group"
 
 
 def test_rerank_node_multi_group_per_group_rerank() -> None:
@@ -217,9 +254,9 @@ def test_rerank_node_multi_group_per_group_rerank() -> None:
         _result_for_query("vf3_a", 0.20, "VF 3 info", 1),
     ]
     update = rerank_node(_base_state(fused_results=docs))
-    assert update["trace"][0]["rerank_strategy"] == "per_query_group"
-    assert update["trace"][0]["group_count"] == 2
-    chunk_ids = [r.chunk.chunk_id for r in update["relevant_docs"]]
+    assert update.trace[0]["rerank_strategy"] == "per_query_group"
+    assert update.trace[0]["group_count"] == 2
+    chunk_ids = [r.chunk.chunk_id for r in update.relevant_docs]
     assert "vf7_a" in chunk_ids
     assert "vf3_a" in chunk_ids
 
@@ -235,16 +272,16 @@ def test_rerank_node_multi_group_reads_top_k_from_env(monkeypatch: object) -> No
         _result_for_query("vf3_c", 0.94, "VF 3 info", 1),
     ]
     update = rerank_node(_base_state(fused_results=docs))
-    groups = update["trace"][0]["groups"]
+    groups = update.trace[0]["groups"]
     assert [group["kept"] for group in groups] == [2, 2]
-    assert len(update["relevant_docs"]) == 4
+    assert len(update.relevant_docs) == 4
 
 
 def test_rerank_node_empty() -> None:
     update = rerank_node(_base_state(fused_results=[]))
-    assert update["relevant_docs"] == []
-    assert update["pinned_docs"] == []
-    assert update["missing_entities"] == []
+    assert update.relevant_docs == []
+    assert update.pinned_docs == []
+    assert update.missing_entities == []
 
 
 def test_rerank_node_gap_detection_flags_thin_group(monkeypatch: object) -> None:
@@ -255,8 +292,8 @@ def test_rerank_node_gap_detection_flags_thin_group(monkeypatch: object) -> None
         _result_for_query("vf3_a", 0.20, "VF 3 info", 1),
     ]
     update = rerank_node(_base_state(fused_results=docs))
-    assert "VF 3 info" in update["missing_entities"]
-    assert "VF 7 info" not in update["missing_entities"]
+    assert "VF 3 info" in update.missing_entities
+    assert "VF 7 info" not in update.missing_entities
 
 
 def test_rerank_node_gap_detection_pins_all_groups(monkeypatch: object) -> None:
@@ -268,17 +305,17 @@ def test_rerank_node_gap_detection_pins_all_groups(monkeypatch: object) -> None:
         _result_for_query("vf3_a", 0.20, "VF 3 info", 1),
     ]
     update = rerank_node(_base_state(fused_results=docs))
-    pinned_ids = [r.chunk.chunk_id for r in update["pinned_docs"]]
+    pinned_ids = [r.chunk.chunk_id for r in update.pinned_docs]
     assert "vf7_a" in pinned_ids
     assert "vf7_b" in pinned_ids
     assert "vf3_a" in pinned_ids
-    assert "VF 3 info" in update["missing_entities"]
+    assert "VF 3 info" in update.missing_entities
 
 
 def test_rerank_node_no_gap_detection_for_single_group() -> None:
     docs = [_result(f"c{i}", 0.9) for i in range(3)]
     update = rerank_node(_base_state(fused_results=docs))
-    assert update["missing_entities"] == []
+    assert update.missing_entities == []
 
 
 def test_rerank_node_rejected_chunks_excluded_in_next_loop() -> None:
@@ -321,7 +358,7 @@ def test_rerank_node_builds_rejected_list() -> None:
     docs = [_result(f"c{i}", 0.9) for i in range(6)]
     update = rerank_node(_base_state(fused_results=docs))
     # All chunks fit within top_k, so nothing rejected
-    assert isinstance(update["rejected_chunk_ids"], list)
+    assert isinstance(update.rejected_chunk_ids, list)
 
 
 # --- transform_query_node với missing_entities ---
@@ -330,11 +367,11 @@ def test_rerank_node_builds_rejected_list() -> None:
 def test_transform_skips_when_no_new_query(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: None)  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: None)  # type: ignore[attr-defined]
     update = transform_query_node(_base_state())
-    assert update["trace"][0].get("skipped") is True
-    assert update["trace"][0]["reason"] == "query_already_tried"
-    assert update["retrieval_exhausted"] is True
+    assert update.trace[0].get("skipped") is True
+    assert update.trace[0]["reason"] == "query_already_tried"
+    assert update.retrieval_exhausted is True
 
 
 def test_transform_passes_missing_entities_to_llm(monkeypatch: object) -> None:
@@ -343,18 +380,22 @@ def test_transform_passes_missing_entities_to_llm(monkeypatch: object) -> None:
     captured: list[str] = []
 
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            captured.append(prompt)
-            return '{"method": "requery", "query": "thông số kỹ thuật VF 3"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            captured.append(request.prompt)
+            return LLMCompletionOutput(
+                text='{"method": "requery", "query": "thông số kỹ thuật VF 3"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: _FakeLLM())  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: _FakeLLM())  # type: ignore[attr-defined]
     state = _base_state(missing_entities=["VF 3 info"])
     update = transform_query_node(state)
     assert any("VF 3 info" in p for p in captured)
-    assert update["trace"][0]["next_route_hint"] == "retrieve"
+    assert update.trace[0]["next_route_hint"] == "retrieve"
 
 
 # --- generate_node với pinned_docs ---
@@ -364,14 +405,14 @@ def test_generate_node_merges_pinned_and_relevant_docs() -> None:
     pinned = [_result("pinned_c1", 0.95)]
     relevant = [_result("relevant_c2", 0.80)]
     update = generate_node(_base_state(pinned_docs=pinned, relevant_docs=relevant))
-    assert isinstance(update["answer"], Answer)
-    assert update["trace"][0]["pinned_count"] == 1
+    assert isinstance(update.answer, Answer)
+    assert update.trace[0]["pinned_count"] == 1
 
 
 def test_generate_node_deduplicates_pinned_and_relevant() -> None:
     shared = _result("shared_c1", 0.90)
     update = generate_node(_base_state(pinned_docs=[shared], relevant_docs=[shared]))
-    doc_ids = [r.chunk.chunk_id for r in update["relevant_docs"]]
+    doc_ids = [r.chunk.chunk_id for r in update.relevant_docs]
     assert doc_ids.count("shared_c1") == 1
 
 
@@ -435,28 +476,32 @@ def test_route_rerank_threshold_disabled_by_default() -> None:
 def test_transform_skip_after_existing_answer_points_to_check(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: None)  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: None)  # type: ignore[attr-defined]
     answer = Answer(answer="not found", status="not_found", citations=[])
     update = transform_query_node(_base_state(answer=answer))
-    assert update["trace"][0].get("skipped") is True
-    assert update["trace"][0]["next_route_hint"] == "check_answer"
+    assert update.trace[0].get("skipped") is True
+    assert update.trace[0]["next_route_hint"] == "check_answer"
 
 
 def test_transform_via_llm(monkeypatch: object) -> None:
     import agentic_rag.agent.nodes as m
 
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"method": "expand", "query": "thời hạn bảo hành pin xe điện"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"method": "expand", "query": "thời hạn bảo hành pin xe điện"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
-    monkeypatch.setattr(m, "configured_llm_client", lambda: _FakeLLM())  # type: ignore[attr-defined]
+    monkeypatch.setattr(m, "get_llm_client", lambda role: _FakeLLM())  # type: ignore[attr-defined]
     update = transform_query_node(_base_state())
-    assert update["trace"][0]["next_route_hint"] == "retrieve"
-    assert update["trace"][0]["llm_result"]["method"] == "expand"
-    assert update["queries_tried"] == ["thời hạn bảo hành pin xe điện"]
+    assert update.trace[0]["next_route_hint"] == "retrieve"
+    assert update.trace[0]["llm_result"]["method"] == "expand"
+    assert update.queries_tried == ["thời hạn bảo hành pin xe điện"]
 
 
 # --- route_after_transform ---
@@ -484,7 +529,7 @@ def test_route_transform_checks_when_skipped_after_answer() -> None:
 def test_generate_node_returns_answer() -> None:
     docs = [_result(f"c{i}", 0.9) for i in range(3)]
     update = generate_node(_base_state(relevant_docs=docs))
-    assert isinstance(update["answer"], Answer)
+    assert isinstance(update.answer, Answer)
 
 
 # --- check_answer_node ---
@@ -493,7 +538,7 @@ def test_generate_node_returns_answer() -> None:
 def test_check_answer_logs_status() -> None:
     answer = Answer(answer="Pin bảo hành 8 năm", status="answered", citations=[])
     update = check_answer_node(_base_state(answer=answer))
-    assert update["trace"][0]["status"] == "answered"
+    assert update.trace[0]["status"] == "answered"
 
 
 # --- routing ---
@@ -519,3 +564,57 @@ def test_route_check_ends_when_not_found_at_max(monkeypatch: object) -> None:
     monkeypatch.setenv("AGENT_MAX_STEPS", "2")  # type: ignore[attr-defined]
     answer = Answer(answer="not found", status="not_found", citations=[])
     assert route_after_check(_base_state(answer=answer, step_count=2)) == "end"
+
+
+def test_node_output_is_frozen_and_rejects_extra_fields() -> None:
+    output = PreprocessNodeOutput(
+        rewritten_question="rewritten",
+        queries_tried=["rewritten"],
+        trace=[{"node": "preprocess"}],
+    )
+
+    with pytest.raises(ValidationError):
+        output.rewritten_question = "changed"  # type: ignore[misc]
+
+    with pytest.raises(ValidationError):
+        PreprocessNodeOutput(
+            rewritten_question="rewritten",
+            queries_tried=[],
+            trace=[],
+            unexpected=True,
+        )  # type: ignore[call-arg]
+
+
+def test_unset_optional_node_fields_remain_absent_from_partial_update() -> None:
+    output = PreprocessNodeOutput(
+        rewritten_question="unchanged",
+        queries_tried=[],
+        trace=[{"node": "preprocess"}],
+    )
+
+    assert output.model_dump(exclude_unset=True) == {
+        "rewritten_question": "unchanged",
+        "queries_tried": [],
+        "trace": [{"node": "preprocess"}],
+    }
+
+
+def test_langgraph_accepts_node_model_and_preserves_nested_contracts() -> None:
+    answer = Answer(answer="grounded", status="answered", citations=[])
+    result = _result("c1", 0.9)
+    output = GenerateNodeOutput(
+        answer=answer,
+        relevant_docs=[result],
+        trace=[{"node": "generate"}],
+    )
+
+    graph = StateGraph(_GraphState)
+    graph.add_node("generate", lambda _state: output)
+    graph.add_edge(START, "generate")
+    graph.add_edge("generate", END)
+    compiled = graph.compile()
+
+    final_state = compiled.invoke({"relevant_docs": [], "trace": []})
+
+    assert final_state["answer"] is answer
+    assert final_state["relevant_docs"] == [result]
