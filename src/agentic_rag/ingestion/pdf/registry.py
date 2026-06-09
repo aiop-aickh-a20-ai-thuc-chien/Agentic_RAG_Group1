@@ -6,8 +6,8 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict
 
-from agentic_rag.ingestion.pdf.models import PdfParserCapabilities
-from agentic_rag.ingestion.pdf.parser import (
+from .models import PdfParserCapabilities
+from .parser import (
     DEFAULT_PDF_PARSER,
     DoclingMarkdownParser,
     PdfMarkdownParser,

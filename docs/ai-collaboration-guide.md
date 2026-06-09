@@ -78,6 +78,15 @@ Dùng `agentic_rag.core.contracts` cho Pydantic models dùng chung:
 - `SearchResult`
 - `Citation`
 - `Answer`
+- `ConversationMessage`
+- `WorkflowRunInput`
+- `WorkflowRunOutput`
+- `RetrievalInput`
+- `RetrievalOutput`
+- `EvidenceResolutionInput`
+- `EvidenceResolutionOutput`
+- `SourceDocumentUpload`
+- `SourceDocumentChunks`
 
 Dùng `agentic_rag.core.ports` cho protocol boundaries.
 
@@ -86,7 +95,8 @@ Dùng `agentic_rag.core.ports` cho protocol boundaries.
 - Dùng `uv` để quản lý dependency và môi trường Python.
 - Chỉ thêm runtime dependency khi module thật sự cần.
 - Thêm development tool vào dependency group `dev`.
-- Commit `uv.lock`.
+- Không commit lockfile cục bộ; `uv.lock` được ignore để tránh xung đột
+  không cần thiết.
 - Dùng generic type built-in của Python 3.12 như `list[Chunk]` và `dict[str, Any]`.
 - Không dùng kiểu cũ `typing.List` hoặc `typing.Dict`.
 

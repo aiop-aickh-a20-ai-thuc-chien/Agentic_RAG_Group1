@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import SearchResult
 from agentic_rag.retrieval.thresholds import (
@@ -17,9 +18,10 @@ DEFAULT_DENSE_WEIGHT = 0.45
 DEFAULT_NORMALIZED_SCORE_ALPHA = 0.55
 
 
-@dataclass
-class FusedCandidate:
+class FusedCandidate(BaseModel):
     """Internal accumulator for fusion strategies."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     representative: SearchResult
     score: float
@@ -142,8 +144,11 @@ def accumulate_rrf_scores(
             )
             continue
 
-        candidate.score += contribution
-        _replace_representative_if_better(candidate, result)
+        fused_by_chunk_id[chunk_id] = _updated_candidate(
+            candidate,
+            result,
+            additional_score=contribution,
+        )
 
 
 def accumulate_weighted_rrf_scores(
@@ -168,8 +173,11 @@ def accumulate_weighted_rrf_scores(
             )
             continue
 
-        candidate.score += contribution
-        _replace_representative_if_better(candidate, result)
+        fused_by_chunk_id[chunk_id] = _updated_candidate(
+            candidate,
+            result,
+            additional_score=contribution,
+        )
 
 
 def rank_fused_candidates(
@@ -196,12 +204,16 @@ def rank_fused_candidates(
     ]
 
 
-def _replace_representative_if_better(
+def _updated_candidate(
     candidate: FusedCandidate,
     result: SearchResult,
-) -> None:
+    *,
+    additional_score: float,
+) -> FusedCandidate:
+    updates: dict[str, object] = {"score": candidate.score + additional_score}
     if result.rank < candidate.best_rank or (
         result.rank == candidate.best_rank and result.score > candidate.representative.score
     ):
-        candidate.representative = result
-        candidate.best_rank = result.rank
+        updates["representative"] = result
+        updates["best_rank"] = result.rank
+    return candidate.model_copy(update=updates)

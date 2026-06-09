@@ -7,9 +7,10 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from agentic_rag.ingestion.pdf.chunkers import DEFAULT_MARKDOWN_CHUNKER
-from agentic_rag.ingestion.pdf.pipelines import DEFAULT_PDF_PIPELINE, DEFAULT_PDF_STRATEGY
 from agentic_rag.runtime_env import load_local_env
+
+from .chunkers import DEFAULT_MARKDOWN_CHUNKER
+from .pipelines import DEFAULT_PDF_PIPELINE, DEFAULT_PDF_STRATEGY
 
 
 class PdfIngestionConfig(BaseModel):

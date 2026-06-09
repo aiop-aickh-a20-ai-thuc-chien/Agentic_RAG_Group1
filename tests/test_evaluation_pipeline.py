@@ -2,10 +2,22 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
-from agentic_rag.agent.graph import AgentResult
-from agentic_rag.core.contracts import Answer, Chunk, Citation, SearchResult
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    Citation,
+    SearchResult,
+    WorkflowRunInput,
+    WorkflowRunOutput,
+)
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
+from agentic_rag.evaluation.ragas_eval import (
+    RagasEvaluationInput,
+    RagasEvaluationScores,
+    run_ragas_evaluation,
+)
 from agentic_rag.evaluation.runner import EvaluationRunner
 
 EVALUATION_HEADERS = [
@@ -105,22 +117,22 @@ def test_evaluation_runner_populates_outputs_and_metrics(
         SearchResult(chunk=chunk_c, score=0.5, rank=2, retriever="rerank"),
     ]
 
-    def fake_run_agent(*, provider: Any, question: str, **_: Any) -> AgentResult:
-        if "co phieu" in question:
-            return AgentResult(
+    def fake_run_agent(*, provider: Any, request: WorkflowRunInput, **_: Any) -> WorkflowRunOutput:
+        if "co phieu" in request.question:
+            return WorkflowRunOutput(
                 answer=Answer(answer="Khong co trong tai lieu.", status="not_found"),
                 evidence_chunks=[],
-                queries_tried=[question],
+                queries_tried=[request.question],
                 steps=[],
             )
-        return AgentResult(
+        return WorkflowRunOutput(
             answer=Answer(
                 answer="Pin duoc bao hanh 8 nam.",
                 status="answered",
                 citations=[Citation(source="warranty.pdf", chunk_id="chunk-a", page=1)],
             ),
             evidence_chunks=evidence_chunks,
-            queries_tried=[question],
+            queries_tried=[request.question],
             steps=[],
         )
 
@@ -157,6 +169,169 @@ def test_evaluation_runner_reports_missing_required_columns(tmp_path: Path) -> N
 
     with pytest.raises(ValueError, match="missing required columns"):
         EvaluationRunner(str(input_path), str(output_path)).run()
+
+
+def test_ragas_boundary_uses_strict_frozen_contracts() -> None:
+    item = RagasEvaluationInput(
+        question="Pin bao hanh bao lau?",
+        answer="Pin duoc bao hanh 8 nam.",
+        contexts=["Pin duoc bao hanh 8 nam."],
+        ground_truth="Pin duoc bao hanh 8 nam.",
+    )
+    scores = RagasEvaluationScores(
+        ragas_faithfulness=1.0,
+        ragas_answer_relevancy=0.9,
+        ragas_context_precision=0.8,
+        ragas_context_recall=0.7,
+    )
+
+    assert item.contexts == ["Pin duoc bao hanh 8 nam."]
+    assert scores.ragas_context_recall == 0.7
+
+    with pytest.raises(ValidationError):
+        RagasEvaluationInput.model_validate(
+            {
+                "question": "Pin bao hanh bao lau?",
+                "answer": "Pin duoc bao hanh 8 nam.",
+                "contexts": [],
+                "unexpected": True,
+            }
+        )
+
+    field_name = "answer"
+    with pytest.raises(ValidationError):
+        setattr(item, field_name, "changed")
+
+
+def test_ragas_evaluation_returns_deferred_zero_scores_with_typed_input() -> None:
+    item = RagasEvaluationInput(question="q", answer="a", contexts=[], ground_truth="g")
+
+    scores = run_ragas_evaluation([item])
+
+    assert scores == [RagasEvaluationScores()]
+
+
+def test_evaluation_runner_writes_default_ragas_scores_when_deferred(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    openpyxl = _openpyxl()
+    input_path = tmp_path / "evaluation.xlsx"
+    output_path = tmp_path / "evaluation_results.xlsx"
+    _write_workbook(
+        input_path,
+        rows=[
+            {
+                "id": "Q01",
+                "question": "Pin bao hanh bao lau?",
+                "expected_answer": "Pin duoc bao hanh 8 nam.",
+                "ground_truth_chunk_ids": "chunk-a",
+                "is_out_of_scope": False,
+            }
+        ],
+    )
+
+    def fake_run_agent(*, provider: Any, request: WorkflowRunInput, **_: Any) -> WorkflowRunOutput:
+        chunk = Chunk(
+            chunk_id="chunk-a",
+            text="Pin duoc bao hanh 8 nam.",
+            metadata={"source": "warranty.pdf"},
+        )
+        evidence_chunks = [SearchResult(chunk=chunk, score=0.9, rank=1, retriever="rerank")]
+        return WorkflowRunOutput(
+            answer=Answer(answer="Pin duoc bao hanh 8 nam.", status="answered"),
+            evidence_chunks=evidence_chunks,
+            queries_tried=[request.question],
+            steps=[],
+        )
+
+    monkeypatch.setattr("agentic_rag.agent.graph.run_agent", fake_run_agent)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.LocalPdfEvidenceProvider.from_env",
+        classmethod(lambda cls: None),
+    )
+
+    EvaluationRunner(str(input_path), str(output_path), run_ragas=True).run()
+
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb["Evaluation"]
+    header = _header(ws)
+    assert ws.cell(row=3, column=header["ragas_faithfulness"]).value == 0.0
+    assert ws.cell(row=3, column=header["ragas_answer_relevancy"]).value == 0.0
+    assert ws.cell(row=3, column=header["ragas_context_precision"]).value == 0.0
+    assert ws.cell(row=3, column=header["ragas_context_recall"]).value == 0.0
+
+
+def test_evaluation_runner_passes_typed_ragas_input_and_writes_scores(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    openpyxl = _openpyxl()
+    input_path = tmp_path / "evaluation.xlsx"
+    output_path = tmp_path / "evaluation_results.xlsx"
+    _write_workbook(
+        input_path,
+        rows=[
+            {
+                "id": "Q01",
+                "question": "Pin bao hanh bao lau?",
+                "expected_answer": "Pin duoc bao hanh 8 nam.",
+                "ground_truth_chunk_ids": "chunk-a",
+                "is_out_of_scope": False,
+            }
+        ],
+    )
+
+    def fake_run_agent(*, provider: Any, request: WorkflowRunInput, **_: Any) -> WorkflowRunOutput:
+        chunk = Chunk(
+            chunk_id="chunk-a",
+            text="Pin duoc bao hanh 8 nam.",
+            metadata={"source": "warranty.pdf"},
+        )
+        evidence_chunks = [SearchResult(chunk=chunk, score=0.9, rank=1, retriever="rerank")]
+        return WorkflowRunOutput(
+            answer=Answer(answer="Pin duoc bao hanh 8 nam.", status="answered"),
+            evidence_chunks=evidence_chunks,
+            queries_tried=[request.question],
+            steps=[],
+        )
+
+    seen: dict[str, object] = {}
+
+    def fake_ragas(eval_data: list[RagasEvaluationInput]) -> list[RagasEvaluationScores]:
+        seen["eval_data"] = eval_data
+        return [
+            RagasEvaluationScores(
+                ragas_faithfulness=0.9,
+                ragas_answer_relevancy=0.8,
+                ragas_context_precision=0.7,
+                ragas_context_recall=0.6,
+            )
+        ]
+
+    monkeypatch.setattr("agentic_rag.agent.graph.run_agent", fake_run_agent)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.LocalPdfEvidenceProvider.from_env",
+        classmethod(lambda cls: None),
+    )
+    monkeypatch.setattr("agentic_rag.evaluation.ragas_eval.run_ragas_evaluation", fake_ragas)
+
+    EvaluationRunner(str(input_path), str(output_path), run_ragas=True).run()
+
+    eval_data = seen["eval_data"]
+    assert isinstance(eval_data, list)
+    assert isinstance(eval_data[0], RagasEvaluationInput)
+    assert eval_data[0].question == "Pin bao hanh bao lau?"
+    assert eval_data[0].answer == "Pin duoc bao hanh 8 nam."
+    assert eval_data[0].contexts == ["Pin duoc bao hanh 8 nam."]
+
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb["Evaluation"]
+    header = _header(ws)
+    assert ws.cell(row=3, column=header["ragas_faithfulness"]).value == 0.9
+    assert ws.cell(row=3, column=header["ragas_answer_relevancy"]).value == 0.8
+    assert ws.cell(row=3, column=header["ragas_context_precision"]).value == 0.7
+    assert ws.cell(row=3, column=header["ragas_context_recall"]).value == 0.6
 
 
 def _write_workbook(path: Path, *, rows: list[dict[str, object]]) -> None:

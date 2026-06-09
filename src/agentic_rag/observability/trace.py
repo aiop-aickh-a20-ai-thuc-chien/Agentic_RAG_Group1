@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from agentic_rag.core.contracts import Answer, SearchResult
-from agentic_rag.generation.llm import DEFAULT_OLLAMA_MODEL, DEFAULT_OPENAI_MODEL
+from agentic_rag.model_runtime.config import LLMProfileConfig, resolve_llm_profile
+from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
 from agentic_rag.runtime_env import load_local_env
 
 TRACE_PROVIDER_JSONL = "jsonl"
@@ -705,10 +706,7 @@ def _langsmith_mode() -> str:
 
 
 def _configured_generation_model() -> str:
-    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
-    if provider == "ollama":
-        return os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
-    return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    return _generation_profile().model or ""
 
 
 def _stable_run_uuid(value: str) -> uuid.UUID:
@@ -886,8 +884,14 @@ def _citation_trace_valid(*, answer: Answer, evidence_chunks: list[SearchResult]
 
 
 def _configured_llm_provider() -> str:
-    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
-    return provider or "openai"
+    return _generation_profile().provider
+
+
+def _generation_profile() -> LLMProfileConfig:
+    try:
+        return resolve_llm_profile("generation")
+    except ModelRuntimeConfigurationError:
+        return LLMProfileConfig(role="generation", provider="invalid", model=None)
 
 
 def _preview(text: str, limit: int) -> str:

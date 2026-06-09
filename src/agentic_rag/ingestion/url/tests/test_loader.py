@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url import (
+    LoadedUrlDocument,
     load_html_chunks,
     load_html_with_artifacts,
     load_text_chunks,
@@ -208,6 +210,18 @@ def test_load_html_with_artifacts_returns_markdown_and_paths(
     assert loaded.artifacts is not None
     assert loaded.artifacts.markdown_path.read_text(encoding="utf-8") == f"{loaded.markdown}\n"
     assert loaded.artifacts.chunks_path.exists()
+
+
+def test_loaded_url_document_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        LoadedUrlDocument.model_validate(
+            {
+                "markdown": "# Intro",
+                "chunks": [],
+                "artifacts": None,
+                "unexpected": True,
+            }
+        )
 
 
 def test_load_html_chunks_prefers_crawl_link_dom_markdown_for_artifacts(

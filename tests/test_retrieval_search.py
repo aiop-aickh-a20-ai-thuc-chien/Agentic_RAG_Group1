@@ -72,7 +72,7 @@ def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
             return object()
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "pgvector")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "huggingface")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
     monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example")
     monkeypatch.setenv("DENSE_PGVECTOR_COLLECTION", "agentic_chunks")
     monkeypatch.setattr("agentic_rag.retrieval.search._configured_embedding", lambda: object())
@@ -176,9 +176,9 @@ def test_qdrant_upsert_dense_embeddings_writes_dense_sparse_vectors_and_payload(
             return object()
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
@@ -207,8 +207,8 @@ def test_qdrant_upsert_dense_embeddings_writes_dense_sparse_vectors_and_payload(
     assert trace["enabled"] is True
     assert trace["vector_store"] == "qdrant"
     assert trace["collection"] == "agentic_chunks"
-    assert trace["requested_provider"] == "local_openai"
-    assert trace["resolved_provider"] == "local_openai"
+    assert trace["requested_provider"] == "local"
+    assert trace["resolved_provider"] == "local"
     assert trace["model"] == "local-model"
     assert trace["dimensions"] == 2
     assert str(UUID(str(point.id))) == str(point.id)
@@ -221,7 +221,7 @@ def test_qdrant_upsert_dense_embeddings_writes_dense_sparse_vectors_and_payload(
     assert point.payload["page"] == 3
     assert point.payload["_embedding_profile"] == {
         "schema_version": 1,
-        "provider": "local_openai",
+        "provider": "local",
         "model": "local-model",
         "dimensions": 2,
     }
@@ -256,7 +256,7 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
                         payload={
                             "_embedding_profile": {
                                 "schema_version": 1,
-                                "provider": "local_openai",
+                                "provider": "local",
                                 "model": "local-model",
                                 "dimensions": 2,
                             }
@@ -283,9 +283,9 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
             return SimpleNamespace(points=[point])
 
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
     )
@@ -330,9 +330,9 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
             seen["upsert"] = kwargs
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
@@ -366,10 +366,10 @@ def test_qdrant_upsert_does_not_fallback_after_openai_runtime_failure(
             raise RuntimeError("openai rate limited")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "auto")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "auto")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
         lambda: FailingOpenAIEmbedding(),
@@ -417,7 +417,7 @@ def test_qdrant_upsert_accepts_matching_populated_embedding_profile(
                         payload={
                             "_embedding_profile": {
                                 "schema_version": 1,
-                                "provider": "local_openai",
+                                "provider": "local",
                                 "model": "local-model",
                                 "dimensions": 2,
                             }
@@ -431,9 +431,9 @@ def test_qdrant_upsert_accepts_matching_populated_embedding_profile(
             seen.update(kwargs)
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
@@ -475,9 +475,9 @@ def test_qdrant_upsert_does_not_create_collection_after_non_404_error(
             raise AssertionError("non-404 errors must not recreate the collection")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
         lambda: FakeEmbedding(),
@@ -520,9 +520,9 @@ def test_qdrant_upsert_rejects_existing_dimension_mismatch(
             raise AssertionError("mismatched collection must not be written")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
@@ -556,7 +556,7 @@ def test_qdrant_upsert_rejects_existing_dimension_mismatch(
         },
         {
             "schema_version": 1,
-            "provider": "local_openai",
+            "provider": "local",
             "model": "different-model",
             "dimensions": 2,
         },
@@ -589,9 +589,9 @@ def test_qdrant_upsert_rejects_incompatible_or_legacy_profile(
             raise AssertionError("incompatible collection must not be written")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
@@ -651,9 +651,9 @@ def test_qdrant_query_rejects_incompatible_profile_before_search(
         def query_points(self, **kwargs: Any) -> object:
             raise AssertionError("incompatible collection must not be queried")
 
-    monkeypatch.setenv("DENSE_EMBEDDING_PROVIDER", "local_openai")
-    monkeypatch.setenv("LOCAL_EMBEDDING_BASE_URL", "http://127.0.0.1:8000/v1")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",

@@ -1,6 +1,11 @@
 from pytest import MonkeyPatch
 
-from agentic_rag.core.contracts import SearchResult
+from agentic_rag.core.contracts import (
+    EvidenceResolutionInput,
+    RetrievalInput,
+    RetrievalOutput,
+    SearchResult,
+)
 from agentic_rag.generation import evidence
 from agentic_rag.testing.fixtures import sample_search_results
 
@@ -12,26 +17,25 @@ class FakeSourceProvider:
 
     def retrieve(
         self,
-        *,
-        question: str,
-        document_ids: list[str] | None = None,
-        page_size: int | None = None,
-    ) -> list[SearchResult]:
-        self.seen_document_ids = document_ids
-        return self.results
+        request: RetrievalInput,
+    ) -> RetrievalOutput:
+        self.seen_document_ids = request.document_ids
+        return RetrievalOutput(results=self.results)
 
 
 def test_evidence_for_question_uses_local_pdf_provider(monkeypatch: MonkeyPatch) -> None:
     provider = FakeSourceProvider(sample_search_results())
     monkeypatch.setattr(evidence, "source_provider_from_env", lambda: provider)
 
-    chunks, context = evidence.evidence_for_question(
-        question="Pin bao hanh bao lau?",
-        provider="local_pdf",
-        document_ids=["doc-1"],
-        use_mock_evidence=False,
+    resolved = evidence.evidence_for_question(
+        EvidenceResolutionInput(
+            question="Pin bao hanh bao lau?",
+            provider="local_pdf",
+            document_ids=["doc-1"],
+            use_mock_evidence=False,
+        )
     )
 
-    assert chunks == provider.results
+    assert resolved.chunks == provider.results
     assert provider.seen_document_ids == ["doc-1"]
-    assert "chunk_id=" in context
+    assert "chunk_id=" in resolved.context

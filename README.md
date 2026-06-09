@@ -17,7 +17,7 @@ nhưng các module phải trao đổi dữ liệu thông qua Pydantic v2 models 
 ```text
 src/agentic_rag/
   core/
-    contracts.py        Pydantic models dùng chung: Chunk, SearchResult, Citation, Answer
+    contracts.py        Pydantic models dùng chung: Chunk, SearchResult, Citation, Answer, source documents
     ports.py            Protocol interfaces cho ranh giới module
   ingestion/
     pdf/                Module xử lý PDF ingestion
@@ -57,17 +57,26 @@ uv run mypy
 uv run pytest -q
 ```
 
-Khi CI chạy hoặc khi `uv.lock` đã tồn tại, dùng lệnh cài đặt khóa phiên bản:
+CI cũng dùng `uv sync`. `uv.lock` là lockfile cục bộ và đang được ignore để
+tránh xung đột không cần thiết giữa môi trường phát triển.
 
-```bash
-uv sync 
-```
 
 ## Phát triển với AI Coding Assistant
 
 Phần lớn thành viên làm việc cùng AI Coding Assistant. Hãy đọc
 `docs/ai-collaboration-guide.md` trước khi bắt đầu task để prompt, ranh giới
 module, quality gate và quy tắc an toàn thống nhất trong cả nhóm.
+
+## Chạy pipeline
+
+Hướng dẫn bàn giao cho thành viên mới nằm ở
+`docs/offline-ingestion-and-online-search.md`. Tài liệu này tách rõ:
+
+- Offline ingestion pipeline: parse PDF/URL/text, chunk, persist artifacts, index.
+- Online search pipeline: retrieve BM25/dense evidence, fusion/rerank, generate
+  answer and citations.
+
+Đọc tài liệu này trước khi chạy demo local, cloud prototype hoặc so sánh RAGFlow.
 
 ## Ranh giới module
 
@@ -90,17 +99,17 @@ Qdrant stores the persistent hybrid retrieval index.
 
 ## Dense embedding providers
 
-`DENSE_EMBEDDING_PROVIDER=auto` uses OpenAI when `OPENAI_API_KEY` is configured.
-Without that key it selects `local_openai`, which expects an OpenAI-compatible
-`/v1/embeddings` service:
+`EMBEDDING_PROVIDER=huggingface` runs the default in-process multilingual model.
+Set another provider such as `openai` or `local_openai` to route embeddings
+through LiteLLM. Local OpenAI-compatible `/v1/embeddings` services use
+`EMBEDDING_API_BASE`:
 
 ```env
-DENSE_EMBEDDING_PROVIDER=auto
-DENSE_EMBEDDING_DIMENSIONS=
-OPENAI_EMBEDDING_DIMENSIONS=1536
-LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:8000/v1
-LOCAL_EMBEDDING_MODEL=your-embedding-model
-LOCAL_EMBEDDING_API_KEY=
+EMBEDDING_PROVIDER=local_openai
+EMBEDDING_MODEL=your-embedding-model
+EMBEDDING_API_BASE=http://127.0.0.1:8000/v1
+EMBEDDING_API_KEY=
+EMBEDDING_DIMENSIONS=
 ```
 
 Run vLLM in an isolated uv environment:
@@ -120,9 +129,7 @@ uv run --isolated --with "sglang[all]" \
   --port 30000
 ```
 
-For SGLang, set `LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:30000/v1`.
-`DENSE_EMBEDDING_PROVIDER=huggingface` remains an explicit in-process option and
-is never selected automatically.
+For SGLang, set `EMBEDDING_API_BASE=http://127.0.0.1:30000/v1`.
 
 Smoke-test either local server:
 

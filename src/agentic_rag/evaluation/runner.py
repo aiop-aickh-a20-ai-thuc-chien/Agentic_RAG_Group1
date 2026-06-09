@@ -8,6 +8,7 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from agentic_rag.core.contracts import WorkflowRunInput
 from agentic_rag.evaluation.metrics import mrr_at_k, recall_at_k
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,6 @@ class EvaluationRunner:
         import os
 
         os.environ["AGENT_RETRIEVE_WORKERS"] = "1"
-
         from agentic_rag.agent.graph import run_agent
         from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 
@@ -134,7 +134,7 @@ class EvaluationRunner:
 
             # 1. Run Agent Pipeline
             try:
-                result = run_agent(provider=provider, question=question)
+                result = run_agent(provider=provider, request=WorkflowRunInput(question=question))
                 evidence_chunks = result.evidence_chunks
                 generation_answer = result.answer
             except Exception:
@@ -209,10 +209,13 @@ class EvaluationRunner:
 
         # 3. RAGAS Evaluation
         if self.run_ragas:
-            from agentic_rag.evaluation.ragas_eval import run_ragas_evaluation
+            from agentic_rag.evaluation.ragas_eval import (
+                RagasEvaluationInput,
+                run_ragas_evaluation,
+            )
 
             logger.info("Preparing data for RAGAS evaluation...")
-            eval_data = []
+            eval_data: list[RagasEvaluationInput] = []
             row_mapping = []
 
             for row_idx in range(3, ws.max_row + 1):
@@ -246,30 +249,30 @@ class EvaluationRunner:
                         logger.warning("Skipping invalid rag_context JSON in row %s", row_idx)
 
                 eval_data.append(
-                    {
-                        "question": question,
-                        "answer": answer,
-                        "contexts": contexts,
-                        "ground_truth": expected_answer,
-                    }
+                    RagasEvaluationInput(
+                        question=question,
+                        answer=answer,
+                        contexts=contexts,
+                        ground_truth=expected_answer,
+                    )
                 )
                 row_mapping.append(row_idx)
 
             if eval_data:
                 ragas_results = run_ragas_evaluation(eval_data)
                 for row_idx, scores in zip(row_mapping, ragas_results, strict=False):
-                    ws.cell(row=row_idx, column=header["ragas_faithfulness"]).value = scores.get(
-                        "ragas_faithfulness", 0.0
-                    )
+                    ws.cell(
+                        row=row_idx, column=header["ragas_faithfulness"]
+                    ).value = scores.ragas_faithfulness
                     ws.cell(
                         row=row_idx, column=header["ragas_answer_relevancy"]
-                    ).value = scores.get("ragas_answer_relevancy", 0.0)
+                    ).value = scores.ragas_answer_relevancy
                     ws.cell(
                         row=row_idx, column=header["ragas_context_precision"]
-                    ).value = scores.get("ragas_context_precision", 0.0)
-                    ws.cell(row=row_idx, column=header["ragas_context_recall"]).value = scores.get(
-                        "ragas_context_recall", 0.0
-                    )
+                    ).value = scores.ragas_context_precision
+                    ws.cell(
+                        row=row_idx, column=header["ragas_context_recall"]
+                    ).value = scores.ragas_context_recall
 
         # 4. Summary row
         _write_summary(ws, header, self.run_ragas)

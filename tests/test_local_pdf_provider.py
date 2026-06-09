@@ -4,13 +4,18 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from pydantic import BaseModel, ValidationError
 from pytest import MonkeyPatch
 
-from agentic_rag.core.contracts import Chunk, SearchResult
+from agentic_rag.core.contracts import Chunk, RetrievalInput, SearchResult
 from agentic_rag.ingestion.pdf import LoadedPdfDocument
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
-from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
+from agentic_rag.integrations.local_pdf.providers import (
+    LocalPdfDocumentChunks,
+    LocalPdfEvidenceProvider,
+    LocalPdfUploadedDocument,
+)
 from agentic_rag.integrations.local_pdf.storage import StoredRawSource, StoredSourceDocument
 from agentic_rag.retrieval.search import Store
 
@@ -37,6 +42,37 @@ def _mock_openai_client(monkeypatch: MonkeyPatch) -> None:
             )
 
     monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+
+
+def test_local_pdf_provider_models_are_pydantic_contracts() -> None:
+    uploaded = LocalPdfUploadedDocument(
+        document_id="doc-1",
+        name="warranty.pdf",
+        dataset_id="local_pdf",
+        parse_started=True,
+        trace={"parser": "docling"},
+    )
+    page = LocalPdfDocumentChunks(chunks=[], total_chunks=0)
+
+    assert isinstance(uploaded, BaseModel)
+    assert isinstance(page, BaseModel)
+
+    with pytest.raises(ValidationError):
+        LocalPdfUploadedDocument.model_validate(
+            {
+                "document_id": "doc-1",
+                "name": "warranty.pdf",
+                "dataset_id": "local_pdf",
+                "parse_started": True,
+                "trace": {},
+                "unexpected": True,
+            }
+        )
+
+    field_name = "name"
+
+    with pytest.raises(ValidationError):
+        setattr(uploaded, field_name, "changed.pdf")
 
 
 def test_local_pdf_provider_uploads_chunks_and_lists_them(
@@ -463,7 +499,7 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
         "agentic_rag.integrations.local_pdf.providers.dense_embedding_metadata",
         lambda: {
             "requested_provider": "auto",
-            "resolved_provider": "local_openai",
+            "resolved_provider": "local",
             "fallback_reason": "openai_api_key_missing",
             "model": "local-model",
         },
@@ -488,7 +524,7 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
         "status": "error",
         "error": "local endpoint unavailable",
         "requested_provider": "auto",
-        "resolved_provider": "local_openai",
+        "resolved_provider": "local",
         "fallback_reason": "openai_api_key_missing",
         "model": "local-model",
         "latency_ms": trace["index_write"]["dense_index"]["latency_ms"],
@@ -597,7 +633,9 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     monkeypatch: MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "score")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    monkeypatch.setenv("EMBEDDING_API_KEY", "test-key")
     _mock_openai_client(monkeypatch)
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
@@ -637,9 +675,11 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     )
 
     results = provider.retrieve(
-        question="pin bao hanh bao lau",
-        document_ids=[uploaded.document_id],
-    )
+        RetrievalInput(
+            question="pin bao hanh bao lau",
+            document_ids=[uploaded.document_id],
+        )
+    ).results
 
     assert len(results) >= 1
     assert results[0].chunk.chunk_id == "pdf_doc_c0001"
@@ -725,7 +765,7 @@ def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
         source_store=cast(Any, FakeCloudSourceStore()),
     )
 
-    results = provider.retrieve(question="pin vf8", document_ids=["doc-1"])
+    results = provider.retrieve(RetrievalInput(question="pin vf8", document_ids=["doc-1"])).results
 
     assert results == expected
     assert seen == {"question": "pin vf8", "document_ids": ["doc-1"], "top_k": 3}

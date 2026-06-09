@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import urljoin
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.ingestion.url.chunking import normalize_space
 
@@ -24,8 +25,13 @@ _PUBLISHED_META_NAMES = {
 _AUTHOR_META_NAMES = {"author", "article:author", "dc.creator"}
 
 
-@dataclass(frozen=True)
-class Section:
+class _UrlParserModel(BaseModel):
+    """Base model for immutable URL parser DTOs."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class Section(_UrlParserModel):
     """A parsed page section."""
 
     heading: str
@@ -34,8 +40,7 @@ class Section:
     markdown: str | None = None
 
 
-@dataclass(frozen=True)
-class Asset:
+class Asset(_UrlParserModel):
     """A related URL asset discovered in HTML."""
 
     kind: str
@@ -45,8 +50,7 @@ class Asset:
     target_url: str | None = None
 
 
-@dataclass(frozen=True)
-class PageMetadata:
+class PageMetadata(_UrlParserModel):
     """Metadata discovered from canonical, Open Graph, and article tags."""
 
     canonical_url: str | None = None
@@ -59,13 +63,12 @@ class PageMetadata:
     language: str | None = None
 
 
-@dataclass(frozen=True)
-class ParsedHtml:
+class ParsedHtml(_UrlParserModel):
     """HTML parser output for ingestion."""
 
     title: str | None
     sections: tuple[Section, ...]
-    metadata: PageMetadata = PageMetadata()
+    metadata: PageMetadata = Field(default_factory=PageMetadata)
     assets: tuple[Asset, ...] = ()
 
 

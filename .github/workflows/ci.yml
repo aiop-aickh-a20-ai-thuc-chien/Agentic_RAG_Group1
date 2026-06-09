@@ -27,7 +27,7 @@ jobs:
           python-version-file: .python-version
 
       - name: Install dependencies
-        run: uv sync 
+        run: uv sync
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -39,6 +39,4 @@ jobs:
         run: uv run mypy
 
       - name: Test
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: uv run pytest -q

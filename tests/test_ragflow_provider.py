@@ -1,7 +1,14 @@
-from agentic_rag.core.contracts import Chunk, SearchResult
+import pytest
+from pydantic import BaseModel, ValidationError
+
+from agentic_rag.core.contracts import Chunk, RetrievalInput, RetrievalOutput, SearchResult
 from agentic_rag.integrations.ragflow.client import RAGFlowClient
 from agentic_rag.integrations.ragflow.config import RAGFlowConfig
-from agentic_rag.integrations.ragflow.providers import RAGFlowEvidenceProvider
+from agentic_rag.integrations.ragflow.providers import (
+    RAGFlowDocumentChunks,
+    RAGFlowEvidenceProvider,
+    RAGFlowUploadedDocument,
+)
 
 
 class FakeRAGFlowClient(RAGFlowClient):
@@ -104,6 +111,35 @@ class FakeRAGFlowClient(RAGFlowClient):
         }
 
 
+def test_ragflow_provider_models_are_pydantic_contracts() -> None:
+    uploaded = RAGFlowUploadedDocument(
+        document_id="doc-1",
+        name="warranty.pdf",
+        dataset_id="dataset-1",
+        parse_started=True,
+    )
+    page = RAGFlowDocumentChunks(chunks=[], total_chunks=0)
+
+    assert isinstance(uploaded, BaseModel)
+    assert isinstance(page, BaseModel)
+
+    with pytest.raises(ValidationError):
+        RAGFlowUploadedDocument.model_validate(
+            {
+                "document_id": "doc-1",
+                "name": "warranty.pdf",
+                "dataset_id": "dataset-1",
+                "parse_started": True,
+                "unexpected": True,
+            }
+        )
+
+    field_name = "name"
+
+    with pytest.raises(ValidationError):
+        setattr(uploaded, field_name, "changed.pdf")
+
+
 def test_provider_uploads_document_and_starts_parse() -> None:
     client = FakeRAGFlowClient()
     provider = RAGFlowEvidenceProvider(client, dataset_id="dataset-1")
@@ -183,33 +219,37 @@ def test_provider_returns_full_document_chunk_count() -> None:
 def test_provider_retrieves_search_results_without_generating_answer() -> None:
     provider = RAGFlowEvidenceProvider(FakeRAGFlowClient(), dataset_id="dataset-1")
 
-    results = provider.retrieve(question="Pin bao hanh bao lau?", document_ids=["doc-1"])
+    results = provider.retrieve(
+        RetrievalInput(question="Pin bao hanh bao lau?", document_ids=["doc-1"])
+    )
 
-    assert results == [
-        SearchResult(
-            chunk=Chunk(
-                chunk_id="chunk-1",
-                text="Pin cao ap duoc bao hanh 8 nam.",
-                metadata={
-                    "source": "warranty.pdf",
-                    "document_name": "warranty.pdf",
-                    "dataset_id": "dataset-1",
-                    "id": "chunk-1",
-                    "document_id": "doc-1",
-                    "content": "Pin cao ap duoc bao hanh 8 nam.",
-                    "similarity": 0.91,
-                    "positions": [[12, 1, 2]],
-                    "source_type": "ragflow",
-                    "file_name": None,
-                    "url": None,
-                    "page": 12,
-                    "section": None,
-                    "vector_similarity": None,
-                    "term_similarity": None,
-                },
-            ),
-            score=0.91,
-            rank=1,
-            retriever="ragflow",
-        )
-    ]
+    assert results == RetrievalOutput(
+        results=[
+            SearchResult(
+                chunk=Chunk(
+                    chunk_id="chunk-1",
+                    text="Pin cao ap duoc bao hanh 8 nam.",
+                    metadata={
+                        "source": "warranty.pdf",
+                        "document_name": "warranty.pdf",
+                        "dataset_id": "dataset-1",
+                        "id": "chunk-1",
+                        "document_id": "doc-1",
+                        "content": "Pin cao ap duoc bao hanh 8 nam.",
+                        "similarity": 0.91,
+                        "positions": [[12, 1, 2]],
+                        "source_type": "ragflow",
+                        "file_name": None,
+                        "url": None,
+                        "page": 12,
+                        "section": None,
+                        "vector_similarity": None,
+                        "term_similarity": None,
+                    },
+                ),
+                score=0.91,
+                rank=1,
+                retriever="ragflow",
+            )
+        ]
+    )

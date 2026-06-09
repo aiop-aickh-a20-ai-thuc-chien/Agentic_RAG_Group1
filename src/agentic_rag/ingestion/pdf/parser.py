@@ -7,7 +7,7 @@ from typing import Any, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict
 
-from agentic_rag.ingestion.pdf.models import PdfParseResult
+from .models import PdfParseResult
 
 DocumentConverter: Any | None = None
 DEFAULT_PDF_PARSER = "docling"
@@ -104,6 +104,6 @@ def _get_document_converter() -> Any:
 def resolve_pdf_parser(parser_name: str | None = None) -> PdfMarkdownParser:
     """Resolve a parser name through the PDF-local registry."""
 
-    from agentic_rag.ingestion.pdf.registry import resolve_pdf_parser as resolve_registered_parser
+    from .registry import resolve_pdf_parser as resolve_registered_parser
 
     return resolve_registered_parser(parser_name)

@@ -913,9 +913,10 @@ def get_chunks(q: str) -> list[dict[str, Any]]:
 
         load_local_env()
 
+        from agentic_rag.core.contracts import EvidenceResolutionInput
         from agentic_rag.generation.evidence import evidence_for_question
 
-        results, _ = evidence_for_question(question=q)
+        results = evidence_for_question(EvidenceResolutionInput(question=q)).chunks
         return [
             {
                 "chunk_id": r.chunk.chunk_id,

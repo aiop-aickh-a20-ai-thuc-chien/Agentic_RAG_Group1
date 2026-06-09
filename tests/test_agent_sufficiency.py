@@ -8,7 +8,14 @@ from agentic_rag.agent.grading import (
     grade_hallucination,
     preprocess_query,
 )
-from agentic_rag.core.contracts import Answer, Chunk, SearchResult
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    LLMCompletionInput,
+    LLMCompletionOutput,
+    LLMStreamDelta,
+    SearchResult,
+)
 
 
 def _result(chunk_id: str) -> SearchResult:
@@ -36,11 +43,15 @@ def test_preprocess_passthrough_no_trigger_signals() -> None:
 
 def test_preprocess_llm_single() -> None:
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"type": "single", "question": "Pin VF8 bảo hành bao lâu?"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"type": "single", "question": "Pin VF8 bảo hành bao lâu?"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
     history = [{"role": "user", "content": "VF8 là xe gì?"}]
     result = preprocess_query("Còn pin nó thì sao?", history, llm_client=_FakeLLM())
@@ -50,11 +61,15 @@ def test_preprocess_llm_single() -> None:
 
 def test_preprocess_llm_multi() -> None:
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"type": "multi", "questions": ["pin VF8 bảo hành", "pin VF9 bảo hành"]}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"type": "multi", "questions": ["pin VF8 bảo hành", "pin VF9 bảo hành"]}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
     result = preprocess_query("So sánh pin VF8 và VF9", [], llm_client=_FakeLLM())
     assert result["type"] == "multi"
@@ -63,11 +78,11 @@ def test_preprocess_llm_multi() -> None:
 
 def test_preprocess_bad_json_falls_back() -> None:
     class _BadLLM:
-        def complete(self, prompt: str) -> str:
-            return "not json"
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(text="not json", provider="test", model="test")
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
     result = preprocess_query("So sánh VF8 và VF9", [], llm_client=_BadLLM())
     assert result["type"] == "single"
@@ -88,11 +103,15 @@ def test_hallucination_no_docs_is_not_grounded() -> None:
 
 def test_hallucination_llm_grounded() -> None:
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"grounded": true, "reason": "supported"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"grounded": true, "reason": "supported"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
     answer = Answer(answer="pin bảo hành 8 năm", status="answered", citations=[])
     assert grade_hallucination("q", answer, [_result("c1")], llm_client=_FakeLLM()) is True
@@ -100,11 +119,15 @@ def test_hallucination_llm_grounded() -> None:
 
 def test_hallucination_llm_not_grounded() -> None:
     class _FakeLLM:
-        def complete(self, prompt: str) -> str:
-            return '{"grounded": false, "reason": "fabricated"}'
+        def complete(self, request: LLMCompletionInput) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text='{"grounded": false, "reason": "fabricated"}',
+                provider="test",
+                model="test",
+            )
 
-        def stream_complete(self, prompt: str) -> Iterator[str]:
-            yield ""
+        def stream(self, request: LLMCompletionInput) -> Iterator[LLMStreamDelta]:
+            yield LLMStreamDelta(text="")
 
     answer = Answer(answer="fabricated", status="answered", citations=[])
     assert grade_hallucination("q", answer, [_result("c1")], llm_client=_FakeLLM()) is False

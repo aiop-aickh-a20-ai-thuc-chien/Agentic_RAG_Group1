@@ -27,8 +27,9 @@ Frontend:
 Backend dùng:
 
 ```text
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o-mini
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+LLM_API_KEY=
 ```
 
 Frontend dùng:
@@ -245,12 +246,11 @@ DENSE_VECTOR_STORE=qdrant
 QDRANT_URL=https://your-cluster.qdrant.io
 QDRANT_API_KEY=...
 QDRANT_COLLECTION=agentic_rag_chunks
-DENSE_EMBEDDING_PROVIDER=auto
-DENSE_EMBEDDING_DIMENSIONS=
-OPENAI_EMBEDDING_DIMENSIONS=1536
-LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:8000/v1
-LOCAL_EMBEDDING_MODEL=your-embedding-model
-LOCAL_EMBEDDING_API_KEY=
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=your-embedding-model
+EMBEDDING_API_BASE=http://127.0.0.1:8000/v1
+EMBEDDING_API_KEY=
+EMBEDDING_DIMENSIONS=
 ```
 
 In this mode S3 stores raw files, URL/text records, parsed Markdown, debug
@@ -258,10 +258,9 @@ artifacts, source manifests, and chunk manifests. Qdrant stores the persistent
 chunk retrieval index and is used for cloud-mode hybrid search, so normal answer
 retrieval does not rebuild BM25 from S3 chunk manifests on each request.
 
-`DENSE_EMBEDDING_PROVIDER=auto` uses OpenAI only when `OPENAI_API_KEY` exists.
-Otherwise it resolves to the local OpenAI-compatible endpoint. Runtime OpenAI
-errors do not trigger a provider switch. `huggingface` remains an explicit
-in-process option.
+`EMBEDDING_PROVIDER=huggingface` runs in process. Other providers route through
+LiteLLM; `EMBEDDING_PROVIDER=local` uses an OpenAI-compatible local endpoint
+configured by `EMBEDDING_API_BASE`.
 
 Serve a pooling/embedding model with vLLM in an isolated uv environment:
 
@@ -282,7 +281,7 @@ uv run --isolated --with "sglang[all]" \
 
 These commands do not add vLLM or SGLang to the RAG application's
 `pyproject.toml`. For SGLang, set
-`LOCAL_EMBEDDING_BASE_URL=http://127.0.0.1:30000/v1`.
+`EMBEDDING_API_BASE=http://127.0.0.1:30000/v1`.
 
 Verify the serving endpoint before starting ingestion:
 
@@ -292,7 +291,7 @@ curl http://127.0.0.1:8000/v1/embeddings \
   -d '{"model":"your-embedding-model","input":["embedding smoke test"]}'
 ```
 
-Leave `DENSE_EMBEDDING_DIMENSIONS` empty to infer the local model's native
+Leave `EMBEDDING_DIMENSIONS` empty to infer the local model's native
 dimension, or set it to enforce an expected size. A Qdrant collection stores a
 single provider/model/dimension profile. Switching any part of that profile
 requires a new `QDRANT_COLLECTION` or an explicit delete and reindex; the app
@@ -355,7 +354,7 @@ Bật `RAG_TRACE_FULL_CONTENT=true` khi cần đẩy toàn bộ Markdown vào JS
 Optional LangSmith tracing:
 
 ```bash
-pip install -e ".[observability]"
+uv sync --extra observability
 RAG_TRACE_PROVIDER=langsmith
 LANGSMITH_API_KEY=...
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com

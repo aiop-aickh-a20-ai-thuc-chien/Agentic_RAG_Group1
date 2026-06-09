@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.runtime_env import load_local_env
 
@@ -12,9 +13,10 @@ class RAGFlowConfigurationError(RuntimeError):
     """Raised when RAGFlow is selected but required settings are missing."""
 
 
-@dataclass(frozen=True)
-class RAGFlowConfig:
+class RAGFlowConfig(BaseModel):
     """Connection and retrieval defaults for a RAGFlow service."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     base_url: str
     api_key: str

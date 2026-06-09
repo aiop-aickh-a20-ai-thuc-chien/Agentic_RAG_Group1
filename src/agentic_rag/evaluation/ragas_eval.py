@@ -1,106 +1,47 @@
-"""RAGAS integration for automated LLM-as-a-judge evaluation."""
+"""Typed deferred RAGAS integration boundary for LLM-as-a-judge evaluation."""
 
-import logging
-import os
-from typing import Any
+from __future__ import annotations
 
-logger = logging.getLogger(__name__)
+from pydantic import BaseModel, ConfigDict, Field
 
 
-def run_ragas_evaluation(eval_data: list[dict[str, Any]]) -> list[dict[str, float]]:
-    """
-    Run RAGAS evaluation on a batch of data.
+class _RagasModel(BaseModel):
+    """Base model for immutable RAGAS evaluation boundary objects."""
 
-    Args:
-        eval_data: A list of dicts, each containing:
-            - question (str)
-            - answer (str)
-            - contexts (list of str)
-            - ground_truth (str)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    Returns:
-        A list of dicts containing the scores for each row.
-    """
-    try:
-        from datasets import Dataset
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-        from ragas import evaluate
-        from ragas.metrics import (
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            faithfulness,
-        )
-    except ImportError:
-        logger.error(
-            "RAGAS or its dependencies are not installed. "
-            "Please install with `pip install -e '.[evaluation]'`."
-        )
-        raise
 
-    # Prepare dataset
-    data = {
-        "question": [row["question"] for row in eval_data],
-        "answer": [row["answer"] for row in eval_data],
-        "contexts": [row["contexts"] for row in eval_data],
-        "ground_truth": [row["ground_truth"] for row in eval_data],
-    }
-    dataset = Dataset.from_dict(data)
+class RagasEvaluationInput(_RagasModel):
+    """One RAGAS evaluation item prepared from an evaluation workbook row."""
 
-    # Configure LLM from env
-    model_name = os.getenv("RAGAS_MODEL", "gpt-4o-mini")
-    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    contexts: list[str] = Field(default_factory=list)
+    ground_truth: str = ""
 
-    if not api_key:
-        logger.warning("No OpenAI API key found for RAGAS. Evaluation might fail.")
 
-    llm = ChatOpenAI(model=model_name, api_key=api_key)
-    embeddings = OpenAIEmbeddings(api_key=api_key)  # type: ignore[call-arg]
+class RagasEvaluationScores(_RagasModel):
+    """RAGAS metric scores aligned to evaluation workbook columns."""
 
-    metrics = [
-        faithfulness,
-        answer_relevancy,
-        context_precision,
-        context_recall,
-    ]
+    ragas_faithfulness: float = 0.0
+    ragas_answer_relevancy: float = 0.0
+    ragas_context_precision: float = 0.0
+    ragas_context_recall: float = 0.0
 
-    logger.info(
-        f"Running RAGAS evaluation on {len(eval_data)} examples using model {model_name}..."
-    )
 
-    try:
-        result = evaluate(
-            dataset=dataset,
-            metrics=metrics,
-            llm=llm,
-            embeddings=embeddings,
-        )
+class RagasEvaluationDeferredError(RuntimeError):
+    """Raised while automated RAGAS execution remains intentionally deferred."""
 
-        # Convert result back to list of dicts for each row
-        result_any: Any = result
-        result_df = result_any.to_pandas()
-        scores_list = []
 
-        for _, row in result_df.iterrows():
-            scores = {
-                "ragas_faithfulness": float(row.get("faithfulness", 0.0)),
-                "ragas_answer_relevancy": float(row.get("answer_relevancy", 0.0)),
-                "ragas_context_precision": float(row.get("context_precision", 0.0)),
-                "ragas_context_recall": float(row.get("context_recall", 0.0)),
-            }
-            scores_list.append(scores)
+RAGAS_DEFERRED_MESSAGE = (
+    "RAGAS evaluation is deferred in the model-runtime refactor. "
+    "Install the evaluation extra and complete the RAGAS/LangChain compatibility "
+    "repair before enabling automated RAGAS scoring."
+)
 
-        return scores_list
 
-    except Exception as e:
-        logger.error(f"RAGAS evaluation failed: {e}")
-        # Return empty scores if it fails
-        return [
-            {
-                "ragas_faithfulness": 0.0,
-                "ragas_answer_relevancy": 0.0,
-                "ragas_context_precision": 0.0,
-                "ragas_context_recall": 0.0,
-            }
-            for _ in eval_data
-        ]
+def run_ragas_evaluation(eval_data: list[RagasEvaluationInput]) -> list[RagasEvaluationScores]:
+    """Validate typed input and return deferred zero scores until RAGAS repair lands."""
+
+    validated = [RagasEvaluationInput.model_validate(item) for item in eval_data]
+    return [RagasEvaluationScores() for _ in validated]
