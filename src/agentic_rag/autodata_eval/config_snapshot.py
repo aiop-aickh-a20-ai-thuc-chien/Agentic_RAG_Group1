@@ -80,9 +80,25 @@ def _model_config() -> dict[str, Any]:
     return out
 
 
+def _resolve_vector_store() -> str:
+    """Provider qua resolver chính thức (retrieval.config) — xử lý tên canonical
+    VECTOR_STORE_PROVIDER, legacy DENSE_VECTOR_STORE, và suy luận từ QDRANT_URL/
+    pgvector. Fallback đọc env thô nếu resolver lỗi — snapshot không được chặn tạo run.
+    """
+    import warnings
+    try:
+        from agentic_rag.retrieval.config import resolve_vector_store_config
+        with warnings.catch_warnings():  # đừng nag deprecation mỗi lần tạo run
+            warnings.simplefilter("ignore")
+            return resolve_vector_store_config().provider
+    except Exception:
+        raw = os.getenv("VECTOR_STORE_PROVIDER") or os.getenv("DENSE_VECTOR_STORE") or "turbovec"
+        return raw.strip().lower() or "turbovec"
+
+
 def _retrieval_config() -> dict[str, Any]:
     """Vector store + breadth (cả 2 đường); fusion/threshold chỉ trên turbovec."""
-    vector_store = (os.getenv("DENSE_VECTOR_STORE", "turbovec").strip().lower() or "turbovec")
+    vector_store = _resolve_vector_store()
     out: dict[str, Any] = {
         "vector_store": vector_store,
         "retrieval_top_k": _int_env("LOCAL_PDF_RETRIEVAL_TOP_K", 5),   # lấy về trước rerank
