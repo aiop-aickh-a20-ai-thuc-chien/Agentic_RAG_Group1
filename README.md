@@ -77,6 +77,8 @@ Hướng dẫn bàn giao cho thành viên mới nằm ở
   answer and citations.
 
 Đọc tài liệu này trước khi chạy demo local, cloud prototype hoặc so sánh RAGFlow.
+Các biến môi trường cho LLM, embedding và reranker được định nghĩa tập trung tại
+[docs/model-runtime-configuration.md](docs/model-runtime-configuration.md).
 
 ## Ranh giới module
 
@@ -93,19 +95,20 @@ Hướng dẫn bàn giao cho thành viên mới nằm ở
 
 Local development can run with JSONL source manifests and the in-process
 `turbovec` dense store. Cloud prototype mode keeps `EVIDENCE_PROVIDER=local_pdf`
-but can set `LOCAL_SOURCE_STORE=s3` and `DENSE_VECTOR_STORE=qdrant` so S3 stores
+but can set `LOCAL_SOURCE_STORE=s3` and `VECTOR_STORE_PROVIDER=qdrant` so S3 stores
 raw source files, parsed Markdown, debug artifacts, and chunk manifests while
 Qdrant stores the persistent hybrid retrieval index.
 
 ## Dense embedding providers
 
-`EMBEDDING_PROVIDER=huggingface` runs the default in-process multilingual model.
-Set another provider such as `openai` or `local_openai` to route embeddings
-through LiteLLM. Local OpenAI-compatible `/v1/embeddings` services use
-`EMBEDDING_API_BASE`:
+`EMBEDDING_PROVIDER=sentence_transformers` runs the default in-process
+multilingual model. Named providers route through LiteLLM, while
+`EMBEDDING_PROVIDER=local` uses a separately hosted OpenAI-compatible service.
+See [docs/model-runtime-configuration.md](docs/model-runtime-configuration.md)
+for the complete provider contract.
 
 ```env
-EMBEDDING_PROVIDER=local_openai
+EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL=your-embedding-model
 EMBEDDING_API_BASE=http://127.0.0.1:8000/v1
 EMBEDDING_API_KEY=
@@ -139,10 +142,12 @@ curl http://127.0.0.1:8000/v1/embeddings \
   -d '{"model":"your-embedding-model","input":["embedding smoke test"]}'
 ```
 
-One `QDRANT_COLLECTION` may contain only one provider/model/dimension profile.
+One `VECTOR_STORE_COLLECTION` may contain only one provider/model/dimension profile.
 When changing the embedding model or provider, use a new collection name or
 delete the existing collection and reindex. The app does not recreate an
-incompatible collection automatically.
+incompatible collection automatically. Older pgvector indexes that used the
+previous implicit `document` collection must set
+`VECTOR_STORE_COLLECTION=document` or be reindexed into `agentic_rag_chunks`.
 
 ## Quality Gate
 
