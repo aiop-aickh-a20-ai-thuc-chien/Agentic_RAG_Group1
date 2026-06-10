@@ -11,9 +11,11 @@ CREATE TABLE IF NOT EXISTS eval_datasets (
 );
 
 -- ── Draft questions (AutoData sinh ra) ───────────────────────────────────────
+-- dataset_id là cột LEGACY (câu mới sinh để NULL — gán dataset qua junction table).
+-- ON DELETE SET NULL: xóa dataset không được kéo theo câu hỏi trong kho.
 CREATE TABLE IF NOT EXISTS eval_questions (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dataset_id       UUID REFERENCES eval_datasets(id) ON DELETE CASCADE,
+  dataset_id       UUID REFERENCES eval_datasets(id) ON DELETE SET NULL,
   document_id      TEXT NOT NULL,
   section          TEXT,
   question         TEXT NOT NULL,
@@ -28,10 +30,12 @@ CREATE INDEX IF NOT EXISTS idx_eval_questions_deleted   ON eval_questions(delete
 CREATE INDEX IF NOT EXISTS idx_eval_questions_document  ON eval_questions(document_id);
 
 -- ── Approved questions (đã tích xanh) ────────────────────────────────────────
+-- dataset_id legacy + nullable: approve là trạng thái toàn cục của câu hỏi,
+-- không gắn dataset (INSERT trong router chỉ ghi question_id + reviewed_by).
 CREATE TABLE IF NOT EXISTS eval_questions_approved (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   question_id  UUID NOT NULL REFERENCES eval_questions(id) ON DELETE CASCADE,
-  dataset_id   UUID NOT NULL REFERENCES eval_datasets(id) ON DELETE CASCADE,
+  dataset_id   UUID REFERENCES eval_datasets(id) ON DELETE SET NULL,
   reviewed_by  TEXT,
   reviewed_at  TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(question_id)
@@ -39,19 +43,31 @@ CREATE TABLE IF NOT EXISTS eval_questions_approved (
 
 CREATE INDEX IF NOT EXISTS idx_eval_approved_dataset ON eval_questions_approved(dataset_id);
 
+-- ── Junction table: dataset ↔ question (nhiều-nhiều) ─────────────────────────
+CREATE TABLE IF NOT EXISTS eval_dataset_questions (
+  dataset_id   UUID NOT NULL REFERENCES eval_datasets(id) ON DELETE CASCADE,
+  question_id  UUID NOT NULL REFERENCES eval_questions(id) ON DELETE CASCADE,
+  PRIMARY KEY (dataset_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_eval_dq_dataset  ON eval_dataset_questions(dataset_id);
+CREATE INDEX IF NOT EXISTS idx_eval_dq_question ON eval_dataset_questions(question_id);
+
 -- ── Eval runs (mỗi lần bấm chạy = 1 run/version) ────────────────────────────
 CREATE TABLE IF NOT EXISTS eval_runs (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  dataset_id   UUID REFERENCES eval_datasets(id),
-  name         TEXT NOT NULL,
-  description  TEXT,
-  config       JSONB DEFAULT '{}',
-  status       TEXT NOT NULL DEFAULT 'queued',
-  total        INTEGER DEFAULT 0,
-  success      INTEGER DEFAULT 0,
-  failed       INTEGER DEFAULT 0,
-  created_at   TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dataset_id            UUID REFERENCES eval_datasets(id),
+  name                  TEXT NOT NULL,
+  description           TEXT,
+  config                JSONB DEFAULT '{}',
+  status                TEXT NOT NULL DEFAULT 'queued',
+  total                 INTEGER DEFAULT 0,
+  success               INTEGER DEFAULT 0,
+  failed                INTEGER DEFAULT 0,
+  -- Snapshot danh sách câu tại thời điểm tạo run — tránh worker đọc dataset live
+  frozen_question_ids   UUID[] NOT NULL DEFAULT '{}',
+  created_at            TIMESTAMPTZ DEFAULT NOW(),
+  completed_at          TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_eval_runs_dataset ON eval_runs(dataset_id);

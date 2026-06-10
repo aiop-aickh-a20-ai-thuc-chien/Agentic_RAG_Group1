@@ -8,6 +8,7 @@ const NAV = [
   { href: "/internal/autodata",     label: "Tạo câu hỏi" },
   { href: "/internal/eval-review",  label: "Review" },
   { href: "/internal/datasets",     label: "Datasets" },
+  { href: "/internal/eval-run",     label: "Chạy Eval" },
   { href: "/internal/eval-results", label: "Eval Results" },
   { href: "/internal/eval-compare", label: "So sánh" },
 ];

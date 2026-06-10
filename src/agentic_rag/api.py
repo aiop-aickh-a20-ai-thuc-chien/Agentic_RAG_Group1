@@ -7,6 +7,9 @@ import logging
 import os
 import re
 import warnings
+
+from dotenv import load_dotenv
+load_dotenv()
 from typing import Any
 
 warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
@@ -77,8 +80,10 @@ LOGGER = logging.getLogger(__name__)
 @asynccontextmanager
 async def _api_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Warm optional heavyweight models before the first user request."""
+    from agentic_rag.autodata_eval.router import recover_stuck_runs
 
     _preload_configured_models()
+    recover_stuck_runs()
     yield
 
 

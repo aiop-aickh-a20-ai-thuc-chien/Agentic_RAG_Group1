@@ -1,0 +1,410 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Pause, Pencil, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
+
+type Dataset  = { id: string; name: string; is_benchmark: boolean };
+type Run      = { id: string; name: string; status: string; total: number; success: number; failed: number; created_at: string };
+type Progress = { run_id: string; status: string; total: number; success: number; failed: number; not_started: number; ragas_done: number };
+
+const STATUS_LABEL: Record<string, string> = {
+  queued:  "Đang chờ",
+  running: "Đang chạy",
+  paused:  "Tạm dừng",
+  done:    "Hoàn thành",
+  error:   "Lỗi",
+};
+const STATUS_CLS: Record<string, string> = {
+  queued:  "bg-gray-100 text-gray-500",
+  running: "bg-blue-100 text-blue-700",
+  paused:  "bg-amber-100 text-amber-700",
+  done:    "bg-emerald-100 text-emerald-700",
+  error:   "bg-red-100 text-red-700",
+};
+
+function fmtDate(s: string) {
+  const d = new Date(s);
+  return d.toLocaleDateString("vi-VN") + " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function EvalRunPage() {
+  const [datasets,   setDatasets]   = useState<Dataset[]>([]);
+  const [datasetId,  setDatasetId]  = useState<string>("");
+  const [runName,    setRunName]    = useState<string>("");
+  const [creating,   setCreating]   = useState(false);
+  const [runs,       setRuns]       = useState<Run[]>([]);
+  const [activeId,   setActiveId]   = useState<string | null>(null);
+  const [progress,   setProgress]   = useState<Progress | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Rename state
+  const [editingId,   setEditingId]   = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
+  const [renaming,    setRenaming]    = useState(false);
+
+  // Delete state
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting,        setDeleting]        = useState(false);
+
+  useEffect(() => {
+    fetch(`${API}/internal/datasets`)
+      .then((r) => r.json())
+      .then((d: Dataset[]) => { setDatasets(d); if (d.length) setDatasetId(d[0].id); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!datasetId) return;
+    fetch(`${API}/internal/runs?dataset_id=${datasetId}`)
+      .then((r) => r.json())
+      .then((d: Run[]) => {
+        setRuns(d);
+        const active = d.find((r) => r.status === "running" || r.status === "queued");
+        if (active) setActiveId(active.id);
+      })
+      .catch(() => {});
+  }, [datasetId]);
+
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (!activeId) { setProgress(null); return; }
+
+    const poll = async () => {
+      try {
+        const r = await fetch(`${API}/internal/runs/${activeId}/progress`);
+        const p: Progress = await r.json();
+        setProgress(p);
+        setRuns((prev) => prev.map((run) =>
+          run.id === activeId
+            ? { ...run, status: p.status, success: p.success, failed: p.failed, total: p.total }
+            : run
+        ));
+        if (p.status !== "running" && p.status !== "queued") {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch {/* ignore */}
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeId]);
+
+  async function startRun() {
+    if (!datasetId || !runName.trim()) return;
+    setCreating(true);
+    try {
+      const r = await fetch(`${API}/internal/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataset_id: datasetId, name: runName.trim() }),
+      });
+      const d: Run = await r.json();
+      setRuns((prev) => [d, ...prev]);
+      setActiveId(d.id);
+      setRunName("");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function pauseRun() {
+    if (!activeId) return;
+    await fetch(`${API}/internal/runs/${activeId}/pause`, { method: "POST" });
+    setProgress((p) => p ? { ...p, status: "paused" } : p);
+    setRuns((prev) => prev.map((r) => r.id === activeId ? { ...r, status: "paused" } : r));
+  }
+
+  async function resumeRun() {
+    if (!activeId) return;
+    await fetch(`${API}/internal/runs/${activeId}/resume`, { method: "POST" });
+    setProgress((p) => p ? { ...p, status: "running" } : p);
+    setRuns((prev) => prev.map((r) => r.id === activeId ? { ...r, status: "running" } : r));
+    setActiveId((id) => id);
+  }
+
+  function startEdit(run: Run) {
+    setEditingId(run.id);
+    setEditingName(run.name);
+  }
+
+  async function saveRename(id: string) {
+    if (!editingName.trim()) return;
+    setRenaming(true);
+    try {
+      await fetch(`${API}/internal/runs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingName.trim() }),
+      });
+      setRuns((prev) => prev.map((r) => r.id === id ? { ...r, name: editingName.trim() } : r));
+      setEditingId(null);
+    } finally {
+      setRenaming(false);
+    }
+  }
+
+  async function deleteRun(id: string) {
+    setDeleting(true);
+    try {
+      await fetch(`${API}/internal/runs/${id}`, { method: "DELETE" });
+      setRuns((prev) => prev.filter((r) => r.id !== id));
+      if (activeId === id) { setActiveId(null); setProgress(null); }
+      setConfirmDeleteId(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const activeRun = runs.find((r) => r.id === activeId);
+  const confirmDeleteRun = runs.find((r) => r.id === confirmDeleteId);
+  const pct = progress && progress.total > 0
+    ? Math.round((progress.success / progress.total) * 100) : 0;
+  const failPct = progress && progress.total > 0
+    ? Math.round((progress.failed / progress.total) * 100) : 0;
+  const ragasPct = progress && progress.success > 0
+    ? Math.round((progress.ragas_done / progress.success) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Chạy Eval</h1>
+        <p className="text-sm text-gray-500 mt-1">Tạo và theo dõi tiến trình đánh giá</p>
+      </div>
+
+      {/* Confirm delete dialog */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-black/10 shadow-xl w-full max-w-sm mx-4 px-6 py-5 space-y-4">
+            <div>
+              <p className="text-base font-semibold text-gray-900">Xóa run?</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Xóa <span className="font-medium text-gray-800">{confirmDeleteRun?.name}</span> sẽ xóa toàn bộ kết quả eval của run này. Không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-1.5 text-sm rounded-lg border border-black/12 text-gray-500 hover:bg-gray-50">
+                Huỷ
+              </button>
+              <button onClick={() => deleteRun(confirmDeleteId)} disabled={deleting}
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {deleting && <Loader2 size={13} className="animate-spin" />}
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Config panel */}
+        <div className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Cấu hình</h2>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-gray-500">Dataset</label>
+            <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)}
+              className="w-full text-sm border border-black/12 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+              {datasets.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-gray-500">Tên run</label>
+            <input value={runName} onChange={(e) => setRunName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") startRun(); }}
+              placeholder="VD: Run tháng 6 v2"
+              className="w-full text-sm border border-black/12 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            />
+          </div>
+          <button onClick={startRun} disabled={creating || !datasetId || !runName.trim()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800 disabled:opacity-40 transition-colors">
+            {creating
+              ? <><Loader2 size={15} className="animate-spin" /> Đang tạo...</>
+              : <><Play size={15} /> Bắt đầu chạy eval</>}
+          </button>
+        </div>
+
+        {/* Progress panel */}
+        <div className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Tiến trình</h2>
+            {activeId && (
+              <button onClick={() => setActiveId((id) => id)}
+                className="text-gray-400 hover:text-gray-600 transition-colors" title="Làm mới">
+                <RefreshCw size={13} />
+              </button>
+            )}
+          </div>
+
+          {!activeId || !progress ? (
+            <div className="py-10 text-center text-sm text-gray-400">
+              {runs.find((r) => r.status === "running" || r.status === "queued")
+                ? "Đang tải tiến trình..."
+                : "Chưa có run nào đang chạy"}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-800 truncate">{activeRun?.name}</span>
+                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full shrink-0", STATUS_CLS[progress.status] ?? STATUS_CLS.queued)}>
+                  {STATUS_LABEL[progress.status] ?? progress.status}
+                </span>
+              </div>
+
+              {/* Pipeline progress */}
+              <div>
+                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                  <span>Pipeline: {progress.success} / {progress.total}</span>
+                  <span>{pct}%</span>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
+                  <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                  <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${failPct}%` }} />
+                </div>
+              </div>
+
+              {/* RAGAS progress */}
+              {progress.success > 0 && (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <span>RAGAS: {progress.ragas_done} / {progress.success}</span>
+                    <span>{ragasPct}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${ragasPct}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Counts */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-emerald-50 rounded-lg px-3 py-2">
+                  <p className="text-lg font-semibold text-emerald-700">{progress.success}</p>
+                  <p className="text-xs text-emerald-600">Thành công</p>
+                </div>
+                <div className="bg-red-50 rounded-lg px-3 py-2">
+                  <p className="text-lg font-semibold text-red-600">{progress.failed}</p>
+                  <p className="text-xs text-red-500">Lỗi</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <p className="text-lg font-semibold text-gray-600">{progress.not_started}</p>
+                  <p className="text-xs text-gray-400">Còn lại</p>
+                </div>
+              </div>
+
+              {/* Controls */}
+              {(progress.status === "running" || progress.status === "queued") && (
+                <button onClick={pauseRun}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-amber-300 text-amber-700 text-sm hover:bg-amber-50 transition-colors">
+                  <Pause size={14} /> Tạm dừng
+                </button>
+              )}
+              {progress.status === "paused" && (
+                <button onClick={resumeRun}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50 transition-colors">
+                  <Play size={14} /> Tiếp tục
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Run history */}
+      <div className="bg-white rounded-2xl border border-black/8 overflow-hidden">
+        <div className="px-5 py-4 border-b border-black/6">
+          <h2 className="text-sm font-semibold text-gray-700">Lịch sử run</h2>
+        </div>
+        {runs.length === 0 ? (
+          <div className="py-14 text-center text-sm text-gray-400">Chưa có run nào</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-black/6 bg-gray-50/60 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="px-5 py-3 text-left">Tên run</th>
+                <th className="px-3 py-3 text-center w-28">Trạng thái</th>
+                <th className="px-3 py-3 text-right w-28">Tiến độ</th>
+                <th className="px-3 py-3 text-right w-28">Lỗi</th>
+                <th className="px-5 py-3 text-right w-40">Thời gian</th>
+                <th className="px-3 py-3 w-32" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5">
+              {runs.map((run) => (
+                <tr key={run.id}
+                  className={cn("hover:bg-gray-50/50 transition-colors cursor-pointer", activeId === run.id && "bg-blue-50/40")}
+                  onClick={() => { if (editingId !== run.id) setActiveId(run.id); }}>
+
+                  {/* Name — inline edit */}
+                  <td className="px-5 py-3 font-medium text-gray-800" onClick={(e) => e.stopPropagation()}>
+                    {editingId === run.id ? (
+                      <form onSubmit={(e) => { e.preventDefault(); saveRename(run.id); }}
+                        className="flex items-center gap-1.5">
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="text-sm border border-emerald-300 rounded-lg px-2 py-1 w-48 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                        <button type="submit" disabled={renaming}
+                          className="text-xs px-2 py-1 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50">
+                          {renaming ? <Loader2 size={12} className="animate-spin" /> : "Lưu"}
+                        </button>
+                        <button type="button" onClick={() => setEditingId(null)}
+                          className="text-gray-400 hover:text-gray-600 p-1">
+                          <X size={13} />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-2 group/name">
+                        <span>{run.name}</span>
+                        <button
+                          onClick={() => startEdit(run)}
+                          className="opacity-0 group-hover/name:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity p-0.5"
+                          title="Đổi tên">
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+
+                  <td className="px-3 py-3 text-center">
+                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", STATUS_CLS[run.status] ?? STATUS_CLS.queued)}>
+                      {STATUS_LABEL[run.status] ?? run.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right text-gray-600 tabular-nums">{run.success} / {run.total}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    <span className={cn(run.failed > 0 ? "text-red-600" : "text-gray-400")}>{run.failed}</span>
+                  </td>
+                  <td className="px-5 py-3 text-right text-xs text-gray-400">{fmtDate(run.created_at)}</td>
+
+                  {/* Actions */}
+                  <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      <a href="/internal/eval-results"
+                        className="text-xs text-emerald-700 hover:underline whitespace-nowrap">
+                        Xem kết quả →
+                      </a>
+                      <button
+                        onClick={() => setConfirmDeleteId(run.id)}
+                        className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                        title="Xóa run">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}

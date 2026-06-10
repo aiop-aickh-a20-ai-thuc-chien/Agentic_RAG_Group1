@@ -28,7 +28,9 @@ class Dataset(BaseModel):
 # ── Question (draft) ──────────────────────────────────────────────────────────
 
 class QuestionCreate(BaseModel):
-    dataset_id: UUID
+    # Sinh câu là bước toàn cục — KHÔNG gắn dataset. Gán dataset là bước sau
+    # (trang Datasets, qua eval_dataset_questions).
+    dataset_id: UUID | None = None
     document_id: str
     section: str | None = None
     question: str
@@ -53,6 +55,12 @@ class QuestionWithStatus(Question):
     reviewed_by: str | None = None
     reviewed_at: datetime | None = None
     has_results: bool = False
+    global_seq: int = 0
+
+
+class QuestionUpdate(BaseModel):
+    question: str | None = None
+    ground_truth: str | None = None
 
 
 # ── Approve ───────────────────────────────────────────────────────────────────
@@ -93,6 +101,7 @@ class RunProgress(BaseModel):
     success: int
     failed: int
     not_started: int
+    ragas_done: int = 0
 
 
 # ── Eval Result ───────────────────────────────────────────────────────────────
@@ -123,15 +132,28 @@ class EvalResult(BaseModel):
 
 class GenerateRequest(BaseModel):
     document_id: str
-    dataset_id: UUID
+    dataset_id: UUID | None = None  # sinh câu toàn cục, dataset gán sau
     section_filters: list[str] | None = None  # None = toàn bộ document
     questions_per_section: int = Field(default=3, ge=1, le=10)
+    custom_prompt: str | None = None  # template với {n}/{section}/{context}; None = dùng mặc định
+
+
+class GenerateBulkRequest(BaseModel):
+    """Sinh câu cho nhiều document cùng lúc."""
+    dataset_id: UUID | None = None  # sinh câu toàn cục, dataset gán sau
+    document_ids: list[str]
+    questions_per_section: int = Field(default=3, ge=1, le=10)
+    only_missing: bool = True  # chỉ sinh cho section chưa có câu (resumable)
+    custom_prompt: str | None = None
 
 
 class GenerateJob(BaseModel):
     job_id: str
     status: str
     message: str
+    total_sections: int = 0
+    done_sections: int = 0
+    questions_created: int = 0
 
 
 # ── Compare ───────────────────────────────────────────────────────────────────

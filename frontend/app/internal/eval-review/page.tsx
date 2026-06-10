@@ -1,24 +1,25 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, Search, Trash2, Undo2, Upload, X } from "lucide-react";
+import { Archive, CheckCircle2, ChevronDown, ChevronRight, Search, Trash2, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
 type Dataset  = { id: string; name: string; is_benchmark: boolean };
 type Question = {
-  id: string; section: string | null; question: string; ground_truth: string;
+  id: string; dataset_id: string | null; section: string | null;
+  question: string; ground_truth: string;
   document_id: string; source_chunk_ids: string[] | null;
   is_approved: boolean; reviewed_by: string | null;
   deleted_at: string | null; created_at: string;
   has_results: boolean;
 };
-type Tab = "draft" | "approved" | "evaluated" | "archived";
+type Tab = "pending" | "approved" | "archived";
 type ChunkContent = { chunk_id: string; document_id: string; text: string; metadata: Record<string, unknown> };
 type PanelState = { chunkId: string; question: string; groundTruth: string };
 
-function ChunkPanel({ state, onClose }: { state: PanelState; onClose: () => void }) {
+function ChunkPanel({ state, onClose }: Readonly<{ state: PanelState; onClose: () => void }>) {
   const [data, setData] = useState<ChunkContent | null>(null);
   const [err,  setErr]  = useState(false);
 
@@ -32,30 +33,25 @@ function ChunkPanel({ state, onClose }: { state: PanelState; onClose: () => void
 
   return (
     <aside className="flex flex-col bg-white rounded-xl border border-black/8 overflow-hidden sticky top-20 max-h-[calc(100vh-6rem)]">
-      {/* Header */}
       <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-black/6 shrink-0 bg-gray-50/60">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">Chunk</p>
           <p className="text-xs font-mono text-gray-500 break-all leading-relaxed">{state.chunkId}</p>
-          {data?.metadata?.section && (
+          {typeof data?.metadata?.section === "string" && data.metadata.section && (
             <span className="mt-1.5 inline-block text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
-              {String(data.metadata.section)}
+              {data.metadata.section}
             </span>
           )}
         </div>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 shrink-0 mt-0.5"><X size={15} /></button>
       </div>
-
       <div className="flex-1 overflow-y-auto divide-y divide-black/6">
-        {/* Chunk content */}
         <div className="px-4 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Nội dung tài liệu</p>
           {!data && !err && <p className="text-sm text-gray-400 py-4 text-center">Đang tải...</p>}
           {err  && <p className="text-sm text-red-500 py-4 text-center">Không tìm thấy chunk</p>}
           {data && <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{data.text}</p>}
         </div>
-
-        {/* Q&A */}
         <div className="px-4 py-4 space-y-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Câu hỏi</p>
@@ -72,33 +68,34 @@ function ChunkPanel({ state, onClose }: { state: PanelState; onClose: () => void
 }
 
 export default function EvalReviewPage() {
-  const [datasets,  setDatasets]  = useState<Dataset[]>([]);
-  const [datasetId, setDatasetId] = useState<string>("");
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [tab,       setTab]       = useState<Tab>("approved");
-  const [selected,  setSelected]  = useState<Set<string>>(new Set());
-  const [expanded,  setExpanded]  = useState<string | null>(null);
-  const [search,    setSearch]    = useState("");
-  const [loading,   setLoading]   = useState(false);
-  const [panel,     setPanel]     = useState<PanelState | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [datasets,       setDatasets]       = useState<Dataset[]>([]);
+  const [questions,      setQuestions]      = useState<Question[]>([]);
+  const [tab,            setTab]            = useState<Tab>("pending");
+  const [selected,       setSelected]       = useState<Set<string>>(new Set());
+  const [expanded,       setExpanded]       = useState<string | null>(null);
+  const [search,         setSearch]         = useState("");
+  const [loading,        setLoading]        = useState(false);
+  const [panel,          setPanel]          = useState<PanelState | null>(null);
+  const [editing,        setEditing]        = useState<{ id: string; question: string; groundTruth: string } | null>(null);
 
   useEffect(() => {
     fetch(`${API}/internal/datasets`)
       .then((r) => r.json())
-      .then((d: Dataset[]) => { setDatasets(d); if (d.length) setDatasetId(d[0].id); })
+      .then((d: Dataset[]) => setDatasets(d))
       .catch(() => {});
+    loadQuestions();
   }, []);
-
-  useEffect(() => { if (datasetId) loadQuestions(); }, [datasetId]);
 
   function loadQuestions() {
     setLoading(true);
-    fetch(`${API}/internal/datasets/${datasetId}/questions?include_deleted=true`)
+    fetch(`${API}/internal/questions?include_deleted=true`)
       .then((r) => r.json())
       .then((d: Question[]) => { setQuestions(d); setLoading(false); })
       .catch(() => setLoading(false));
+  }
+
+  function patchLocal(ids: string[], changes: Partial<Question>) {
+    setQuestions((prev) => prev.map((q) => ids.includes(q.id) ? { ...q, ...changes } : q));
   }
 
   async function approveOne(id: string) {
@@ -106,7 +103,7 @@ export default function EvalReviewPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question_ids: [id], reviewed_by: "internal" }),
     });
-    loadQuestions();
+    patchLocal([id], { is_approved: true });
   }
 
   async function archiveOne(id: string) {
@@ -114,7 +111,7 @@ export default function EvalReviewPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify([id]),
     });
-    loadQuestions();
+    patchLocal([id], { deleted_at: new Date().toISOString() });
   }
 
   async function restoreOne(id: string) {
@@ -122,53 +119,79 @@ export default function EvalReviewPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify([id]),
     });
-    loadQuestions();
+    patchLocal([id], { deleted_at: null });
   }
 
   async function handleBulkApprove() {
+    const ids = [...selected];
     await fetch(`${API}/internal/questions/approve`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question_ids: [...selected], reviewed_by: "internal" }),
+      body: JSON.stringify({ question_ids: ids, reviewed_by: "internal" }),
     });
-    setSelected(new Set()); loadQuestions();
+    patchLocal(ids, { is_approved: true });
+    setSelected(new Set());
   }
 
   async function handleBulkArchive() {
+    const ids = [...selected];
     await fetch(`${API}/internal/questions/archive`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([...selected]),
+      body: JSON.stringify(ids),
     });
-    setSelected(new Set()); loadQuestions();
+    patchLocal(ids, { deleted_at: new Date().toISOString() });
+    setSelected(new Set());
   }
 
   async function handleBulkRestore() {
+    const ids = [...selected];
     await fetch(`${API}/internal/questions/restore`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([...selected]),
+      body: JSON.stringify(ids),
     });
-    setSelected(new Set()); loadQuestions();
+    patchLocal(ids, { deleted_at: null });
+    setSelected(new Set());
   }
 
-  async function handleImport() {
-    if (!datasetId) return;
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const r = await fetch(`${API}/internal/datasets/${datasetId}/import-excel`, { method: "POST" });
-      const d = await r.json();
-      setImportMsg(`Đã import ${d.imported} câu hỏi mới`);
-      if (d.imported > 0) loadQuestions();
-    } catch {
-      setImportMsg("Import thất bại");
-    } finally {
-      setImporting(false);
+  // Xóa cứng — BE chỉ xóa câu chưa có kết quả eval; câu đã chạy bị skip (giữ lịch sử).
+  async function deleteForever(ids: string[]) {
+    const res = await fetch(`${API}/internal/questions`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ids),
+    });
+    const d = await res.json().catch(() => ({ deleted: 0, skipped: [] as string[] }));
+    const skipped: string[] = d.skipped ?? [];
+    const deletedIds = new Set(ids.filter((id) => !skipped.includes(id)));
+    setQuestions((prev) => prev.filter((q) => !deletedIds.has(q.id)));
+    setSelected(new Set());
+    if (skipped.length > 0) {
+      alert(`${skipped.length} câu đã có kết quả eval nên không xóa cứng được (chỉ archive để giữ lịch sử).`);
     }
   }
 
+  function deleteForeverOne(id: string) {
+    if (confirm("Xóa vĩnh viễn câu này? Không khôi phục được.")) deleteForever([id]);
+  }
+
+  function handleBulkDeleteForever() {
+    if (confirm(`Xóa vĩnh viễn ${selected.size} câu đã chọn? Không khôi phục được.`)) {
+      deleteForever([...selected]);
+    }
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    await fetch(`${API}/internal/questions/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: editing.question, ground_truth: editing.groundTruth }),
+    });
+    patchLocal([editing.id], { question: editing.question, ground_truth: editing.groundTruth });
+    setEditing(null);
+  }
+
   const byTab = questions.filter((q) => {
-    if (tab === "draft")     return !q.deleted_at && !q.is_approved;
-    if (tab === "approved")  return !q.deleted_at && q.is_approved && !q.has_results;
-    if (tab === "evaluated") return !q.deleted_at && q.has_results;
+    if (tab === "pending")  return !q.deleted_at && !q.is_approved;
+    if (tab === "approved") return !q.deleted_at && q.is_approved;
     return !!q.deleted_at;
   });
 
@@ -183,18 +206,19 @@ export default function EvalReviewPage() {
   const toggleAll = () => setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((q) => q.id)));
 
   const counts = {
-    draft:     questions.filter((q) => !q.deleted_at && !q.is_approved).length,
-    approved:  questions.filter((q) => !q.deleted_at && q.is_approved && !q.has_results).length,
-    evaluated: questions.filter((q) => !q.deleted_at && q.has_results).length,
-    archived:  questions.filter((q) => !!q.deleted_at).length,
+    pending:  questions.filter((q) => !q.deleted_at && !q.is_approved).length,
+    approved: questions.filter((q) => !q.deleted_at && q.is_approved).length,
+    archived: questions.filter((q) => !!q.deleted_at).length,
   };
 
-  const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "draft",     label: "Chưa review",  count: counts.draft },
-    { key: "approved",  label: "Đã duyệt",     count: counts.approved },
-    { key: "evaluated", label: "Đã đánh giá",  count: counts.evaluated },
-    { key: "archived",  label: "Archive",       count: counts.archived },
+  const TABS: { key: Tab; label: string; count: number; active: string; hover: string }[] = [
+    { key: "pending",  label: "Chưa review", count: counts.pending,  active: "bg-amber-500 text-white",   hover: "text-amber-600 hover:bg-amber-50" },
+    { key: "approved", label: "Đã duyệt",    count: counts.approved, active: "bg-blue-600 text-white",    hover: "text-blue-600 hover:bg-blue-50" },
+    { key: "archived", label: "Loại bỏ",     count: counts.archived, active: "bg-gray-500 text-white",    hover: "text-gray-500 hover:bg-gray-100" },
   ];
+
+  const datasetMap  = Object.fromEntries(datasets.map((d) => [d.id, d.name]));
+  const globalIndex = Object.fromEntries(questions.map((q, i) => [q.id, i + 1]));
 
   const openPanel = (chunkId: string, q: Question) =>
     setPanel({ chunkId, question: q.question, groundTruth: q.ground_truth });
@@ -207,25 +231,6 @@ export default function EvalReviewPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Review</h1>
           <p className="text-sm text-gray-500 mt-1">Duyệt câu hỏi trước khi đưa vào eval</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={datasetId}
-            onChange={(e) => { setDatasetId(e.target.value); setSelected(new Set()); }}
-            className="text-sm border border-black/12 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-          >
-            {datasets.map((d) => <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}</option>)}
-          </select>
-          <button
-            onClick={handleImport}
-            disabled={importing || !datasetId}
-            title="Import câu hỏi pending từ result.xlsx"
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-black/12 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            <Upload size={14} />
-            {importing ? "Đang import..." : "Import Excel"}
-          </button>
-          {importMsg && <span className="text-xs text-gray-500">{importMsg}</span>}
-        </div>
       </div>
 
       {/* Tabs + search + bulk */}
@@ -237,7 +242,7 @@ export default function EvalReviewPage() {
               onClick={() => { setTab(t.key); setSelected(new Set()); setExpanded(null); }}
               className={cn(
                 "px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors",
-                tab === t.key ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                tab === t.key ? t.active : t.hover
               )}
             >
               {t.label}
@@ -259,24 +264,29 @@ export default function EvalReviewPage() {
             />
           </div>
 
-          {selected.size > 0 && tab !== "evaluated" && (
+          {selected.size > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400">Đã chọn {selected.size}</span>
-              {tab === "draft" && (
+              {tab === "pending" && (
                 <button onClick={handleBulkApprove} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors">
-                  <CheckCircle2 size={13} /> Duyệt tất cả
-                </button>
-              )}
-              {tab !== "archived" && (
-                <button onClick={handleBulkArchive} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-                  <Trash2 size={13} /> Xóa tất cả
+                  <CheckCircle2 size={13} /> Duyệt câu chọn
                 </button>
               )}
               {tab === "archived" && (
                 <button onClick={handleBulkRestore} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
-                  <Undo2 size={13} /> Restore tất cả
+                  <Undo2 size={13} /> Khôi phục
                 </button>
               )}
+              {/* Nút 1 — Loại bỏ (mềm) */}
+              {tab !== "archived" && (
+                <button onClick={handleBulkArchive} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+                  <Archive size={13} /> Loại bỏ
+                </button>
+              )}
+              {/* Nút 2 — Xóa vĩnh viễn (cứng); câu đã có kết quả sẽ bị BE skip */}
+              <button onClick={handleBulkDeleteForever} className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors">
+                <Trash2 size={13} /> Xóa vĩnh viễn
+              </button>
             </div>
           )}
         </div>
@@ -284,7 +294,6 @@ export default function EvalReviewPage() {
 
       {/* Main: table + side panel */}
       <div className={cn("grid gap-4", panel ? "grid-cols-[1fr_380px]" : "grid-cols-1")}>
-        {/* Table */}
         <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
           {loading ? (
             <div className="py-16 text-center text-sm text-gray-400">Đang tải...</div>
@@ -295,6 +304,7 @@ export default function EvalReviewPage() {
                   <th className="w-10 px-4 py-3">
                     <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} className="accent-emerald-600" />
                   </th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 w-12">#</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Câu hỏi</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Đáp án chuẩn</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 w-48">Ground Truth IDs</th>
@@ -304,10 +314,11 @@ export default function EvalReviewPage() {
               </thead>
               <tbody className="divide-y divide-black/5">
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="py-14 text-center text-sm text-gray-400">Không có câu hỏi</td></tr>
+                  <tr><td colSpan={7} className="py-14 text-center text-sm text-gray-400">Không có câu hỏi</td></tr>
                 )}
                 {filtered.map((q) => {
-                  const isExp = expanded === q.id;
+                  const isExp         = expanded === q.id;
+                  const isEditing     = editing?.id === q.id;
                   const isActiveChunk = panel?.chunkId && q.source_chunk_ids?.includes(panel.chunkId);
                   return (
                     <React.Fragment key={q.id}>
@@ -315,15 +326,37 @@ export default function EvalReviewPage() {
                         "hover:bg-gray-50/50 transition-colors",
                         selected.has(q.id) && "bg-emerald-50/50",
                         isActiveChunk && "bg-blue-50/40 ring-1 ring-inset ring-blue-200/60",
+                        isEditing && "bg-amber-50/60 ring-1 ring-inset ring-amber-200/60",
                       )}>
                         <td className="px-4 py-3">
                           <input type="checkbox" checked={selected.has(q.id)} onChange={() => toggleQ(q.id)} className="accent-emerald-600" />
                         </td>
-                        <td className="px-4 py-3">
-                          <p className="text-gray-800 leading-relaxed">{q.question}</p>
+                        <td className="px-3 py-3">
+                          <span className="text-xs text-gray-400 tabular-nums">{globalIndex[q.id]}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-gray-500 text-xs leading-relaxed">{q.ground_truth}</p>
+                          {isEditing
+                            ? <textarea autoFocus rows={3} value={editing.question}
+                                onChange={(e) => setEditing({ ...editing, question: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") setEditing(null); }}
+                                className="w-full text-xs border border-amber-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400/40 resize-none" />
+                            : <button type="button" disabled={tab === "archived"}
+                                onClick={() => setEditing({ id: q.id, question: q.question, groundTruth: q.ground_truth })}
+                                className="text-left text-xs text-gray-800 leading-relaxed w-full cursor-text hover:bg-amber-50/60 rounded px-1 -mx-1 transition-colors disabled:cursor-default disabled:hover:bg-transparent line-clamp-3">
+                                {q.question}
+                              </button>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {isEditing
+                            ? <textarea rows={3} value={editing.groundTruth}
+                                onChange={(e) => setEditing({ ...editing, groundTruth: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); } if (e.key === "Escape") setEditing(null); }}
+                                className="w-full text-xs border border-amber-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400/40 resize-none" />
+                            : <button type="button" disabled={tab === "archived"}
+                                onClick={() => setEditing({ id: q.id, question: q.question, groundTruth: q.ground_truth })}
+                                className="text-left text-gray-500 text-xs leading-relaxed w-full cursor-text hover:bg-amber-50/60 rounded px-1 -mx-1 transition-colors disabled:cursor-default disabled:hover:bg-transparent">
+                                {q.ground_truth}
+                              </button>}
                         </td>
                         <td className="px-3 py-3">
                           {q.source_chunk_ids && q.source_chunk_ids.length > 0 ? (
@@ -350,22 +383,35 @@ export default function EvalReviewPage() {
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex items-center justify-center gap-1">
-                            {tab === "draft" && (
+                            {tab === "pending" && (
                               <button onClick={() => approveOne(q.id)} title="Duyệt"
                                 className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors">
                                 <CheckCircle2 size={16} />
-                              </button>
-                            )}
-                            {tab !== "archived" && tab !== "evaluated" && (
-                              <button onClick={() => archiveOne(q.id)} title="Xóa"
-                                className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-                                <Trash2 size={16} />
                               </button>
                             )}
                             {tab === "archived" && (
                               <button onClick={() => restoreOne(q.id)} title="Khôi phục"
                                 className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors">
                                 <Undo2 size={16} />
+                              </button>
+                            )}
+                            {/* Nút 1 — Loại bỏ (mềm, khôi phục được) */}
+                            {tab !== "archived" && (
+                              <button onClick={() => archiveOne(q.id)} title="Loại bỏ (vào thùng rác, khôi phục được)"
+                                className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors">
+                                <Archive size={16} />
+                              </button>
+                            )}
+                            {/* Nút 2 — Xóa vĩnh viễn (cứng); câu đã có kết quả eval thì khóa */}
+                            {q.has_results ? (
+                              <button disabled title="Đã có kết quả eval — không xóa cứng được, chỉ loại bỏ"
+                                className="p-1.5 rounded-lg text-gray-300 cursor-not-allowed">
+                                <Trash2 size={16} />
+                              </button>
+                            ) : (
+                              <button onClick={() => deleteForeverOne(q.id)} title="Xóa vĩnh viễn (không khôi phục được)"
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors">
+                                <Trash2 size={16} />
                               </button>
                             )}
                           </div>
@@ -379,13 +425,20 @@ export default function EvalReviewPage() {
 
                       {isExp && (
                         <tr className="bg-gray-50/40">
-                          <td colSpan={6} className="px-8 py-5">
+                          <td colSpan={7} className="px-8 py-5">
                             <div className="space-y-4 text-sm">
-                              {q.section && (
-                                <span className="inline-flex items-center text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
-                                  {q.section}
-                                </span>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {q.section && (
+                                  <span className="inline-flex items-center text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full">
+                                    {q.section}
+                                  </span>
+                                )}
+                                {q.dataset_id && datasetMap[q.dataset_id] && (
+                                  <span className="inline-flex items-center text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full">
+                                    {datasetMap[q.dataset_id]}
+                                  </span>
+                                )}
+                              </div>
                               <div className="grid grid-cols-2 gap-6">
                                 <div>
                                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Câu hỏi đầy đủ</p>
@@ -412,7 +465,6 @@ export default function EvalReviewPage() {
           )}
         </div>
 
-        {/* Side panel */}
         {panel && <ChunkPanel state={panel} onClose={() => setPanel(null)} />}
       </div>
     </div>
