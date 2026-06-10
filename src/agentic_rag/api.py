@@ -6,30 +6,27 @@ import json
 import logging
 import os
 import re
+import time
 import warnings
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
+from html.parser import HTMLParser
+from typing import Any
+from urllib.error import HTTPError as UrlHTTPError
+from urllib.error import URLError
+from urllib.parse import quote, urlparse
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 
 from dotenv import load_dotenv
-load_dotenv()
-from typing import Any
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel, Field
 
-warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
-import time  # noqa: E402
-from collections.abc import AsyncIterator, Iterator  # noqa: E402
-from contextlib import asynccontextmanager  # noqa: E402
-from html.parser import HTMLParser  # noqa: E402
-from urllib.error import HTTPError as UrlHTTPError  # noqa: E402
-from urllib.error import URLError  # noqa: E402
-from urllib.parse import quote, urlparse  # noqa: E402
-from urllib.request import Request as UrlRequest  # noqa: E402
-from urllib.request import urlopen  # noqa: E402
-
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import FileResponse, Response, StreamingResponse  # noqa: E402
-from pydantic import BaseModel, Field  # noqa: E402
-
-from agentic_rag.agent.graph import run_agent  # noqa: E402
-from agentic_rag.core.contracts import (  # noqa: E402
+from agentic_rag.agent.graph import run_agent
+from agentic_rag.autodata_eval.router import router as autodata_eval_router
+from agentic_rag.core.contracts import (
     Answer,
     Chunk,
     ConversationMessage,
@@ -38,40 +35,41 @@ from agentic_rag.core.contracts import (  # noqa: E402
     SourceDocumentChunks,
     WorkflowRunInput,
 )
-from agentic_rag.core.ports import SourceEvidenceProvider  # noqa: E402
-from agentic_rag.eval_review import router as eval_review_router  # noqa: E402
-from agentic_rag.autodata_eval.router import router as autodata_eval_router  # noqa: E402
-from agentic_rag.generation.answering import (  # noqa: E402
+from agentic_rag.core.ports import SourceEvidenceProvider
+from agentic_rag.eval_review import router as eval_review_router
+from agentic_rag.generation.answering import (
     AnswerDelta,
     AnswerDone,
     generate_answer_with_trace,
     stream_answer,
 )
-from agentic_rag.generation.evidence import (  # noqa: E402
+from agentic_rag.generation.evidence import (
     EvidenceProviderName,
     configured_evidence_provider_name,
     evidence_for_question,
     ragflow_provider_from_env,
     source_provider_from_env,
 )
-from agentic_rag.integrations.local_pdf.providers import (  # noqa: E402
+from agentic_rag.integrations.local_pdf.providers import (
     LocalPdfEvidenceProvider,
     local_pdf_backend_status,
 )
-from agentic_rag.integrations.ragflow.client import RAGFlowClientError  # noqa: E402
-from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError  # noqa: E402
-from agentic_rag.model_runtime.factory import preload_configured_models  # noqa: E402
-from agentic_rag.observability.trace import (  # noqa: E402
+from agentic_rag.integrations.ragflow.client import RAGFlowClientError
+from agentic_rag.integrations.ragflow.config import RAGFlowConfigurationError
+from agentic_rag.model_runtime.factory import preload_configured_models
+from agentic_rag.observability.trace import (
     new_run_id,
     write_rag_trace,
     write_source_trace,
 )
-from agentic_rag.retrieval.fusion import (  # noqa: E402
+from agentic_rag.retrieval.fusion import (
     build_evidence_context as _build_evidence_context,
 )
-from agentic_rag.runtime_env import load_local_env  # noqa: E402
+from agentic_rag.runtime_env import load_local_env
 
+load_dotenv()
 load_local_env()
+warnings.filterwarnings("ignore", message=".*CollectionStore.*", category=Warning)
 
 UPLOAD_FILE = File(...)
 LOGGER = logging.getLogger(__name__)

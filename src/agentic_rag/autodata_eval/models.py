@@ -8,8 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Dataset ───────────────────────────────────────────────────────────────────
+
 
 class DatasetCreate(BaseModel):
     name: str
@@ -26,6 +26,7 @@ class Dataset(BaseModel):
 
 
 # ── Question (draft) ──────────────────────────────────────────────────────────
+
 
 class QuestionCreate(BaseModel):
     # Sinh câu là bước toàn cục — KHÔNG gắn dataset. Gán dataset là bước sau
@@ -65,12 +66,14 @@ class QuestionUpdate(BaseModel):
 
 # ── Approve ───────────────────────────────────────────────────────────────────
 
+
 class ApproveRequest(BaseModel):
     question_ids: list[UUID]
     reviewed_by: str = "internal"
 
 
 # ── Eval Run ──────────────────────────────────────────────────────────────────
+
 
 class RunCreate(BaseModel):
     dataset_id: UUID
@@ -106,6 +109,7 @@ class RunProgress(BaseModel):
 
 # ── Eval Result ───────────────────────────────────────────────────────────────
 
+
 class EvalResult(BaseModel):
     id: UUID
     question_id: UUID
@@ -130,6 +134,7 @@ class EvalResult(BaseModel):
 
 # ── AutoData Generate ─────────────────────────────────────────────────────────
 
+
 class GenerateRequest(BaseModel):
     document_id: str
     dataset_id: UUID | None = None  # sinh câu toàn cục, dataset gán sau
@@ -140,6 +145,7 @@ class GenerateRequest(BaseModel):
 
 class GenerateBulkRequest(BaseModel):
     """Sinh câu cho nhiều document cùng lúc."""
+
     dataset_id: UUID | None = None  # sinh câu toàn cục, dataset gán sau
     document_ids: list[str]
     questions_per_section: int = Field(default=3, ge=1, le=10)
@@ -157,6 +163,7 @@ class GenerateJob(BaseModel):
 
 
 # ── Compare ───────────────────────────────────────────────────────────────────
+
 
 class RunSummary(BaseModel):
     run_id: UUID

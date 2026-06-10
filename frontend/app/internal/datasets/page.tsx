@@ -228,7 +228,7 @@ export default function DatasetsPage() {
             <div
               key={d.id}
               className={cn(
-                "group flex items-center border-b border-black/5 last:border-0 transition-colors hover:bg-gray-50",
+                "group flex items-center border-b border-black/5 last:border-0 hover:bg-gray-50 row-hover",
                 activeId === d.id && "bg-emerald-50 hover:bg-emerald-50"
               )}
             >

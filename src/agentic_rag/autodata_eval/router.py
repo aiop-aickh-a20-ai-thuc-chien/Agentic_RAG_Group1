@@ -11,7 +11,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-from psycopg.rows import dict_row
 
 from agentic_rag.autodata_eval.config_snapshot import snapshot_pipeline_config
 from agentic_rag.autodata_eval.db import get_conn
@@ -33,6 +32,8 @@ from agentic_rag.autodata_eval.models import (
     RunSummary,
 )
 from agentic_rag.autodata_eval.worker import run_eval_worker, run_ragas_worker
+from agentic_rag.core.contracts import Chunk
+from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["autodata-eval"])
@@ -40,36 +41,49 @@ router = APIRouter(tags=["autodata-eval"])
 
 # ── Datasets ──────────────────────────────────────────────────────────────────
 
+
 @router.get("/datasets", response_model=list[Dataset])
-def list_datasets() -> list[dict]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM eval_datasets ORDER BY created_at DESC")
-            return cur.fetchall()
+def list_datasets() -> list[dict[str, Any]]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT * FROM eval_datasets ORDER BY created_at DESC")
+        return cur.fetchall()
 
 
 @router.delete("/datasets/{dataset_id}")
-def delete_dataset(dataset_id: UUID) -> dict:
+def delete_dataset(dataset_id: UUID) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM eval_results WHERE run_id IN (SELECT id FROM eval_runs WHERE dataset_id = %s)",
+                """
+                DELETE FROM eval_results
+                WHERE run_id IN (
+                    SELECT id FROM eval_runs WHERE dataset_id = %s
+                )
+                """,
                 (str(dataset_id),),
             )
             cur.execute("DELETE FROM eval_runs WHERE dataset_id = %s", (str(dataset_id),))
             # Detach trước khi xóa: cột legacy dataset_id trên eval_questions /
             # eval_questions_approved có FK ON DELETE CASCADE — không detach thì
             # xóa dataset sẽ hard-delete câu hỏi trong kho (mất dữ liệu).
-            cur.execute("UPDATE eval_questions SET dataset_id = NULL WHERE dataset_id = %s", (str(dataset_id),))
-            cur.execute("UPDATE eval_questions_approved SET dataset_id = NULL WHERE dataset_id = %s", (str(dataset_id),))
-            cur.execute("DELETE FROM eval_dataset_questions WHERE dataset_id = %s", (str(dataset_id),))
+            cur.execute(
+                "UPDATE eval_questions SET dataset_id = NULL WHERE dataset_id = %s",
+                (str(dataset_id),),
+            )
+            cur.execute(
+                "UPDATE eval_questions_approved SET dataset_id = NULL WHERE dataset_id = %s",
+                (str(dataset_id),),
+            )
+            cur.execute(
+                "DELETE FROM eval_dataset_questions WHERE dataset_id = %s", (str(dataset_id),)
+            )
             cur.execute("DELETE FROM eval_datasets WHERE id = %s", (str(dataset_id),))
         conn.commit()
     return {"ok": True}
 
 
 @router.post("/datasets", response_model=Dataset)
-def create_dataset(body: DatasetCreate) -> dict:
+def create_dataset(body: DatasetCreate) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -81,19 +95,21 @@ def create_dataset(body: DatasetCreate) -> dict:
             )
             row = cur.fetchone()
         conn.commit()
+    if row is None:
+        raise HTTPException(status_code=500, detail="Dataset was not created")
     return row
 
 
 # ── Questions ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/questions", response_model=list[QuestionWithStatus])
-def list_all_questions(include_deleted: bool = False) -> list[dict]:
+def list_all_questions(include_deleted: bool = False) -> list[dict[str, Any]]:
     """Lấy tất cả câu hỏi từ mọi dataset (dùng cho Review page)."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            deleted_filter = "" if include_deleted else "WHERE q.deleted_at IS NULL"
-            cur.execute(
-                f"""
+    with get_conn() as conn, conn.cursor() as cur:
+        deleted_filter = "" if include_deleted else "WHERE q.deleted_at IS NULL"
+        cur.execute(
+            f"""
                 WITH global_order AS (
                   SELECT id,
                     ROW_NUMBER() OVER (ORDER BY created_at DESC) AS global_seq
@@ -114,18 +130,17 @@ def list_all_questions(include_deleted: bool = False) -> list[dict]:
                 {deleted_filter}
                 ORDER BY q.created_at DESC
                 """
-            )
-            return cur.fetchall()
+        )
+        return cur.fetchall()
 
 
 @router.get("/datasets/{dataset_id}/questions", response_model=list[QuestionWithStatus])
-def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict]:
+def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict[str, Any]]:
     """Lấy câu hỏi thuộc dataset (qua junction table eval_dataset_questions)."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            deleted_filter = "" if include_deleted else "AND q.deleted_at IS NULL"
-            cur.execute(
-                f"""
+    with get_conn() as conn, conn.cursor() as cur:
+        deleted_filter = "" if include_deleted else "AND q.deleted_at IS NULL"
+        cur.execute(
+            f"""
                 WITH global_order AS (
                   SELECT id,
                     ROW_NUMBER() OVER (ORDER BY created_at DESC) AS global_seq
@@ -150,13 +165,13 @@ def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict
                 WHERE dq.dataset_id = %s {deleted_filter}
                 ORDER BY q.created_at DESC
                 """,
-                (str(dataset_id), str(dataset_id)),
-            )
-            return cur.fetchall()
+            (str(dataset_id), str(dataset_id)),
+        )
+        return cur.fetchall()
 
 
 @router.patch("/questions/{question_id}", response_model=Question)
-def update_question(question_id: UUID, body: QuestionUpdate) -> dict:
+def update_question(question_id: UUID, body: QuestionUpdate) -> dict[str, Any]:
     """Cập nhật câu hỏi và/hoặc đáp án chuẩn."""
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
@@ -188,26 +203,34 @@ def _doc_id_from_chunks(chunk_ids: list[str]) -> str:
     return f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else chunk_ids[0]
 
 
-def _parse_excel_row(row: tuple, col: dict[str, int]) -> dict | None:
+def _parse_excel_row(row: tuple[Any, ...], col: dict[str, int]) -> dict[str, Any] | None:
     """Return a question dict (với approved=True/False), hoặc None nếu thiếu dữ liệu."""
     q_text = row[col["question"]] if "question" in col else None
-    gt     = row[col["expected_answer"]] if "expected_answer" in col else None
+    gt = row[col["expected_answer"]] if "expected_answer" in col else None
     if not q_text or not gt:
         return None
-    status    = str(row[col["review_status"]]).strip() if "review_status" in col and row[col["review_status"]] else ""
-    chunk_ids = _parse_chunk_ids(row[col["ground_truth_chunk_ids"]] if "ground_truth_chunk_ids" in col else None)
-    section   = row[col["section_name"]] if "section_name" in col else None
+    status = (
+        str(row[col["review_status"]]).strip()
+        if "review_status" in col and row[col["review_status"]]
+        else ""
+    )
+    chunk_ids = _parse_chunk_ids(
+        row[col["ground_truth_chunk_ids"]] if "ground_truth_chunk_ids" in col else None
+    )
+    section = row[col["section_name"]] if "section_name" in col else None
     return {
-        "question":     str(q_text).strip(),
+        "question": str(q_text).strip(),
         "ground_truth": str(gt).strip(),
-        "section":      str(section) if section else None,
-        "chunk_ids":    chunk_ids,
-        "doc_id":       _doc_id_from_chunks(chunk_ids),
-        "approved":     status == "approved",
+        "section": str(section) if section else None,
+        "chunk_ids": chunk_ids,
+        "doc_id": _doc_id_from_chunks(chunk_ids),
+        "approved": status == "approved",
     }
 
 
-def _load_excel_rows(col: dict[str, int], rows: list[tuple], existing: set) -> tuple[list[dict], list[dict]]:
+def _load_excel_rows(
+    col: dict[str, int], rows: list[tuple[Any, ...]], existing: set[tuple[str, str]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Trả về (draft_rows, approved_rows) chưa có trong DB."""
     seen: set[tuple[str, str]] = set()
     drafts, approveds = [], []
@@ -227,10 +250,11 @@ def _load_excel_rows(col: dict[str, int], rows: list[tuple], existing: set) -> t
 
 
 @router.post("/datasets/{dataset_id}/import-excel")
-def import_pending_from_excel(dataset_id: UUID) -> dict:
+def import_pending_from_excel(dataset_id: UUID) -> dict[str, Any]:
     """Import câu hỏi từ result.xlsx: pending/None → Draft, approved → insert + approve ngay."""
-    import openpyxl
     from pathlib import Path
+
+    import openpyxl
 
     excel_path = Path("guide/reports/result.xlsx")
     if not excel_path.exists():
@@ -241,20 +265,19 @@ def import_pending_from_excel(dataset_id: UUID) -> dict:
     all_rows = list(ws.iter_rows(values_only=True))
     col = {h: i for i, h in enumerate(all_rows[1]) if h is not None}
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT question, ground_truth FROM eval_questions WHERE dataset_id = %s",
-                (str(dataset_id),),
-            )
-            existing = {(r["question"].strip(), r["ground_truth"].strip()) for r in cur.fetchall()}
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT question, ground_truth FROM eval_questions WHERE dataset_id = %s",
+            (str(dataset_id),),
+        )
+        existing = {(r["question"].strip(), r["ground_truth"].strip()) for r in cur.fetchall()}
 
     drafts, approveds = _load_excel_rows(col, all_rows[2:], existing)
 
     if not drafts and not approveds:
         return {"imported_draft": 0, "imported_approved": 0, "skipped_existing": len(existing)}
 
-    def _link_to_dataset(cur, question_id: str) -> None:
+    def _link_to_dataset(cur: Any, question_id: str) -> None:
         # list_questions của dataset đọc qua junction — không link thì câu import
         # chỉ thấy ở Review toàn cục, không thấy trong dataset.
         cur.execute(
@@ -275,8 +298,14 @@ def import_pending_from_excel(dataset_id: UUID) -> dict:
                     VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (str(dataset_id), q["doc_id"], q["section"],
-                     q["question"], q["ground_truth"], q["chunk_ids"]),
+                    (
+                        str(dataset_id),
+                        q["doc_id"],
+                        q["section"],
+                        q["question"],
+                        q["ground_truth"],
+                        q["chunk_ids"],
+                    ),
                 )
                 row = cur.fetchone()
                 if row:
@@ -289,8 +318,14 @@ def import_pending_from_excel(dataset_id: UUID) -> dict:
                     VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (str(dataset_id), q["doc_id"], q["section"],
-                     q["question"], q["ground_truth"], q["chunk_ids"]),
+                    (
+                        str(dataset_id),
+                        q["doc_id"],
+                        q["section"],
+                        q["question"],
+                        q["ground_truth"],
+                        q["chunk_ids"],
+                    ),
                 )
                 row = cur.fetchone()
                 if row:
@@ -306,14 +341,14 @@ def import_pending_from_excel(dataset_id: UUID) -> dict:
         conn.commit()
 
     return {
-        "imported_draft":    len(drafts),
+        "imported_draft": len(drafts),
         "imported_approved": len(approveds),
-        "skipped_existing":  len(existing),
+        "skipped_existing": len(existing),
     }
 
 
 @router.post("/questions/batch", response_model=list[Question])
-def create_questions_batch(questions: list[QuestionCreate]) -> list[dict]:
+def create_questions_batch(questions: list[QuestionCreate]) -> list[dict[str, Any]]:
     if not questions:
         return []
     with get_conn() as conn:
@@ -327,17 +362,23 @@ def create_questions_batch(questions: list[QuestionCreate]) -> list[dict]:
                     VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
                     """,
                     (
-                        str(q.dataset_id) if q.dataset_id else None, q.document_id, q.section,
-                        q.question, q.ground_truth, q.source_chunk_ids,
+                        str(q.dataset_id) if q.dataset_id else None,
+                        q.document_id,
+                        q.section,
+                        q.question,
+                        q.ground_truth,
+                        q.source_chunk_ids,
                     ),
                 )
-                rows.append(cur.fetchone())
+                row = cur.fetchone()
+                if row is not None:
+                    rows.append(row)
         conn.commit()
     return rows
 
 
 @router.post("/questions/approve")
-def approve_questions(body: ApproveRequest) -> dict:
+def approve_questions(body: ApproveRequest) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             for qid in body.question_ids:
@@ -356,7 +397,7 @@ def approve_questions(body: ApproveRequest) -> dict:
 
 
 @router.delete("/questions")
-def delete_questions(question_ids: list[UUID]) -> dict:
+def delete_questions(question_ids: list[UUID]) -> dict[str, Any]:
     """Hard delete — CHỈ xóa câu chưa có kết quả eval (dọn rác).
 
     Câu đã chạy eval bị bỏ qua để giữ lịch sử run (kết quả/biểu đồ so sánh) —
@@ -380,7 +421,7 @@ def delete_questions(question_ids: list[UUID]) -> dict:
 
 
 @router.post("/questions/archive")
-def archive_questions(question_ids: list[UUID]) -> dict:
+def archive_questions(question_ids: list[UUID]) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -392,7 +433,7 @@ def archive_questions(question_ids: list[UUID]) -> dict:
 
 
 @router.post("/questions/restore")
-def restore_questions(question_ids: list[UUID]) -> dict:
+def restore_questions(question_ids: list[UUID]) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -404,7 +445,7 @@ def restore_questions(question_ids: list[UUID]) -> dict:
 
 
 @router.post("/datasets/{dataset_id}/questions/add")
-def add_questions_to_dataset(dataset_id: UUID, question_ids: list[UUID]) -> dict:
+def add_questions_to_dataset(dataset_id: UUID, question_ids: list[UUID]) -> dict[str, Any]:
     """Thêm câu hỏi đã approved vào dataset (eval subset)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -427,12 +468,15 @@ def add_questions_to_dataset(dataset_id: UUID, question_ids: list[UUID]) -> dict
 
 
 @router.delete("/datasets/{dataset_id}/questions/remove")
-def remove_questions_from_dataset(dataset_id: UUID, question_ids: list[UUID]) -> dict:
+def remove_questions_from_dataset(dataset_id: UUID, question_ids: list[UUID]) -> dict[str, Any]:
     """Xóa câu hỏi khỏi dataset (không xóa câu hỏi khỏi pool)."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM eval_dataset_questions WHERE dataset_id = %s AND question_id = ANY(%s)",
+                """
+                DELETE FROM eval_dataset_questions
+                WHERE dataset_id = %s AND question_id = ANY(%s)
+                """,
                 (str(dataset_id), [str(q) for q in question_ids]),
             )
             removed = cur.rowcount
@@ -441,29 +485,27 @@ def remove_questions_from_dataset(dataset_id: UUID, question_ids: list[UUID]) ->
 
 
 @router.get("/datasets/{dataset_id}/doc-question-counts")
-def doc_question_counts(dataset_id: UUID) -> dict:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+def doc_question_counts(dataset_id: UUID) -> dict[str, Any]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT document_id, COUNT(*) AS cnt
                 FROM eval_questions
                 WHERE dataset_id = %s AND deleted_at IS NULL
                 GROUP BY document_id
                 """,
-                (str(dataset_id),),
-            )
-            return {r["document_id"]: r["cnt"] for r in cur.fetchall()}
+            (str(dataset_id),),
+        )
+        return {r["document_id"]: r["cnt"] for r in cur.fetchall()}
 
 
 @router.get("/doc-question-counts")
-def doc_question_counts_all() -> dict:
+def doc_question_counts_all() -> dict[str, Any]:
     """Đếm câu hỏi theo document_id trên TOÀN BỘ datasets (bảng lớn), kèm breakdown
     review: total / approved — FE tự suy ra pending = total - approved."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT q.document_id,
                        COUNT(*) AS total,
                        COUNT(a.id) AS approved
@@ -472,15 +514,15 @@ def doc_question_counts_all() -> dict:
                 WHERE q.deleted_at IS NULL
                 GROUP BY q.document_id
                 """
-            )
-            return {
-                r["document_id"]: {"total": r["total"], "approved": r["approved"]}
-                for r in cur.fetchall()
-            }
+        )
+        return {
+            r["document_id"]: {"total": r["total"], "approved": r["approved"]}
+            for r in cur.fetchall()
+        }
 
 
 @router.get("/chunks/{chunk_id}")
-def get_chunk_content(chunk_id: str) -> dict:
+def get_chunk_content(chunk_id: str) -> dict[str, Any]:
     """Lấy nội dung text của 1 chunk theo chunk_id."""
     try:
         from agentic_rag.generation.evidence import source_provider_from_env
@@ -514,33 +556,32 @@ def _section_question_counts(document_id: str) -> dict[str, int]:
     sinh" tính trên toàn thể, không chia riêng từng dataset — khớp với cách
     document-level dùng /doc-question-counts (global).
     """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT section, COUNT(*) AS cnt
                 FROM eval_questions
                 WHERE document_id = %s AND deleted_at IS NULL
                 GROUP BY section
                 """,
-                (document_id,),
-            )
-            return {r["section"]: r["cnt"] for r in cur.fetchall() if r["section"]}
+            (document_id,),
+        )
+        return {r["section"]: r["cnt"] for r in cur.fetchall() if r["section"]}
 
 
 @router.get("/autodata/sections")
-def list_sections_global(document_id: str) -> list[dict]:
+def list_sections_global(document_id: str) -> list[dict[str, Any]]:
     """Sections của 1 document — sinh câu là bước toàn cục, không gắn dataset."""
     return _sections_for_document(document_id)
 
 
 @router.get("/datasets/{dataset_id}/sections")
-def list_sections(dataset_id: str, document_id: str) -> list[dict]:
+def list_sections(dataset_id: str, document_id: str) -> list[dict[str, Any]]:
     """(Giữ tương thích cũ) dataset_id không tham gia logic — dùng /autodata/sections."""
     return _sections_for_document(document_id)
 
 
-def _sections_for_document(document_id: str) -> list[dict]:
+def _sections_for_document(document_id: str) -> list[dict[str, Any]]:
     """Danh sách section + số chunk + số câu đã sinh (global) của 1 document."""
     try:
         from agentic_rag.generation.evidence import source_provider_from_env
@@ -569,7 +610,8 @@ def _sections_for_document(document_id: str) -> list[dict]:
 
 # Prompt mặc định cho LLM sinh Q&A. Placeholder thay bằng .replace() (không dùng
 # .format() — template do user nhập có thể chứa { } lạc gây KeyError).
-_DEFAULT_GENERATE_PROMPT = """Dựa vào đoạn văn bản sau, hãy tạo ra {n} câu hỏi và câu trả lời ngắn gọn.
+_DEFAULT_GENERATE_PROMPT = """\
+Dựa vào đoạn văn bản sau, hãy tạo ra {n} câu hỏi và câu trả lời ngắn gọn.
 Section: {section}
 
 Văn bản:
@@ -582,10 +624,7 @@ Chỉ trả về JSON, không thêm gì khác."""
 
 def _render_prompt(template: str, *, n: int, section: str, context: str) -> str:
     rendered = (
-        template
-        .replace("{n}", str(n))
-        .replace("{section}", section)
-        .replace("{context}", context)
+        template.replace("{n}", str(n)).replace("{section}", section).replace("{context}", context)
     )
     # User quên {context} thì vẫn phải đưa văn bản cho LLM — nối vào cuối.
     if "{context}" not in template:
@@ -594,7 +633,7 @@ def _render_prompt(template: str, *, n: int, section: str, context: str) -> str:
 
 
 @router.get("/autodata/prompt-template")
-def get_prompt_template() -> dict:
+def get_prompt_template() -> dict[str, Any]:
     """Trả prompt mặc định để FE hiển thị cho user chỉnh trực tiếp trên UI."""
     return {"template": _DEFAULT_GENERATE_PROMPT}
 
@@ -602,7 +641,7 @@ def get_prompt_template() -> dict:
 # Job lưu trong RAM. value: {status, total_sections, done_sections, questions_created}.
 # Lưu ý: job mất khi restart server — nhưng câu đã sinh được commit ngay vào DB,
 # nên chạy lại với only_missing=True sẽ tự bỏ qua section đã xong (resumable).
-_generate_jobs: dict[str, dict] = {}
+_generate_jobs: dict[str, dict[str, Any]] = {}
 
 _JOB_MESSAGES = {
     "running": "Đang sinh câu hỏi...",
@@ -612,7 +651,7 @@ _JOB_MESSAGES = {
 }
 
 
-def _new_job() -> tuple[str, dict]:
+def _new_job() -> tuple[str, dict[str, Any]]:
     job_id = str(uuid.uuid4())
     job = {"status": "running", "total_sections": 0, "done_sections": 0, "questions_created": 0}
     _generate_jobs[job_id] = job
@@ -620,21 +659,21 @@ def _new_job() -> tuple[str, dict]:
 
 
 @router.post("/autodata/generate", response_model=GenerateJob)
-def generate_questions(body: GenerateRequest, background: BackgroundTasks) -> dict:
+def generate_questions(body: GenerateRequest, background: BackgroundTasks) -> dict[str, Any]:
     job_id, _ = _new_job()
     background.add_task(_run_generate, job_id, body)
     return {"job_id": job_id, "status": "running", "message": _JOB_MESSAGES["running"]}
 
 
 @router.post("/autodata/generate-bulk", response_model=GenerateJob)
-def generate_bulk(body: GenerateBulkRequest, background: BackgroundTasks) -> dict:
+def generate_bulk(body: GenerateBulkRequest, background: BackgroundTasks) -> dict[str, Any]:
     job_id, _ = _new_job()
     background.add_task(_run_generate_bulk, job_id, body)
     return {"job_id": job_id, "status": "running", "message": _JOB_MESSAGES["running"]}
 
 
 @router.get("/autodata/jobs/{job_id}", response_model=GenerateJob)
-def get_generate_job(job_id: str) -> dict:
+def get_generate_job(job_id: str) -> dict[str, Any]:
     job = _generate_jobs.get(job_id)
     status = job["status"] if job else "not_found"
     return {
@@ -660,8 +699,14 @@ def _persist_questions(questions: list[QuestionCreate]) -> int:
                       (dataset_id, document_id, section, question, ground_truth, source_chunk_ids)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (str(q.dataset_id) if q.dataset_id else None, q.document_id, q.section,
-                     q.question, q.ground_truth, q.source_chunk_ids),
+                    (
+                        str(q.dataset_id) if q.dataset_id else None,
+                        q.document_id,
+                        q.section,
+                        q.question,
+                        q.ground_truth,
+                        q.source_chunk_ids,
+                    ),
                 )
         conn.commit()
     return len(questions)
@@ -672,17 +717,15 @@ def _section_chunks_for_document(
     *,
     section_filters: list[str] | None,
     only_missing: bool,
-) -> dict[str, list]:
+) -> dict[str, list[Chunk]]:
     """Gom chunk theo section, áp dụng filter section + bỏ section đã có câu (only_missing).
 
     only_missing tính trên TOÀN BỘ dataset (global) — khớp định nghĩa "chưa sinh".
     """
-    from agentic_rag.integrations.local_pdf.providers import get_source_provider
+    provider = LocalPdfEvidenceProvider.from_env()
+    chunks = provider.document_chunks(document_id=document_id).chunks
 
-    provider = get_source_provider()
-    chunks = provider.storage.read_chunks(document_id)
-
-    section_chunks: dict[str, list] = {}
+    section_chunks: dict[str, list[Chunk]] = {}
     for chunk in chunks:
         section = chunk.metadata.get("section") or chunk.metadata.get("title") or "General"
         if section_filters and section not in section_filters:
@@ -700,9 +743,9 @@ def _generate_for_document(
     document_id: str,
     *,
     dataset_id: UUID | None,
-    section_chunks: dict[str, list],
+    section_chunks: dict[str, list[Chunk]],
     questions_per_section: int,
-    job: dict,
+    job: dict[str, Any],
     custom_prompt: str | None = None,
 ) -> None:
     """Sinh câu cho từng section của 1 document, cập nhật tiến độ vào job."""
@@ -751,7 +794,7 @@ def _run_generate_bulk(job_id: str, body: GenerateBulkRequest) -> None:
     job = _generate_jobs[job_id]
     try:
         # Pass 1: gom section cho từng doc + tính tổng để hiển thị tiến độ
-        per_doc: list[tuple[str, dict[str, list]]] = []
+        per_doc: list[tuple[str, dict[str, list[Chunk]]]] = []
         for document_id in body.document_ids:
             section_chunks = _section_chunks_for_document(
                 document_id,
@@ -780,15 +823,16 @@ def _run_generate_bulk(job_id: str, body: GenerateBulkRequest) -> None:
 def _call_llm_generate(
     context: str, n: int, section: str, custom_prompt: str | None = None
 ) -> list[dict[str, str]]:
-    import litellm
     import os
+
+    import litellm
 
     template = (custom_prompt or "").strip() or _DEFAULT_GENERATE_PROMPT
     prompt = _render_prompt(template, n=n, section=section, context=context[:3000])
 
     # OpenAI bắt buộc prompt chứa chữ "JSON" khi dùng response_format json_object —
     # prompt user tự sửa có thể thiếu, lúc đó bỏ response_format thay vì để 400.
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     if "json" in prompt.lower():
         kwargs["response_format"] = {"type": "json_object"}
 
@@ -807,7 +851,10 @@ def _call_llm_generate(
     try:
         parsed = json.loads(raw)
         if isinstance(parsed, dict):
-            parsed = parsed.get("questions", parsed.get("items", list(parsed.values())[0] if parsed else []))
+            parsed = parsed.get(
+                "questions",
+                parsed.get("items", next(iter(parsed.values())) if parsed else []),
+            )
         return [q for q in parsed if isinstance(q, dict) and "question" in q and "answer" in q][:n]
     except Exception:
         return []
@@ -816,22 +863,22 @@ def _call_llm_generate(
 # ── Eval Runs ─────────────────────────────────────────────────────────────────
 _RUN_NOT_FOUND = "Run không tồn tại"
 
+
 @router.get("/runs", response_model=list[EvalRun])
-def list_runs(dataset_id: UUID | None = None) -> list[dict]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            if dataset_id:
-                cur.execute(
-                    "SELECT * FROM eval_runs WHERE dataset_id = %s ORDER BY created_at DESC",
-                    (str(dataset_id),),
-                )
-            else:
-                cur.execute("SELECT * FROM eval_runs ORDER BY created_at DESC")
-            return cur.fetchall()
+def list_runs(dataset_id: UUID | None = None) -> list[dict[str, Any]]:
+    with get_conn() as conn, conn.cursor() as cur:
+        if dataset_id:
+            cur.execute(
+                "SELECT * FROM eval_runs WHERE dataset_id = %s ORDER BY created_at DESC",
+                (str(dataset_id),),
+            )
+        else:
+            cur.execute("SELECT * FROM eval_runs ORDER BY created_at DESC")
+        return cur.fetchall()
 
 
 @router.post("/runs", response_model=EvalRun)
-def create_run(body: RunCreate, background: BackgroundTasks) -> dict:
+def create_run(body: RunCreate, background: BackgroundTasks) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             # Đóng băng danh sách câu tại thời điểm tạo run.
@@ -874,38 +921,45 @@ def create_run(body: RunCreate, background: BackgroundTasks) -> dict:
                 VALUES (%s, %s, %s, %s, 'queued', %s, %s)
                 RETURNING *
                 """,
-                (str(body.dataset_id), body.name, body.description,
-                 json.dumps(config), total, question_ids),
+                (
+                    str(body.dataset_id),
+                    body.name,
+                    body.description,
+                    json.dumps(config),
+                    total,
+                    question_ids,
+                ),
             )
             run = cur.fetchone()
         conn.commit()
 
+    if run is None:
+        raise HTTPException(status_code=500, detail="Run was not created")
     background.add_task(run_eval_worker, str(run["id"]))
     return run
 
 
 @router.get("/runs/{run_id}/progress", response_model=RunProgress)
-def get_run_progress(run_id: UUID) -> dict:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+def get_run_progress(run_id: UUID) -> dict[str, Any]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT r.status, r.total, r.success, r.failed,
                   (r.total - r.success - r.failed) AS not_started,
                   (SELECT COUNT(*) FROM eval_results er
                    WHERE er.run_id = r.id AND er.ragas_faithfulness IS NOT NULL) AS ragas_done
                 FROM eval_runs r WHERE r.id = %s
                 """,
-                (str(run_id),),
-            )
-            row = cur.fetchone()
+            (str(run_id),),
+        )
+        row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail=_RUN_NOT_FOUND)
     return {"run_id": run_id, **row}
 
 
 @router.post("/runs/{run_id}/pause")
-def pause_run(run_id: UUID) -> dict:
+def pause_run(run_id: UUID) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -917,7 +971,7 @@ def pause_run(run_id: UUID) -> dict:
 
 
 @router.post("/runs/{run_id}/resume")
-def resume_run(run_id: UUID, background: BackgroundTasks) -> dict:
+def resume_run(run_id: UUID, background: BackgroundTasks) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -930,7 +984,7 @@ def resume_run(run_id: UUID, background: BackgroundTasks) -> dict:
 
 
 @router.patch("/runs/{run_id}")
-def rename_run(run_id: UUID, body: dict) -> dict:
+def rename_run(run_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Tên không được để trống")
@@ -948,7 +1002,7 @@ def rename_run(run_id: UUID, body: dict) -> dict:
 
 
 @router.delete("/runs/{run_id}")
-def delete_run(run_id: UUID) -> dict:
+def delete_run(run_id: UUID) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             # eval_results có ON DELETE CASCADE nên tự xóa theo
@@ -961,7 +1015,11 @@ def delete_run(run_id: UUID) -> dict:
 
 
 @router.post("/runs/{run_id}/ragas")
-def run_ragas(run_id: UUID, question_ids: list[UUID] | None = None, background: BackgroundTasks = None) -> dict:
+def run_ragas(
+    run_id: UUID,
+    background: BackgroundTasks,
+    question_ids: list[UUID] | None = None,
+) -> dict[str, Any]:
     ids = [str(q) for q in question_ids] if question_ids else None
     background.add_task(run_ragas_worker, str(run_id), ids)
     return {"status": "started", "message": "RAGAS đang chạy ngầm..."}
@@ -969,13 +1027,13 @@ def run_ragas(run_id: UUID, question_ids: list[UUID] | None = None, background: 
 
 # ── Results ───────────────────────────────────────────────────────────────────
 
+
 @router.get("/runs/{run_id}/metrics")
-def run_metrics(run_id: UUID) -> dict:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
+def run_metrics(run_id: UUID) -> dict[str, Any]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+              SELECT
                   COUNT(*)                                               AS total,
                   AVG(recall_at_5)                                       AS recall,
                   AVG(mrr_at_5)                                          AS mrr,
@@ -986,21 +1044,23 @@ def run_metrics(run_id: UUID) -> dict:
                   AVG(ragas_context_precision)                           AS ctx_precision,
                   AVG(ragas_context_recall)                              AS ctx_recall
                 FROM eval_results WHERE run_id = %s
-                """,
-                (str(run_id),),
-            )
-            return cur.fetchone()
+            """,
+            (str(run_id),),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=_RUN_NOT_FOUND)
+        return row
 
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResult])
-def list_results(run_id: UUID, limit: int = 50, offset: int = 0) -> list[dict]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM eval_results WHERE run_id = %s ORDER BY ran_at LIMIT %s OFFSET %s",
-                (str(run_id), limit, offset),
-            )
-            return cur.fetchall()
+def list_results(run_id: UUID, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM eval_results WHERE run_id = %s ORDER BY ran_at LIMIT %s OFFSET %s",
+            (str(run_id), limit, offset),
+        )
+        return cur.fetchall()
 
 
 class ResultImport(BaseModel):
@@ -1023,7 +1083,7 @@ class ResultImport(BaseModel):
 
 
 @router.post("/runs/{run_id}/results/import")
-def import_single_result(run_id: UUID, body: ResultImport) -> dict:
+def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -1039,14 +1099,22 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict:
                 RETURNING id
                 """,
                 (
-                    str(body.question_id), str(run_id),
-                    body.rag_context, body.bot_response,
-                    body.bot_citations, body.trace_url,
-                    body.retrieved_top5_ids, body.ground_truth_rank,
-                    body.recall_at_5, body.mrr_at_5,
-                    body.citation_chunk_match, body.guardrail_pass,
-                    body.ragas_faithfulness, body.ragas_answer_relevancy,
-                    body.ragas_context_precision, body.ragas_context_recall,
+                    str(body.question_id),
+                    str(run_id),
+                    body.rag_context,
+                    body.bot_response,
+                    body.bot_citations,
+                    body.trace_url,
+                    body.retrieved_top5_ids,
+                    body.ground_truth_rank,
+                    body.recall_at_5,
+                    body.mrr_at_5,
+                    body.citation_chunk_match,
+                    body.guardrail_pass,
+                    body.ragas_faithfulness,
+                    body.ragas_answer_relevancy,
+                    body.ragas_context_precision,
+                    body.ragas_context_recall,
                 ),
             )
             row = cur.fetchone()
@@ -1056,12 +1124,12 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict:
 
 # ── Compare ───────────────────────────────────────────────────────────────────
 
+
 @router.get("/compare", response_model=list[RunSummary])
-def compare_runs(dataset_id: UUID) -> list[dict]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT
                   r.id          AS run_id,
                   r.name,
@@ -1080,24 +1148,22 @@ def compare_runs(dataset_id: UUID) -> list[dict]:
                 GROUP BY r.id
                 ORDER BY r.created_at DESC
                 """,
-                (str(dataset_id),),
-            )
-            return cur.fetchall()
+            (str(dataset_id),),
+        )
+        return cur.fetchall()
 
 
 # ── Startup recovery ──────────────────────────────────────────────────────────
+
 
 def recover_stuck_runs() -> None:
     """Khởi động lại worker cho các run đang 'running' khi server restart.
     Chỉ restart 'running' — 'paused' là dừng có chủ ý, không auto-resume.
     """
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id FROM eval_runs WHERE status = 'running'"
-                )
-                rows = cur.fetchall()
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT id FROM eval_runs WHERE status = 'running'")
+            rows = cur.fetchall()
 
         for row in rows:
             run_id = str(row["id"])

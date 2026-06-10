@@ -34,6 +34,7 @@ def snapshot_pipeline_config() -> dict[str, Any]:
     # (provider, retrieval knob) có thể rơi về default khi .env chưa được nạp.
     try:
         from agentic_rag.runtime_env import load_local_env
+
         load_local_env()
     except Exception:
         pass
@@ -48,6 +49,7 @@ def _provider_config() -> dict[str, Any]:
     """Evidence provider — quyết định knob nào áp dụng + phát hiện cấu hình sai."""
     try:
         from agentic_rag.generation.evidence import configured_evidence_provider_name
+
         return {"provider": configured_evidence_provider_name()}
     except Exception:  # snapshot không bao giờ được chặn việc tạo run
         return {}
@@ -64,7 +66,11 @@ def _model_config() -> dict[str, Any]:
     out: dict[str, Any] = {}
     try:
         llm = resolve_llm_profile("generation")
-        out["llm"] = f"{llm.provider}/{llm.model}" if (llm.provider != "none" and llm.model) else llm.provider
+        out["llm"] = (
+            f"{llm.provider}/{llm.model}"
+            if (llm.provider != "none" and llm.model)
+            else llm.provider
+        )
     except Exception:
         pass
     try:
@@ -86,8 +92,10 @@ def _resolve_vector_store() -> str:
     pgvector. Fallback đọc env thô nếu resolver lỗi — snapshot không được chặn tạo run.
     """
     import warnings
+
     try:
         from agentic_rag.retrieval.config import resolve_vector_store_config
+
         with warnings.catch_warnings():  # đừng nag deprecation mỗi lần tạo run
             warnings.simplefilter("ignore")
             return resolve_vector_store_config().provider
@@ -101,8 +109,8 @@ def _retrieval_config() -> dict[str, Any]:
     vector_store = _resolve_vector_store()
     out: dict[str, Any] = {
         "vector_store": vector_store,
-        "retrieval_top_k": _int_env("LOCAL_PDF_RETRIEVAL_TOP_K", 5),   # lấy về trước rerank
-        "rerank_top_k": _int_env("AGENT_RERANK_FINAL_TOP_K", 8),        # đưa vào LLM sau rerank
+        "retrieval_top_k": _int_env("LOCAL_PDF_RETRIEVAL_TOP_K", 5),  # lấy về trước rerank
+        "rerank_top_k": _int_env("AGENT_RERANK_FINAL_TOP_K", 8),  # đưa vào LLM sau rerank
     }
 
     # Knob CHỈ áp dụng trên đường in-memory (turbovec) — qdrant fuse server-side
@@ -110,7 +118,7 @@ def _retrieval_config() -> dict[str, Any]:
     # gây hiểu lầm (vô tác dụng), nên gom hết vào nhánh này.
     if vector_store != "qdrant":
         out["candidate_k"] = _int_env("LOCAL_PDF_RETRIEVAL_CANDIDATE_K", 20)
-        out["fusion"] = (os.getenv("FUSION_METHOD", "rrf").strip().lower() or "rrf")
+        out["fusion"] = os.getenv("FUSION_METHOD", "rrf").strip().lower() or "rrf"
         for key, env_name in _THRESHOLD_ENVS:
             val = _float_env(env_name)
             if val is not None:

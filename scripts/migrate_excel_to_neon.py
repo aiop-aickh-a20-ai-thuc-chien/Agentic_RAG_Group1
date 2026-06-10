@@ -8,6 +8,7 @@ Phân loại:
 Chạy: uv run scripts/migrate_excel_to_neon.py
       uv run scripts/migrate_excel_to_neon.py --dry-run
 """
+
 from __future__ import annotations
 
 import json
@@ -16,14 +17,14 @@ import re
 import sys
 from pathlib import Path
 
+import pandas as pd
+import psycopg
+from psycopg.rows import dict_row
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from agentic_rag.runtime_env import load_local_env
 
 load_local_env()
-
-import pandas as pd
-import psycopg
-from psycopg.rows import dict_row
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ DRY_RUN = "--dry-run" in sys.argv
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
+
 def _conn() -> psycopg.Connection:
     raw = os.environ.get("NEON_CONNECTION", "")
     if not raw:
@@ -55,6 +57,7 @@ def _conn() -> psycopg.Connection:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _doc_id(chunk_ids_str: str | None) -> str:
     if not chunk_ids_str:
@@ -118,6 +121,7 @@ def _jsonb(val) -> str | None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     if not EXCEL_PATH.exists():
         print(f"ERROR: File không tìm thấy: {EXCEL_PATH}", flush=True)
@@ -130,7 +134,9 @@ def main() -> None:
     df = df[df["question"].astype(str).str.strip() != ""]
 
     total = len(df)
-    approved_mask = (df.get("review_status", pd.Series(dtype=str)) == "approved") | df["bot_response"].notna()
+    approved_mask = (df.get("review_status", pd.Series(dtype=str)) == "approved") | df[
+        "bot_response"
+    ].notna()
     evaluated_mask = df["bot_response"].notna()
 
     approved_count = int(approved_mask.sum())
@@ -154,7 +160,11 @@ def main() -> None:
 
         # 1. Dataset
         cur.execute(
-            "INSERT INTO eval_datasets (name, description, is_benchmark) VALUES (%s, %s, TRUE) RETURNING id",
+            """
+            INSERT INTO eval_datasets (name, description, is_benchmark)
+            VALUES (%s, %s, TRUE)
+            RETURNING id
+            """,
             (DATASET_NAME, DATASET_DESC),
         )
         dataset_id: str = cur.fetchone()["id"]
@@ -190,7 +200,14 @@ def main() -> None:
 
         cur.executemany(
             """
-            INSERT INTO eval_questions (dataset_id, document_id, section, question, ground_truth, source_chunk_ids)
+            INSERT INTO eval_questions (
+                dataset_id,
+                document_id,
+                section,
+                question,
+                ground_truth,
+                source_chunk_ids
+            )
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
             q_rows,
@@ -199,7 +216,12 @@ def main() -> None:
 
         # Lấy lại IDs theo thứ tự
         cur.execute(
-            "SELECT id, question, ground_truth FROM eval_questions WHERE dataset_id = %s ORDER BY created_at",
+            """
+            SELECT id, question, ground_truth
+            FROM eval_questions
+            WHERE dataset_id = %s
+            ORDER BY created_at
+            """,
             (dataset_id,),
         )
         inserted = cur.fetchall()
@@ -218,7 +240,9 @@ def main() -> None:
             if not qid:
                 continue
             review_status = _str(row.get("review_status")) or "pending"
-            has_eval = row.get("bot_response") is not None and str(row.get("bot_response", "")).strip() not in ("", "nan")
+            has_eval = row.get("bot_response") is not None and str(
+                row.get("bot_response", "")
+            ).strip() not in ("", "nan")
             if review_status == "approved" or has_eval:
                 approved_rows.append((qid, dataset_id, "migrated"))
 
@@ -246,23 +270,28 @@ def main() -> None:
                 qid = q_map.get((q_text, gt))
                 if not qid:
                     continue
-                result_rows.append((
-                    qid, run_id,
-                    _str(row.get("rag_context")),
-                    bot_resp,
-                    _jsonb(row.get("bot_citations")),
-                    _str(row.get("trace_url")),
-                    _parse_ids(_str(row.get("retrieved_top5_ids"))),
-                    row.get("ground_truth_rank") if pd.notna(row.get("ground_truth_rank", float("nan"))) else None,
-                    _float(row.get("recall_at_5")),
-                    _float(row.get("mrr_at_5")),
-                    _float(row.get("citation_chunk_match")),
-                    _bool(row.get("guardrail_pass")),
-                    _float(row.get("ragas_faithfulness")),
-                    _float(row.get("ragas_answer_relevancy")),
-                    _float(row.get("ragas_context_precision")),
-                    _float(row.get("ragas_context_recall")),
-                ))
+                result_rows.append(
+                    (
+                        qid,
+                        run_id,
+                        _str(row.get("rag_context")),
+                        bot_resp,
+                        _jsonb(row.get("bot_citations")),
+                        _str(row.get("trace_url")),
+                        _parse_ids(_str(row.get("retrieved_top5_ids"))),
+                        row.get("ground_truth_rank")
+                        if pd.notna(row.get("ground_truth_rank", float("nan")))
+                        else None,
+                        _float(row.get("recall_at_5")),
+                        _float(row.get("mrr_at_5")),
+                        _float(row.get("citation_chunk_match")),
+                        _bool(row.get("guardrail_pass")),
+                        _float(row.get("ragas_faithfulness")),
+                        _float(row.get("ragas_answer_relevancy")),
+                        _float(row.get("ragas_context_precision")),
+                        _float(row.get("ragas_context_recall")),
+                    )
+                )
 
             cur.executemany(
                 """

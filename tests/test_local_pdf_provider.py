@@ -79,6 +79,7 @@ def test_local_pdf_provider_uploads_chunks_and_lists_them(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("RAG_TRACE_FULL_CONTENT", "false")
     seen_kwargs: dict[str, str] = {}
 
     def fake_load_pdf_with_markdown(path: str, **kwargs: str) -> LoadedPdfDocument:

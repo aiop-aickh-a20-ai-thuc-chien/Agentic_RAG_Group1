@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Archive, CheckCircle2, ChevronDown, ChevronRight, Search, Trash2, Undo2, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { TableSkeleton } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
@@ -130,6 +133,7 @@ export default function EvalReviewPage() {
     });
     patchLocal(ids, { is_approved: true });
     setSelected(new Set());
+    toast.success(`Đã duyệt ${ids.length} câu`);
   }
 
   async function handleBulkArchive() {
@@ -140,6 +144,7 @@ export default function EvalReviewPage() {
     });
     patchLocal(ids, { deleted_at: new Date().toISOString() });
     setSelected(new Set());
+    toast(`Đã loại bỏ ${ids.length} câu`, { description: "Khôi phục được ở tab Loại bỏ." });
   }
 
   async function handleBulkRestore() {
@@ -150,6 +155,7 @@ export default function EvalReviewPage() {
     });
     patchLocal(ids, { deleted_at: null });
     setSelected(new Set());
+    toast.success(`Đã khôi phục ${ids.length} câu`);
   }
 
   // Xóa cứng — BE chỉ xóa câu chưa có kết quả eval; câu đã chạy bị skip (giữ lịch sử).
@@ -163,8 +169,11 @@ export default function EvalReviewPage() {
     const deletedIds = new Set(ids.filter((id) => !skipped.includes(id)));
     setQuestions((prev) => prev.filter((q) => !deletedIds.has(q.id)));
     setSelected(new Set());
+    if (deletedIds.size > 0) toast.success(`Đã xóa vĩnh viễn ${deletedIds.size} câu`);
     if (skipped.length > 0) {
-      alert(`${skipped.length} câu đã có kết quả eval nên không xóa cứng được (chỉ archive để giữ lịch sử).`);
+      toast.warning(`${skipped.length} câu đã có kết quả eval nên không xóa cứng được`, {
+        description: "Dùng Loại bỏ để ẩn — lịch sử eval được giữ nguyên.",
+      });
     }
   }
 
@@ -241,12 +250,20 @@ export default function EvalReviewPage() {
               key={t.key}
               onClick={() => { setTab(t.key); setSelected(new Set()); setExpanded(null); }}
               className={cn(
-                "px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors",
-                tab === t.key ? t.active : t.hover
+                "relative px-3.5 py-1.5 rounded-md text-sm font-medium transition-colors duration-200 pressable",
+                tab === t.key ? "text-white" : cn(t.hover, "hover:-translate-y-px")
               )}
             >
-              {t.label}
-              <span className={cn("ml-1.5 text-xs tabular-nums", tab === t.key ? "text-white/70" : "text-gray-400")}>
+              {/* Pill trượt mượt giữa các tab — đổi màu theo tab đích */}
+              {tab === t.key && (
+                <motion.span
+                  layoutId="review-tab-pill"
+                  className={cn("absolute inset-0 rounded-md shadow-md", t.active)}
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
+              )}
+              <span className="relative z-10">{t.label}</span>
+              <span className={cn("relative z-10 ml-1.5 text-xs tabular-nums", tab === t.key ? "text-white/70" : "text-gray-400")}>
                 {t.count}
               </span>
             </button>
@@ -296,7 +313,7 @@ export default function EvalReviewPage() {
       <div className={cn("grid gap-4", panel ? "grid-cols-[1fr_380px]" : "grid-cols-1")}>
         <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
           {loading ? (
-            <div className="py-16 text-center text-sm text-gray-400">Đang tải...</div>
+            <TableSkeleton rows={8} />
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -385,20 +402,20 @@ export default function EvalReviewPage() {
                           <div className="flex items-center justify-center gap-1">
                             {tab === "pending" && (
                               <button onClick={() => approveOne(q.id)} title="Duyệt"
-                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 hover:scale-110 transition-all pressable">
                                 <CheckCircle2 size={16} />
                               </button>
                             )}
                             {tab === "archived" && (
                               <button onClick={() => restoreOne(q.id)} title="Khôi phục"
-                                className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors">
+                                className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 hover:scale-110 transition-all pressable">
                                 <Undo2 size={16} />
                               </button>
                             )}
                             {/* Nút 1 — Loại bỏ (mềm, khôi phục được) */}
                             {tab !== "archived" && (
                               <button onClick={() => archiveOne(q.id)} title="Loại bỏ (vào thùng rác, khôi phục được)"
-                                className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors">
+                                className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 hover:scale-110 transition-all pressable">
                                 <Archive size={16} />
                               </button>
                             )}
@@ -410,7 +427,7 @@ export default function EvalReviewPage() {
                               </button>
                             ) : (
                               <button onClick={() => deleteForeverOne(q.id)} title="Xóa vĩnh viễn (không khôi phục được)"
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors">
+                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:scale-110 transition-all pressable">
                                 <Trash2 size={16} />
                               </button>
                             )}

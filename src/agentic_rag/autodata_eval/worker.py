@@ -21,6 +21,7 @@ _running_workers_lock = threading.Lock()
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
+
 def run_pipeline_for_question(
     question_id: str,
     question: str,
@@ -42,14 +43,14 @@ def run_pipeline_for_question(
         )
 
         bot_response = result.answer.answer
-        citations    = result.answer.citations
+        citations = result.answer.citations
         bot_citations = [c.model_dump() for c in citations]
-        rag_context  = "\n\n".join(sr.chunk.text for sr in result.evidence_chunks)
+        rag_context = "\n\n".join(sr.chunk.text for sr in result.evidence_chunks)
         retrieved_ids = [sr.chunk.chunk_id for sr in result.evidence_chunks[:5]]
 
         ground_truth_rank = _compute_rank(source_chunk_ids, retrieved_ids)
         recall = _recall_at_k(source_chunk_ids, retrieved_ids, k=5)
-        mrr    = _mrr_at_k(source_chunk_ids, retrieved_ids, k=5)
+        mrr = _mrr_at_k(source_chunk_ids, retrieved_ids, k=5)
         citation_match = _citation_match(source_chunk_ids, bot_citations)
         guardrail = result.answer.status == "answered"
 
@@ -102,9 +103,11 @@ def _citation_match(ground_truth_ids: list[str], citations: list[Any]) -> float:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+
 @retry_on_operational_error
 def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> None:
     import json
+
     has_error = bool(payload.get("eval_error"))
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -135,10 +138,13 @@ def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> Non
                 RETURNING (xmax = 0) AS is_new_insert
                 """,
                 (
-                    question_id, run_id,
+                    question_id,
+                    run_id,
                     payload.get("rag_context"),
                     payload.get("bot_response"),
-                    json.dumps(payload.get("bot_citations")) if payload.get("bot_citations") else None,
+                    json.dumps(payload.get("bot_citations"))
+                    if payload.get("bot_citations")
+                    else None,
                     payload.get("trace_url"),
                     payload.get("retrieved_top5_ids"),
                     payload.get("ground_truth_rank"),
@@ -154,9 +160,7 @@ def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> Non
             is_new = (cur.fetchone() or {}).get("is_new_insert", False)
             if is_new:
                 col = "failed" if has_error else "success"
-                cur.execute(
-                    f"UPDATE eval_runs SET {col} = {col} + 1 WHERE id = %s", (run_id,)
-                )
+                cur.execute(f"UPDATE eval_runs SET {col} = {col} + 1 WHERE id = %s", (run_id,))
         conn.commit()
 
 
@@ -165,10 +169,9 @@ def _next_pending_question(run_id: str) -> dict[str, Any] | None:
     """Lấy câu tiếp theo từ snapshot đóng băng lúc tạo run (frozen_question_ids).
     Dùng snapshot tránh worker đọc dataset live — câu mới add sau khi run bắt đầu
     sẽ không bị kéo vào và không gây vòng lặp vô hạn."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT q.id, q.question, q.ground_truth, q.source_chunk_ids, q.document_id
                 FROM eval_runs run
                 JOIN eval_questions q ON q.id = ANY(run.frozen_question_ids)
@@ -178,18 +181,17 @@ def _next_pending_question(run_id: str) -> dict[str, Any] | None:
                   AND q.deleted_at IS NULL
                 LIMIT 1
                 """,
-                (run_id, run_id),
-            )
-            return cur.fetchone()
+            (run_id, run_id),
+        )
+        return cur.fetchone()
 
 
 @retry_on_operational_error
 def _fetch_ragas_batch(run_id: str, batch_size: int) -> list[dict[str, Any]]:
     """Lấy batch câu đã có pipeline output nhưng chưa có RAGAS score."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT r.id, r.question_id, q.question, q.ground_truth,
                        r.rag_context, r.bot_response
                 FROM eval_results r
@@ -200,18 +202,19 @@ def _fetch_ragas_batch(run_id: str, batch_size: int) -> list[dict[str, Any]]:
                   AND r.bot_response IS NOT NULL
                 LIMIT %s
                 """,
-                (run_id, batch_size),
-            )
-            return cur.fetchall()
+            (run_id, batch_size),
+        )
+        return cur.fetchall()
 
 
 # ── RAGAS ─────────────────────────────────────────────────────────────────────
 
+
 def _setup_ragas() -> dict[str, Any]:
     """Import RAGAS, cấu hình LLM/embeddings. Gọi 1 lần duy nhất."""
+    import os
     import sys
     import types
-    import os
 
     _lc_vertexai = "langchain_community.chat_models.vertexai"
     if _lc_vertexai not in sys.modules:
@@ -230,17 +233,21 @@ def _setup_ragas() -> dict[str, Any]:
         faithfulness,
     )
 
-    _llm = LangchainLLMWrapper(ChatOpenAI(
-        model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    ))
-    _emb = LangchainEmbeddingsWrapper(OpenAIEmbeddings(
-        model=os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    ))
+    _llm = LangchainLLMWrapper(
+        ChatOpenAI(
+            model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+    )
+    _emb = LangchainEmbeddingsWrapper(
+        OpenAIEmbeddings(
+            model=os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+    )
     for _m in (faithfulness, answer_relevancy, context_precision, context_recall):
-        _m.llm = _llm  # type: ignore[attr-defined]
-    answer_relevancy.embeddings = _emb  # type: ignore[attr-defined]
+        _m.llm = _llm
+    answer_relevancy.embeddings = _emb
 
     return {
         "evaluate": evaluate,
@@ -253,19 +260,21 @@ def _process_ragas_batch(run_id: str, rows: list[dict[str, Any]], ctx: dict[str,
     from datasets import Dataset as HFDataset
 
     evaluate = ctx["evaluate"]
-    metrics  = ctx["metrics"]
+    metrics = ctx["metrics"]
 
-    dataset = HFDataset.from_list([
-        {
-            "question": r["question"],
-            "answer":   r["bot_response"] or "",
-            "contexts": [r["rag_context"] or ""],
-            "ground_truth": r["ground_truth"],
-        }
-        for r in rows
-    ])
+    dataset = HFDataset.from_list(
+        [
+            {
+                "question": r["question"],
+                "answer": r["bot_response"] or "",
+                "contexts": [r["rag_context"] or ""],
+                "ground_truth": r["ground_truth"],
+            }
+            for r in rows
+        ]
+    )
 
-    scores    = evaluate(dataset, metrics=metrics)
+    scores = evaluate(dataset, metrics=metrics)
     scores_df = scores.to_pandas()
 
     with get_conn() as conn:
@@ -282,10 +291,10 @@ def _process_ragas_batch(run_id: str, rows: list[dict[str, Any]], ctx: dict[str,
                     WHERE id = %s
                     """,
                     (
-                        float(s.get("faithfulness",       0) or 0),
-                        float(s.get("answer_relevancy",   0) or 0),
-                        float(s.get("context_precision",  0) or 0),
-                        float(s.get("context_recall",     0) or 0),
+                        float(s.get("faithfulness", 0) or 0),
+                        float(s.get("answer_relevancy", 0) or 0),
+                        float(s.get("context_precision", 0) or 0),
+                        float(s.get("context_recall", 0) or 0),
                         row["id"],
                     ),
                 )
@@ -330,11 +339,10 @@ def _ragas_consumer(run_id: str, pipeline_done: threading.Event) -> None:
 
 @retry_on_operational_error
 def _get_run_status(run_id: str) -> str | None:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT status FROM eval_runs WHERE id = %s", (run_id,))
-            row = cur.fetchone()
-            return row["status"] if row else None
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT status FROM eval_runs WHERE id = %s", (run_id,))
+        row = cur.fetchone()
+        return row["status"] if row else None
 
 
 @retry_on_operational_error
@@ -357,6 +365,7 @@ def _mark_run_running(run_id: str) -> None:
 
 
 # ── Main worker ───────────────────────────────────────────────────────────────
+
 
 def run_eval_worker(run_id: str) -> None:
     """Worker chạy trong background thread cho 1 eval run."""
@@ -408,6 +417,7 @@ def run_eval_worker(run_id: str) -> None:
 
 # ── Manual RAGAS trigger (dùng cho router endpoint POST /runs/{id}/ragas) ────
 
+
 def run_ragas_worker(run_id: str, question_ids: list[str] | None = None) -> None:
     """Chạy lại RAGAS cho các câu chưa có score (dùng khi trigger thủ công)."""
     try:
@@ -416,12 +426,11 @@ def run_ragas_worker(run_id: str, question_ids: list[str] | None = None) -> None
         logger.error("RAGAS not installed. Run: uv pip install ragas datasets")
         return
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            filter_clause = "AND r.question_id = ANY(%s)" if question_ids else ""
-            params: tuple = (run_id, question_ids) if question_ids else (run_id,)
-            cur.execute(
-                f"""
+    with get_conn() as conn, conn.cursor() as cur:
+        filter_clause = "AND r.question_id = ANY(%s)" if question_ids else ""
+        params: tuple[Any, ...] = (run_id, question_ids) if question_ids else (run_id,)
+        cur.execute(
+            f"""
                 SELECT r.id, r.question_id, q.question, q.ground_truth,
                        r.rag_context, r.bot_response
                 FROM eval_results r
@@ -431,9 +440,9 @@ def run_ragas_worker(run_id: str, question_ids: list[str] | None = None) -> None
                   AND r.ragas_faithfulness IS NULL
                   {filter_clause}
                 """,
-                params,
-            )
-            rows = cur.fetchall()
+            params,
+        )
+        rows = cur.fetchall()
 
     if not rows:
         logger.warning("RAGAS: no rows to evaluate for run %s", run_id)

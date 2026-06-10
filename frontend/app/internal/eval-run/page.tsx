@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Loader2, Pause, Pencil, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CountUp, Spotlight } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
@@ -106,6 +109,7 @@ export default function EvalRunPage() {
       setRuns((prev) => [d, ...prev]);
       setActiveId(d.id);
       setRunName("");
+      toast.success(`Đã tạo run "${d.name}" — bắt đầu chạy eval`);
     } finally {
       setCreating(false);
     }
@@ -154,6 +158,7 @@ export default function EvalRunPage() {
       setRuns((prev) => prev.filter((r) => r.id !== id));
       if (activeId === id) { setActiveId(null); setProgress(null); }
       setConfirmDeleteId(null);
+      toast.success("Đã xóa run");
     } finally {
       setDeleting(false);
     }
@@ -175,10 +180,18 @@ export default function EvalRunPage() {
         <p className="text-sm text-gray-500 mt-1">Tạo và theo dõi tiến trình đánh giá</p>
       </div>
 
-      {/* Confirm delete dialog */}
+      {/* Confirm delete dialog — spring vật lý khi mở/đóng */}
+      <AnimatePresence>
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl border border-black/10 shadow-xl w-full max-w-sm mx-4 px-6 py-5 space-y-4">
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 6 }}
+            transition={{ type: "spring", stiffness: 380, damping: 28 }}
+            className="bg-white rounded-2xl border border-black/10 shadow-xl w-full max-w-sm mx-4 px-6 py-5 space-y-4">
             <div>
               <p className="text-base font-semibold text-gray-900">Xóa run?</p>
               <p className="text-sm text-gray-500 mt-1">
@@ -191,18 +204,19 @@ export default function EvalRunPage() {
                 Huỷ
               </button>
               <button onClick={() => deleteRun(confirmDeleteId)} disabled={deleting}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-all pressable">
                 {deleting && <Loader2 size={13} className="animate-spin" />}
                 Xóa
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Config panel */}
-        <div className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
+        <Spotlight className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Cấu hình</h2>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-500">Dataset</label>
@@ -222,15 +236,15 @@ export default function EvalRunPage() {
             />
           </div>
           <button onClick={startRun} disabled={creating || !datasetId || !runName.trim()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800 disabled:opacity-40 transition-colors">
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800 hover:shadow-lg hover:shadow-emerald-700/25 disabled:opacity-40 transition-all pressable">
             {creating
               ? <><Loader2 size={15} className="animate-spin" /> Đang tạo...</>
               : <><Play size={15} /> Bắt đầu chạy eval</>}
           </button>
-        </div>
+        </Spotlight>
 
         {/* Progress panel */}
-        <div className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
+        <Spotlight className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Tiến trình</h2>
             {activeId && (
@@ -256,14 +270,15 @@ export default function EvalRunPage() {
                 </span>
               </div>
 
-              {/* Pipeline progress */}
+              {/* Pipeline progress — sọc chạy khi đang hoạt động */}
               <div>
                 <div className="flex justify-between text-xs text-gray-500 mb-1.5">
                   <span>Pipeline: {progress.success} / {progress.total}</span>
                   <span>{pct}%</span>
                 </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
-                  <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
+                  <div className={cn("h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500",
+                    progress.status === "running" && "progress-active")} style={{ width: `${pct}%` }} />
                   <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${failPct}%` }} />
                 </div>
               </div>
@@ -275,24 +290,31 @@ export default function EvalRunPage() {
                     <span>RAGAS: {progress.ragas_done} / {progress.success}</span>
                     <span>{ragasPct}%</span>
                   </div>
-                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${ragasPct}%` }} />
+                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div className={cn("h-full bg-gradient-to-r from-violet-500 to-violet-400 transition-all duration-500",
+                      progress.status === "running" && ragasPct < 100 && "progress-active")} style={{ width: `${ragasPct}%` }} />
                   </div>
                 </div>
               )}
 
-              {/* Counts */}
+              {/* Counts — số đếm chạy + nháy xanh khi polling cập nhật */}
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-emerald-50 rounded-lg px-3 py-2">
-                  <p className="text-lg font-semibold text-emerald-700">{progress.success}</p>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 card-lift">
+                  <p className="text-lg font-semibold text-emerald-700 tabular-nums">
+                    <CountUp value={progress.success} />
+                  </p>
                   <p className="text-xs text-emerald-600">Thành công</p>
                 </div>
-                <div className="bg-red-50 rounded-lg px-3 py-2">
-                  <p className="text-lg font-semibold text-red-600">{progress.failed}</p>
+                <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 card-lift">
+                  <p className="text-lg font-semibold text-red-600 tabular-nums">
+                    <CountUp value={progress.failed} />
+                  </p>
                   <p className="text-xs text-red-500">Lỗi</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-lg font-semibold text-gray-600">{progress.not_started}</p>
+                <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 card-lift">
+                  <p className="text-lg font-semibold text-gray-600 tabular-nums">
+                    <CountUp value={progress.not_started} />
+                  </p>
                   <p className="text-xs text-gray-400">Còn lại</p>
                 </div>
               </div>
@@ -312,7 +334,7 @@ export default function EvalRunPage() {
               )}
             </div>
           )}
-        </div>
+        </Spotlight>
       </div>
 
       {/* Run history */}

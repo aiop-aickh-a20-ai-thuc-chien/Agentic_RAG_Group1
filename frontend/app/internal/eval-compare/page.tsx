@@ -2,6 +2,9 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronLeft, Loader2, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { cn } from "@/lib/utils";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -180,6 +183,60 @@ function ConfigDiff({ a, b, nameA, nameB }: {
   );
 }
 
+// ── Chart xu hướng metric qua các run (cũ → mới) ─────────────────────────────
+const TREND_LINES = [
+  { key: "recall",       label: "Recall@5",     color: "#059669" },
+  { key: "mrr",          label: "MRR@5",        color: "#2563eb" },
+  { key: "citation",     label: "Citation",     color: "#7c3aed" },
+  { key: "guardrail",    label: "Guardrail",    color: "#6b7280" },
+  { key: "faithfulness", label: "Faithfulness", color: "#d97706" },
+  { key: "relevancy",    label: "Relevancy",    color: "#e11d48" },
+] as const;
+
+function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
+  const data = runs.map((r) => ({
+    name: r.name,
+    recall: r.avg_recall,
+    mrr: r.avg_mrr,
+    citation: r.avg_citation,
+    guardrail: r.guardrail_rate,
+    faithfulness: r.has_ragas ? r.avg_ragas_faithfulness : null,
+    relevancy: r.has_ragas ? r.avg_ragas_relevancy : null,
+  }));
+  return (
+    <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
+      <div className="px-5 py-3 border-b border-black/6 bg-gray-50/60">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          Xu hướng metric qua các version
+        </p>
+      </div>
+      <div className="px-3 pt-4 pb-2 h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 4, right: 24, bottom: 0, left: -16 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={{ stroke: "rgba(0,0,0,0.1)" }} />
+            <YAxis domain={[0, 1]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false}
+              tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+            <Tooltip
+              formatter={(v) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : String(v ?? "—"))}
+              contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 8px 24px rgba(17,24,39,0.08)" }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} iconType="plainline" />
+            {TREND_LINES.map((l) => (
+              <Line
+                key={l.key} type="monotone" dataKey={l.key} name={l.label}
+                stroke={l.color} strokeWidth={2} connectNulls
+                dot={{ r: 3, strokeWidth: 0, fill: l.color }}
+                activeDot={{ r: 5 }}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 export default function EvalComparePage() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [datasetId, setDatasetId] = useState<string>("");
@@ -331,6 +388,9 @@ export default function EvalComparePage() {
           </table>
         </div>
       )}
+
+      {/* Chart xu hướng — chỉ hiện khi có >= 2 run để so */}
+      {!loading && runs.length > 1 && <TrendChart runs={ordered} />}
 
       {/* Best version highlight */}
       {runs.length > 1 && (() => {

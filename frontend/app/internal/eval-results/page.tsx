@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { ChevronDown, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
+import { motion } from "motion/react";
+import { ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CountUp, TableSkeleton } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 const PAGE_SIZE = 50;
@@ -176,20 +178,29 @@ export default function EvalResultsPage() {
             <span>Tiến độ</span>
             <span>{selectedRun.success}/{selectedRun.total}</span>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all"
+              className={cn(
+                "h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all",
+                selectedRun.status === "running" && "progress-active"
+              )}
               style={{ width: `${(selectedRun.success / selectedRun.total) * 100}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Aggregate metrics */}
+      {/* Aggregate metrics — xuất hiện so le + số đếm chạy */}
       {SUMMARY.length > 0 && (
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-3">
-          {SUMMARY.map((s) => (
-            <div key={s.label} className="bg-white rounded-xl border border-black/8 px-4 py-3 text-center">
+        <div key={runId} className="grid grid-cols-4 sm:grid-cols-7 gap-3">
+          {SUMMARY.map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white rounded-xl border border-black/8 px-4 py-3 text-center card-lift"
+            >
               <p className="text-xs text-gray-400 mb-1">{s.label}</p>
               <p className={cn(
                 "text-lg font-semibold tabular-nums",
@@ -197,9 +208,9 @@ export default function EvalResultsPage() {
                 s.v >= 0.7 ? "text-emerald-700" :
                 s.v >= 0.4 ? "text-amber-700" : "text-red-600"
               )}>
-                {s.v === null ? "—" : fmt(s.v, 0)}
+                {s.v === null ? "—" : <CountUp value={s.v} format={(v) => (v * 100).toFixed(0) + "%"} flash={false} />}
               </p>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
@@ -207,9 +218,7 @@ export default function EvalResultsPage() {
       {/* Results table */}
       <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
         {loading ? (
-          <div className="py-16 flex items-center justify-center gap-2 text-sm text-gray-400">
-            <Loader2 size={15} className="animate-spin" /> Đang tải kết quả...
-          </div>
+          <TableSkeleton rows={8} />
         ) : results.length === 0 ? (
           <div className="py-16 text-center text-sm text-gray-400">
             {runId ? "Chưa có kết quả nào" : "Chọn dataset và run để xem kết quả"}

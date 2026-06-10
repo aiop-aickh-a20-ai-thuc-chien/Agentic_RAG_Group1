@@ -5,7 +5,9 @@ import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FileText,
   Globe, Layers, Loader2, Pencil, RefreshCw, RotateCcw, Sparkles, Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 const PROMPT_STORAGE_KEY = "autodata_custom_prompt";
@@ -100,6 +102,13 @@ export default function AutodataPage() {
           setJobStatus(d.status);
           clearInterval(id);
           refreshCounts();
+          if (d.status === "done") {
+            toast.success(`Sinh xong: +${d.questions_created ?? 0} câu hỏi từ ${d.done_sections ?? 0} sections`, {
+              description: "Qua trang Review để duyệt câu mới.",
+            });
+          } else {
+            toast.error("Job sinh câu thất bại", { description: "Xem log backend để biết lý do." });
+          }
           // reload sections của doc đang xem để badge cập nhật
           if (selectedDoc && !bulkMode) {
             fetch(`${API}/internal/autodata/sections?document_id=${selectedDoc}`)
@@ -201,6 +210,12 @@ export default function AutodataPage() {
 
   const generated    = sources.filter((s) => (docCounts[s.document_id]?.total ?? 0) > 0);
   const notGenerated = sources.filter((s) => (docCounts[s.document_id]?.total ?? 0) === 0);
+
+  // Tổng thật toàn hệ thống (mọi doc) — hiển thị ở dòng chú thích đầu trang
+  const globalTotals = Object.values(docCounts).reduce(
+    (acc, c) => ({ total: acc.total + c.total, approved: acc.approved + c.approved }),
+    { total: 0, approved: 0 },
+  );
   const selectedDocInfo = sources.find((s) => s.document_id === selectedDoc);
   const selectedCount = selectedDoc ? docCounts[selectedDoc] : undefined;
   const alreadyGenerated = (selectedCount?.total ?? 0) > 0;
@@ -268,7 +283,7 @@ export default function AutodataPage() {
         key={s.document_id}
         onClick={() => { setSelectedDoc(s.document_id); setJobStatus("idle"); }}
         className={cn(
-          "w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 border-b border-black/5 last:border-0",
+          "w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-gray-50 border-b border-black/5 last:border-0 row-hover",
           selectedDoc === s.document_id && "bg-emerald-50 hover:bg-emerald-50"
         )}
       >
@@ -329,7 +344,7 @@ export default function AutodataPage() {
           {notGenerated.length > 0 && (
             <button
               onClick={quickSelectNew}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 hover:shadow-lg hover:shadow-emerald-700/25 transition-all pressable"
               title="Vào chế độ bulk và tích sẵn toàn bộ tài liệu chưa sinh câu hỏi"
             >
               <Zap size={14} /> Sinh cho {notGenerated.length} doc mới
@@ -347,14 +362,16 @@ export default function AutodataPage() {
         </div>
       </div>
 
-      {/* Chú thích badge map với Review */}
-      <div className="flex items-center gap-3 text-xs text-gray-400">
-        <span>Badge theo tổng câu toàn hệ thống (map với trang Review):</span>
-        <span className="text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">12</span>
+      {/* Thống kê thật toàn hệ thống — đồng thời là chú thích ý nghĩa badge */}
+      <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+        <span>Toàn hệ thống (map với trang Review):</span>
+        <span className="text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full tabular-nums">{globalTotals.total}</span>
         <span>tổng câu</span>
-        <span className="text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">✓5</span>
+        <span className="text-gray-300">·</span>
+        <span className="text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full tabular-nums">✓{globalTotals.approved}</span>
         <span>đã duyệt</span>
-        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">7 chờ</span>
+        <span className="text-gray-300">·</span>
+        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full tabular-nums">{globalTotals.total - globalTotals.approved} chờ</span>
         <span>chờ review</span>
       </div>
 
@@ -435,9 +452,15 @@ export default function AutodataPage() {
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   {loadingSections && (
-                    <div className="flex items-center justify-center p-8 gap-2 text-gray-400">
-                      <Loader2 size={15} className="animate-spin" />
-                      <span className="text-sm">Đang tải sections...</span>
+                    <div className="p-5 space-y-3">
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <Skeleton className="h-4 w-4 rounded" />
+                          <Skeleton className={cn("h-4", i % 2 ? "w-3/5" : "w-2/5")} />
+                          <Skeleton className="h-4 w-16 ml-auto rounded-full" />
+                          <Skeleton className="h-4 w-20 rounded-full" />
+                        </div>
+                      ))}
                     </div>
                   )}
                   {!loadingSections && sections.length === 0 && (
@@ -512,10 +535,10 @@ export default function AutodataPage() {
                     onClick={handleGenerate}
                     disabled={jobStatus === "running" || sections.length === 0}
                     className={cn(
-                      "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all",
+                      "flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all pressable",
                       alreadyGenerated
-                        ? "bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-40"
-                        : "bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-40",
+                        ? "bg-amber-600 hover:bg-amber-700 hover:shadow-lg hover:shadow-amber-600/25 text-white disabled:opacity-40"
+                        : "bg-emerald-700 hover:bg-emerald-800 hover:shadow-lg hover:shadow-emerald-700/25 text-white disabled:opacity-40",
                       "disabled:cursor-not-allowed"
                     )}
                   >
@@ -643,8 +666,8 @@ function BulkPanel({
               </span>
               <span>{pct}%</span>
             </div>
-            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500 progress-active" style={{ width: `${pct}%` }} />
             </div>
           </div>
         )}
@@ -658,7 +681,7 @@ function BulkPanel({
         <button
           onClick={onGenerate}
           disabled={count === 0 || jobStatus === "running"}
-          className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-emerald-700 hover:bg-emerald-800 hover:shadow-lg hover:shadow-emerald-700/25 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all pressable"
         >
           {jobStatus === "running"
             ? <><Loader2 size={14} className="animate-spin" /> Đang sinh hàng loạt...</>

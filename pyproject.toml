@@ -46,8 +46,16 @@ observability = [
 # selection is machine-specific; do not pin CUDA wheels in project metadata.
 local-models = [
     "sentence-transformers>=5,<6",
-    "torch>=2.12,<3",
+    "torch>=2.5,<3",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
 
 [build-system]
 requires = ["hatchling"]
@@ -104,7 +112,7 @@ module = [
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
-module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+module = ["ragas", "ragas.*", "datasets", "datasets.*", "langchain_openai", "langchain_openai.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
