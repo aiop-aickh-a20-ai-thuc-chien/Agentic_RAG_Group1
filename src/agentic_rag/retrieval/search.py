@@ -22,15 +22,9 @@ from agentic_rag.model_runtime.embeddings import (
     validate_embedding_output,
 )
 from agentic_rag.model_runtime.factory import get_embedding_client
+from agentic_rag.retrieval.config import VectorStoreConfig, resolve_vector_store_config
 
 EmbeddingProfile = EmbeddingOutput
-
-DENSE_VECTOR_STORE_ENV = "DENSE_VECTOR_STORE"
-DENSE_PGVECTOR_CONNECTION_ENV = "DENSE_PGVECTOR_CONNECTION"
-DENSE_PGVECTOR_COLLECTION_ENV = "DENSE_PGVECTOR_COLLECTION"
-QDRANT_URL_ENV = "QDRANT_URL"
-QDRANT_API_KEY_ENV = "QDRANT_API_KEY"
-QDRANT_COLLECTION_ENV = "QDRANT_COLLECTION"
 
 REQUERY_ROUTER_PROMPT = """
 <task>
@@ -245,12 +239,22 @@ def dense_embedding_metadata() -> dict[str, object]:
     }
 
 
-def upsert_dense_embeddings(chunks: list[Chunk]) -> dict[str, object]:
+def upsert_dense_embeddings(
+    chunks: list[Chunk],
+    *,
+    vector_config: VectorStoreConfig | None = None,
+) -> dict[str, object]:
     """Upsert chunk embeddings into the configured persistent vector store."""
 
-    vector_store = _configured_vector_store()
+    has_validated_config = vector_config is not None
+    config = vector_config or _vector_store_config()
+    vector_store = config.provider
     if vector_store == "qdrant":
-        return _upsert_qdrant_embeddings(chunks)
+        return _upsert_qdrant_embeddings(
+            chunks,
+            vector_config=config,
+            use_validated_config=has_validated_config,
+        )
     if vector_store != "pgvector":
         return {
             "enabled": False,
@@ -266,22 +270,22 @@ def upsert_dense_embeddings(chunks: list[Chunk]) -> dict[str, object]:
         embedding=embedding,
         metadatas=_dense_metadatas(chunks),
         ids=_dense_ids(chunks),
+        vector_config=config,
     )
     return {
         "enabled": pgvector_store is not None,
         "vector_store": vector_store,
         "chunk_count": len(chunks) if pgvector_store is not None else 0,
-        "collection": _configured_pgvector_collection(),
+        "collection": config.collection,
     }
 
 
 def _configured_vector_store() -> str:
-    raw = os.getenv(DENSE_VECTOR_STORE_ENV, "turbovec").strip().lower()
-    if raw in {"pgvector", "postgres", "postgresql"}:
-        return "pgvector"
-    if raw == "qdrant":
-        return "qdrant"
-    return "turbovec"
+    return _vector_store_config().provider
+
+
+def _vector_store_config() -> VectorStoreConfig:
+    return resolve_vector_store_config()
 
 
 def _configured_embedding() -> Any:
@@ -294,9 +298,15 @@ def _build_pgvector_store(
     embedding: Any,
     metadatas: list[dict[str, object]],
     ids: list[str],
+    vector_config: VectorStoreConfig | None = None,
 ) -> Any | None:
     """Upsert texts into pgvector (used at ingest time — calls embedding API)."""
-    connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
+    config = vector_config or _vector_store_config()
+    connection = (
+        config.url.get_secret_value()
+        if config.provider == "pgvector" and config.url is not None
+        else None
+    )
     if not connection:
         return None
 
@@ -310,7 +320,7 @@ def _build_pgvector_store(
         embedding=embedding,
         metadatas=metadatas,
         ids=ids,
-        collection_name=_configured_pgvector_collection(),
+        collection_name=config.collection,
         connection=connection,
         pre_delete_collection=False,
     )
@@ -318,7 +328,7 @@ def _build_pgvector_store(
 
 def _build_pgvector_store_for_search(*, embedding: Any) -> Any | None:
     """Connect to existing pgvector index for search (does NOT re-embed stored texts)."""
-    connection = os.getenv(DENSE_PGVECTOR_CONNECTION_ENV, "").strip()
+    connection = _configured_pgvector_connection()
     if not connection:
         return None
 
@@ -335,11 +345,18 @@ def _build_pgvector_store_for_search(*, embedding: Any) -> Any | None:
 
 
 def _configured_pgvector_collection() -> str:
-    return os.getenv(DENSE_PGVECTOR_COLLECTION_ENV, "document").strip() or "document"
+    return _vector_store_config().collection
+
+
+def _configured_pgvector_connection() -> str | None:
+    config = _vector_store_config()
+    if config.provider != "pgvector" or config.url is None:
+        return None
+    return config.url.get_secret_value()
 
 
 def _configured_qdrant_collection() -> str:
-    return os.getenv(QDRANT_COLLECTION_ENV, "agentic_rag_chunks").strip() or "agentic_rag_chunks"
+    return _vector_store_config().collection
 
 
 def qdrant_hybrid_search(
@@ -352,18 +369,24 @@ def qdrant_hybrid_search(
 
     if top_k <= 0:
         return []
+    vector_config = _vector_store_config()
+    if vector_config.provider != "qdrant" or vector_config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    collection = vector_config.collection
     embedding_config = resolve_embedding_config()
     embedding = _configured_embedding()
     dense_vector = _embed_query(embedding, query)
     embedding_profile = _validate_embedding_vectors([dense_vector], config=embedding_config)
     sparse_vector = _sparse_vector(query)
-    client = _qdrant_client_from_env()
+    client = _qdrant_client(vector_config)
     _validate_qdrant_collection(
         client=client,
+        collection=collection,
         embedding_profile=embedding_profile,
     )
     response = _query_qdrant_points(
         client=client,
+        collection=collection,
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         embedding_profile=embedding_profile,
@@ -392,18 +415,24 @@ def qdrant_hybrid_search(
 def delete_qdrant_document_points(document_id: str) -> dict[str, object]:
     """Delete Qdrant points belonging to one source document."""
 
-    if _configured_vector_store() != "qdrant":
-        return {"enabled": False, "vector_store": _configured_vector_store()}
-    client = _qdrant_client_from_env()
+    config = _vector_store_config()
+    vector_store = config.provider
+    if vector_store != "qdrant":
+        return {"enabled": False, "vector_store": vector_store}
+    client = _qdrant_client(config)
     try:
-        _delete_qdrant_points(client=client, document_ids=[document_id])
+        _delete_qdrant_points(
+            client=client,
+            collection=config.collection,
+            document_ids=[document_id],
+        )
     except Exception as exc:
         if not _is_qdrant_not_found(exc):
             raise
     return {
         "enabled": True,
         "vector_store": "qdrant",
-        "collection": _configured_qdrant_collection(),
+        "collection": config.collection,
         "document_id": document_id,
         "deleted": True,
     }
@@ -412,23 +441,34 @@ def delete_qdrant_document_points(document_id: str) -> dict[str, object]:
 def delete_all_qdrant_points() -> dict[str, object]:
     """Delete all Qdrant points in the configured collection."""
 
-    if _configured_vector_store() != "qdrant":
-        return {"enabled": False, "vector_store": _configured_vector_store()}
-    client = _qdrant_client_from_env()
+    config = _vector_store_config()
+    vector_store = config.provider
+    if vector_store != "qdrant":
+        return {"enabled": False, "vector_store": vector_store}
+    client = _qdrant_client(config)
     try:
-        _delete_qdrant_points(client=client, document_ids=None)
+        _delete_qdrant_points(
+            client=client,
+            collection=config.collection,
+            document_ids=None,
+        )
     except Exception as exc:
         if not _is_qdrant_not_found(exc):
             raise
     return {
         "enabled": True,
         "vector_store": "qdrant",
-        "collection": _configured_qdrant_collection(),
+        "collection": config.collection,
         "deleted": True,
     }
 
 
-def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
+def _upsert_qdrant_embeddings(
+    chunks: list[Chunk],
+    *,
+    vector_config: VectorStoreConfig,
+    use_validated_config: bool,
+) -> dict[str, object]:
     import os
     import time
 
@@ -437,7 +477,7 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
             "enabled": True,
             "vector_store": "qdrant",
             "chunk_count": 0,
-            "collection": _configured_qdrant_collection(),
+            "collection": vector_config.collection,
         }
 
     batch_size = int(os.environ.get("DENSE_EMBED_BATCH_SIZE", "50"))
@@ -449,10 +489,10 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
     try:
         from qdrant_client import models
     except ImportError as exc:
-        raise RuntimeError("DENSE_VECTOR_STORE=qdrant requires qdrant-client.") from exc
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
 
     embedding_profile: object = None
-    collection = _configured_qdrant_collection()
+    collection = vector_config.collection
     client: Any = None
 
     for batch_start in range(0, len(chunks), batch_size):
@@ -460,11 +500,17 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
         dense_vectors = _embed_documents(embedding, [c.text for c in batch])
 
         if client is None:
-            client = _qdrant_client_from_env()
+            client = (
+                _qdrant_client(vector_config) if use_validated_config else _qdrant_client_from_env()
+            )
 
         if embedding_profile is None:
             embedding_profile = _validate_embedding_vectors(dense_vectors, config=embedding_config)
-            _ensure_qdrant_collection(client=client, embedding_profile=embedding_profile)
+            _ensure_qdrant_collection(
+                client=client,
+                collection=collection,
+                embedding_profile=embedding_profile,
+            )
 
         points = []
         for local_idx, chunk in enumerate(batch):
@@ -507,23 +553,28 @@ def _upsert_qdrant_embeddings(chunks: list[Chunk]) -> dict[str, object]:
 
 
 def _qdrant_client_from_env() -> Any:
-    url = os.getenv(QDRANT_URL_ENV, "").strip()
-    api_key = os.getenv(QDRANT_API_KEY_ENV, "").strip() or None
-    if not url:
-        raise ValueError("DENSE_VECTOR_STORE=qdrant requires QDRANT_URL.")
+    config = _vector_store_config()
+    return _qdrant_client(config)
+
+
+def _qdrant_client(config: VectorStoreConfig) -> Any:
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    api_key = config.api_key.get_secret_value() if config.api_key is not None else None
     try:
         from qdrant_client import QdrantClient
     except ImportError as exc:
-        raise RuntimeError("DENSE_VECTOR_STORE=qdrant requires qdrant-client.") from exc
-    return QdrantClient(url=url, api_key=api_key)
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
+    return QdrantClient(url=config.url.get_secret_value(), api_key=api_key)
 
 
 def _ensure_qdrant_collection(
     *,
     client: Any,
+    collection: str | None = None,
     embedding_profile: EmbeddingProfile,
 ) -> None:
-    collection = _configured_qdrant_collection()
+    collection = collection or _configured_qdrant_collection()
     get_collection = getattr(client, "get_collection", None)
     if not callable(get_collection):
         raise RuntimeError("Qdrant client must implement get_collection.")
@@ -535,6 +586,7 @@ def _ensure_qdrant_collection(
     else:
         _validate_qdrant_collection_info(
             client=client,
+            collection=collection,
             collection_info=collection_info,
             embedding_profile=embedding_profile,
         )
@@ -546,7 +598,7 @@ def _ensure_qdrant_collection(
     try:
         from qdrant_client import models
     except ImportError as exc:
-        raise RuntimeError("Qdrant collection creation requires qdrant-client.") from exc
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
     create_collection(
         collection_name=collection,
         vectors_config={
@@ -563,9 +615,9 @@ def _ensure_qdrant_collection(
 def _validate_qdrant_collection(
     *,
     client: Any,
+    collection: str,
     embedding_profile: EmbeddingProfile,
 ) -> None:
-    collection = _configured_qdrant_collection()
     get_collection = getattr(client, "get_collection", None)
     if not callable(get_collection):
         raise RuntimeError("Qdrant client must implement get_collection.")
@@ -580,6 +632,7 @@ def _validate_qdrant_collection(
         raise
     _validate_qdrant_collection_info(
         client=client,
+        collection=collection,
         collection_info=collection_info,
         embedding_profile=embedding_profile,
     )
@@ -602,19 +655,19 @@ def _ensure_qdrant_payload_indexes(*, client: Any, collection: str, models: Any)
 def _validate_qdrant_collection_info(
     *,
     client: Any,
+    collection: str,
     collection_info: object,
     embedding_profile: EmbeddingProfile,
 ) -> None:
-    collection = _configured_qdrant_collection()
     stored_dimensions = _qdrant_dense_vector_size(collection_info)
     if stored_dimensions != embedding_profile.dimensions:
         raise ValueError(
             f"Qdrant collection {collection!r} dense dimension is {stored_dimensions}, "
             f"but the active embedding dimension is {embedding_profile.dimensions}. "
-            "Change QDRANT_COLLECTION or delete the collection and reindex."
+            "Change VECTOR_STORE_COLLECTION or delete the collection and reindex."
         )
 
-    stored_profile = _qdrant_stored_embedding_profile(client)
+    stored_profile = _qdrant_stored_embedding_profile(client, collection=collection)
     if stored_profile is None:
         return
     expected_profile = _embedding_profile_payload(embedding_profile)
@@ -622,7 +675,7 @@ def _validate_qdrant_collection_info(
         raise ValueError(
             f"Qdrant collection {collection!r} embedding profile is incompatible: "
             f"stored={stored_profile}, active={expected_profile}. "
-            "Change QDRANT_COLLECTION or delete the collection and reindex."
+            "Change VECTOR_STORE_COLLECTION or delete the collection and reindex."
         )
 
     try:
@@ -642,17 +695,21 @@ def _qdrant_dense_vector_size(collection_info: object) -> int:
     if not isinstance(size, int) or size <= 0:
         raise ValueError(
             "Qdrant collection does not expose the required named dense vector. "
-            "Change QDRANT_COLLECTION or delete the collection and reindex."
+            "Change VECTOR_STORE_COLLECTION or delete the collection and reindex."
         )
     return size
 
 
-def _qdrant_stored_embedding_profile(client: Any) -> dict[str, object] | None:
+def _qdrant_stored_embedding_profile(
+    client: Any,
+    *,
+    collection: str,
+) -> dict[str, object] | None:
     scroll = getattr(client, "scroll", None)
     if not callable(scroll):
         raise RuntimeError("Qdrant client must implement scroll for profile validation.")
     response = scroll(
-        collection_name=_configured_qdrant_collection(),
+        collection_name=collection,
         limit=1,
         with_payload=True,
         with_vectors=False,
@@ -669,9 +726,9 @@ def _qdrant_stored_embedding_profile(client: Any) -> dict[str, object] | None:
     profile = payload.get("_embedding_profile") if isinstance(payload, dict) else None
     if not isinstance(profile, dict):
         raise ValueError(
-            f"Qdrant collection {_configured_qdrant_collection()!r} contains legacy points "
-            "without an embedding profile. Change QDRANT_COLLECTION or delete the collection "
-            "and reindex."
+            f"Qdrant collection {collection!r} contains legacy points "
+            "without an embedding profile. Change VECTOR_STORE_COLLECTION or delete the "
+            "collection and reindex."
         )
     return dict(profile)
 
@@ -687,6 +744,7 @@ def _is_qdrant_not_found(exc: Exception) -> bool:
 def _query_qdrant_points(
     *,
     client: Any,
+    collection: str,
     dense_vector: list[float],
     sparse_vector: dict[str, list[int] | list[float]],
     embedding_profile: EmbeddingProfile,
@@ -707,7 +765,7 @@ def _query_qdrant_points(
             if not all(isinstance(value, float) for value in sparse_values):
                 sparse_values = []
             return client.query_points(
-                collection_name=_configured_qdrant_collection(),
+                collection_name=collection,
                 prefetch=[
                     models.Prefetch(
                         query=dense_vector,
@@ -730,7 +788,7 @@ def _query_qdrant_points(
                 with_payload=True,
             )
     return client.query_points(
-        collection_name=_configured_qdrant_collection(),
+        collection_name=collection,
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         document_ids=document_ids,
@@ -739,7 +797,12 @@ def _query_qdrant_points(
     )
 
 
-def _delete_qdrant_points(*, client: Any, document_ids: list[str] | None) -> None:
+def _delete_qdrant_points(
+    *,
+    client: Any,
+    collection: str,
+    document_ids: list[str] | None,
+) -> None:
     delete = getattr(client, "delete", None)
     if not callable(delete):
         raise RuntimeError("Qdrant client must implement delete.")
@@ -751,13 +814,13 @@ def _delete_qdrant_points(*, client: Any, document_ids: list[str] | None) -> Non
         else:
             selector_filter = _qdrant_document_filter(document_ids, models=models)
             delete(
-                collection_name=_configured_qdrant_collection(),
+                collection_name=collection,
                 points_selector=models.FilterSelector(filter=selector_filter),
                 wait=True,
             )
             return
     delete(
-        collection_name=_configured_qdrant_collection(),
+        collection_name=collection,
         document_ids=document_ids,
         wait=True,
     )

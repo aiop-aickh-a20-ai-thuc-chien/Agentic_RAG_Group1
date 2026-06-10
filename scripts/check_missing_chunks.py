@@ -1,7 +1,6 @@
 """Find which URLs the missing chunk IDs belong to in result.xlsx."""
 
 import io
-import os
 import sys
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -12,6 +11,8 @@ load_dotenv()
 
 import openpyxl  # noqa: E402
 from qdrant_client import QdrantClient  # noqa: E402
+
+from agentic_rag.retrieval.config import require_qdrant_vector_store_config  # noqa: E402
 
 XLSX_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\guide\reports\result.xlsx"
 RELINK = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt"
@@ -34,8 +35,15 @@ for row in ws.iter_rows(min_row=3, values_only=True):
         chunk_to_row[str(cid).strip()] = (qid, str(url).strip() if url else "")
 
 # Fetch Qdrant chunk IDs
-qclient = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
-collection = os.getenv("QDRANT_COLLECTION")
+qdrant_config = require_qdrant_vector_store_config()
+assert qdrant_config.url is not None
+qclient = QdrantClient(
+    url=qdrant_config.url.get_secret_value(),
+    api_key=(
+        qdrant_config.api_key.get_secret_value() if qdrant_config.api_key is not None else None
+    ),
+)
+collection = qdrant_config.collection
 qdrant_chunk_ids: set[str] = set()
 offset = None
 while True:
