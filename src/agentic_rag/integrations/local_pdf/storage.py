@@ -130,7 +130,7 @@ class S3LocalSourceStore:
             markdown_key = f"{base_key}/parsed/document.md"
             self._put_bytes(
                 markdown_key,
-                markdown_path.read_bytes(),
+                markdown_path.read_text(encoding="utf-8").encode(),
                 content_type="text/markdown; charset=utf-8",
             )
 
