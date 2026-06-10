@@ -32,6 +32,7 @@ dependencies = [
 # Evaluation workbook tooling and deferred RAGAS dependencies.
 evaluation = [
     "datasets",
+    "langchain-community",
     "openpyxl>=3.1.0",
     "ragas>=0.2",
 ]
