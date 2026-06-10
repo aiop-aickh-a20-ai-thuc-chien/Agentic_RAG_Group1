@@ -1,0 +1,61 @@
+"""Shared chunking boundary for ingestion modules."""
+
+from agentic_rag.ingestion.chunking.chunkers import (
+    Chunker,
+    DeterministicMarkdownChunker,
+    TextChunkingStrategy,
+)
+from agentic_rag.ingestion.chunking.models import (
+    ChunkCandidate,
+    ChunkingInput,
+    MarkdownChunk,
+    MarkdownSection,
+)
+from agentic_rag.ingestion.chunking.splitters import (
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_PARAGRAPH_MAX_TOKENS,
+    DEFAULT_PARAGRAPH_OVERLAP,
+    build_chunk_id,
+    chunk_markdown,
+    chunk_markdown_by_sections,
+    chunking_text,
+    detect_lang,
+    normalize_space,
+    paragraph_chunk,
+    short_hash,
+    slugify,
+    split_markdown,
+    split_markdown_into_sections,
+    split_markdown_paragraphs,
+    split_sentences,
+    split_text_with_strategy,
+)
+
+__all__ = [
+    "DEFAULT_CHUNK_OVERLAP",
+    "DEFAULT_CHUNK_SIZE",
+    "DEFAULT_PARAGRAPH_MAX_TOKENS",
+    "DEFAULT_PARAGRAPH_OVERLAP",
+    "ChunkCandidate",
+    "Chunker",
+    "ChunkingInput",
+    "DeterministicMarkdownChunker",
+    "MarkdownChunk",
+    "MarkdownSection",
+    "TextChunkingStrategy",
+    "build_chunk_id",
+    "chunk_markdown",
+    "chunk_markdown_by_sections",
+    "chunking_text",
+    "detect_lang",
+    "normalize_space",
+    "paragraph_chunk",
+    "short_hash",
+    "slugify",
+    "split_markdown",
+    "split_markdown_into_sections",
+    "split_markdown_paragraphs",
+    "split_sentences",
+    "split_text_with_strategy",
+]

@@ -1,0 +1,205 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic RAG Auto Data Tool</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+    <header class="top-nav">
+        <div class="logo">Agentic RAG Auto Data Tool</div>
+        <div class="nav-actions">
+            <button class="btn nav-btn">Review</button>
+            <button class="btn nav-btn">Device</button>
+        </div>
+    </header>
+
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <span>LLM Gateway</span>
+                    <label style="font-size: 10px; display: flex; align-items: center;"><input type="checkbox" checked> Demo / offline</label>
+                </div>
+                <div class="form-group">
+                    <label>Gateway URL:</label>
+                    <input type="text" id="gateway-url" value="https://token-plan-sgp.xiaomimimo.com/v1" readonly>
+                </div>
+                <div class="form-group">
+                    <label>API key:</label>
+                    <input type="password" id="api-key" placeholder="Nhập API key...">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Model name:</label>
+                        <select id="model-name">
+                            <option value="mimo-v2.5">Xiaomi MIMO v2.5</option>
+                            <option value="mimo-v2.5-pro">Xiaomi MIMO v2.5 Pro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Temp: 0.5</label>
+                        <input type="range" id="temp" min="0" max="1" step="0.1" value="0.5">
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header"><span>Data source</span></div>
+                <div class="form-group">
+                    <label>TXT File Path (URLs):</label>
+                    <input type="text" id="txt-file-path" value="C:\Users\ACER\Downloads\Agentic_RAG_Group1\_relink.txt">
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>PDF Folder Path:</label>
+                    <input type="text" id="pdf-folder-path" placeholder="Ví dụ: ../guide/pdfs">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-header"><span>Batch autopilot QA</span></div>
+                <p style="font-size: 11px; color: #555; margin-bottom: 10px;">Tự động duyệt tuần tự qua các chunk chưa có nhãn để sinh nhanh câu hỏi và đáp án.</p>
+                <div class="form-row batch-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Độ trễ nhịp (ms):</label>
+                        <input type="number" id="batch-delay" value="1000">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Số chunk / batch:</label>
+                        <input type="number" id="batch-size" value="5" min="1" max="20">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <button class="btn btn-primary" id="btn-batch-run" style="width: 100%; margin-top: 10px;">Chạy hàng loạt</button>
+                </div>
+                <div class="progress-info" style="font-size: 11px; font-weight: bold; text-align: right; margin-top: 10px;">
+                    Tiến độ gán nhãn: <span id="progress-text">0/0 Chunks (0%)</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="content">
+            <div class="main-top-bar card">
+                <button class="btn btn-primary" id="btn-load-links">+ Nạp Document Chunk</button>
+                <div class="tabs">
+                    <button class="tab active">Tất cả (<span id="count-all">0</span>)</button>
+                    <button class="tab">Đã duyệt (<span id="count-done">0</span>)</button>
+                    <button class="tab">Chờ gán (<span id="count-wait">0</span>)</button>
+                    <button class="tab">Lỗi (<span id="count-err">0</span>)</button>
+                </div>
+                <div class="search-box">
+                    <input type="text" placeholder="Tìm tiêu đề, nội dung...">
+                </div>
+            </div>
+
+            <div class="workspace-tabs card">
+                <button class="workspace-tab active" data-view="label">Label QA</button>
+                <button class="workspace-tab" data-view="review">Review parsing / chunking</button>
+                <span class="workspace-hint">Chọn chunk trong bảng để label hoặc kiểm tra raw document, parsed Markdown và chunk highlight.</span>
+            </div>
+
+            <div class="card chunk-list-card">
+                <div class="card-header">
+                    <span>Danh sách vector chunks</span>
+                    <span style="font-size: 12px; color: #888;">Bộ lọc hiển thị: <span id="filter-count">0</span> kết quả</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Chunk ID</th>
+                                <th>Thiết bị / tiêu đề</th>
+                                <th>Mẫu trích xuất tài liệu</th>
+                                <th>Trạng thái QA</th>
+                                <th>Độ đầy đủ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="chunk-list-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="split-panel view-panel active" id="label-panel">
+                <div class="card context-card">
+                    <div class="card-header">
+                        <span>Document context [vector chunk]</span>
+                        <span id="current-chunk-id" style="font-size:11px; color:#888;"></span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:1;">
+                            <label>Tên tiêu đề:</label>
+                            <input type="text" id="ctx-title" readonly>
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label>Metadata đính kèm:</label>
+                            <input type="text" id="ctx-meta" readonly>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label>Nội dung đoạn văn gốc (vector chunk):</label>
+                        <textarea id="ctx-content" rows="8" readonly></textarea>
+                    </div>
+                    <div class="context-actions">
+                        <span id="status-msg" style="font-size: 11px; color: #888;">Chọn chunk để label hoặc review parsing.</span>
+                        <div class="btn-group">
+                            <button class="btn btn-outline">Sinh câu hỏi trước</button>
+                            <button class="btn btn-primary" id="btn-generate">Tự động sinh QA cặp</button>
+                            <button class="btn btn-success" id="btn-save" style="margin-left: 5px;">Lưu Excel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="qa-col">
+                    <div class="card qa-card">
+                        <div class="card-header">
+                            <span>Generated question [câu hỏi RAG]</span>
+                            <button class="btn btn-text">Re-generate</button>
+                        </div>
+                        <textarea id="qa-question" rows="4"></textarea>
+                    </div>
+                    <div class="card qa-card">
+                        <div class="card-header">
+                            <span style="color: #2ea043;">Generated answer [câu trả lời chuẩn]</span>
+                            <button class="btn btn-text">Re-generate</button>
+                        </div>
+                        <textarea id="qa-answer" rows="6"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="review-panel view-panel" id="review-panel">
+                <div class="card raw-card">
+                    <div class="card-header">
+                        <span>Raw document source</span>
+                        <button class="btn btn-outline" id="btn-open-source">Mở trang gốc</button>
+                    </div>
+                    <div class="review-source-meta">
+                        <div id="review-source-title">Chưa chọn chunk.</div>
+                        <div id="review-source-url"></div>
+                    </div>
+                    <div class="raw-frame-wrap">
+                        <iframe id="raw-frame" title="Raw document preview"></iframe>
+                        <div id="raw-fallback" class="raw-fallback">Chọn một URL chunk để xem raw page.</div>
+                    </div>
+                </div>
+
+                <div class="card markdown-card">
+                    <div class="card-header">
+                        <span>Parsed Markdown + chunk highlight</span>
+                        <span id="review-chunk-count" style="font-size: 12px; color: #888;">0 chunks</span>
+                    </div>
+                    <div class="markdown-toolbar">
+                        <button class="btn btn-outline active" id="btn-review-markdown">Markdown</button>
+                        <button class="btn btn-outline" id="btn-review-chunks">Chunk blocks</button>
+                    </div>
+                    <div id="parsed-markdown-view" class="parsed-markdown-view"></div>
+                    <div id="chunk-highlight-view" class="chunk-highlight-view hidden"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js?v=5"></script>
+</body>
+</html>

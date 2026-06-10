@@ -18,6 +18,12 @@ site/
 .eggs/
 pip-wheel-metadata/
 
+# Frontend dependencies and build artifacts
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+
 # Test, coverage, and type-check caches
 .pytest_cache/
 .coverage
@@ -41,9 +47,12 @@ htmlcov/
 # Logs and local runtime output
 *.log
 logs/
+.tmp/
 
 # Common local RAG/vector store artifacts
 .cache/
+.uv-cache/
+.codegraph/
 artifacts/
 chroma/
 .chroma/
@@ -53,9 +62,38 @@ storage/
 index/
 
 # IDE and OS files
+.agents/
+.codex/
+.claude/
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
 Thumbs.db
+
+# uv lock file
+uv.lock
+
+# Evaluation data files
+eval.xlsx
+result.xlsx
+*.xlsx
+!guide/reports/result_final.xlsx
+!guide/reports/reject.xlsx
+
+# Local deployment config (machine-specific paths)
+nginx.conf
+
+# Temporary relink/partial files
+_relink*.txt
+guide/reports/_sheet1_partial.xml
+guide/reports/eval_queue.json
+guide/reports/eval_queue.xlsx
+
+# Script logs and debug one-offs
+scripts/upload_failed.txt
+scripts/_*.py
+
+# Data folder
+data/

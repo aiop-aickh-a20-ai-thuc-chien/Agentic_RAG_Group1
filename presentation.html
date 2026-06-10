@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic RAG — VinFast</title>
+<style>
+/* ─── Design Tokens ─────────────────────────────────────── */
+:root {
+  --bg:         #eef5ff;
+  --surface:    #ffffff;
+  --surface-2:  #f0f7ff;
+  --surface-3:  #e0eeff;
+  --border:     rgba(0,40,120,0.10);
+  --border-2:   rgba(0,40,120,0.18);
+
+  --mint:       #059669;
+  --mint-glow:  rgba(5,150,105,0.12);
+  --mint-dim:   rgba(5,150,105,0.10);
+  --mint-border:rgba(5,150,105,0.30);
+
+  --blue:       #2563eb;
+  --blue-dim:   rgba(37,99,235,0.10);
+  --blue-border:rgba(37,99,235,0.25);
+
+  --violet:     #7c3aed;
+  --violet-dim: rgba(124,58,237,0.10);
+
+  --amber:      #d97706;
+  --amber-dim:  rgba(217,119,6,0.10);
+
+  --coral:      #dc2626;
+  --coral-dim:  rgba(220,38,38,0.10);
+
+  --text-1:  #0f1f3d;
+  --text-2:  #3d5a80;
+  --text-3:  #7a9ab8;
+
+  --r-card: 14px;
+  --r-sm:   8px;
+  --r-pill: 999px;
+}
+
+/* ─── Reset & Base ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text-1);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ─── Slide System ──────────────────────────────────────── */
+.deck { width: 100%; height: 100vh; position: relative; }
+
+.slide {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: 52px 68px;
+  opacity: 0; pointer-events: none;
+  transform: translateX(56px);
+  transition: opacity .4s cubic-bezier(.22,1,.36,1),
+              transform .4s cubic-bezier(.22,1,.36,1);
+  overflow: hidden;
+}
+.slide.active {
+  opacity: 1; pointer-events: all; transform: translateX(0);
+}
+.slide.prev {
+  opacity: 0; transform: translateX(-56px);
+}
+
+/* ─── Nav Bar ───────────────────────────────────────────── */
+.nav-bar {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%); z-index: 99;
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(240,248,255,.92);
+  backdrop-filter: blur(16px); box-shadow: 0 2px 20px rgba(0,40,120,.1);
+  border: 1px solid rgba(0,40,120,.15); border-radius: var(--r-pill);
+  padding: 8px 18px;
+}
+.nav-bar button {
+  background: none; border: none; color: var(--text-2);
+  font-size: 18px; cursor: pointer; padding: 4px 8px;
+  border-radius: var(--r-sm); line-height: 1;
+  transition: color .2s, background .2s;
+}
+.nav-bar button:hover { color: #0f1f3d; background: rgba(0,40,120,.07); }
+.nav-bar button.off { opacity: .3; pointer-events: none; }
+.dots { display: flex; gap: 6px; }
+.dot {
+  width: 6px; height: 6px; border-radius: var(--r-pill);
+  background: var(--text-3); cursor: pointer;
+  transition: all .25s cubic-bezier(.22,1,.36,1);
+}
+.dot.on { background: var(--mint); width: 20px; }
+.slide-count { font-size: 11px; color: #7a9ab8; min-width: 32px; text-align:center; }
+
+/* ─── Typography ────────────────────────────────────────── */
+.kicker {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--mint); margin-bottom: 14px;
+}
+.display {
+  font-size: clamp(2.4rem,4.2vw,3.6rem);
+  font-weight: 800; letter-spacing: -.03em; line-height: 1.05;
+}
+.title {
+  font-size: clamp(1.5rem,2.8vw,2.2rem);
+  font-weight: 700; letter-spacing: -.02em; line-height: 1.1;
+}
+.heading { font-size: 1.05rem; font-weight: 700; }
+.body { font-size: .85rem; color: #3d5a80; line-height: 1.65; }
+.mono {
+  font-family: "SF Mono","Cascadia Code","Fira Code",ui-monospace,monospace;
+  font-size: .78rem;
+}
+
+/* ─── Gradient Text ─────────────────────────────────────── */
+.grad {
+  background: linear-gradient(120deg, #059669 0%, #2563eb 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* ─── Cards & Panels ────────────────────────────────────── */
+.card {
+  background: #ffffff; border: 1px solid rgba(0,40,120,0.10);
+  border-radius: var(--r-card); padding: 20px 22px;
+}
+.card-sm { padding: 13px 16px; border-radius: var(--r-sm); }
+.glass {
+  background: rgba(255,255,255,.7); backdrop-filter: blur(10px);
+  border: 1px solid var(--border); border-radius: var(--r-card);
+}
+
+/* ─── Pill / Badge ──────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .72rem; font-weight: 600;
+  padding: 4px 12px; border-radius: var(--r-pill);
+}
+.pill-mint { background: rgba(5,150,105,.1); color: #059669; border: 1px solid rgba(5,150,105,.3); }
+.pill-blue { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue-border); }
+.pill-violet { background: var(--violet-dim); color: var(--violet); border: 1px solid rgba(167,139,250,.3); }
+.pill-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(246,191,60,.3); }
+.pill-coral { background: var(--coral-dim); color: var(--coral); border: 1px solid rgba(255,107,107,.3); }
+
+/* ─── Layout Helpers ────────────────────────────────────── */
+.w-full { width: 100%; max-width: 1120px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 13px; }
+.grid-5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 11px; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; align-items: center; gap: 10px; }
+
+/* ─── Stagger Reveal ────────────────────────────────────── */
+.slide.active .s { animation: upIn .5s cubic-bezier(.22,1,.36,1) both; }
+.slide.active .s1 { animation-delay: .04s; }
+.slide.active .s2 { animation-delay: .11s; }
+.slide.active .s3 { animation-delay: .18s; }
+.slide.active .s4 { animation-delay: .25s; }
+.slide.active .s5 { animation-delay: .32s; }
+.slide.active .s6 { animation-delay: .38s; }
+@keyframes upIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Pipeline Diagram ──────────────────────────────────── */
+.pipe {
+  display: flex; align-items: center;
+  width: 100%; gap: 0;
+}
+.pipe-node {
+  flex: 1; position: relative;
+  background: #ffffff; border: 1px solid rgba(0,40,120,0.10);
+  border-radius: var(--r-sm); padding: 13px 10px; text-align: center;
+  min-width: 0;
+}
+.pipe-node.active-node {
+  border-color: var(--mint-border);
+  background: linear-gradient(135deg, rgba(14,207,128,.08), rgba(14,207,128,.03));
+}
+.pipe-label { font-size: .72rem; font-weight: 700; color: var(--text-1); }
+.pipe-sub   { font-size: .6rem;  color: var(--text-2); margin-top: 3px; }
+.pipe-model { font-size: .6rem;  color: var(--mint);   margin-top: 4px; font-weight: 600; }
+.pipe-arrow {
+  width: 30px; flex-shrink: 0; text-align: center;
+  font-size: .8rem; color: var(--mint); position: relative;
+}
+
+/* Loop arrow */
+.pipe-loop {
+  width: 100%; text-align: right; padding-right: 4px;
+  margin-top: 6px;
+}
+.loop-track {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 6px;
+}
+.loop-line {
+  height: 2px; flex: 1; max-width: 340px;
+  background: linear-gradient(to right, transparent, var(--violet), transparent);
+}
+.loop-label {
+  font-size: .62rem; color: var(--violet); font-weight: 600;
+  background: var(--violet-dim); border: 1px solid rgba(167,139,250,.25);
+  padding: 2px 10px; border-radius: var(--r-pill);
+}
+
+/* ─── Step List ─────────────────────────────────────────── */
+.step-list { display: flex; flex-direction: column; gap: 9px; width: 100%; }
+.step {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: #ffffff; border: 1px solid rgba(0,40,120,0.10);
+  border-radius: var(--r-sm); padding: 12px 16px;
+}
+.step-num {
+  width: 26px; height: 26px; border-radius: var(--r-pill); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 800; color: var(--bg);
+  background: linear-gradient(135deg, var(--mint), var(--blue));
+  margin-top: 1px;
+}
+.step-title { font-size: .82rem; font-weight: 700; }
+.step-desc  { font-size: .72rem; color: var(--text-2); margin-top: 2px; line-height: 1.5; }
+.step-tag   { font-size: .62rem; color: var(--mint); font-weight: 600; margin-top: 4px; }
+
+/* ─── Member Cards ──────────────────────────────────────── */
+.member {
+  background: #ffffff; border: 1px solid rgba(0,40,120,0.10);
+  border-radius: var(--r-card); padding: 16px 18px;
+  border-top: 2px solid var(--accent, var(--mint));
+  display: flex; flex-direction: column;
+}
+.member-icon { font-size: 1.4rem; margin-bottom: 8px; }
+.member-handle { font-size: .78rem; font-weight: 700; color: var(--text-1); }
+.member-name   { font-size: .67rem; color: var(--text-3); margin-top: 1px; }
+.member-part   { font-size: .72rem; font-weight: 700; color: var(--text-1); margin-top: 10px; }
+.member-body   { font-size: .68rem; color: var(--text-2); line-height: 1.55; margin-top: 4px; }
+
+/* ─── Stat Cards ─────────────────────────────────────────── */
+.stat { text-align: center; }
+.stat-num {
+  font-size: 2.6rem; font-weight: 800;
+  background: linear-gradient(135deg, var(--mint), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.stat-label { font-size: .75rem; color: var(--text-2); margin-top: 3px; }
+
+/* ─── Tech Tags ─────────────────────────────────────────── */
+.tech-group { display: flex; flex-direction: column; gap: 8px; }
+.tech-group-label {
+  font-size: .65rem; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: .7rem; font-weight: 600;
+  padding: 3px 11px; border-radius: var(--r-sm);
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  color: var(--text-1);
+}
+
+/* ─── Evaluation Metrics ────────────────────────────────── */
+.metric-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-name  { font-size: .8rem; font-weight: 600; }
+.metric-value { font-size: .72rem; color: var(--text-2); }
+
+/* ─── Demo Q ─────────────────────────────────────────────── */
+.demo-q {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 13px 16px; border-radius: var(--r-sm);
+  background: #ffffff; border: 1px solid rgba(0,40,120,0.10);
+  border-left: 3px solid var(--accent, var(--mint));
+}
+.q-type  { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--accent, var(--mint)); margin-bottom: 5px; }
+.q-text  { font-size: .88rem; font-weight: 600; }
+.q-note  { font-size: .7rem; color: var(--text-2); margin-top: 5px; }
+
+/* ─── Cover Decorations ──────────────────────────────────── */
+.cover-glow {
+  position: absolute; width: 700px; height: 400px;
+  background: radial-gradient(ellipse, rgba(37,99,235,.10) 0%, transparent 70%);
+  top: -80px; left: 50%; transform: translateX(-50%);
+  pointer-events: none;
+}
+.cover-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0,40,120,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,40,120,.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 0%, transparent 100%);
+}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 1 — COVER
+══════════════════════════════════════════════════════ -->
+<div class="slide active" id="s1" style="background:linear-gradient(160deg,#dbeafe 0%,#eff6ff 50%,#e0f2fe 100%)">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+
+  <div style="text-align:center;position:relative;max-width:800px">
+    <div class="kicker s s1" style="margin-bottom:20px">Nhóm 1 · Agentic RAG · VinFast</div>
+
+    <div class="display s s2" style="font-size:clamp(3rem,6vw,5rem);margin-bottom:6px">
+      Agentic <span class="grad">RAG</span>
+    </div>
+    <div class="display s s2" style="font-size:clamp(1.4rem,2.8vw,2rem);color:var(--text-2);font-weight:400;letter-spacing:-.01em;margin-bottom:32px">
+      Hệ thống hỏi đáp thông minh cho VinFast
+    </div>
+
+    <div style="width:48px;height:2px;background:linear-gradient(90deg,var(--mint),var(--blue));margin:0 auto 28px" class="s s3"></div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center" class="s s4">
+      <span class="pill pill-mint">hotrandinhnguyen</span>
+      <span class="pill pill-blue">TesWy</span>
+      <span class="pill pill-violet">ngthvinhrai</span>
+      <span class="pill pill-amber">dung1308</span>
+      <span class="pill" style="background:rgba(255,107,107,.22);color:#ffcece;border:1px solid rgba(255,107,107,.45)">NAT23042004</span>
+    </div>
+
+    <div style="margin-top:28px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap" class="s s5">
+      <span class="tag">LangGraph</span>
+      <span class="tag">Self-RAG</span>
+      <span class="tag">pgvector</span>
+      <span class="tag">GPT-4o-mini</span>
+      <span class="tag">bge-reranker-v2-m3</span>
+      <span class="tag">FastAPI</span>
+      <span class="tag">Next.js 14</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 2 — TONG QUAN
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:26px">Tổng quan dự án</div>
+
+  <div class="grid-3 s s2" style="margin-bottom:16px">
+    <div class="card stat">
+      <div class="stat-num">181</div>
+      <div class="stat-label">Tài liệu trong hệ thống</div>
+    </div>
+    <div class="card stat">
+      <div class="stat-num">5</div>
+      <div class="stat-label">LangGraph Nodes</div>
+    </div>
+    <div class="card stat">
+      <div class="stat-num">2</div>
+      <div class="stat-label">OpenAI Models</div>
+    </div>
+  </div>
+
+  <div class="grid-2 s s3">
+    <div class="card">
+      <div class="heading" style="margin-bottom:10px;color:var(--mint)">Vấn đề</div>
+      <div class="body">Người dùng cần thông tin chính xác về xe VinFast (giá, thông số, bảo hành, phụ kiện...) nhưng phải tìm thủ công trên nhiều trang web khác nhau.</div>
+    </div>
+    <div class="card">
+      <div class="heading" style="margin-bottom:10px;color:var(--blue)">Giải pháp</div>
+      <div class="body">Hệ thống RAG tự động tìm kiếm, tổng hợp và trả lời với trích dẫn nguồn chính xác. Tự đánh giá kết quả và tái truy vấn khi cần.</div>
+    </div>
+  </div>
+
+  <div class="card s s4" style="margin-top:14px">
+    <div class="row" style="gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div class="mono" style="color:var(--mint);font-weight:700">Dữ liệu nguồn</div>
+        <div class="body" style="margin-top:5px">PDF tài liệu kỹ thuật + 165 trang web VinFast chính thức</div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <div class="mono" style="color:var(--blue);font-weight:700">Retrieval</div>
+        <div class="body" style="margin-top:5px">BM25 (sparse) + Dense pgvector (semantic) + RRF Fusion</div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <div class="mono" style="color:var(--violet);font-weight:700">Generation</div>
+        <div class="body" style="margin-top:5px">Grounded prompt, citation validation, song ngữ Viet/Anh</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 3 — KIEN TRUC SELF-RAG (hotrandinhnguyen contribution)
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+<div class="w-full">
+  <div class="row s s1" style="margin-bottom:6px;gap:12px">
+    <div class="title">Kiến trúc Self-RAG</div>
+    <span class="pill pill-mint" style="font-size:.65rem">hotrandinhnguyen</span>
+  </div>
+  <div class="body s s1" style="margin-bottom:22px">Chuyển đổi từ linear RAG sang agentic pipeline voi LangGraph — tự động tái truy vấn khi không đủ evidence</div>
+
+  <!-- Pipeline Diagram -->
+  <div class="pipe s s2">
+    <div class="pipe-node active-node">
+      <div style="font-size:1.1rem;margin-bottom:4px">🧹</div>
+      <div class="pipe-label">Preprocess</div>
+      <div class="pipe-sub">Rewrite query<br>Split multi-intent</div>
+      <div class="pipe-model">gpt-4o-mini</div>
+    </div>
+    <div class="pipe-arrow" style="color:#2563eb">→</div>
+    <div class="pipe-node" style="border-color:var(--blue-border)">
+      <div style="font-size:1.1rem;margin-bottom:4px">🔍</div>
+      <div class="pipe-label">Retrieve</div>
+      <div class="pipe-sub">BM25 + Dense<br>RRF Fusion</div>
+      <div class="pipe-model" style="color:var(--blue)">pgvector</div>
+    </div>
+    <div class="pipe-arrow" style="color:#2563eb">→</div>
+    <div class="pipe-node" style="border-color:rgba(167,139,250,.3)">
+      <div style="font-size:1.1rem;margin-bottom:4px">⚖️</div>
+      <div class="pipe-label">Rerank</div>
+      <div class="pipe-sub">Cross-encoder<br>per-group score</div>
+      <div class="pipe-model" style="color:var(--violet)">bge-reranker-v2-m3</div>
+    </div>
+    <div class="pipe-arrow" style="color:#2563eb">→</div>
+    <div class="pipe-node active-node">
+      <div style="font-size:1.1rem;margin-bottom:4px">✍️</div>
+      <div class="pipe-label">Generate</div>
+      <div class="pipe-sub">Grounded prompt<br>Citation valid.</div>
+      <div class="pipe-model">gpt-4o-mini</div>
+    </div>
+    <div class="pipe-arrow" style="color:#2563eb">→</div>
+    <div class="pipe-node active-node">
+      <div style="font-size:1.1rem;margin-bottom:4px">✅</div>
+      <div class="pipe-label">Check Answer</div>
+      <div class="pipe-sub">Route: END<br>or re-query</div>
+      <div class="pipe-model">rule-based</div>
+    </div>
+  </div>
+
+  <!-- Loop arrow visual -->
+  <div class="s s3" style="margin-top:8px;display:flex;align-items:center;padding:0 40px;gap:0">
+    <div style="width:calc(40% + 60px)"></div>
+    <div style="flex:1;display:flex;align-items:center;gap:0">
+      <div style="font-size:.65rem;color:var(--violet);white-space:nowrap;background:var(--violet-dim);border:1px solid rgba(167,139,250,.25);padding:3px 10px;border-radius:var(--r-pill)">Transform Query (gpt-4o-mini)</div>
+      <div style="flex:1;height:1px;background:linear-gradient(to right, rgba(167,139,250,.5), transparent)"></div>
+      <div style="font-size:.6rem;color:var(--text-3)">max 2 vòng</div>
+    </div>
+  </div>
+
+  <!-- 3 Key Points -->
+  <div class="grid-3 s s4" style="margin-top:16px">
+    <div class="card card-sm">
+      <div class="mono" style="color:var(--mint);font-weight:700;margin-bottom:5px">Routing thông minh</div>
+      <div style="font-size:.72rem;color:var(--text-2)">Có relevant docs → Generate. Không có + còn steps → Transform Query → Retrieve lai.</div>
+    </div>
+    <div class="card card-sm">
+      <div class="mono" style="color:var(--blue);font-weight:700;margin-bottom:5px">Multi-intent</div>
+      <div style="font-size:.72rem;color:var(--text-2)">Câu hỏi phức tạp tự động tách sub-queries, retrieve song song với ThreadPoolExecutor.</div>
+    </div>
+    <div class="card card-sm">
+      <div class="mono" style="color:var(--violet);font-weight:700;margin-bottom:5px">History-aware</div>
+      <div style="font-size:.72rem;color:var(--text-2)">Rewrite pronoun từ lịch sử chat (6 lượt cuối), biet "no" là xe nào trong hội thoại.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — AGENTIC RAG CHI TIET (hotrandinhnguyen)
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="row s s1" style="margin-bottom:18px;gap:12px">
+    <div class="title">hotrandinhnguyen — Đóng góp chính</div>
+    <span class="pill pill-mint">Agentic RAG + Generation + UI</span>
+  </div>
+
+  <div class="grid-2 s s2" style="gap:14px">
+    <div class="col">
+      <!-- Contribution 1: Agentic RAG -->
+      <div class="card" style="border-left:3px solid var(--mint)">
+        <div class="heading" style="color:var(--mint);margin-bottom:8px">Xây dựng Agentic RAG</div>
+        <div class="body">Chuyển từ linear RAG sang Self-RAG với LangGraph. Thiết kế toàn bộ 5-node graph: Preprocess, Retrieve, Rerank, Generate, Check Answer. Tích hợp vòng lặp Transform Query tự động tái truy vấn khi không đủ evidence.</div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px">
+          <span class="tag" style="font-size:.62rem">LangGraph</span>
+          <span class="tag" style="font-size:.62rem">Self-RAG</span>
+          <span class="tag" style="font-size:.62rem">AgentState</span>
+          <span class="tag" style="font-size:.62rem">LangSmith</span>
+        </div>
+      </div>
+
+      <!-- Contribution 2: Generation -->
+      <div class="card" style="border-left:3px solid var(--blue)">
+        <div class="heading" style="color:var(--blue);margin-bottom:8px">Generation + Citation</div>
+        <div class="body">Grounded prompt chỉ bám evidence. Citation validation kiểm tra chunk_id / source / section / url. Detect ngôn ngữ từ câu hỏi gốc (Viet/Anh). Parse JSON structured output. Streaming response.</div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px">
+          <span class="tag" style="font-size:.62rem">Grounded Prompt</span>
+          <span class="tag" style="font-size:.62rem">Citation Validation</span>
+          <span class="tag" style="font-size:.62rem">Streaming</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- Contribution 3: Guardrails -->
+      <div class="card" style="border-left:3px solid var(--violet)">
+        <div class="heading" style="color:var(--violet);margin-bottom:8px">Guardrails</div>
+        <div class="body">Phát hiện câu hỏi ngoài tài liệu (not_found). Ngăn model hallucinate khi không có evidence. Validation: nếu không có valid citation → trả về not_found thay vì chọn citation sai.</div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px">
+          <span class="tag" style="font-size:.62rem">not_found detection</span>
+          <span class="tag" style="font-size:.62rem">Hallucination guard</span>
+        </div>
+      </div>
+
+      <!-- Contribution 4: UI + Eval -->
+      <div class="card" style="border-left:3px solid var(--amber)">
+        <div class="heading" style="color:var(--amber);margin-bottom:8px">UI + Evaluation</div>
+        <div class="body">Frontend Next.js: citation click xem source, source debug viewer, PDF/chunk mapping. Evaluation runner Excel: Recall@5, MRR@5, RAGAS (faithfulness, relevancy, precision, recall). LangSmith trace toàn bộ graph.</div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px">
+          <span class="tag" style="font-size:.62rem">Next.js 14</span>
+          <span class="tag" style="font-size:.62rem">RAGAS</span>
+          <span class="tag" style="font-size:.62rem">LangSmith</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — INGESTION PIPELINE (NAT + dung)
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:22px">Ingestion Pipeline</div>
+
+  <div class="grid-2 s s2" style="gap:14px">
+    <div class="col">
+      <div class="card" style="border-top:2px solid rgba(255,107,107,.6)">
+        <div class="row" style="margin-bottom:12px">
+          <span style="font-size:1.2rem">📄</span>
+          <div>
+            <div class="heading">PDF Ingestion — NAT23042004</div>
+            <div style="font-size:.68rem;color:var(--text-3)">Phan 1</div>
+          </div>
+        </div>
+        <div class="step-list">
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--mint);font-weight:700">Parse:</span>
+            <span style="color:var(--text-2)"> Docling + RapidOCR → Markdown + native document</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--blue);font-weight:700">Chunk:</span>
+            <span style="color:var(--text-2)"> Docling HybridChunker hoặc Deterministic (theo heading)</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--violet);font-weight:700">Store:</span>
+            <span style="color:var(--text-2)"> PostgreSQL (BM25) + pgvector (Dense embedding)</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--amber);font-weight:700">Metadata:</span>
+            <span style="color:var(--text-2)"> source, page, section, chunk_id, storage_chunk_id</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card" style="border-top:2px solid var(--blue-border)">
+        <div class="row" style="margin-bottom:12px">
+          <span style="font-size:1.2rem">🌐</span>
+          <div>
+            <div class="heading">URL/Text Ingestion — dung1308</div>
+            <div style="font-size:.68rem;color:var(--text-3)">Phan 2</div>
+          </div>
+        </div>
+        <div class="step-list">
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--mint);font-weight:700">Fetch:</span>
+            <span style="color:var(--text-2)"> HTTP request, HTML parse, boilerplate removal</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--blue);font-weight:700">Extract:</span>
+            <span style="color:var(--text-2)"> Main content, section hierarchy, title/heading structure</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--violet);font-weight:700">Chunk:</span>
+            <span style="color:var(--text-2)"> Section-aware chunking, giữ heading/section context</span>
+          </div>
+          <div style="font-size:.75rem;padding:7px 12px;background:var(--surface);border-radius:var(--r-sm);border:1px solid var(--border)">
+            <span style="color:var(--amber);font-weight:700">Metadata:</span>
+            <span style="color:var(--text-2)"> url, title, section, chunk_id, source_type, page_type</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card s s3" style="margin-top:14px">
+    <div class="row" style="gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:160px">
+        <div class="mono" style="color:var(--mint);font-weight:700;font-size:.7rem">evidence_metadata.py</div>
+        <div style="font-size:.7rem;color:var(--text-2);margin-top:4px">Infer page_type, price_type, vehicle_model từ URL pattern → giúp LLM cite đúng giá xe, không nhầm phụ kiện</div>
+      </div>
+      <div style="flex:1;min-width:160px">
+        <div class="mono" style="color:var(--blue);font-weight:700;font-size:.7rem">storage_chunk_id</div>
+        <div style="font-size:.7rem;color:var(--text-2);margin-top:4px">Format: local_url_xxx:0001 — stable ID cho evaluation, không thay đổi theo content</div>
+      </div>
+      <div style="flex:1;min-width:160px">
+        <div class="mono" style="color:var(--violet);font-weight:700;font-size:.7rem">Connection Pool</div>
+        <div style="font-size:.7rem;color:var(--text-2);margin-top:4px">psycopg_pool voi prepare_threshold=None, tránh DuplicatePreparedStatement trên pgvector</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — HYBRID SEARCH (vinh + huy)
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:22px">Hybrid Search + Reranking</div>
+
+  <div class="grid-3 s s2" style="margin-bottom:14px">
+    <div class="card" style="border-top:2px solid var(--blue-border)">
+      <div class="row" style="margin-bottom:10px">
+        <span style="font-size:1rem">🔤</span>
+        <div>
+          <div class="heading" style="font-size:.85rem">BM25 Sparse</div>
+          <div style="font-size:.62rem;color:var(--text-3)">ngthvinhrai — Phần 3</div>
+        </div>
+      </div>
+      <div class="body" style="font-size:.72rem">Full-text search trên PostgreSQL. Tốt với từ khóa chính xác, tên xe (VF3, VF7...), model, phan loai. Nhanh, không cần GPU.</div>
+      <div style="margin-top:10px">
+        <span class="tag" style="font-size:.62rem">PostgreSQL</span>
+        <span class="tag" style="font-size:.62rem;margin-left:5px">BM25</span>
+      </div>
+    </div>
+
+    <div class="card" style="border-top:2px solid var(--mint-border)">
+      <div class="row" style="margin-bottom:10px">
+        <span style="font-size:1rem">🧠</span>
+        <div>
+          <div class="heading" style="font-size:.85rem">Dense Semantic</div>
+          <div style="font-size:.62rem;color:var(--text-3)">ngthvinhrai — Phần 3</div>
+        </div>
+      </div>
+      <div class="body" style="font-size:.72rem">Embedding OpenAI text-embedding-3-small, lưu trên pgvector. Hiểu ý nghĩa câu hỏi, tìm chunk có nghĩa tương đồng dù khác từ khóa.</div>
+      <div style="margin-top:10px">
+        <span class="tag" style="font-size:.62rem">pgvector</span>
+        <span class="tag" style="font-size:.62rem;margin-left:5px">OpenAI Embed</span>
+      </div>
+    </div>
+
+    <div class="card" style="border-top:2px solid rgba(167,139,250,.5)">
+      <div class="row" style="margin-bottom:10px">
+        <span style="font-size:1rem">⚖️</span>
+        <div>
+          <div class="heading" style="font-size:.85rem">RRF + Rerank</div>
+          <div style="font-size:.62rem;color:var(--text-3)">TesWy — Phần 4</div>
+        </div>
+      </div>
+      <div class="body" style="font-size:.72rem">Reciprocal Rank Fusion (k=60) hợp nhất BM25 + Dense. Cross-encoder bge-reranker-v2-m3 chấm điểm lại theo từng query group, CUDA.</div>
+      <div style="margin-top:10px">
+        <span class="tag" style="font-size:.62rem">RRF k=60</span>
+        <span class="tag" style="font-size:.62rem;margin-left:5px">bge-reranker</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow from retrieve to generate -->
+  <div class="card s s3" style="padding:14px 20px">
+    <div class="row" style="gap:0;flex-wrap:nowrap;overflow:hidden">
+      <div style="text-align:center;flex:1;padding:8px">
+        <div style="font-size:.7rem;color:var(--blue);font-weight:700">BM25 candidates</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:3px">top 15</div>
+      </div>
+      <div style="font-size:.8rem;color:var(--text-3)">+</div>
+      <div style="text-align:center;flex:1;padding:8px">
+        <div style="font-size:.7rem;color:var(--mint);font-weight:700">Dense candidates</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:3px">top 15</div>
+      </div>
+      <div style="font-size:.8rem;color:var(--mint)">→</div>
+      <div style="text-align:center;flex:1;padding:8px">
+        <div style="font-size:.7rem;color:var(--violet);font-weight:700">RRF Fusion</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:3px">merged rank</div>
+      </div>
+      <div style="font-size:.8rem;color:var(--mint)">→</div>
+      <div style="text-align:center;flex:1;padding:8px">
+        <div style="font-size:.7rem;color:var(--amber);font-weight:700">Rerank</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:3px">cross-encoder</div>
+      </div>
+      <div style="font-size:.8rem;color:var(--mint)">→</div>
+      <div style="text-align:center;flex:1;padding:8px">
+        <div style="font-size:.7rem;color:var(--mint);font-weight:700">Top-K chunks</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:3px">10 single / 8 multi</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2 s s4" style="margin-top:12px">
+    <div class="card card-sm">
+      <div style="font-size:.72rem"><span style="color:var(--mint);font-weight:700">Query Preprocessing:</span> <span style="color:var(--text-2)">Decompose, expand, contextualize từ lịch sử chat (ngthvinhrai)</span></div>
+    </div>
+    <div class="card card-sm">
+      <div style="font-size:.72rem"><span style="color:var(--blue);font-weight:700">Per-group Rerank:</span> <span style="color:var(--text-2)">Mỗi query group được rerank riêng, dedup sau đó merge (TesWy)</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — TECH STACK
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:24px">Technology Stack</div>
+
+  <div class="grid-2 s s2" style="gap:14px">
+    <div class="col">
+      <div class="card">
+        <div class="tech-group-label" style="margin-bottom:8px">AI + Models</div>
+        <div class="tags">
+          <span class="tag" style="background:var(--mint-dim);border-color:var(--mint-border);color:var(--mint)">GPT-4o-mini</span>
+          <span class="tag" style="background:var(--mint-dim);border-color:var(--mint-border);color:var(--mint)">OpenAI Embeddings</span>
+          <span class="tag" style="background:var(--mint-dim);border-color:var(--mint-border);color:var(--mint)">BAAI/bge-reranker-v2-m3</span>
+          <span class="tag" style="background:var(--mint-dim);border-color:var(--mint-border);color:var(--mint)">Docling + RapidOCR</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tech-group-label" style="margin-bottom:8px">Framework + Orchestration</div>
+        <div class="tags">
+          <span class="tag" style="background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)">LangGraph</span>
+          <span class="tag" style="background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)">FastAPI</span>
+          <span class="tag" style="background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)">Next.js 14</span>
+          <span class="tag" style="background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)">LangSmith</span>
+          <span class="tag" style="background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)">RAGAS</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="tech-group-label" style="margin-bottom:8px">Storage + Search</div>
+        <div class="tags">
+          <span class="tag" style="background:var(--violet-dim);border-color:rgba(167,139,250,.3);color:var(--violet)">PostgreSQL (BM25)</span>
+          <span class="tag" style="background:var(--violet-dim);border-color:rgba(167,139,250,.3);color:var(--violet)">pgvector (Dense)</span>
+          <span class="tag" style="background:var(--violet-dim);border-color:rgba(167,139,250,.3);color:var(--violet)">psycopg_pool</span>
+          <span class="tag" style="background:var(--violet-dim);border-color:rgba(167,139,250,.3);color:var(--violet)">RRF Fusion</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="tech-group-label" style="margin-bottom:8px">Dev + Ops</div>
+        <div class="tags">
+          <span class="tag" style="background:var(--amber-dim);border-color:rgba(246,191,60,.3);color:var(--amber)">Docker + PostgreSQL 5434</span>
+          <span class="tag" style="background:var(--amber-dim);border-color:rgba(246,191,60,.3);color:var(--amber)">uv (Python deps)</span>
+          <span class="tag" style="background:var(--amber-dim);border-color:rgba(246,191,60,.3);color:var(--amber)">GitHub Actions</span>
+          <span class="tag" style="background:var(--amber-dim);border-color:rgba(246,191,60,.3);color:var(--amber)">sentence-transformers</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture note -->
+  <div class="card s s3" style="margin-top:14px;padding:12px 20px;border-color:var(--mint-border)">
+    <div style="font-size:.75rem;line-height:1.7">
+      <span style="color:var(--mint);font-weight:700">Backend:</span>
+      <span style="color:var(--text-2)"> FastAPI serve /chat (streaming), /sources (CRUD), /sources/{id}/debug (UI), /sources/{id}/raw (PDF viewer)</span>
+      <span style="color:var(--text-3)"> · </span>
+      <span style="color:var(--blue);font-weight:700">Frontend:</span>
+      <span style="color:var(--text-2)"> Next.js 14 RSC, Tailwind, citation click → source debug page</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — EVALUATION
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:22px">Evaluation Pipeline</div>
+
+  <div class="grid-2 s s2" style="gap:14px;margin-bottom:14px">
+    <div class="card">
+      <div class="heading" style="color:var(--blue);margin-bottom:14px">Retrieval Metrics</div>
+      <div>
+        <div class="metric-row">
+          <div class="metric-name">Recall@5</div>
+          <div class="metric-value">Chunk đúng có trong top 5 không?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">MRR@5</div>
+          <div class="metric-value">Chunk dung dung thu may?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">Citation Match</div>
+          <div class="metric-value">Citation có trỏ đúng storage_chunk_id?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">Guardrail Pass</div>
+          <div class="metric-value">Câu OOS trả về not_found?</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="heading" style="color:var(--mint);margin-bottom:14px">RAGAS — LLM-as-Judge</div>
+      <div>
+        <div class="metric-row">
+          <div class="metric-name">Faithfulness</div>
+          <div class="metric-value">Câu trả lời bám evidence?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">Answer Relevancy</div>
+          <div class="metric-value">Trả lời đúng câu hỏi?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">Context Precision</div>
+          <div class="metric-value">Context có nhiều nhiễu không?</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-name">Context Recall</div>
+          <div class="metric-value">Đủ context để trả lời?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card s s3" style="padding:14px 20px">
+    <div class="col" style="gap:7px">
+      <div class="mono" style="color:var(--mint);font-weight:700;font-size:.72rem">Cách chạy Evaluation</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;font-family:monospace;font-size:.72rem;color:var(--text-2)">
+        <div>uv run python -m agentic_rag.evaluation.runner --input eval.xlsx --output result.xlsx</div>
+        <div style="margin-top:4px;color:var(--text-3)"># Them RAGAS:</div>
+        <div>uv run python -m agentic_rag.evaluation.runner --input result.xlsx --output result.xlsx --ragas</div>
+      </div>
+      <div style="font-size:.7rem;color:var(--text-2)">Dien cot <span style="color:var(--mint);font-weight:600">question</span> + <span style="color:var(--mint);font-weight:600">is_out_of_scope</span> → Runner tự động điền phần còn lại + tính AVERAGE cuối bảng</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- slide 10 results -->
+<div class="slide" id="s4" style="background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 40%,#e0f2fe 100%)">
+<style>
+.res-card {
+  background:rgba(255,255,255,0.85);border:1px solid rgba(37,99,235,0.15);
+  border-radius:16px;padding:18px 20px;backdrop-filter:blur(12px);
+  transform:perspective(600px) rotateX(4deg);transform-origin:top center;
+  transition:transform .3s ease,box-shadow .3s ease;
+  box-shadow:0 12px 40px rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.06);
+}
+.res-card:hover{transform:perspective(600px) rotateX(0deg) translateY(-4px);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.bar-bg{height:7px;border-radius:999px;background:rgba(255,255,255,0.1);margin-top:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;animation:barGrow .9s cubic-bezier(.22,1,.36,1) both}
+@keyframes barGrow{from{width:0}}
+.rnum{font-size:1.5rem;font-weight:800;letter-spacing:-.03em;background:linear-gradient(120deg,#059669,#2563eb);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+</style>
+<div class="w-full" style="position:relative">
+  <div style="position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.07),transparent 70%);top:-80px;right:-80px;pointer-events:none"></div>
+  <div style="position:absolute;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(5,150,105,.07),transparent 70%);bottom:-40px;left:-40px;pointer-events:none"></div>
+
+  <div class="row s s1" style="margin-bottom:6px;gap:12px">
+    <div class="title" style="color:#0f1f3d">Kết quả đánh giá</div>
+    <span class="pill" style="background:rgba(5,150,105,.12);color:#059669;border:1px solid rgba(5,150,105,.3);font-size:.65rem">10 câu hỏi thử nghiệm</span>
+  </div>
+  <div style="font-size:.78rem;color:rgba(0,40,120,.55);margin-bottom:18px" class="s s1">Kết quả từ evaluation runner — bộ test thực tế của nhóm</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px" class="s s2">
+    <div class="res-card">
+      <div style="font-size:.67rem;font-weight:700;color:rgba(0,40,120,.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Retrieval Metrics</div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Recall@5</div>
+            <div class="rnum">30%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:30%;background:linear-gradient(90deg,#10b981,#60a5fa)"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">3/10 câu retrieve đúng chunk</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">MRR@5</div>
+            <div class="rnum">0.25</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:25%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);animation-delay:.1s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">Trung bình rank của chunk đúng</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Citation Match</div>
+            <div class="rnum">30%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:30%;background:linear-gradient(90deg,#f59e0b,#ef4444);animation-delay:.15s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">3/10 citation khớp ground truth</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="res-card" style="transform:perspective(600px) rotateX(4deg) rotateY(-2deg)">
+      <div style="font-size:.67rem;font-weight:700;color:rgba(0,40,120,.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">RAGAS — LLM-as-Judge</div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Faithfulness</div>
+            <div class="rnum" style="background:linear-gradient(120deg,#34d399,#6ee7b7);-webkit-background-clip:text;background-clip:text">71.3%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:71.3%;background:linear-gradient(90deg,#10b981,#34d399);animation-delay:.2s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">Câu trả lời bám evidence</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Answer Relevancy</div>
+            <div class="rnum">43.5%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:43.5%;background:linear-gradient(90deg,#3b82f6,#60a5fa);animation-delay:.3s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">Trả lời đúng câu hỏi</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Context Precision</div>
+            <div class="rnum" style="background:linear-gradient(120deg,#a78bfa,#c4b5fd);-webkit-background-clip:text;background-clip:text">47.6%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:47.6%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);animation-delay:.4s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">Context ít nhiễu</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:.78rem;font-weight:600;color:#0f1f3d">Context Recall</div>
+            <div class="rnum" style="background:linear-gradient(120deg,#fbbf24,#fde68a);-webkit-background-clip:text;background-clip:text">55.0%</div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill" style="width:55%;background:linear-gradient(90deg,#f59e0b,#fbbf24);animation-delay:.5s"></div></div>
+          <div style="font-size:.62rem;color:rgba(0,40,120,.45);margin-top:3px">Đủ context để trả lời</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s s3" style="margin-top:12px;background:rgba(0,40,120,.04);border:1px solid rgba(0,40,120,.10);border-radius:10px;padding:10px 16px;font-size:.72rem;color:rgba(0,40,120,.55)">
+    <span style="color:#059669;font-weight:700">Ghi chú:</span> Recall/MRR thấp do ground_truth_chunk_ids chưa đầy đủ. Faithfulness 71.3% cho thấy model bám evidence tốt. Cần mở rộng bộ test và thêm dữ liệu để cải thiện.
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — KET QUA
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+<div class="w-full">
+  <div class="title s s1" style="margin-bottom:22px">Kết quả đạt được</div>
+
+  <div class="grid-2 s s2" style="gap:13px">
+    <div class="col">
+      <div class="card card-sm" style="border-left:2px solid var(--mint)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Self-RAG voi LangGraph</div>
+        <div class="body" style="font-size:.72rem">Tự động tái truy vấn khi không đủ evidence, tối đa 2 vòng lặp</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--mint)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Hybrid BM25 + Dense + RRF</div>
+        <div class="body" style="font-size:.72rem">Kết hợp sparse và semantic search, giảm điểm mù retrieval</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--mint)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Cross-encoder Reranking CUDA</div>
+        <div class="body" style="font-size:.72rem">BAAI/bge-reranker-v2-m3 per-query-group, preload ở startup</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--mint)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Citation Validation</div>
+        <div class="body" style="font-size:.72rem">Kiểm tra chunk_id/source/section/url — không thể cite sai nguồn</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card card-sm" style="border-left:2px solid var(--blue)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">PDF + URL Ingestion</div>
+        <div class="body" style="font-size:.72rem">Docling OCR cho PDF, web scraping cho URL, lưu PostgreSQL + pgvector</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--blue)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Multi-intent + History</div>
+        <div class="body" style="font-size:.72rem">Tách câu hỏi phức tạp, rewrite reference từ lịch sử hội thoại</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--blue)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">Evaluation Framework</div>
+        <div class="body" style="font-size:.72rem">Runner Excel tự động, Recall@5, MRR@5, RAGAS 4 metrics, AVERAGE row</div>
+      </div>
+      <div class="card card-sm" style="border-left:2px solid var(--blue)">
+        <div class="heading" style="font-size:.82rem;margin-bottom:3px">LangSmith Observability</div>
+        <div class="body" style="font-size:.72rem">Trace toan bo graph, debug từng node, citation viewer trên UI</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4 — Q&A
+══════════════════════════════════════════════════════ -->
+<div class="slide" id="s4" style="background:linear-gradient(160deg,#dbeafe 0%,#eff6ff 50%,#e0f2fe 100%)">
+  <div class="cover-glow"></div>
+  <div class="cover-grid"></div>
+
+  <div style="text-align:center;position:relative">
+    <div class="display s s1" style="font-size:clamp(4rem,8vw,6rem);margin-bottom:16px">
+      Q <span class="grad">&</span> A
+    </div>
+    <div style="font-size:1rem;color:#3d5a80;margin-bottom:32px" class="s s2">
+      Agentic RAG — VinFast Information Assistant
+    </div>
+    <div style="width:48px;height:2px;background:linear-gradient(90deg,var(--mint),var(--blue));margin:0 auto 28px" class="s s3"></div>
+
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap" class="s s4">
+      <div class="card card-sm" style="min-width:150px;text-align:center">
+        <div style="font-size:.65rem;color:var(--mint);font-weight:700;margin-bottom:4px">Backend</div>
+        <div style="font-size:.7rem;color:var(--text-2)">FastAPI · LangGraph · Python</div>
+      </div>
+      <div class="card card-sm" style="min-width:150px;text-align:center">
+        <div style="font-size:.65rem;color:var(--blue);font-weight:700;margin-bottom:4px">Frontend</div>
+        <div style="font-size:.7rem;color:var(--text-2)">Next.js 14 · Tailwind</div>
+      </div>
+      <div class="card card-sm" style="min-width:150px;text-align:center">
+        <div style="font-size:.65rem;color:var(--violet);font-weight:700;margin-bottom:4px">Storage</div>
+        <div style="font-size:.7rem;color:var(--text-2)">PostgreSQL · pgvector</div>
+      </div>
+      <div class="card card-sm" style="min-width:150px;text-align:center">
+        <div style="font-size:.65rem;color:var(--amber);font-weight:700;margin-bottom:4px">AI</div>
+        <div style="font-size:.7rem;color:var(--text-2)">GPT-4o-mini · bge-reranker</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<!-- ─── Nav ─────────────────────────────────────────────── -->
+<div class="nav-bar">
+  <button id="btn-prev" onclick="go(cur-1)">&#8249;</button>
+  <div class="dots" id="dots-bar"></div>
+  <button id="btn-next" onclick="go(cur+1)">&#8250;</button>
+  <span class="slide-count" id="count"></span>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total  = slides.length;
+let cur = 0;
+
+function buildDots() {
+  const bar = document.getElementById('dots-bar');
+  bar.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' on' : '');
+    d.onclick = () => go(i);
+    bar.appendChild(d);
+  }
+}
+
+function go(idx) {
+  if (idx < 0 || idx >= total) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('prev');
+  const fromIdx = cur;
+  cur = idx;
+  slides[cur].classList.remove('prev');
+  slides[cur].classList.add('active');
+  setTimeout(() => slides[fromIdx].classList.remove('prev'), 480);
+
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('on', i === cur));
+  document.getElementById('count').textContent = (cur+1)+'/'+total;
+  document.getElementById('btn-prev').classList.toggle('off', cur === 0);
+  document.getElementById('btn-next').classList.toggle('off', cur === total-1);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(cur+1); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); go(cur-1); }
+});
+
+buildDots();
+go(0);
+</script>
+</body>
+</html>
