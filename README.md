@@ -98,6 +98,8 @@ Local development can run with JSONL source manifests and the in-process
 but can set `LOCAL_SOURCE_STORE=s3` and `VECTOR_STORE_PROVIDER=qdrant` so S3 stores
 raw source files, parsed Markdown, debug artifacts, and chunk manifests while
 Qdrant stores the persistent hybrid retrieval index.
+For team IAM user/profile onboarding, see
+[docs/s3-access-management.md](docs/s3-access-management.md).
 
 ## Dense embedding providers
 

@@ -246,6 +246,9 @@ VECTOR_STORE_API_KEY=your_qdrant_key
 VECTOR_STORE_COLLECTION=agentic_rag_chunks
 ```
 
+For per-member IAM users, local `AWS_PROFILE` setup, and access-key handling,
+see [`s3-access-management.md`](s3-access-management.md).
+
 Use a new `VECTOR_STORE_COLLECTION` when switching embedding provider, model, or
 vector dimension. Older pgvector indexes that relied on the previous implicit
 `document` collection must set `VECTOR_STORE_COLLECTION=document` or be reindexed

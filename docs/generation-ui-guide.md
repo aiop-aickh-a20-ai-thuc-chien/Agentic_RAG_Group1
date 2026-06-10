@@ -261,6 +261,8 @@ In this mode S3 stores raw files, URL/text records, parsed Markdown, debug
 artifacts, source manifests, and chunk manifests. Qdrant stores the persistent
 chunk retrieval index and is used for cloud-mode hybrid search, so normal answer
 retrieval does not rebuild BM25 from S3 chunk manifests on each request.
+For per-member IAM users, local `AWS_PROFILE` setup, and access-key handling,
+see [`s3-access-management.md`](s3-access-management.md).
 
 `EMBEDDING_PROVIDER=sentence_transformers` runs in process. Named providers
 route through LiteLLM; `EMBEDDING_PROVIDER=local` uses a separately hosted
