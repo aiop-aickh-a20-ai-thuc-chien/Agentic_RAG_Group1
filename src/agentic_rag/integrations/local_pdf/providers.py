@@ -16,9 +16,10 @@ import tempfile
 import time
 import unicodedata
 import uuid
-from contextlib import suppress
+import warnings
+from contextlib import nullcontext, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
@@ -41,6 +42,11 @@ from agentic_rag.integrations.local_pdf.storage import (
     StoredRawSource,
     StoredSourceDocument,
 )
+from agentic_rag.retrieval.config import (
+    VectorStoreConfig,
+    VectorStoreConfigurationError,
+    resolve_vector_store_config,
+)
 from agentic_rag.retrieval.fusion import (
     RRF_K,
     ThresholdConfig,
@@ -58,6 +64,17 @@ from agentic_rag.retrieval.search import (
     qdrant_hybrid_search,
     upsert_dense_embeddings,
 )
+
+
+@runtime_checkable
+class _RestorableSourceStore(Protocol):
+    """Optional source-store capability for restoring a prior replacement."""
+
+    def snapshot_document(self, document_id: str) -> object | None:
+        """Capture a document snapshot before replacement."""
+
+    def restore_document(self, document_id: str, snapshot: object) -> None:
+        """Restore a document snapshot after a failed replacement."""
 
 
 def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
@@ -206,6 +223,7 @@ class LocalPdfEvidenceProvider:
 
         started_at = time.perf_counter()
         _validate_pdf_upload(filename=filename, content_type=content_type)
+        vector_config = resolve_vector_store_config()
         run_id = f"pdf_{uuid.uuid4().hex[:8]}"  # temporary id for the local working file
         safe_filename = _safe_filename(filename)
         pdf_path = self._raw_pdf_path(run_id)
@@ -243,6 +261,11 @@ class LocalPdfEvidenceProvider:
         parse_latency_ms = _latency_ms(parse_started_at)
         # Deterministic document_id = chunk prefix so re-uploads overwrite (idempotent).
         document_id = _document_id_from_chunks(chunks, fallback=f"pdf_{short_hash(safe_filename)}")
+        local_snapshot = (
+            self._snapshot_local_document(document_id)
+            if self._source_store is None and vector_config.provider == "qdrant"
+            else None
+        )
         if self._source_store is None:
             final_pdf_path = self._files_dir / f"{_safe_document_id(document_id)}.pdf"
             if pdf_path != final_pdf_path:
@@ -265,6 +288,7 @@ class LocalPdfEvidenceProvider:
             self._write_chunks(document_id=document_id, chunks=chunks)
         try:
             source_store_trace, dense_index_trace = self._write_indexes(
+                vector_config=vector_config,
                 document_id=document_id,
                 name=safe_filename,
                 source_type="pdf",
@@ -279,6 +303,14 @@ class LocalPdfEvidenceProvider:
                 },
                 chunks=chunks,
             )
+        except Exception:
+            if local_snapshot is not None:
+                self._restore_local_document_after_qdrant_failure(
+                    document_id=document_id,
+                    snapshot=local_snapshot,
+                    vector_config=vector_config,
+                )
+            raise
         finally:
             self._delete_temporary_path(pdf_path)
             self._delete_temporary_path(markdown_path)
@@ -338,6 +370,7 @@ class LocalPdfEvidenceProvider:
         """Fetch, parse, chunk, and index one URL through the URL ingestion module."""
 
         started_at = time.perf_counter()
+        vector_config = resolve_vector_store_config()
         run_id = f"url_{uuid.uuid4().hex[:8]}"  # temporary id for debug artifact naming
         safe_name = _safe_url_filename(url)
 
@@ -357,6 +390,11 @@ class LocalPdfEvidenceProvider:
         # Deterministic document_id = chunk prefix (url_<short_hash(final_url)>) so the
         # store key matches chunk_ids and re-uploads overwrite instead of duplicating.
         document_id = _document_id_from_chunks(chunks, fallback=f"url_{short_hash(url)}")
+        local_snapshot = (
+            self._snapshot_local_document(document_id)
+            if self._source_store is None and vector_config.provider == "qdrant"
+            else None
+        )
         ingest_latency_ms = _latency_ms(ingest_started_at)
         markdown_path = (
             loaded_url.artifacts.markdown_path if loaded_url.artifacts is not None else None
@@ -381,6 +419,7 @@ class LocalPdfEvidenceProvider:
             self._write_chunks(document_id=document_id, chunks=chunks)
         try:
             source_store_trace, dense_index_trace = self._write_indexes(
+                vector_config=vector_config,
                 document_id=document_id,
                 name=safe_name,
                 source_type="url",
@@ -394,6 +433,14 @@ class LocalPdfEvidenceProvider:
                 },
                 chunks=chunks,
             )
+        except Exception:
+            if local_snapshot is not None:
+                self._restore_local_document_after_qdrant_failure(
+                    document_id=document_id,
+                    snapshot=local_snapshot,
+                    vector_config=vector_config,
+                )
+            raise
         finally:
             self._delete_temporary_path(local_markdown_path)
         write_latency_ms = _latency_ms(write_started_at)
@@ -462,6 +509,7 @@ class LocalPdfEvidenceProvider:
         """Chunk and index user-provided text through the URL/text ingestion module."""
 
         started_at = time.perf_counter()
+        vector_config = resolve_vector_store_config()
         run_id = f"text_{uuid.uuid4().hex[:8]}"  # temporary id for debug artifact naming
         safe_name = _safe_text_filename(title)
 
@@ -475,6 +523,11 @@ class LocalPdfEvidenceProvider:
         )
         # Deterministic document_id = chunk prefix so re-uploads overwrite (idempotent).
         document_id = _document_id_from_chunks(chunks, fallback=f"text_{short_hash(safe_name)}")
+        local_snapshot = (
+            self._snapshot_local_document(document_id)
+            if self._source_store is None and vector_config.provider == "qdrant"
+            else None
+        )
         markdown_path = self._write_markdown(document_id=document_id, markdown=text)
         ingest_latency_ms = _latency_ms(ingest_started_at)
 
@@ -491,6 +544,7 @@ class LocalPdfEvidenceProvider:
             self._write_chunks(document_id=document_id, chunks=chunks)
         try:
             source_store_trace, dense_index_trace = self._write_indexes(
+                vector_config=vector_config,
                 document_id=document_id,
                 name=safe_name,
                 source_type="text",
@@ -500,6 +554,14 @@ class LocalPdfEvidenceProvider:
                 metadata={"title": title},
                 chunks=chunks,
             )
+        except Exception:
+            if local_snapshot is not None:
+                self._restore_local_document_after_qdrant_failure(
+                    document_id=document_id,
+                    snapshot=local_snapshot,
+                    vector_config=vector_config,
+                )
+            raise
         finally:
             self._delete_temporary_path(markdown_path)
         write_latency_ms = _latency_ms(write_started_at)
@@ -580,6 +642,7 @@ class LocalPdfEvidenceProvider:
             return [
                 self._stored_document_from_source_store(item, include_chunks=include_chunks)
                 for item in self._source_store.list_documents()
+                if not _is_orphaned_source_document(item)
             ]
 
         documents: list[LocalPdfStoredDocument] = []
@@ -821,6 +884,59 @@ class LocalPdfEvidenceProvider:
         payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
         chunk_path.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
 
+    def _snapshot_local_document(self, document_id: str) -> dict[Path, bytes | None]:
+        return {
+            path: path.read_bytes() if path.exists() else None
+            for path in self._local_document_paths(document_id)
+        }
+
+    def _restore_local_document_after_qdrant_failure(
+        self,
+        *,
+        document_id: str,
+        snapshot: dict[Path, bytes | None],
+        vector_config: VectorStoreConfig,
+    ) -> None:
+        self._restore_local_document_snapshot(snapshot)
+        prior_chunks = self._chunks_from_local_snapshot(document_id=document_id, snapshot=snapshot)
+        try:
+            if prior_chunks:
+                _replace_qdrant_document_points(
+                    document_id=document_id,
+                    chunks=prior_chunks,
+                    vector_config=vector_config,
+                )
+            else:
+                delete_qdrant_document_points(document_id)
+        except Exception as exc:
+            raise RuntimeError(
+                "Qdrant upsert failed; local source storage was restored but dense index "
+                "repair failed."
+            ) from exc
+
+    def _restore_local_document_snapshot(self, snapshot: dict[Path, bytes | None]) -> None:
+        for path, payload in snapshot.items():
+            if payload is None:
+                path.unlink(missing_ok=True)
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(payload)
+
+    def _chunks_from_local_snapshot(
+        self,
+        *,
+        document_id: str,
+        snapshot: dict[Path, bytes | None],
+    ) -> list[Chunk]:
+        payload = snapshot.get(self._chunk_path(document_id))
+        if payload is None:
+            return []
+        return [
+            Chunk.model_validate_json(line)
+            for line in payload.decode("utf-8").splitlines()
+            if line.strip()
+        ]
+
     def _write_source_store(
         self,
         *,
@@ -832,20 +948,35 @@ class LocalPdfEvidenceProvider:
         markdown_path: Path | None,
         metadata: dict[str, object],
         chunks: list[Chunk],
+        s3_transaction_id: str | None = None,
     ) -> dict[str, object]:
         if self._source_store is None:
             return {"type": "jsonl", "enabled": False}
-        self._source_store.write_document(
-            document_id=document_id,
-            dataset_id=self.dataset_id,
-            name=name,
-            source_type=source_type,
-            source=source,
-            raw_path=raw_path,
-            markdown_path=markdown_path,
-            metadata=metadata,
-            chunks=chunks,
-        )
+        if isinstance(self._source_store, S3LocalSourceStore):
+            self._source_store.write_document(
+                document_id=document_id,
+                dataset_id=self.dataset_id,
+                name=name,
+                source_type=source_type,
+                source=source,
+                raw_path=raw_path,
+                markdown_path=markdown_path,
+                metadata=metadata,
+                chunks=chunks,
+                transaction_id=s3_transaction_id,
+            )
+        else:
+            self._source_store.write_document(
+                document_id=document_id,
+                dataset_id=self.dataset_id,
+                name=name,
+                source_type=source_type,
+                source=source,
+                raw_path=raw_path,
+                markdown_path=markdown_path,
+                metadata=metadata,
+                chunks=chunks,
+            )
         return {
             "type": _source_store_trace_type(self._source_store),
             "enabled": True,
@@ -856,6 +987,7 @@ class LocalPdfEvidenceProvider:
     def _write_indexes(
         self,
         *,
+        vector_config: VectorStoreConfig,
         document_id: str,
         name: str,
         source_type: str,
@@ -865,31 +997,318 @@ class LocalPdfEvidenceProvider:
         metadata: dict[str, object],
         chunks: list[Chunk],
     ) -> tuple[dict[str, object], dict[str, object]]:
-        source_store_trace = self._write_source_store(
-            document_id=document_id,
-            name=name,
-            source_type=source_type,
-            source=source,
-            raw_path=raw_path,
-            markdown_path=markdown_path,
-            metadata=metadata,
-            chunks=chunks,
+        rollback_on_dense_failure = vector_config.provider == "qdrant"
+        s3_source_store = (
+            self._source_store if isinstance(self._source_store, S3LocalSourceStore) else None
         )
-        try:
-            dense_index_trace = _upsert_dense_embeddings_safely(chunks)
-        except Exception as exc:
-            if _qdrant_vector_store_enabled() and self._source_store is not None:
-                try:
-                    self._source_store.delete_document(document_id)
-                except Exception as rollback_exc:
+        restorable_source_store = (
+            self._source_store
+            if (
+                self._source_store is not None
+                and s3_source_store is None
+                and isinstance(self._source_store, _RestorableSourceStore)
+            )
+            else None
+        )
+        write_lock = (
+            s3_source_store.document_write_lock(document_id)
+            if s3_source_store is not None
+            else nullcontext()
+        )
+        with write_lock:
+            s3_transaction_id = uuid.uuid4().hex if s3_source_store is not None else None
+            s3_snapshot = (
+                s3_source_store.snapshot_document(document_id)
+                if s3_source_store is not None
+                else None
+            )
+            source_existed = (
+                _source_document_exists(self._source_store, document_id)
+                if self._source_store is not None and s3_source_store is None
+                else False
+            )
+            source_snapshot = (
+                restorable_source_store.snapshot_document(document_id)
+                if restorable_source_store is not None
+                else None
+            )
+            try:
+                source_store_trace = self._write_source_store(
+                    document_id=document_id,
+                    name=name,
+                    source_type=source_type,
+                    source=source,
+                    raw_path=raw_path,
+                    markdown_path=markdown_path,
+                    metadata=metadata,
+                    chunks=chunks,
+                    s3_transaction_id=s3_transaction_id,
+                )
+            except Exception as exc:
+                if (
+                    s3_source_store is not None
+                    and s3_snapshot is not None
+                    and s3_transaction_id is not None
+                ):
+                    try:
+                        if s3_source_store.transaction_is_current(
+                            document_id,
+                            transaction_id=s3_transaction_id,
+                        ):
+                            restored = s3_source_store.restore_document_if_current(
+                                document_id,
+                                s3_snapshot,
+                                transaction_id=s3_transaction_id,
+                            )
+                        else:
+                            restored = s3_source_store.snapshot_is_current(
+                                document_id,
+                                s3_snapshot,
+                            )
+                            with suppress(Exception):
+                                s3_source_store.cleanup_transaction_stage(
+                                    document_id,
+                                    transaction_id=s3_transaction_id,
+                                )
+                    except Exception:
+                        raise RuntimeError(
+                            "S3 source replacement failed and existing S3 source "
+                            "restoration failed."
+                        ) from exc
+                    if not restored:
+                        with suppress(Exception):
+                            s3_source_store.cleanup_transaction_stage(
+                                document_id,
+                                transaction_id=s3_transaction_id,
+                            )
+                        raise RuntimeError(
+                            "S3 source replacement failed; S3 source transaction was superseded."
+                        ) from exc
                     raise RuntimeError(
-                        f"Qdrant upsert failed and source storage rollback failed: {rollback_exc}"
+                        "S3 source replacement failed; existing S3 source storage was restored."
                     ) from exc
+                if s3_source_store is not None and s3_transaction_id is not None:
+                    with suppress(Exception):
+                        s3_source_store.cleanup_transaction_stage(
+                            document_id,
+                            transaction_id=s3_transaction_id,
+                        )
+                raise
+
+            try:
+                if rollback_on_dense_failure and s3_source_store is not None:
+                    dense_index_trace = _repair_dense_index_from_canonical_s3(
+                        source_store=s3_source_store,
+                        document_id=document_id,
+                        vector_config=vector_config,
+                    )
+                elif rollback_on_dense_failure:
+                    dense_index_trace = _replace_qdrant_document_points(
+                        document_id=document_id,
+                        chunks=chunks,
+                        vector_config=vector_config,
+                    )
+                else:
+                    dense_index_trace = _upsert_dense_embeddings_safely(
+                        chunks,
+                        vector_config=vector_config,
+                    )
+            except Exception as exc:
+                if rollback_on_dense_failure and self._source_store is not None:
+                    if s3_source_store is not None and s3_transaction_id is not None:
+                        if s3_snapshot is not None:
+                            try:
+                                restored = s3_source_store.restore_document_if_current(
+                                    document_id,
+                                    s3_snapshot,
+                                    transaction_id=s3_transaction_id,
+                                )
+                            except Exception:
+                                raise RuntimeError(
+                                    "Qdrant upsert failed and existing S3 source "
+                                    "restoration failed."
+                                ) from exc
+                            if restored:
+                                try:
+                                    _repair_dense_index_from_canonical_s3(
+                                        source_store=s3_source_store,
+                                        document_id=document_id,
+                                        vector_config=vector_config,
+                                    )
+                                except Exception:
+                                    raise RuntimeError(
+                                        "Qdrant upsert failed; existing S3 source storage "
+                                        "was restored but dense index repair failed."
+                                    ) from exc
+                                raise RuntimeError(
+                                    "Qdrant upsert failed; existing S3 source storage was restored."
+                                ) from exc
+                            with suppress(Exception):
+                                s3_source_store.cleanup_transaction_stage(
+                                    document_id,
+                                    transaction_id=s3_transaction_id,
+                                )
+                            try:
+                                _repair_dense_index_from_canonical_s3(
+                                    source_store=s3_source_store,
+                                    document_id=document_id,
+                                    vector_config=vector_config,
+                                )
+                            except Exception:
+                                raise RuntimeError(
+                                    "Qdrant upsert failed; S3 source transaction was "
+                                    "superseded and dense index repair failed."
+                                ) from exc
+                            raise RuntimeError(
+                                "Qdrant upsert failed; S3 source transaction was superseded."
+                            ) from exc
+                        try:
+                            marked_orphaned = s3_source_store.mark_document_orphaned_if_current(
+                                document_id,
+                                transaction_id=s3_transaction_id,
+                                reason="qdrant_upsert_failed",
+                            )
+                        except Exception:
+                            raise RuntimeError(
+                                "Qdrant upsert failed and S3 orphan marking failed."
+                            ) from exc
+                        if marked_orphaned:
+                            try:
+                                delete_qdrant_document_points(document_id)
+                            except Exception:
+                                raise RuntimeError(
+                                    "Qdrant upsert failed; S3 source storage was marked "
+                                    "orphaned but partial dense index cleanup failed."
+                                ) from exc
+                            raise RuntimeError(
+                                "Qdrant upsert failed; S3 source storage was marked orphaned."
+                            ) from exc
+                        with suppress(Exception):
+                            s3_source_store.cleanup_transaction_stage(
+                                document_id,
+                                transaction_id=s3_transaction_id,
+                            )
+                        try:
+                            _repair_dense_index_from_canonical_s3(
+                                source_store=s3_source_store,
+                                document_id=document_id,
+                                vector_config=vector_config,
+                            )
+                        except Exception:
+                            raise RuntimeError(
+                                "Qdrant upsert failed; S3 source transaction was "
+                                "superseded and dense index repair failed."
+                            ) from exc
+                        raise RuntimeError(
+                            "Qdrant upsert failed; S3 source transaction was superseded."
+                        ) from exc
+                    if restorable_source_store is not None and source_snapshot is not None:
+                        try:
+                            restorable_source_store.restore_document(document_id, source_snapshot)
+                        except Exception as rollback_exc:
+                            raise RuntimeError(
+                                "Qdrant upsert failed and source storage restoration failed."
+                            ) from rollback_exc
+                        try:
+                            restored_chunks = self._source_store.read_chunks(document_id)
+                            _replace_qdrant_document_points(
+                                document_id=document_id,
+                                chunks=restored_chunks,
+                                vector_config=vector_config,
+                            )
+                        except Exception:
+                            raise RuntimeError(
+                                "Qdrant upsert failed; source storage was restored but dense "
+                                "index repair failed."
+                            ) from exc
+                        raise RuntimeError(
+                            "Qdrant upsert failed; source storage was restored."
+                        ) from exc
+                    if not source_existed:
+                        try:
+                            self._source_store.delete_document(document_id)
+                        except Exception as rollback_exc:
+                            raise RuntimeError(
+                                "Qdrant upsert failed and source storage rollback failed."
+                            ) from rollback_exc
+                        try:
+                            delete_qdrant_document_points(document_id)
+                        except Exception:
+                            raise RuntimeError(
+                                "Qdrant upsert failed; source storage was rolled back but "
+                                "partial dense index cleanup failed."
+                            ) from exc
+                        raise RuntimeError(
+                            "Qdrant upsert failed; source storage was rolled back."
+                        ) from exc
+                    try:
+                        delete_qdrant_document_points(document_id)
+                    except Exception:
+                        raise RuntimeError(
+                            "Qdrant upsert failed; source storage was retained but partial "
+                            "dense index cleanup failed."
+                        ) from exc
+                    raise RuntimeError(
+                        "Qdrant upsert failed; source storage was retained and partial dense "
+                        "index was cleaned."
+                    ) from exc
+                if rollback_on_dense_failure:
+                    try:
+                        delete_qdrant_document_points(document_id)
+                    except Exception:
+                        raise RuntimeError(
+                            "Qdrant upsert failed and partial dense index cleanup failed."
+                        ) from exc
+                    raise RuntimeError(
+                        "Qdrant upsert failed; partial dense index was cleaned."
+                    ) from exc
+                raise
+            if (
+                rollback_on_dense_failure
+                and s3_source_store is not None
+                and s3_transaction_id is not None
+                and not s3_source_store.transaction_is_current(
+                    document_id,
+                    transaction_id=s3_transaction_id,
+                )
+            ):
+                try:
+                    _repair_dense_index_from_canonical_s3(
+                        source_store=s3_source_store,
+                        document_id=document_id,
+                        vector_config=vector_config,
+                    )
+                except Exception as exc:
+                    with suppress(Exception):
+                        s3_source_store.cleanup_transaction_stage(
+                            document_id,
+                            transaction_id=s3_transaction_id,
+                        )
+                    raise RuntimeError(
+                        "Qdrant upsert succeeded but S3 source transaction was "
+                        "superseded and dense index repair failed."
+                    ) from exc
+                with suppress(Exception):
+                    s3_source_store.cleanup_transaction_stage(
+                        document_id,
+                        transaction_id=s3_transaction_id,
+                    )
                 raise RuntimeError(
-                    f"Qdrant upsert failed; source storage was rolled back: {exc}"
-                ) from exc
-            raise
-        return source_store_trace, dense_index_trace
+                    "Qdrant upsert succeeded but S3 source transaction was superseded; "
+                    "dense index was repaired."
+                )
+            if (
+                s3_source_store is not None
+                and s3_transaction_id is not None
+                and s3_snapshot is not None
+            ):
+                with suppress(Exception):
+                    s3_source_store.cleanup_snapshot_versions_if_current(
+                        document_id,
+                        s3_snapshot,
+                        transaction_id=s3_transaction_id,
+                    )
+            return source_store_trace, dense_index_trace
 
     def _write_markdown(self, *, document_id: str, markdown: str) -> Path | None:
         if not markdown:
@@ -971,6 +1390,15 @@ class LocalPdfEvidenceProvider:
     def _markdown_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
         return self._parsed_dir / f"{safe_document_id}.md"
+
+    def _local_document_paths(self, document_id: str) -> tuple[Path, ...]:
+        safe_document_id = _safe_document_id(document_id)
+        return (
+            self._chunk_path(document_id),
+            self._markdown_path(document_id),
+            self._files_dir / f"{safe_document_id}.pdf",
+            self._files_dir / f"{safe_document_id}.txt",
+        )
 
     def _debug_chunk_input(
         self,
@@ -1086,14 +1514,51 @@ def _source_store_from_env() -> LocalSourceStore | None:
     if raw_store not in {"postgres", "postgresql", "pg"}:
         return None
 
-    connection = (
-        os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "").strip()
-        or os.getenv("DENSE_PGVECTOR_CONNECTION", "").strip()
-    )
+    connection = os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "").strip()
+    if not connection:
+        canonical_provider = os.getenv("VECTOR_STORE_PROVIDER", "").strip()
+        canonical_url = os.getenv("VECTOR_STORE_URL", "").strip()
+        legacy_provider = os.getenv("DENSE_VECTOR_STORE", "").strip().lower()
+        legacy_connection = os.getenv("DENSE_PGVECTOR_CONNECTION", "").strip()
+        pgvector_selected = canonical_provider == "pgvector" or (
+            not canonical_provider and legacy_provider in {"pgvector", "postgres", "postgresql"}
+        )
+        if pgvector_selected and canonical_url:
+            connection = canonical_url
+        elif not canonical_provider and not canonical_url and legacy_connection:
+            warnings.warn(
+                "DENSE_PGVECTOR_CONNECTION is deprecated for "
+                "LOCAL_SOURCE_STORE=postgres; use "
+                "LOCAL_SOURCE_POSTGRES_CONNECTION instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            connection = legacy_connection
+        else:
+            try:
+                vector_config = resolve_vector_store_config()
+            except VectorStoreConfigurationError:
+                vector_config = None
+            if vector_config is not None and vector_config.provider == "pgvector":
+                connection = (
+                    vector_config.url.get_secret_value() if vector_config.url is not None else ""
+                )
+    if not connection:
+        legacy_connection = os.getenv("DENSE_PGVECTOR_CONNECTION", "").strip()
+        if legacy_connection:
+            warnings.warn(
+                "DENSE_PGVECTOR_CONNECTION is deprecated for "
+                "LOCAL_SOURCE_STORE=postgres; use "
+                "LOCAL_SOURCE_POSTGRES_CONNECTION instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            connection = legacy_connection
     if not connection:
         raise ValueError(
-            "LOCAL_SOURCE_STORE=postgres requires LOCAL_SOURCE_POSTGRES_CONNECTION "
-            "or DENSE_PGVECTOR_CONNECTION."
+            "LOCAL_SOURCE_STORE=postgres requires LOCAL_SOURCE_POSTGRES_CONNECTION, "
+            "VECTOR_STORE_URL with VECTOR_STORE_PROVIDER=pgvector, or the deprecated "
+            "DENSE_PGVECTOR_CONNECTION fallback."
         )
     table_prefix = os.getenv("LOCAL_SOURCE_POSTGRES_TABLE_PREFIX", "local_rag").strip()
     return PostgresLocalSourceStore(connection=connection, table_prefix=table_prefix)
@@ -1107,24 +1572,78 @@ def _source_store_trace_type(source_store: LocalSourceStore) -> str:
     return source_store.__class__.__name__
 
 
-def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:
+def _is_orphaned_source_document(document: StoredSourceDocument) -> bool:
+    return document.metadata.get("source_index_status") == "orphaned"
+
+
+def _source_document_exists(source_store: LocalSourceStore, document_id: str) -> bool:
+    try:
+        return any(
+            document.document_id == document_id for document in source_store.list_documents()
+        )
+    except Exception:
+        return False
+
+
+def _upsert_dense_embeddings_safely(
+    chunks: list[Chunk],
+    *,
+    vector_config: VectorStoreConfig,
+) -> dict[str, object]:
     started_at = time.perf_counter()
-    if _qdrant_vector_store_enabled():
-        trace = upsert_dense_embeddings(chunks)
+    if vector_config.provider == "qdrant":
+        trace = upsert_dense_embeddings(chunks, vector_config=vector_config)
         return {**trace, "latency_ms": _latency_ms(started_at)}
 
     embedding_metadata = dense_embedding_metadata()
     try:
-        trace = upsert_dense_embeddings(chunks)
-    except Exception as exc:
+        trace = upsert_dense_embeddings(chunks, vector_config=vector_config)
+    except Exception:
         return {
             "enabled": True,
             "status": "error",
-            "error": str(exc),
+            "error": "Dense indexing failed.",
             **embedding_metadata,
             "latency_ms": _latency_ms(started_at),
         }
     return {**trace, "latency_ms": _latency_ms(started_at)}
+
+
+def _replace_qdrant_document_points(
+    *,
+    document_id: str,
+    chunks: list[Chunk],
+    vector_config: VectorStoreConfig,
+) -> dict[str, object]:
+    started_at = time.perf_counter()
+    delete_qdrant_document_points(document_id)
+    trace = upsert_dense_embeddings(chunks, vector_config=vector_config)
+    return {**trace, "latency_ms": _latency_ms(started_at)}
+
+
+def _repair_dense_index_from_canonical_s3(
+    *,
+    source_store: S3LocalSourceStore,
+    document_id: str,
+    vector_config: VectorStoreConfig,
+) -> dict[str, object]:
+    started_at = time.perf_counter()
+    for _ in range(3):
+        canonical = source_store.read_stable_canonical_chunks(document_id)
+        if canonical is None:
+            continue
+        trace = _replace_qdrant_document_points(
+            document_id=document_id,
+            chunks=canonical.chunks,
+            vector_config=vector_config,
+        )
+        if source_store.canonical_manifest_matches(
+            document_id,
+            manifest_payload=canonical.manifest_payload,
+            manifest_etag=canonical.manifest_etag,
+        ):
+            return {**trace, "latency_ms": _latency_ms(started_at)}
+    raise RuntimeError("Canonical S3 source changed repeatedly during dense index repair.")
 
 
 def _delete_dense_document(document_id: str) -> dict[str, object]:
@@ -1132,8 +1651,7 @@ def _delete_dense_document(document_id: str) -> dict[str, object]:
         return delete_qdrant_document_points(document_id)
     except Exception as exc:
         raise RuntimeError(
-            f"Qdrant deletion failed for document {document_id!r}; "
-            f"source storage was not deleted: {exc}"
+            f"Qdrant deletion failed for document {document_id!r}; source storage was not deleted."
         ) from exc
 
 
@@ -1142,12 +1660,16 @@ def _delete_all_dense_embeddings() -> dict[str, object]:
         return delete_all_qdrant_points()
     except Exception as exc:
         raise RuntimeError(
-            f"Qdrant deletion failed while clearing sources; source storage was not deleted: {exc}"
+            "Qdrant deletion failed while clearing sources; source storage was not deleted."
         ) from exc
 
 
 def _qdrant_vector_store_enabled() -> bool:
-    return os.getenv("DENSE_VECTOR_STORE", "turbovec").strip().lower() == "qdrant"
+    return _qdrant_vector_store_enabled_from_config(resolve_vector_store_config())
+
+
+def _qdrant_vector_store_enabled_from_config(config: VectorStoreConfig) -> bool:
+    return config.provider == "qdrant"
 
 
 def local_pdf_backend_status() -> dict[str, str]:
@@ -1161,19 +1683,17 @@ def local_pdf_backend_status() -> dict[str, str]:
     else:
         source_store = "jsonl"
 
-    dense_vector_store = os.getenv("DENSE_VECTOR_STORE", "turbovec").strip().lower()
+    vector_config = resolve_vector_store_config()
     payload = {
         "source_store": source_store,
-        "dense_vector_store": dense_vector_store or "turbovec",
+        "dense_vector_store": vector_config.provider,
     }
     if source_store == "s3":
         payload["s3_bucket_configured"] = "true" if os.getenv("AWS_S3_BUCKET") else "false"
         payload["s3_prefix"] = os.getenv("AWS_S3_PREFIX", "").strip()
-    if payload["dense_vector_store"] == "qdrant":
-        payload["qdrant_url_configured"] = "true" if os.getenv("QDRANT_URL") else "false"
-        payload["qdrant_collection"] = (
-            os.getenv("QDRANT_COLLECTION", "agentic_rag_chunks").strip() or "agentic_rag_chunks"
-        )
+    if vector_config.provider == "qdrant":
+        payload["qdrant_url_configured"] = "true" if vector_config.url else "false"
+        payload["qdrant_collection"] = vector_config.collection
     return payload
 
 
@@ -1310,8 +1830,8 @@ def _dense_search_safely(
 ) -> tuple[list[SearchResult], str | None]:
     try:
         return store.dense_search(query, top_k=top_k), None
-    except Exception as exc:
-        return [], str(exc)
+    except Exception:
+        return [], "Dense retrieval failed."
 
 
 def _with_pipeline_metadata(

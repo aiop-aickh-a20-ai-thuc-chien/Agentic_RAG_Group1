@@ -109,6 +109,10 @@ type SourceListResponse = {
   sources: SourceListItem[];
 };
 
+type HealthResponse = {
+  source_store?: string;
+};
+
 type SourceDebugResponse = {
   provider: string;
   document_id: string;
@@ -213,6 +217,7 @@ export default function CitationChatPage() {
   const [error, setError] = useState("");
   const [hasRestoredClientState, setHasRestoredClientState] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [sourceDeletionDisabled, setSourceDeletionDisabled] = useState(true);
 
   const isDark = theme === "dark";
   const citationCount = visibleCitationItems(answer?.citations ?? [], answer?.answer ?? "").length;
@@ -246,9 +251,17 @@ export default function CitationChatPage() {
       }
 
       try {
-        const sourceList = await fetchSources();
+        const [healthResult, sourceList] = await Promise.all([
+          fetchHealth().catch(() => null),
+          fetchSources(),
+        ]);
         if (cancelled) return;
 
+        if (healthResult) {
+          setSourceDeletionDisabled(
+            healthResult.source_store !== "jsonl" && healthResult.source_store !== "postgres",
+          );
+        }
         const metadataSources = sourceList.sources.map((source, index) =>
           uploadedSourceFromListItem(source, index),
         );
@@ -597,6 +610,7 @@ export default function CitationChatPage() {
               setSelectedDocumentIds={setSelectedDocumentIds}
               setSourceMode={setSourceMode}
               setSourceText={setSourceText}
+              sourceDeletionDisabled={sourceDeletionDisabled}
               sourceMode={sourceMode}
               sourcePlaceholder={sourcePlaceholder}
               sourceStatus={sourceStatus}
@@ -936,6 +950,7 @@ function SourcePanel({
   setSelectedDocumentIds,
   setSourceMode,
   setSourceText,
+  sourceDeletionDisabled,
   sourceMode,
   sourcePlaceholder,
   sourceStatus,
@@ -953,6 +968,7 @@ function SourcePanel({
   setSelectedDocumentIds: Dispatch<SetStateAction<string[]>>;
   setSourceMode: (mode: SourceMode) => void;
   setSourceText: (text: string) => void;
+  sourceDeletionDisabled: boolean;
   sourceMode: SourceMode;
   sourcePlaceholder: string;
   sourceStatus: SourceProcessingStatus;
@@ -1350,7 +1366,7 @@ function SourcePanel({
                 {allSourcesSelected ? "Bỏ chọn" : "Chọn tất cả"}
               </button>
             )}
-            {uploadedSources.length > 0 && (
+            {uploadedSources.length > 0 && !sourceDeletionDisabled && (
               <button
                 className="text-[11px] font-medium text-ink/40 transition hover:text-danger dark:text-slate-500 dark:hover:text-red-300"
                 onClick={() => {
@@ -1505,15 +1521,17 @@ function SourcePanel({
                       >
                         <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                       </Link>
-                      <button
-                        aria-label={`Xóa ${source.name}`}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-ink/54 transition hover:border-danger/35 hover:bg-danger/8 hover:text-danger dark:border-white/14 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-300/30 dark:hover:bg-red-300/10 dark:hover:text-red-200"
-                        onClick={() => onSourceRemove(source.documentId)}
-                        title="Xóa khỏi danh sách"
-                        type="button"
-                      >
-                        <X className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
+                      {!sourceDeletionDisabled && (
+                        <button
+                          aria-label={`Xóa ${source.name}`}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-ink/54 transition hover:border-danger/35 hover:bg-danger/8 hover:text-danger dark:border-white/14 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-300/30 dark:hover:bg-red-300/10 dark:hover:text-red-200"
+                          onClick={() => onSourceRemove(source.documentId)}
+                          title="Xóa khỏi danh sách"
+                          type="button"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
@@ -2016,6 +2034,14 @@ async function fetchSources(includeChunks = false): Promise<SourceListResponse> 
     throw new Error(`Khong lay duoc danh sach tai lieu: ${response.status}`);
   }
   return (await response.json()) as SourceListResponse;
+}
+
+async function fetchHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_URL}/health`);
+  if (!response.ok) {
+    throw new Error(`Khong lay duoc trang thai he thong: ${response.status}`);
+  }
+  return (await response.json()) as HealthResponse;
 }
 
 function uploadedSourceFromListItem(

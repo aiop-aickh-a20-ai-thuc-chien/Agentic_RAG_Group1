@@ -1,4 +1,9 @@
 import json
+import os
+import threading
+import warnings
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -11,13 +16,32 @@ from agentic_rag.core.contracts import Chunk, RetrievalInput, SearchResult
 from agentic_rag.ingestion.pdf import LoadedPdfDocument
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import LoadedUrlDocument
+from agentic_rag.integrations.local_pdf import providers as providers_module
 from agentic_rag.integrations.local_pdf.providers import (
     LocalPdfDocumentChunks,
     LocalPdfEvidenceProvider,
     LocalPdfUploadedDocument,
 )
-from agentic_rag.integrations.local_pdf.storage import StoredRawSource, StoredSourceDocument
+from agentic_rag.integrations.local_pdf.storage import (
+    S3LocalSourceStore,
+    StoredRawSource,
+    StoredSourceDocument,
+)
+from agentic_rag.retrieval.config import VectorStoreConfig
 from agentic_rag.retrieval.search import Store
+
+
+@pytest.fixture(autouse=True)
+def _stub_provider_qdrant_delete(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        lambda document_id: {
+            "enabled": True,
+            "vector_store": "qdrant",
+            "document_id": document_id,
+            "deleted": True,
+        },
+    )
 
 
 def _mock_openai_client(monkeypatch: MonkeyPatch) -> None:
@@ -389,7 +413,7 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
     )
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
-        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+        lambda chunks, **kwargs: {"enabled": False, "vector_store": "turbovec"},
     )
     source_store = FakeSourceStore()
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
@@ -455,7 +479,7 @@ def test_local_pdf_provider_source_store_mode_does_not_write_local_cache(
     )
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
-        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+        lambda chunks, **kwargs: {"enabled": False, "vector_store": "turbovec"},
     )
     source_store = FakeSourceStore()
     provider = LocalPdfEvidenceProvider(
@@ -506,7 +530,9 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
     )
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
-        lambda chunks: (_ for _ in ()).throw(ConnectionError("local endpoint unavailable")),
+        lambda chunks, **kwargs: (_ for _ in ()).throw(
+            ConnectionError("local endpoint unavailable")
+        ),
     )
     source_store = FakeSourceStore()
     provider = LocalPdfEvidenceProvider(
@@ -522,13 +548,29 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
     assert trace["index_write"]["dense_index"] == {
         "enabled": True,
         "status": "error",
-        "error": "local endpoint unavailable",
+        "error": "Dense indexing failed.",
         "requested_provider": "auto",
         "resolved_provider": "local",
         "fallback_reason": "openai_api_key_missing",
         "model": "local-model",
         "latency_ms": trace["index_write"]["dense_index"]["latency_ms"],
     }
+
+
+def test_dense_search_failure_metadata_is_sanitized() -> None:
+    class FakeStore:
+        def dense_search(self, query: str, *, top_k: int) -> list[SearchResult]:
+            raise RuntimeError("postgresql://user:secret-token@db.example/rag connection failed")
+
+    results, error = providers_module._dense_search_safely(
+        cast(Any, FakeStore()),
+        "pin vf8",
+        top_k=5,
+    )
+
+    assert results == []
+    assert error == "Dense retrieval failed."
+    assert "secret-token" not in error
 
 
 def test_local_pdf_provider_rolls_back_source_store_when_qdrant_index_fails(
@@ -547,7 +589,898 @@ def test_local_pdf_provider_rolls_back_source_store_when_qdrant_index_fails(
             self.deleted.append(document_id)
             self.documents.pop(document_id, None)
 
-    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks, **kwargs: (_ for _ in ()).throw(ConnectionError(raw_qdrant_error)),
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, source_store),
+    )
+
+    with pytest.raises(RuntimeError) as raised:
+        provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    assert str(raised.value) == "Qdrant upsert failed; source storage was rolled back."
+    assert "secret-token" not in str(raised.value)
+    assert raw_qdrant_error not in str(raised.value)
+    assert raised.value.__cause__ is not None
+    assert source_store.documents == {}
+    assert len(source_store.deleted) == 1
+
+
+def test_local_pdf_provider_successful_generic_replacement_removes_obsolete_qdrant_points(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+
+        def write_document(self, **kwargs: Any) -> None:
+            self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
+
+        def read_chunks(self, document_id: str) -> list[Chunk]:
+            return self.documents[document_id]
+
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return [
+                StoredSourceDocument(
+                    document_id=document_id,
+                    dataset_id="local_pdf",
+                    name="note.txt",
+                    source_type="text",
+                    source="note.txt",
+                    total_chunks=len(chunks),
+                    metadata={},
+                )
+                for document_id, chunks in self.documents.items()
+            ]
+
+        def delete_document(self, document_id: str) -> None:
+            self.documents.pop(document_id, None)
+
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        count = 3 if text == "long" else 1
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{text}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, count + 1)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    dense_state: dict[str, str] = {}
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        dense_state.update({chunk.chunk_id: chunk.text for chunk in chunks})
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=cast(Any, source_store))
+
+    provider.upload_text(title="Ghi chu", text="long")
+    provider.upload_text(title="Ghi chu", text="short")
+
+    assert dense_state == {"text_doc_c0001": "short-1"}
+    assert [chunk.text for chunk in source_store.read_chunks("text_doc")] == ["short-1"]
+
+
+def test_local_pdf_provider_restores_generic_source_when_qdrant_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeSourceStore:
+        def __init__(self) -> None:
+            self.documents: dict[str, list[Chunk]] = {}
+
+        def write_document(self, **kwargs: Any) -> None:
+            self.documents[str(kwargs["document_id"])] = list(cast(list[Chunk], kwargs["chunks"]))
+
+        def snapshot_document(self, document_id: str) -> list[Chunk] | None:
+            chunks = self.documents.get(document_id)
+            return list(chunks) if chunks is not None else None
+
+        def restore_document(self, document_id: str, snapshot: list[Chunk]) -> None:
+            self.documents[document_id] = list(snapshot)
+
+        def read_chunks(self, document_id: str) -> list[Chunk]:
+            return self.documents[document_id]
+
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return [
+                StoredSourceDocument(
+                    document_id=document_id,
+                    dataset_id="local_pdf",
+                    name="note.txt",
+                    source_type="text",
+                    source="note.txt",
+                    total_chunks=len(chunks),
+                    metadata={},
+                )
+                for document_id, chunks in self.documents.items()
+            ]
+
+        def delete_document(self, document_id: str) -> None:
+            self.documents.pop(document_id, None)
+
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        label = "old" if text == "original" else "new"
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{label}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, 3)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    dense_state: dict[str, str] = {}
+    replacement_failed = False
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal replacement_failed
+        for chunk in chunks:
+            dense_state[chunk.chunk_id] = chunk.text
+            if chunk.text == "new-2" and not replacement_failed:
+                replacement_failed = True
+                raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    source_store = FakeSourceStore()
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=cast(Any, source_store))
+
+    provider.upload_text(title="Ghi chu", text="original")
+    with pytest.raises(RuntimeError, match="source storage was restored"):
+        provider.upload_text(title="Ghi chu", text="replacement")
+
+    assert replacement_failed is True
+    assert dense_state == {
+        "text_doc_c0001": "old-1",
+        "text_doc_c0002": "old-2",
+    }
+    assert [chunk.text for chunk in source_store.read_chunks("text_doc")] == [
+        "old-1",
+        "old-2",
+    ]
+
+
+def test_local_pdf_provider_cleans_partial_qdrant_points_without_source_store(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    dense_state: dict[str, str] = {}
+
+    def fail_after_partial_write(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        dense_state[chunks[0].chunk_id] = chunks[0].text
+        raise ConnectionError("api_key=secret-token")
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        fail_after_partial_write,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    with pytest.raises(RuntimeError, match="partial dense index was cleaned"):
+        provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    assert dense_state == {}
+
+
+def test_local_pdf_provider_restores_jsonl_source_when_qdrant_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        label = "old" if text == "original" else "new"
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{label}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, 3)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    dense_state: dict[str, str] = {}
+    replacement_failed = False
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal replacement_failed
+        for chunk in chunks:
+            dense_state[chunk.chunk_id] = chunk.text
+            if chunk.text == "new-2" and not replacement_failed:
+                replacement_failed = True
+                raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    provider.upload_text(title="Ghi chu", text="original")
+    with pytest.raises(RuntimeError, match="partial dense index was cleaned"):
+        provider.upload_text(title="Ghi chu", text="replacement")
+
+    assert replacement_failed is True
+    assert dense_state == {
+        "text_doc_c0001": "old-1",
+        "text_doc_c0002": "old-2",
+    }
+    assert [chunk.text for chunk in provider._read_chunks("text_doc")] == [
+        "old-1",
+        "old-2",
+    ]
+    assert provider._markdown_path("text_doc").read_text(encoding="utf-8") == "original"
+
+
+def test_local_pdf_provider_sanitizes_jsonl_qdrant_repair_failure_after_restore(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        label = "old" if text == "original" else "new"
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{label}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, 3)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
+    call_count = 0
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return {"enabled": True, "status": "ok", "count": len(chunks)}
+        raise ConnectionError(raw_qdrant_error)
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    provider.upload_text(title="Ghi chu", text="original")
+    with pytest.raises(RuntimeError) as raised:
+        provider.upload_text(title="Ghi chu", text="replacement")
+
+    assert str(raised.value) == (
+        "Qdrant upsert failed; local source storage was restored but dense index repair failed."
+    )
+    assert "secret-token" not in str(raised.value)
+    assert raw_qdrant_error not in str(raised.value)
+    assert [chunk.text for chunk in provider._read_chunks("text_doc")] == [
+        "old-1",
+        "old-2",
+    ]
+    assert provider._markdown_path("text_doc").read_text(encoding="utf-8") == "original"
+
+
+def test_local_pdf_provider_marks_s3_source_orphaned_when_qdrant_index_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.delete_called = False
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, object]) -> None:
+            self.delete_called = True
+            raise AssertionError("S3 rollback must not delete objects")
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
+    dense_state: dict[str, str] = {}
+
+    def fail_after_partial_write(
+        chunks: list[Chunk],
+        **_: object,
+    ) -> dict[str, object]:
+        assert chunks[0].chunk_id == "text_doc_c0001"
+        dense_state[chunks[0].chunk_id] = chunks[0].text
+        raise ConnectionError(raw_qdrant_error)
+
+    def delete_partial_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        fail_after_partial_write,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_partial_points,
+    )
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=source_store,
+    )
+
+    with pytest.raises(RuntimeError) as raised:
+        provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    error_message = str(raised.value)
+    assert error_message == "Qdrant upsert failed; S3 source storage was marked orphaned."
+    assert "secret-token" not in error_message
+    assert "api_key" not in error_message
+    assert "qdrant.example.test" not in error_message
+    assert raw_qdrant_error not in error_message
+    assert isinstance(raised.value.__cause__, ConnectionError)
+    assert str(raised.value.__cause__) == raw_qdrant_error
+    assert client.delete_called is False
+    manifest = json.loads(client.objects["sources/text_doc/manifest.json"].decode())
+    assert manifest["metadata"]["source_index_status"] == "orphaned"
+    assert manifest["metadata"]["source_index_reason"] == "qdrant_upsert_failed"
+    assert dense_state == {}
+
+
+def test_local_pdf_provider_restores_existing_s3_source_when_qdrant_reupload_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    upsert_count = 0
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal upsert_count
+        upsert_count += 1
+        if upsert_count == 2:
+            raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung ban dau")
+    original_objects = dict(client.objects)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Qdrant upsert failed; existing S3 source storage was restored",
+    ):
+        provider.upload_text(title="Ghi chu", text="Noi dung thay the")
+
+    assert client.objects == original_objects
+    assert [document.document_id for document in source_store.list_documents()] == [
+        uploaded.document_id
+    ]
+    assert source_store.read_chunks(uploaded.document_id)[0].text == "Noi dung ban dau"
+
+
+def test_local_pdf_provider_repairs_partial_multi_batch_qdrant_replacement(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        label = "old" if text == "original" else "new"
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{label}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, 3)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("DENSE_EMBED_BATCH_SIZE", "1")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    dense_state: dict[str, str] = {}
+    replacement_failed = False
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal replacement_failed
+        assert os.environ["DENSE_EMBED_BATCH_SIZE"] == "1"
+        for chunk in chunks:
+            dense_state[chunk.chunk_id] = chunk.text
+            if chunk.text == "new-2" and not replacement_failed:
+                replacement_failed = True
+                raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    source_store = S3LocalSourceStore(
+        bucket="rag-bucket",
+        prefix="sources",
+        client=FakeS3Client(),
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    provider.upload_text(title="Ghi chu", text="original")
+
+    with pytest.raises(
+        RuntimeError,
+        match="Qdrant upsert failed; existing S3 source storage was restored",
+    ):
+        provider.upload_text(title="Ghi chu", text="replacement")
+
+    assert replacement_failed is True
+    assert dense_state == {
+        "text_doc_c0001": "old-1",
+        "text_doc_c0002": "old-2",
+    }
+    assert [chunk.text for chunk in source_store.read_chunks("text_doc")] == [
+        "old-1",
+        "old-2",
+    ]
+
+
+def test_local_pdf_provider_successful_shorter_replacement_removes_obsolete_points(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    def load_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        count = 3 if text == "long" else 1
+        return [
+            Chunk(
+                chunk_id=f"text_doc_c{index:04d}",
+                text=f"{text}-{index}",
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+            for index in range(1, count + 1)
+        ]
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        load_chunks,
+    )
+    dense_state: dict[str, str] = {}
+
+    def delete_points(document_id: str) -> dict[str, object]:
+        dense_state.clear()
+        return {"enabled": True, "document_id": document_id, "deleted": True}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        dense_state.update({chunk.chunk_id: chunk.text for chunk in chunks})
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_points,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    source_store = S3LocalSourceStore(
+        bucket="rag-bucket",
+        prefix="sources",
+        client=FakeS3Client(),
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    provider.upload_text(title="Ghi chu", text="long")
+    assert set(dense_state) == {
+        "text_doc_c0001",
+        "text_doc_c0002",
+        "text_doc_c0003",
+    }
+
+    provider.upload_text(title="Ghi chu", text="short")
+
+    assert dense_state == {"text_doc_c0001": "short-1"}
+    assert [chunk.text for chunk in source_store.read_chunks("text_doc")] == ["short-1"]
+
+
+def test_local_pdf_provider_restores_existing_s3_source_when_replacement_write_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.fail_next_chunks_write = False
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            if self.fail_next_chunks_write and Key.endswith("/chunks/chunks.jsonl"):
+                self.fail_next_chunks_write = False
+                raise RuntimeError("aws_secret_access_key=secret-token")
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    upsert_count = 0
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        nonlocal upsert_count
+        upsert_count += 1
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+    uploaded = provider.upload_text(title="Ghi chu", text="Noi dung ban dau")
+    original_objects = dict(client.objects)
+    client.fail_next_chunks_write = True
+
+    with pytest.raises(
+        RuntimeError,
+        match="S3 source replacement failed; existing S3 source storage was restored",
+    ) as raised:
+        provider.upload_text(title="Ghi chu", text="Noi dung thay the")
+
+    assert "secret-token" not in str(raised.value)
+    assert client.objects == original_objects
+    assert source_store.read_chunks(uploaded.document_id)[0].text == "Noi dung ban dau"
+    assert upsert_count == 1
+
+
+def test_local_pdf_provider_removes_partial_stage_when_first_source_write_fails(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            if Key.endswith("/chunks/chunks.jsonl"):
+                raise RuntimeError("aws_secret_access_key=secret-token")
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            raise KeyError(Key)
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    with pytest.raises(RuntimeError) as raised:
+        provider.upload_text(title="Ghi chu", text="Noi dung")
+
+    assert "secret-token" not in str(raised.value)
+    assert client.objects == {}
+
+
+def test_local_pdf_provider_successful_replacements_prune_prior_active_versions(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            for item in cast(list[dict[str, object]], Delete["Objects"]):
+                self.objects.pop(str(item["Key"]), None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
         lambda text, **kwargs: [
@@ -560,19 +1493,743 @@ def test_local_pdf_provider_rolls_back_source_store_when_qdrant_index_fails(
     )
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
-        lambda chunks: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+        lambda chunks, **kwargs: {
+            "enabled": True,
+            "status": "ok",
+            "count": len(chunks),
+        },
     )
-    source_store = FakeSourceStore()
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+
+    for content in ("Noi dung mot", "Noi dung hai", "Noi dung ba"):
+        provider.upload_text(title="Ghi chu", text=content)
+
+    version_prefixes = {
+        key.rsplit("/", 2)[0] for key in client.objects if key.endswith("/chunks/chunks.jsonl")
+    }
+
+    assert len(version_prefixes) == 1
+    assert source_store.read_chunks("text_doc")[0].text == "Noi dung ba"
+
+
+def test_local_pdf_provider_serializes_concurrent_s3_replacements(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.objects_guard = threading.Lock()
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            with self.objects_guard:
+                self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            with self.objects_guard:
+                payload = self.objects[Key]
+            return {"Body": FakeBody(payload)}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            with self.objects_guard:
+                keys = [key for key in sorted(self.objects) if key.startswith(Prefix)]
+            return {
+                "Contents": [{"Key": key} for key in keys],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            with self.objects_guard:
+                for item in cast(list[dict[str, object]], Delete["Objects"]):
+                    self.objects.pop(str(item["Key"]), None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    successful_upsert_started = threading.Event()
+    release_successful_upsert = threading.Event()
+    failed_upsert_started = threading.Event()
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        text = chunks[0].text
+        if text == "Noi dung thanh cong":
+            successful_upsert_started.set()
+            assert release_successful_upsert.wait(timeout=5)
+        elif text == "Noi dung that bai":
+            failed_upsert_started.set()
+            raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    client = FakeS3Client()
+    first_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    second_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    first_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "first",
+        source_store=first_store,
+    )
+    second_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "second",
+        source_store=second_store,
+    )
+    first_provider.upload_text(title="Ghi chu", text="Noi dung ban dau")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        successful = executor.submit(
+            first_provider.upload_text,
+            title="Ghi chu",
+            text="Noi dung thanh cong",
+        )
+        assert successful_upsert_started.wait(timeout=5)
+        failed = executor.submit(
+            second_provider.upload_text,
+            title="Ghi chu",
+            text="Noi dung that bai",
+        )
+        assert not failed_upsert_started.wait(timeout=0.2)
+        release_successful_upsert.set()
+        successful.result(timeout=5)
+        with pytest.raises(
+            RuntimeError,
+            match="Qdrant upsert failed; existing S3 source storage was restored",
+        ):
+            failed.result(timeout=5)
+
+    assert failed_upsert_started.is_set()
+    assert first_store.read_chunks("text_doc")[0].text == "Noi dung thanh cong"
+
+
+def test_local_pdf_provider_does_not_restore_stale_s3_snapshot_across_lock_domains(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class PreconditionFailed(Exception):
+        def __init__(self) -> None:
+            self.response = {"Error": {"Code": "PreconditionFailed"}}
+
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.etags: dict[str, str] = {}
+            self.revision = 0
+            self.guard = threading.Lock()
+
+        def put_object(
+            self,
+            *,
+            Bucket: str,
+            Key: str,
+            Body: bytes | str,
+            IfMatch: str | None = None,
+            **_: object,
+        ) -> None:
+            with self.guard:
+                if IfMatch is not None and self.etags.get(Key) != IfMatch:
+                    raise PreconditionFailed
+                self.revision += 1
+                self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+                self.etags[Key] = f'"revision-{self.revision}"'
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            with self.guard:
+                payload = self.objects[Key]
+                etag = self.etags[Key]
+            return {"Body": FakeBody(payload), "ETag": etag}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            with self.guard:
+                keys = [key for key in sorted(self.objects) if key.startswith(Prefix)]
+            return {
+                "Contents": [{"Key": key} for key in keys],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            with self.guard:
+                for item in cast(list[dict[str, object]], Delete["Objects"]):
+                    key = str(item["Key"])
+                    self.objects.pop(key, None)
+                    self.etags.pop(key, None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    stale_upsert_started = threading.Event()
+    release_stale_upsert = threading.Event()
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        if chunks[0].text == "Noi dung that bai":
+            stale_upsert_started.set()
+            assert release_stale_upsert.wait(timeout=5)
+            raise ConnectionError("api_key=secret-token")
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    client = FakeS3Client()
+    stale_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    newer_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    stale_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "stale",
+        source_store=stale_store,
+    )
+    newer_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "newer",
+        source_store=newer_store,
+    )
+    stale_provider.upload_text(title="Ghi chu", text="Noi dung ban dau")
+
+    monkeypatch.setattr(
+        stale_store,
+        "document_write_lock",
+        lambda document_id: nullcontext(),
+    )
+    monkeypatch.setattr(
+        newer_store,
+        "document_write_lock",
+        lambda document_id: nullcontext(),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        stale = executor.submit(
+            stale_provider.upload_text,
+            title="Ghi chu",
+            text="Noi dung that bai",
+        )
+        assert stale_upsert_started.wait(timeout=5)
+        newer_provider.upload_text(title="Ghi chu", text="Noi dung moi hon")
+        release_stale_upsert.set()
+        with pytest.raises(
+            RuntimeError,
+            match="Qdrant upsert failed; S3 source transaction was superseded",
+        ) as raised:
+            stale.result(timeout=5)
+
+    assert isinstance(raised.value.__cause__, ConnectionError)
+    assert "secret-token" not in str(raised.value)
+    assert newer_store.read_chunks("text_doc")[0].text == "Noi dung moi hon"
+    manifest = json.loads(client.objects["sources/text_doc/manifest.json"].decode())
+    assert manifest["chunks_key"] in client.objects
+
+
+def test_local_pdf_provider_repairs_dense_index_after_successful_stale_upsert(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class PreconditionFailed(Exception):
+        def __init__(self) -> None:
+            self.response = {"Error": {"Code": "PreconditionFailed"}}
+
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.etags: dict[str, str] = {}
+            self.revision = 0
+            self.guard = threading.Lock()
+
+        def put_object(
+            self,
+            *,
+            Bucket: str,
+            Key: str,
+            Body: bytes | str,
+            IfMatch: str | None = None,
+            **_: object,
+        ) -> None:
+            with self.guard:
+                if IfMatch is not None and self.etags.get(Key) != IfMatch:
+                    raise PreconditionFailed
+                self.revision += 1
+                self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+                self.etags[Key] = f'"revision-{self.revision}"'
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            with self.guard:
+                payload = self.objects[Key]
+                etag = self.etags[Key]
+            return {"Body": FakeBody(payload), "ETag": etag}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            with self.guard:
+                keys = [key for key in sorted(self.objects) if key.startswith(Prefix)]
+            return {
+                "Contents": [{"Key": key} for key in keys],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, Any]) -> None:
+            with self.guard:
+                for item in cast(list[dict[str, object]], Delete["Objects"]):
+                    key = str(item["Key"])
+                    self.objects.pop(key, None)
+                    self.etags.pop(key, None)
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    stale_upsert_started = threading.Event()
+    release_stale_upsert = threading.Event()
+    dense_state: dict[str, str] = {}
+
+    def upsert(chunks: list[Chunk], **_: object) -> dict[str, object]:
+        text = chunks[0].text
+        if text == "Noi dung cu hoan tat sau":
+            stale_upsert_started.set()
+            assert release_stale_upsert.wait(timeout=5)
+        dense_state["text_doc"] = text
+        return {"enabled": True, "status": "ok", "count": len(chunks)}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        upsert,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        lambda document_id: dense_state.pop(document_id, None),
+    )
+    client = FakeS3Client()
+    stale_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    winner_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+    stale_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "stale",
+        source_store=stale_store,
+    )
+    winner_provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path / "winner",
+        source_store=winner_store,
+    )
+    stale_provider.upload_text(title="Ghi chu", text="Noi dung ban dau")
+
+    monkeypatch.setattr(
+        stale_store,
+        "document_write_lock",
+        lambda document_id: nullcontext(),
+    )
+    monkeypatch.setattr(
+        winner_store,
+        "document_write_lock",
+        lambda document_id: nullcontext(),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        stale = executor.submit(
+            stale_provider.upload_text,
+            title="Ghi chu",
+            text="Noi dung cu hoan tat sau",
+        )
+        assert stale_upsert_started.wait(timeout=5)
+        winner_provider.upload_text(title="Ghi chu", text="Noi dung canonical moi")
+        assert dense_state["text_doc"] == "Noi dung canonical moi"
+        release_stale_upsert.set()
+        with pytest.raises(
+            RuntimeError,
+            match=(
+                "Qdrant upsert succeeded but S3 source transaction was superseded; "
+                "dense index was repaired"
+            ),
+        ):
+            stale.result(timeout=5)
+
+    canonical_text = winner_store.read_chunks("text_doc")[0].text
+    assert canonical_text == "Noi dung canonical moi"
+    assert dense_state["text_doc"] == canonical_text
+    manifest = json.loads(client.objects["sources/text_doc/manifest.json"].decode())
+    assert manifest["chunks_key"] in client.objects
+
+
+def test_local_pdf_provider_sanitizes_s3_orphan_marking_failure(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.delete_called = False
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, object]) -> None:
+            self.delete_called = True
+            raise AssertionError("S3 rollback must not delete objects")
+
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
+    raw_orphan_error = "aws_secret_access_key=secret-token bucket=https://s3.example.test"
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks, **kwargs: (_ for _ in ()).throw(ConnectionError(raw_qdrant_error)),
+    )
+    client = FakeS3Client()
+    source_store = S3LocalSourceStore(bucket="rag-bucket", prefix="sources", client=client)
+
+    def fail_mark_document_orphaned(
+        document_id: str,
+        *,
+        transaction_id: str,
+        reason: str,
+    ) -> bool:
+        raise RuntimeError(raw_orphan_error)
+
+    monkeypatch.setattr(
+        source_store,
+        "mark_document_orphaned_if_current",
+        fail_mark_document_orphaned,
+    )
     provider = LocalPdfEvidenceProvider(
         store_dir=tmp_path,
-        source_store=cast(Any, source_store),
+        source_store=source_store,
     )
 
-    with pytest.raises(RuntimeError, match="source storage was rolled back"):
+    with pytest.raises(RuntimeError) as raised:
         provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
 
-    assert source_store.documents == {}
-    assert len(source_store.deleted) == 1
+    error_message = str(raised.value)
+    assert error_message == "Qdrant upsert failed and S3 orphan marking failed."
+    assert "secret-token" not in error_message
+    assert "api_key" not in error_message
+    assert "aws_secret_access_key" not in error_message
+    assert "qdrant.example.test" not in error_message
+    assert "s3.example.test" not in error_message
+    assert raw_qdrant_error not in error_message
+    assert raw_orphan_error not in error_message
+    assert isinstance(raised.value.__cause__, ConnectionError)
+    assert str(raised.value.__cause__) == raw_qdrant_error
+    assert client.delete_called is False
+
+
+@pytest.mark.parametrize("source_type", ["text", "url", "pdf"])
+def test_local_pdf_provider_validates_vector_config_before_local_ingestion(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    source_type: str,
+) -> None:
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.delenv("VECTOR_STORE_URL", raising=False)
+
+    def fail_loader(*args: object, **kwargs: object) -> object:
+        raise AssertionError("loader must not run")
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fail_loader,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_url_with_artifacts",
+        fail_loader,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        fail_loader,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="VECTOR_STORE_URL"):
+        if source_type == "text":
+            provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+        elif source_type == "url":
+            provider.upload_url(url="https://example.test/source")
+        else:
+            provider.upload_document(
+                filename="source.pdf",
+                content=b"%PDF-1.4",
+                content_type="application/pdf",
+            )
+
+    assert not any(path.is_file() for path in tmp_path.rglob("*"))
+
+
+def test_local_pdf_provider_reuses_validated_vector_config_for_indexing(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_load_text_chunks(text: str, **kwargs: object) -> list[Chunk]:
+        monkeypatch.delenv("VECTOR_STORE_URL")
+        return [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    def fake_upsert_dense_embeddings(
+        chunks: list[Chunk],
+        *,
+        vector_config: object,
+    ) -> dict[str, object]:
+        seen["vector_config"] = vector_config
+        return {"enabled": True, "vector_store": "qdrant"}
+
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        fake_upsert_dense_embeddings,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    provider.upload_text(title="Ghi chu", text="Noi dung tu nguoi dung")
+
+    vector_config = cast(VectorStoreConfig, seen["vector_config"])
+    assert vector_config.provider == "qdrant"
+    url = vector_config.url
+    assert url is not None
+    assert url.get_secret_value() == "https://qdrant.example.test"
+
+
+def test_source_store_from_env_prefers_explicit_postgres_connection(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, str] = {}
+
+    class FakePostgresLocalSourceStore:
+        def __init__(self, *, connection: str, table_prefix: str) -> None:
+            seen.update(connection=connection, table_prefix=table_prefix)
+
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
+    monkeypatch.setenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "postgresql://source/rag")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://legacy/rag")
+    monkeypatch.setattr(
+        providers_module,
+        "PostgresLocalSourceStore",
+        FakePostgresLocalSourceStore,
+    )
+
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        providers_module._source_store_from_env()
+
+    assert seen == {
+        "connection": "postgresql://source/rag",
+        "table_prefix": "local_rag",
+    }
+    assert not caught_warnings
+
+
+def test_source_store_from_env_uses_pgvector_url_second(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, str] = {}
+
+    class FakePostgresLocalSourceStore:
+        def __init__(self, *, connection: str, table_prefix: str) -> None:
+            seen.update(connection=connection, table_prefix=table_prefix)
+
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
+    monkeypatch.delenv("LOCAL_SOURCE_POSTGRES_CONNECTION", raising=False)
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "pgvector")
+    monkeypatch.setenv("VECTOR_STORE_URL", "postgresql://user:secret@db.example/rag")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://legacy/rag")
+    monkeypatch.setattr(
+        providers_module,
+        "PostgresLocalSourceStore",
+        FakePostgresLocalSourceStore,
+    )
+
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        providers_module._source_store_from_env()
+
+    assert seen["connection"] == "postgresql://user:secret@db.example/rag"
+    assert not caught_warnings
+
+
+def test_source_store_from_env_prefers_canonical_url_with_legacy_provider(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, str] = {}
+
+    class FakePostgresLocalSourceStore:
+        def __init__(self, *, connection: str, table_prefix: str) -> None:
+            seen.update(connection=connection, table_prefix=table_prefix)
+
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
+    monkeypatch.delenv("LOCAL_SOURCE_POSTGRES_CONNECTION", raising=False)
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.setenv("VECTOR_STORE_URL", "postgresql://canonical/rag")
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "pgvector")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://legacy/rag")
+    monkeypatch.setattr(
+        providers_module,
+        "PostgresLocalSourceStore",
+        FakePostgresLocalSourceStore,
+    )
+
+    providers_module._source_store_from_env()
+
+    assert seen["connection"] == "postgresql://canonical/rag"
+
+
+def test_source_store_from_env_warns_for_legacy_postgres_fallback(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, str] = {}
+
+    class FakePostgresLocalSourceStore:
+        def __init__(self, *, connection: str, table_prefix: str) -> None:
+            seen.update(connection=connection, table_prefix=table_prefix)
+
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
+    monkeypatch.delenv("LOCAL_SOURCE_POSTGRES_CONNECTION", raising=False)
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.delenv("VECTOR_STORE_URL", raising=False)
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://legacy/rag")
+    monkeypatch.setattr(
+        providers_module,
+        "PostgresLocalSourceStore",
+        FakePostgresLocalSourceStore,
+    )
+
+    with pytest.warns(
+        FutureWarning,
+        match=(
+            "DENSE_PGVECTOR_CONNECTION is deprecated for "
+            "LOCAL_SOURCE_STORE=postgres; use "
+            "LOCAL_SOURCE_POSTGRES_CONNECTION instead"
+        ),
+    ):
+        providers_module._source_store_from_env()
+
+    assert seen["connection"] == "postgresql://legacy/rag"
+
+
+def test_source_store_from_env_requires_postgres_connection(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
+    monkeypatch.delenv("LOCAL_SOURCE_POSTGRES_CONNECTION", raising=False)
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.delenv("VECTOR_STORE_URL", raising=False)
+    monkeypatch.delenv("DENSE_PGVECTOR_CONNECTION", raising=False)
+
+    with pytest.raises(ValueError, match="LOCAL_SOURCE_POSTGRES_CONNECTION"):
+        providers_module._source_store_from_env()
+
+
+def test_local_pdf_provider_hides_orphaned_source_documents(tmp_path: Path) -> None:
+    class FakeSourceStore:
+        def list_documents(self) -> list[StoredSourceDocument]:
+            return [
+                StoredSourceDocument(
+                    document_id="doc-ready",
+                    dataset_id="local_pdf",
+                    name="ready.txt",
+                    source_type="text",
+                    source="ready.txt",
+                    total_chunks=1,
+                    metadata={"source_index_status": "indexed"},
+                ),
+                StoredSourceDocument(
+                    document_id="doc-orphaned",
+                    dataset_id="local_pdf",
+                    name="orphaned.txt",
+                    source_type="text",
+                    source="orphaned.txt",
+                    total_chunks=1,
+                    metadata={"source_index_status": "orphaned"},
+                ),
+            ]
+
+    provider = LocalPdfEvidenceProvider(
+        store_dir=tmp_path,
+        source_store=cast(Any, FakeSourceStore()),
+    )
+
+    documents = provider.list_documents(include_chunks=False)
+
+    assert [document.document_id for document in documents] == ["doc-ready"]
 
 
 def test_local_pdf_provider_does_not_delete_source_when_qdrant_document_delete_fails(
@@ -590,14 +2247,20 @@ def test_local_pdf_provider_does_not_delete_source_when_qdrant_document_delete_f
         store_dir=tmp_path,
         source_store=cast(Any, source_store),
     )
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
-        lambda document_id: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+        lambda document_id: (_ for _ in ()).throw(ConnectionError(raw_qdrant_error)),
     )
 
-    with pytest.raises(RuntimeError, match=r"Qdrant.*source storage was not deleted"):
+    with pytest.raises(RuntimeError) as raised:
         provider.delete_document(document_id="doc-1")
 
+    assert str(raised.value) == (
+        "Qdrant deletion failed for document 'doc-1'; source storage was not deleted."
+    )
+    assert "secret-token" not in str(raised.value)
+    assert raised.value.__cause__ is not None
     assert source_store.deleted is False
 
 
@@ -617,14 +2280,20 @@ def test_local_pdf_provider_does_not_delete_sources_when_qdrant_clear_fails(
         store_dir=tmp_path,
         source_store=cast(Any, source_store),
     )
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.delete_all_qdrant_points",
-        lambda: (_ for _ in ()).throw(ConnectionError("qdrant unavailable")),
+        lambda: (_ for _ in ()).throw(ConnectionError(raw_qdrant_error)),
     )
 
-    with pytest.raises(RuntimeError, match=r"Qdrant.*source storage was not deleted"):
+    with pytest.raises(RuntimeError) as raised:
         provider.delete_all_documents()
 
+    assert str(raised.value) == (
+        "Qdrant deletion failed while clearing sources; source storage was not deleted."
+    )
+    assert "secret-token" not in str(raised.value)
+    assert raised.value.__cause__ is not None
     assert source_store.deleted is False
 
 
@@ -754,7 +2423,8 @@ def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
         seen["top_k"] = top_k
         return expected
 
-    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
     monkeypatch.setenv("LOCAL_PDF_RETRIEVAL_TOP_K", "3")
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.qdrant_hybrid_search",

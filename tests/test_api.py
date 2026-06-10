@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -21,6 +22,7 @@ from agentic_rag.api import (
     list_sources,
     source_debug,
     source_raw,
+    upload_source,
     upload_text_source,
     upload_url_source,
 )
@@ -28,7 +30,7 @@ from agentic_rag.core.contracts import Chunk
 from agentic_rag.generation.answering import format_evidence_context
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
-from agentic_rag.integrations.local_pdf.storage import StoredRawSource
+from agentic_rag.integrations.local_pdf.storage import S3LocalSourceStore, StoredRawSource
 from agentic_rag.testing.fixtures import sample_search_results
 
 
@@ -67,6 +69,14 @@ class FakeUploadProvider:
         )()
 
 
+class FakeUploadFile:
+    filename = "document.pdf"
+    content_type = "application/pdf"
+
+    async def read(self) -> bytes:
+        return b"%PDF-1.4\n"
+
+
 def test_health_endpoint_shape(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
     result = health()
@@ -79,9 +89,9 @@ def test_health_endpoint_reports_local_pdf_backends(monkeypatch: MonkeyPatch) ->
     monkeypatch.setenv("LOCAL_SOURCE_STORE", "s3")
     monkeypatch.setenv("AWS_S3_BUCKET", "rag-bucket")
     monkeypatch.setenv("AWS_S3_PREFIX", "sources")
-    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("QDRANT_URL", "https://example-qdrant")
-    monkeypatch.setenv("QDRANT_COLLECTION", "chunks")
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://example-qdrant")
+    monkeypatch.setenv("VECTOR_STORE_COLLECTION", "chunks")
 
     result = health()
 
@@ -235,6 +245,51 @@ def test_url_source_uses_local_provider_when_configured(
     assert debug.chunks[0].chunk.text == "Noi dung URL"
 
 
+def test_pdf_source_upload_maps_local_runtime_error_to_502(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("safe runtime failure")),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(upload_source(cast(Any, FakeUploadFile())))
+
+    assert raised.value.status_code == 502
+    assert raised.value.detail == "safe runtime failure"
+
+
+@pytest.mark.parametrize(
+    "upload_call",
+    [
+        lambda: asyncio.run(upload_source(cast(Any, FakeUploadFile()))),
+        lambda: upload_url_source(SourceUrlRequest(url="https://example.com/docs/page")),
+        lambda: upload_text_source(SourceTextRequest(title="Ghi chu", text="Noi dung")),
+    ],
+)
+def test_local_source_upload_maps_malformed_vector_url_to_503(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+    upload_call: Any,
+) -> None:
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "http://[::1")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    with pytest.raises(HTTPException) as raised:
+        upload_call()
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == "VECTOR_STORE_URL is invalid for qdrant."
+
+
 def test_raw_source_returns_local_pdf_file(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
@@ -335,11 +390,42 @@ def test_raw_cloud_source_encodes_header_control_characters(
     assert response.media_type == "text/plain; charset=utf-8"
 
 
+def test_delete_source_is_forbidden_for_s3_before_provider_resolution(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "s3")
+    monkeypatch.setattr(
+        "agentic_rag.api.source_provider_from_env",
+        lambda: (_ for _ in ()).throw(AssertionError("provider must not be resolved")),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        delete_source("doc-1")
+
+    assert raised.value.status_code == 403
+
+
+def test_delete_all_sources_is_forbidden_for_s3_before_provider_resolution(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "s3")
+    monkeypatch.setattr(
+        "agentic_rag.api.source_provider_from_env",
+        lambda: (_ for _ in ()).throw(AssertionError("provider must not be resolved")),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        delete_all_sources()
+
+    assert raised.value.status_code == 403
+
+
 def test_delete_source_returns_bad_gateway_for_qdrant_failure(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "jsonl")
     monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
     monkeypatch.setattr(
         provider,
@@ -361,6 +447,7 @@ def test_delete_all_sources_returns_bad_gateway_for_qdrant_failure(
     tmp_path: Path,
 ) -> None:
     provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("LOCAL_SOURCE_STORE", "postgres")
     monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
     monkeypatch.setattr(
         provider,
@@ -400,6 +487,91 @@ def test_text_source_uses_local_provider_when_configured(
     assert response.provider == "local_pdf"
     assert response.dataset_id == "local_pdf"
     assert response.name == "Ghi-chu.txt"
+
+
+def test_text_source_upload_sanitizes_s3_qdrant_runtime_error(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeBody:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+            self.delete_called = False
+
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes | str, **_: object) -> None:
+            self.objects[Key] = Body.encode() if isinstance(Body, str) else Body
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]:
+            return {"Body": FakeBody(self.objects[Key])}
+
+        def list_objects_v2(self, *, Bucket: str, Prefix: str, **_: object) -> dict[str, object]:
+            return {
+                "Contents": [
+                    {"Key": key} for key in sorted(self.objects) if key.startswith(Prefix)
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, *, Bucket: str, Delete: dict[str, object]) -> None:
+            self.delete_called = True
+            raise AssertionError("S3 rollback must not delete objects")
+
+    raw_qdrant_error = "api_key=secret-token url=https://qdrant.example.test"
+    qdrant_deletions: list[str] = []
+    s3_client = FakeS3Client()
+    source_store = S3LocalSourceStore(
+        bucket="rag-bucket",
+        prefix="sources",
+        client=s3_client,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path, source_store=source_store)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://qdrant.example.test")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id="text_doc_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks, **kwargs: (_ for _ in ()).throw(ConnectionError(raw_qdrant_error)),
+    )
+
+    def delete_qdrant_points(document_id: str) -> dict[str, object]:
+        qdrant_deletions.append(document_id)
+        return {"enabled": True}
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.delete_qdrant_document_points",
+        delete_qdrant_points,
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        upload_text_source(SourceTextRequest(title="Ghi chu", text="Noi dung"))
+
+    detail = str(raised.value.detail)
+    assert raised.value.status_code == 502
+    assert detail == "Qdrant upsert failed; S3 source storage was marked orphaned."
+    assert "secret-token" not in detail
+    assert "api_key" not in detail
+    assert "qdrant.example.test" not in detail
+    assert raw_qdrant_error not in detail
+    assert s3_client.delete_called is False
+    assert qdrant_deletions == ["text_doc", "text_doc"]
 
 
 def test_list_sources_returns_local_documents(

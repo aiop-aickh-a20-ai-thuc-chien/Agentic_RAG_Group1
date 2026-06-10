@@ -62,6 +62,7 @@ from agentic_rag.observability.trace import (  # noqa: E402
     write_rag_trace,
     write_source_trace,
 )
+from agentic_rag.retrieval.config import VectorStoreConfigurationError  # noqa: E402
 from agentic_rag.retrieval.fusion import (  # noqa: E402
     build_evidence_context as _build_evidence_context,
 )
@@ -342,6 +343,10 @@ async def upload_source(file: UploadFile = UPLOAD_FILE) -> SourceUploadResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except VectorStoreConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -574,9 +579,19 @@ def _inline_content_disposition(filename: str) -> str:
     return f'inline; filename="{filename}"'
 
 
+def _forbid_s3_source_deletion() -> None:
+    if os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower() == "s3":
+        raise HTTPException(
+            status_code=403,
+            detail="Source deletion is disabled for shared S3 storage.",
+        )
+
+
 @api.delete("/sources")
 def delete_all_sources() -> dict[str, object]:
     """Delete all local source documents, chunks, files and vectors."""
+
+    _forbid_s3_source_deletion()
 
     try:
         provider = source_provider_from_env()
@@ -599,6 +614,8 @@ def delete_all_sources() -> dict[str, object]:
 @api.delete("/sources/{document_id}")
 def delete_source(document_id: str) -> dict[str, str]:
     """Delete a local source document and all its chunks from storage and disk."""
+
+    _forbid_s3_source_deletion()
 
     try:
         provider = source_provider_from_env()
@@ -683,6 +700,8 @@ def _upload_local_url_document(url: str) -> SourceUploadResponse:
         uploaded = provider.upload_url(url=url)
     except RAGFlowConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except VectorStoreConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
@@ -716,6 +735,8 @@ def _upload_local_text_document(*, title: str, text: str) -> SourceUploadRespons
         uploaded = provider.upload_text(title=title, text=text)
     except RAGFlowConfigurationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except VectorStoreConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
