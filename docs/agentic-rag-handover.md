@@ -81,7 +81,7 @@ AGENT_MAX_GENERATE_ATTEMPTS=2     # max regen khi hallucinate
 |---|---|
 | `api.py` | `AnswerRequest.history` dùng `ConversationMessage`; gọi `run_agent` với `WorkflowRunInput` |
 | `integrations/local_pdf/providers.py` | Dense dùng original query (có dấu); bỏ provider-rerank; thêm `@traceable` |
-| `retrieval/search.py` | Embedding configurable (openai/huggingface) |
+| `retrieval/search.py` | Embedding configurable (named provider/local/sentence_transformers) |
 | `generation/answering.py` | Thêm `@traceable` cho llm-call, answer-parse |
 | `observability/trace.py` | Thêm `LANGSMITH_TRACE_MODE=langgraph\|custom` |
 

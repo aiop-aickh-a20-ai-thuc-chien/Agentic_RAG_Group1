@@ -1,5 +1,7 @@
+import sys
 from collections.abc import Iterator
-from typing import cast
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -26,6 +28,23 @@ def _clean_model_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from agentic_rag.model_runtime.factory import clear_model_runtime_caches
 
     clear_model_runtime_caches()
+    for name in (
+        "EMBEDDING_PROVIDER",
+        "EMBEDDING_MODEL",
+        "EMBEDDING_API_BASE",
+        "EMBEDDING_API_KEY",
+        "EMBEDDING_DIMENSIONS",
+        "EMBEDDING_TIMEOUT_SECONDS",
+        "EMBEDDING_DEVICE",
+        "RERANK_PROVIDER",
+        "RERANK_MODEL",
+        "RERANK_API_BASE",
+        "RERANK_API_KEY",
+        "RERANK_TIMEOUT_SECONDS",
+        "RERANK_DEVICE",
+        "RERANK_PRELOAD",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "none")
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
     yield
@@ -374,6 +393,43 @@ def test_rerank_metadata_reports_configured_bge_model(monkeypatch: pytest.Monkey
     assert metadata["library"] == "sentence-transformers"
 
 
+def test_local_reranker_metadata_reports_litellm_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RERANK_PROVIDER", "local")
+    monkeypatch.setenv("RERANK_MODEL", "local-reranker")
+    monkeypatch.setenv("RERANK_API_BASE", "http://127.0.0.1:8001")
+
+    metadata = fusion_module.rerank_metadata()
+
+    assert metadata["provider"] == "local"
+    assert metadata["model"] == "local-reranker"
+    assert metadata["library"] == "litellm"
+    assert metadata["fallback_provider"] == "score"
+
+
+def test_local_reranker_failure_falls_back_to_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_rerank(**kwargs: Any) -> object:
+        raise RuntimeError("local reranker unavailable")
+
+    monkeypatch.setenv("RERANK_PROVIDER", "local")
+    monkeypatch.setenv("RERANK_MODEL", "local-reranker")
+    monkeypatch.setenv("RERANK_API_BASE", "http://127.0.0.1:8001")
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(rerank=fail_rerank))
+    candidates = [
+        _result(_chunk("chunk-a", "A"), score=0.9, rank=1, retriever="hybrid"),
+        _result(_chunk("chunk-b", "B"), score=0.2, rank=2, retriever="hybrid"),
+    ]
+
+    reranked, metadata = rerank_with_metadata("warranty question", candidates)
+
+    assert [result.chunk.chunk_id for result in reranked] == ["chunk-a", "chunk-b"]
+    assert metadata["configured_provider"] == "local"
+    assert metadata["fallback_provider"] == "score"
+    assert metadata["used_provider"] == "score"
+    assert "local reranker unavailable" in str(metadata["fallback_reason"])
+
+
 def test_preload_reranker_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")
     monkeypatch.delenv("RERANK_PRELOAD", raising=False)
@@ -384,15 +440,16 @@ def test_preload_reranker_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch
     assert metadata["status"] == "disabled"
 
 
-def test_preload_reranker_skips_score_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preload_reranker_ignores_preload_for_score_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RERANK_PROVIDER", "score")
     monkeypatch.setenv("RERANK_PRELOAD", "true")
 
     metadata = preload_reranker()
 
-    assert metadata["preload"] is True
-    assert metadata["status"] == "skipped"
-    assert metadata["reason"] == "provider_not_sentence_transformers"
+    assert metadata["preload"] is False
+    assert metadata["status"] == "disabled"
 
 
 def test_preload_reranker_loads_configured_sentence_transformers(

@@ -77,7 +77,8 @@ class LiteLLMClient(BaseModel):
     def _model_name(self) -> str:
         if self.config.provider == "none" or not self.config.model:
             raise ModelRuntimeConfigurationError("LiteLLMClient requires an enabled model profile.")
-        prefix = f"{self.config.provider}/"
+        provider = "openai" if self.config.provider == "local" else self.config.provider
+        prefix = f"{provider}/"
         if self.config.model.startswith(prefix):
             return self.config.model
         return f"{prefix}{self.config.model}"

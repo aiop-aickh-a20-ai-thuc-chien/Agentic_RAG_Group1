@@ -40,9 +40,17 @@ _ENV_NAMES = (
     "QUERY_REWRITE_LLM_MODEL",
     "EMBEDDING_PROVIDER",
     "EMBEDDING_MODEL",
+    "EMBEDDING_API_BASE",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_DIMENSIONS",
+    "EMBEDDING_TIMEOUT_SECONDS",
     "EMBEDDING_DEVICE",
     "RERANK_PROVIDER",
     "RERANK_MODEL",
+    "RERANK_API_BASE",
+    "RERANK_API_KEY",
+    "RERANK_TIMEOUT_SECONDS",
+    "RERANK_DEVICE",
     "RERANK_PRELOAD",
 )
 
@@ -94,10 +102,10 @@ def test_factories_choose_reserved_local_and_litellm_adapters(
     assert isinstance(get_reranker(), SentenceTransformersReranker)
 
 
-def test_huggingface_embedding_factory_passes_configured_device(
+def test_sentence_transformers_embedding_factory_passes_configured_device(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
     monkeypatch.setenv("EMBEDDING_DEVICE", "cuda")
     clear_model_runtime_caches()
 
@@ -127,7 +135,7 @@ def test_validate_model_runtime_config_returns_all_profiles(monkeypatch: MonkeyP
         "ingestion",
         "evaluation",
     }
-    assert config.embedding.provider == "huggingface"
+    assert config.embedding.provider == "sentence_transformers"
     assert config.reranker.provider == "score"
 
     monkeypatch.setenv("GENERATION_LLM_PROVIDER", "openai")
@@ -153,7 +161,7 @@ def test_preload_configured_models_only_loads_local_reranker(
         SimpleNamespace(CrossEncoder=FakeCrossEncoder),
     )
     skipped = cast(dict[str, object], preload_configured_models()["reranker"])
-    assert skipped["status"] == "skipped"
+    assert skipped["status"] == "disabled"
     assert calls == []
 
     monkeypatch.setenv("RERANK_PROVIDER", "sentence_transformers")

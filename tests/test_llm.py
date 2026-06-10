@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from pytest import MonkeyPatch
@@ -11,6 +14,7 @@ from agentic_rag.core.contracts import (
     LLMStreamDelta,
 )
 from agentic_rag.generation.answering import GROUNDING_SYSTEM_MESSAGE, _traced_complete
+from agentic_rag.model_runtime.config import LLMProfileConfig
 from agentic_rag.model_runtime.factory import clear_model_runtime_caches, get_llm_client
 from agentic_rag.model_runtime.llm import LiteLLMClient
 
@@ -65,3 +69,30 @@ def test_get_llm_client_returns_litellm_for_enabled_provider(monkeypatch: Monkey
     assert isinstance(client, LiteLLMClient)
     assert client.config.provider == "openai"
     assert client.config.model == "gpt-4o-mini"
+
+
+def test_local_llm_uses_openai_compatible_litellm_model(monkeypatch: MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_completion(**kwargs: Any) -> object:
+        captured.update(kwargs)
+        return {"choices": [{"message": {"content": "answer"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(completion=fake_completion))
+    client = LiteLLMClient(
+        config=LLMProfileConfig(
+            role="generation",
+            provider="local",
+            model="local-chat-model",
+            api_base="http://127.0.0.1:8000/v1",
+        )
+    )
+
+    output = client.complete(
+        LLMCompletionInput(prompt="question", system_message="Answer from evidence.")
+    )
+
+    assert captured["model"] == "openai/local-chat-model"
+    assert captured["api_base"] == "http://127.0.0.1:8000/v1"
+    assert output.provider == "local"
+    assert output.model == "openai/local-chat-model"

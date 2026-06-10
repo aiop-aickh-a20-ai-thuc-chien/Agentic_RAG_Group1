@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
 import threading
 import time
@@ -13,6 +14,11 @@ from zipfile import BadZipFile
 import openpyxl
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from agentic_rag.retrieval.config import (
+    VectorStoreConfigurationError,
+    resolve_vector_store_config,
+)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -723,12 +729,21 @@ def get_eval_status() -> JobStatus:
     return JobStatus(**_job)
 
 
-_qdrant_cache: dict[str, Any] = {"at": 0.0, "payloads": []}
+_qdrant_cache: dict[str, Any] = {"at": 0.0, "key": None, "payloads": []}
 _qdrant_cache_lock = threading.Lock()
 _QDRANT_CACHE_TTL = 60  # seconds
 
 
-def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict[str, Any]]:
+def _qdrant_cache_identity(url: str, collection_name: str) -> tuple[str, str]:
+    return hashlib.sha256(url.encode()).hexdigest(), collection_name
+
+
+def _all_qdrant_payloads(
+    client: Any,
+    collection_name: str,
+    *,
+    cache_key: tuple[str, str],
+) -> list[dict[str, Any]]:
     """Return every chunk payload in the collection, cached for _QDRANT_CACHE_TTL.
 
     document_id in Qdrant is a random local_url_<uuid>; the deterministic
@@ -737,7 +752,11 @@ def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict[str, An
     """
     now = time.monotonic()
     with _qdrant_cache_lock:
-        if _qdrant_cache["payloads"] and (now - _qdrant_cache["at"]) < _QDRANT_CACHE_TTL:
+        if (
+            _qdrant_cache["key"] == cache_key
+            and _qdrant_cache["payloads"]
+            and (now - _qdrant_cache["at"]) < _QDRANT_CACHE_TTL
+        ):
             return _qdrant_cache["payloads"]  # type: ignore[no-any-return]
 
     payloads: list[dict[str, Any]] = []
@@ -755,6 +774,7 @@ def _all_qdrant_payloads(client: Any, collection_name: str) -> list[dict[str, An
             break
 
     with _qdrant_cache_lock:
+        _qdrant_cache["key"] = cache_key
         _qdrant_cache["payloads"] = payloads
         _qdrant_cache["at"] = time.monotonic()
     return payloads
@@ -765,14 +785,9 @@ def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
     """Query vector store metadata for all chunks from the same document.
 
     Supports both pgvector (langchain_pg_embedding) and Qdrant Cloud backends,
-    selected automatically from DENSE_VECTOR_STORE env var.
+    selected from the shared vector-store configuration.
     """
-    import os
     import re
-
-    from agentic_rag.runtime_env import load_local_env
-
-    load_local_env()
 
     # chunk_id = "url_9dd8e94fee25_section_c001" → doc_prefix = "url_9dd8e94fee25"
     parts = chunk_id.split("_")
@@ -784,16 +799,22 @@ def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
         m = re.search(r"_c(\d+)$", cid)
         return int(m.group(1)) if m else 0
 
-    vector_store = os.environ.get("DENSE_VECTOR_STORE", "pgvector").lower()
+    try:
+        vector_config = resolve_vector_store_config()
+    except VectorStoreConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    vector_store = vector_config.provider
 
     # ── Qdrant path ───────────────────────────────────────────────────────────
     if vector_store == "qdrant":
-        qdrant_url = os.environ.get("QDRANT_URL", "")
-        qdrant_api_key = os.environ.get("QDRANT_API_KEY")
-        collection_name = os.environ.get("QDRANT_COLLECTION", "agentic_rag_chunks")
-
-        if not qdrant_url:
-            raise HTTPException(status_code=503, detail="QDRANT_URL not set")
+        if vector_config.url is None:
+            raise HTTPException(status_code=503, detail="VECTOR_STORE_URL not set.")
+        qdrant_url = vector_config.url.get_secret_value()
+        qdrant_api_key = (
+            vector_config.api_key.get_secret_value() if vector_config.api_key is not None else None
+        )
+        collection_name = vector_config.collection
 
         try:
             from qdrant_client import QdrantClient
@@ -826,11 +847,15 @@ def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
                 prefix = f"{doc_prefix}_"
                 matched = [
                     p
-                    for p in _all_qdrant_payloads(client, collection_name)
+                    for p in _all_qdrant_payloads(
+                        client,
+                        collection_name,
+                        cache_key=_qdrant_cache_identity(qdrant_url, collection_name),
+                    )
                     if str(p.get("storage_chunk_id") or p.get("chunk_id") or "").startswith(prefix)
                 ]
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"Qdrant query failed: {exc}") from exc
+            raise HTTPException(status_code=503, detail="Qdrant query failed.") from exc
 
         if not matched:
             return {"document_id": doc_prefix, "found": False, "chunks": []}
@@ -851,14 +876,20 @@ def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
         )
         return {"document_id": doc_prefix, "found": True, "chunks": chunks}
 
+    if vector_store != "pgvector":
+        raise HTTPException(
+            status_code=503,
+            detail="VECTOR_STORE_PROVIDER must be pgvector or qdrant for doc chunk lookup.",
+        )
+
     # ── pgvector path (default) ───────────────────────────────────────────────
     import psycopg
 
-    conn_str = os.environ.get("DENSE_PGVECTOR_CONNECTION", "")
-    collection_name = os.environ.get("DENSE_PGVECTOR_COLLECTION", "agentic_rag_chunks")
+    conn_str = vector_config.url.get_secret_value() if vector_config.url is not None else ""
+    collection_name = vector_config.collection
 
     if not conn_str:
-        raise HTTPException(status_code=503, detail="DENSE_PGVECTOR_CONNECTION not set")
+        raise HTTPException(status_code=503, detail="VECTOR_STORE_URL not set")
 
     db_url = re.sub(r"\+\w+://", "://", conn_str)  # postgresql+psycopg:// → postgresql://
 
@@ -877,7 +908,7 @@ def get_doc_chunks(chunk_id: str) -> dict[str, Any]:
             )
             rows = cur.fetchall()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"pgvector query failed: {exc}") from exc
+        raise HTTPException(status_code=503, detail="pgvector query failed.") from exc
 
     if not rows:
         return {"document_id": doc_prefix, "found": False, "chunks": []}

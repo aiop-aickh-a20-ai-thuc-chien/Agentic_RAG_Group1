@@ -17,17 +17,17 @@ def _clean_runtime(monkeypatch: MonkeyPatch) -> Iterator[None]:
     clear_model_runtime_caches()
 
 
-def test_dense_embedding_metadata_uses_default_huggingface_profile(
+def test_dense_embedding_metadata_uses_default_sentence_transformers_profile(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
     monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
 
     metadata = dense_embedding_metadata()
 
-    assert metadata["provider"] == "huggingface"
-    assert metadata["requested_provider"] == "huggingface"
-    assert metadata["resolved_provider"] == "huggingface"
+    assert metadata["provider"] == "sentence_transformers"
+    assert metadata["requested_provider"] == "sentence_transformers"
+    assert metadata["resolved_provider"] == "sentence_transformers"
     assert metadata["fallback_reason"] is None
     assert metadata["library"] == "sentence-transformers"
 
