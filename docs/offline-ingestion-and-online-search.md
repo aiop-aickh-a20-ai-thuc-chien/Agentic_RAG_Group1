@@ -72,7 +72,7 @@ LOCAL_PDF_STRATEGY=docling
 LOCAL_PDF_CHUNKER=deterministic
 LOCAL_SOURCE_STORE=jsonl
 
-DENSE_VECTOR_STORE=turbovec
+VECTOR_STORE_PROVIDER=turbovec
 EMBEDDING_PROVIDER=sentence_transformers
 EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 
@@ -234,18 +234,22 @@ Use S3 for source files/artifacts and Qdrant for dense vectors:
 ```env
 EVIDENCE_PROVIDER=local_pdf
 LOCAL_SOURCE_STORE=s3
-AWS_REGION=ap-southeast-1
+AWS_DEFAULT_REGION=ap-southeast-1
 AWS_S3_BUCKET=your-bucket
 AWS_S3_PREFIX=agentic-rag/sources
+# Optional on developer machines only:
+# AWS_PROFILE=agentic-rag
 
-DENSE_VECTOR_STORE=qdrant
-QDRANT_URL=https://your-qdrant.example
-QDRANT_API_KEY=your_qdrant_key
-QDRANT_COLLECTION=agentic_rag_chunks
+VECTOR_STORE_PROVIDER=qdrant
+VECTOR_STORE_URL=https://your-qdrant.example
+VECTOR_STORE_API_KEY=your_qdrant_key
+VECTOR_STORE_COLLECTION=agentic_rag_chunks
 ```
 
-Use a new `QDRANT_COLLECTION` when switching embedding provider, model, or vector
-dimension.
+Use a new `VECTOR_STORE_COLLECTION` when switching embedding provider, model, or
+vector dimension. Older pgvector indexes that relied on the previous implicit
+`document` collection must set `VECTOR_STORE_COLLECTION=document` or be reindexed
+into `agentic_rag_chunks`.
 
 ## 6. RAGFlow Baseline
 

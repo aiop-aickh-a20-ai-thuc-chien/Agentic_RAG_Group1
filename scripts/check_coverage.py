@@ -18,6 +18,8 @@ import boto3  # noqa: E402
 import openpyxl  # noqa: E402
 from qdrant_client import QdrantClient  # noqa: E402
 
+from agentic_rag.retrieval.config import require_qdrant_vector_store_config  # noqa: E402
+
 XLSX_PATH = r"C:\Users\ACER\Downloads\Agentic_RAG_Group1\guide\reports\result.xlsx"
 
 # ── 1. Load xlsx ──────────────────────────────────────────────────────────────
@@ -45,8 +47,7 @@ print(f"  Unique URLs in xlsx      : {len(xlsx_urls)}")
 
 # ── 2. S3 ─────────────────────────────────────────────────────────────────────
 print("\nQuerying S3 ...")
-session = boto3.Session(profile_name=os.getenv("AWS_PROFILE"))
-s3 = session.client("s3", region_name=os.getenv("AWS_REGION"))
+s3 = boto3.client("s3")
 bucket = os.getenv("AWS_S3_BUCKET")
 prefix = os.getenv("AWS_S3_PREFIX", "")
 
@@ -67,8 +68,15 @@ print(f"  S3 unique document IDs   : {len(s3_doc_ids)}")
 
 # ── 3. Qdrant ─────────────────────────────────────────────────────────────────
 print("\nQuerying Qdrant ...")
-qclient = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
-collection = os.getenv("QDRANT_COLLECTION")
+qdrant_config = require_qdrant_vector_store_config()
+assert qdrant_config.url is not None
+qclient = QdrantClient(
+    url=qdrant_config.url.get_secret_value(),
+    api_key=(
+        qdrant_config.api_key.get_secret_value() if qdrant_config.api_key is not None else None
+    ),
+)
+collection = qdrant_config.collection
 
 qdrant_chunk_ids: set[str] = set()
 qdrant_doc_ids: set[str] = set()

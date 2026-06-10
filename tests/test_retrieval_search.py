@@ -1,4 +1,5 @@
 import json
+import warnings
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -9,11 +10,33 @@ from pytest import MonkeyPatch
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.retrieval.search import (
     Store,
+    _qdrant_client_from_env,
     delete_all_qdrant_points,
     delete_qdrant_document_points,
     qdrant_hybrid_search,
     upsert_dense_embeddings,
 )
+
+_VECTOR_STORE_ENV_NAMES = (
+    "VECTOR_STORE_PROVIDER",
+    "VECTOR_STORE_URL",
+    "VECTOR_STORE_API_KEY",
+    "VECTOR_STORE_COLLECTION",
+    "DENSE_VECTOR_STORE",
+    "DENSE_PGVECTOR_CONNECTION",
+    "DENSE_PGVECTOR_COLLECTION",
+    "QDRANT_URL",
+    "QDRANT_API_KEY",
+    "QDRANT_COLLECTION",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_vector_store_env(monkeypatch: MonkeyPatch) -> None:
+    for name in _VECTOR_STORE_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "turbovec")
+    monkeypatch.setattr("agentic_rag.retrieval.config.load_local_env", lambda: None)
 
 
 def test_preprocess_query_normalizes_vietnamese_text(monkeypatch: MonkeyPatch) -> None:
@@ -72,6 +95,8 @@ def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
             return object()
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "pgvector")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example/rag")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example/rag")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
     monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example")
     monkeypatch.setenv("DENSE_PGVECTOR_COLLECTION", "agentic_chunks")
@@ -93,6 +118,41 @@ def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
     assert calls["pre_delete_collection"] is False
     assert calls["metadatas"][0]["document_id"] == "doc-1"
     assert calls["metadatas"][0]["chunk_id"] == "c1"
+
+
+def test_upsert_dense_embeddings_uses_canonical_pgvector_configuration(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    calls: dict[str, Any] = {}
+
+    class FakePGVector:
+        @classmethod
+        def from_texts(cls, **kwargs: Any) -> object:
+            calls.update(kwargs)
+            return object()
+
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "pgvector")
+    monkeypatch.setenv("VECTOR_STORE_URL", "postgresql://example/rag")
+    monkeypatch.setenv("VECTOR_STORE_COLLECTION", "canonical_chunks")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "sentence_transformers")
+    monkeypatch.setattr("agentic_rag.retrieval.search._configured_embedding", lambda: object())
+    monkeypatch.setattr("langchain_postgres.PGVector", FakePGVector)
+
+    trace = upsert_dense_embeddings(
+        [
+            Chunk(
+                chunk_id="c1",
+                text="Pin VF8",
+                metadata={"document_id": "doc-1"},
+            )
+        ]
+    )
+
+    assert trace["enabled"] is True
+    assert trace["collection"] == "canonical_chunks"
+    assert calls["connection"] == "postgresql://example/rag"
+    assert calls["collection_name"] == "canonical_chunks"
 
 
 def test_pgvector_dense_search_filters_to_selected_documents(
@@ -128,6 +188,7 @@ def test_pgvector_dense_search_filters_to_selected_documents(
             ]
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "pgvector")
+    monkeypatch.setenv("DENSE_PGVECTOR_CONNECTION", "postgresql://example/rag")
     chunks = [
         Chunk(
             chunk_id="c1",
@@ -176,6 +237,11 @@ def test_qdrant_upsert_dense_embeddings_writes_dense_sparse_vectors_and_payload(
             return object()
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -225,6 +291,53 @@ def test_qdrant_upsert_dense_embeddings_writes_dense_sparse_vectors_and_payload(
         "model": "local-model",
         "dimensions": 2,
     }
+
+
+def test_qdrant_client_uses_canonical_url_and_api_key(monkeypatch: MonkeyPatch) -> None:
+    seen: dict[str, str | None] = {}
+
+    class FakeQdrantClient:
+        def __init__(self, *, url: str, api_key: str | None = None) -> None:
+            seen["url"] = url
+            seen["api_key"] = api_key
+
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://canonical-qdrant.example")
+    monkeypatch.setenv("VECTOR_STORE_API_KEY", "canonical-secret")
+    monkeypatch.setattr("qdrant_client.QdrantClient", FakeQdrantClient)
+
+    client = _qdrant_client_from_env()
+
+    assert isinstance(client, FakeQdrantClient)
+    assert seen == {
+        "url": "https://canonical-qdrant.example",
+        "api_key": "canonical-secret",
+    }
+
+
+def test_delete_all_qdrant_points_uses_canonical_provider_and_collection(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class FakeQdrantClient:
+        def delete(self, **kwargs: Any) -> None:
+            seen.update(kwargs)
+
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.setenv("VECTOR_STORE_PROVIDER", "qdrant")
+    monkeypatch.setenv("VECTOR_STORE_URL", "https://canonical-qdrant.example")
+    monkeypatch.setenv("VECTOR_STORE_COLLECTION", "canonical_chunks")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    trace = delete_all_qdrant_points()
+
+    assert trace["enabled"] is True
+    assert trace["collection"] == "canonical_chunks"
+    assert seen["collection_name"] == "canonical_chunks"
 
 
 def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
@@ -282,6 +395,8 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
             )
             return SimpleNamespace(points=[point])
 
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
@@ -290,7 +405,7 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
         "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
     )
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env", lambda: FakeQdrantClient()
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
 
     results = qdrant_hybrid_search("pin vf8", document_ids=["doc-1"], top_k=3)
@@ -330,6 +445,7 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
             seen["upsert"] = kwargs
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -339,8 +455,8 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
         lambda: FakeEmbedding(),
     )
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env",
-        lambda: FakeQdrantClient(),
+        "agentic_rag.retrieval.search._qdrant_client",
+        lambda config: FakeQdrantClient(),
     )
 
     upsert_dense_embeddings(
@@ -366,6 +482,7 @@ def test_qdrant_upsert_does_not_fallback_after_openai_runtime_failure(
             raise RuntimeError("openai rate limited")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "auto")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
@@ -430,18 +547,19 @@ def test_qdrant_upsert_accepts_matching_populated_embedding_profile(
         def upsert(self, **kwargs: Any) -> None:
             seen.update(kwargs)
 
-    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._configured_embedding",
         lambda: FakeEmbedding(),
     )
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env",
-        lambda: FakeQdrantClient(),
+        "agentic_rag.retrieval.search._qdrant_client",
+        lambda config: FakeQdrantClient(),
     )
 
     upsert_dense_embeddings(
@@ -475,6 +593,7 @@ def test_qdrant_upsert_does_not_create_collection_after_non_404_error(
             raise AssertionError("non-404 errors must not recreate the collection")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -520,6 +639,7 @@ def test_qdrant_upsert_rejects_existing_dimension_mismatch(
             raise AssertionError("mismatched collection must not be written")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -589,6 +709,7 @@ def test_qdrant_upsert_rejects_incompatible_or_legacy_profile(
             raise AssertionError("incompatible collection must not be written")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -651,6 +772,8 @@ def test_qdrant_query_rejects_incompatible_profile_before_search(
         def query_points(self, **kwargs: Any) -> object:
             raise AssertionError("incompatible collection must not be queried")
 
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
     monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
@@ -660,8 +783,8 @@ def test_qdrant_query_rejects_incompatible_profile_before_search(
         lambda: FakeEmbedding(),
     )
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env",
-        lambda: FakeQdrantClient(),
+        "agentic_rag.retrieval.search._qdrant_client",
+        lambda config: FakeQdrantClient(),
     )
 
     with pytest.raises(ValueError, match=r"embedding profile.*reindex"):
@@ -678,9 +801,10 @@ def test_delete_qdrant_document_points_filters_by_document_id(
             seen.update(kwargs)
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env", lambda: FakeQdrantClient()
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
 
     trace = delete_qdrant_document_points("doc-1")
@@ -705,9 +829,10 @@ def test_delete_all_qdrant_points_preserves_collection(
             raise AssertionError("clearing points must preserve the collection")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env", lambda: FakeQdrantClient()
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
 
     trace = delete_all_qdrant_points()
@@ -744,8 +869,9 @@ def test_delete_all_qdrant_points_keeps_real_in_memory_collection(
         ],
     )
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
-    monkeypatch.setattr("agentic_rag.retrieval.search._qdrant_client_from_env", lambda: client)
+    monkeypatch.setattr("agentic_rag.retrieval.search._qdrant_client", lambda config: client)
 
     delete_all_qdrant_points()
 
@@ -766,8 +892,9 @@ def test_delete_qdrant_document_points_treats_missing_collection_as_deleted(
             raise MissingCollectionError("collection does not exist")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env", lambda: FakeQdrantClient()
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
 
     trace = delete_qdrant_document_points("doc-1")
@@ -783,9 +910,28 @@ def test_delete_all_qdrant_points_propagates_non_not_found_error(
             raise ConnectionError("qdrant unavailable")
 
     monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
     monkeypatch.setattr(
-        "agentic_rag.retrieval.search._qdrant_client_from_env", lambda: FakeQdrantClient()
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
 
     with pytest.raises(ConnectionError, match="qdrant unavailable"):
         delete_all_qdrant_points()
+
+
+def test_delete_all_qdrant_points_resolves_disabled_store_once(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "turbovec")
+
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        trace = delete_all_qdrant_points()
+
+    assert trace == {"enabled": False, "vector_store": "turbovec"}
+    legacy_warnings = [
+        warning
+        for warning in caught_warnings
+        if "DENSE_VECTOR_STORE is deprecated" in str(warning.message)
+    ]
+    assert len(legacy_warnings) == 1

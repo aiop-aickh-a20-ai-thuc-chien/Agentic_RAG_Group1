@@ -241,13 +241,15 @@ source artifacts to S3 and retrieval indexing to Qdrant:
 ```bash
 EVIDENCE_PROVIDER=local_pdf
 LOCAL_SOURCE_STORE=s3
-AWS_REGION=ap-southeast-1
+AWS_DEFAULT_REGION=ap-southeast-1
 AWS_S3_BUCKET=your-bucket
 AWS_S3_PREFIX=agentic-rag/sources
-DENSE_VECTOR_STORE=qdrant
-QDRANT_URL=https://your-cluster.qdrant.io
-QDRANT_API_KEY=...
-QDRANT_COLLECTION=agentic_rag_chunks
+# Optional on developer machines only:
+# AWS_PROFILE=agentic-rag
+VECTOR_STORE_PROVIDER=qdrant
+VECTOR_STORE_URL=https://your-cluster.qdrant.io
+VECTOR_STORE_API_KEY=...
+VECTOR_STORE_COLLECTION=agentic_rag_chunks
 EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL=your-embedding-model
 EMBEDDING_API_BASE=http://127.0.0.1:8000/v1
@@ -298,8 +300,8 @@ curl http://127.0.0.1:8000/v1/embeddings \
 Leave `EMBEDDING_DIMENSIONS` empty to infer the local model's native
 dimension, or set it to enforce an expected size. A Qdrant collection stores a
 single provider/model/dimension profile. Switching any part of that profile
-requires a new `QDRANT_COLLECTION` or an explicit delete and reindex; the app
-will reject incompatible and legacy populated collections without recreating
+requires a new `VECTOR_STORE_COLLECTION` or an explicit delete and reindex; the
+app will reject incompatible and legacy populated collections without recreating
 them.
 
 Flow:
