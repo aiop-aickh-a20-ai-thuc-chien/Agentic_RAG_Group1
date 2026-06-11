@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AnswerStatus = Literal["answered", "not_found"]
+AnswerStatus = Literal["answered", "not_found", "clarification_needed"]
 RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
 ModelRole = Literal[
     "query_rewrite",
@@ -68,6 +68,7 @@ class ConversationMessage(_ContractModel):
 class WorkflowRunInput(_ContractModel):
     """Validated input for one Workflow run."""
 
+    single_turn: bool = False
     question: str
     history: list[ConversationMessage] = Field(default_factory=list)
     document_ids: list[str] | None = None

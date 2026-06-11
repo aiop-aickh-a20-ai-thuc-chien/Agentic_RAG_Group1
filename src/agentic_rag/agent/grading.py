@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from agentic_rag.core.contracts import Answer, LLMCompletionInput, SearchResult
@@ -62,7 +63,7 @@ all compared entities.
 </context>
 
 <output>
-Return JSON only. Use Vietnamese for rewritten questions.
+Return JSON only. Keep rewritten questions in the same language as the original question.
   Single question: {{"type": "single", "question": "..."}}
   Multiple:        {{"type": "multi",  "questions": ["q1", "q2"]}}
 </output>"""
@@ -140,7 +141,7 @@ Good example for "so sánh VF3 và VF7":
 </rules>
 
 <output>
-Return JSON only. Use Vietnamese queries.
+Return JSON only. Keep queries in the same language as the original question.
   {{"method": "decompose", "queries": ["q1", "q2"]}}
   {{"method": "expand",    "query": "broader query"}}
   {{"method": "requery",   "query": "gap-fill query"}}
@@ -151,8 +152,37 @@ Return JSON only. Use Vietnamese queries.
 # Public graders
 # ---------------------------------------------------------------------------
 
-_MULTI_INTENT_SIGNALS = {"và", "so sánh", "vs", "hoặc", "cũng như", "khác nhau", "giống nhau"}
-_HISTORY_SIGNALS = {"nó", "cái đó", "điều đó", "thế còn", "còn", "vậy còn", "thêm"}
+_MULTI_INTENT_SIGNALS = {
+    # Vietnamese
+    "và",
+    "so sánh",
+    "vs",
+    "hoặc",
+    "cũng như",
+    "khác nhau",
+    "giống nhau",
+    # English
+    "compare",
+    "versus",
+    "difference",
+    "between",
+    "also",
+}
+_HISTORY_SIGNALS = {
+    # Vietnamese
+    "nó",
+    "cái đó",
+    "điều đó",
+    "thế còn",
+    "còn",
+    "vậy còn",
+    "thêm",
+    # English
+    "it",
+    "that",
+    "what about",
+    "how about",
+}
 
 
 def preprocess_query(
@@ -169,7 +199,7 @@ def preprocess_query(
     q_lower = question.lower()
     has_history = bool(history)
     has_multi = any(s in q_lower for s in _MULTI_INTENT_SIGNALS)
-    has_ref = any(s in q_lower for s in _HISTORY_SIGNALS)
+    has_ref = any(re.search(r"\b" + re.escape(s) + r"\b", q_lower) for s in _HISTORY_SIGNALS)
 
     if not (has_history or has_multi or has_ref) or llm_client is None:
         return {"type": "single", "question": question}
@@ -230,17 +260,25 @@ def transform_query(
     queries_tried: list[str],
     missing_entities: list[str] | None = None,
     llm_client: LLMClient | None = None,
+    lang: str = "vi",
 ) -> dict[str, Any]:
     """Return {"method": ..., "query"/"queries": ...} for next retrieval."""
     if llm_client is None:
         return {"method": "requery", "query": question}
 
     summary = _evidence_summary(docs)
-    missing_text = (
-        "Các phần còn thiếu thông tin: " + ", ".join(missing_entities)
-        if missing_entities
-        else "Không xác định được phần còn thiếu."
-    )
+    if lang == "en":
+        missing_text = (
+            "Missing information for: " + ", ".join(missing_entities)
+            if missing_entities
+            else "Could not determine what is missing."
+        )
+    else:
+        missing_text = (
+            "Các phần còn thiếu thông tin: " + ", ".join(missing_entities)
+            if missing_entities
+            else "Không xác định được phần còn thiếu."
+        )
     prompt = _TRANSFORM_QUERY_PROMPT.format(
         question=question,
         queries_tried=", ".join(queries_tried) if queries_tried else "none",

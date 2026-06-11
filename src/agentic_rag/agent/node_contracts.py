@@ -20,6 +20,7 @@ class PreprocessNodeOutput(_AgentNodeOutput):
     queries_tried: list[str]
     pending_queries: list[str] | None = None
     trace: list[dict[str, Any]]
+    detected_language: str = "vi"
 
 
 class RetrieveNodeOutput(_AgentNodeOutput):
@@ -40,6 +41,7 @@ class RerankNodeOutput(_AgentNodeOutput):
 
 
 class TransformQueryNodeOutput(_AgentNodeOutput):
+    rewritten_question: str | None = None
     queries_tried: list[str] | None = None
     pending_queries: list[str] | None = None
     relevant_docs: list[SearchResult] | None = None
@@ -54,4 +56,16 @@ class GenerateNodeOutput(_AgentNodeOutput):
 
 
 class CheckAnswerNodeOutput(_AgentNodeOutput):
+    trace: list[dict[str, Any]]
+
+
+class ClarifyQuestionNodeOutput(_AgentNodeOutput):
+    needs_clarification: bool
+    detected_entities: list[str]
+    detected_intents: list[str]
+    clarification_question: str | None = None
+    clarification_reason: str | None = None
+    pending_clarification: dict[str, str] | None = None
+    # Only set when needs_clarification=True; None means "leave state's answer untouched"
+    answer: Answer | None = None
     trace: list[dict[str, Any]]

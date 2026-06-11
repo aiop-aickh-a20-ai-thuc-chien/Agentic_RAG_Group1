@@ -8,11 +8,13 @@ from langgraph.graph import END, START, StateGraph
 
 from agentic_rag.agent.nodes import (
     check_answer_node,
+    clarify_question_node,
     generate_node,
     make_retrieve_node,
     preprocess_node,
     rerank_node,
     route_after_check,
+    route_after_clarification,
     route_after_rerank,
     route_after_transform,
     transform_query_node,
@@ -32,6 +34,7 @@ def build_agent(provider: SourceEvidenceProvider) -> Any:
     graph: StateGraph[AgentState, Any, Any] = StateGraph(AgentState)
 
     graph.add_node("preprocess", preprocess_node)
+    graph.add_node("clarify_question", clarify_question_node)
     graph.add_node("retrieve", cast(Any, retrieve_node))
     graph.add_node("rerank", rerank_node)
     graph.add_node("transform_query", transform_query_node)
@@ -39,7 +42,12 @@ def build_agent(provider: SourceEvidenceProvider) -> Any:
     graph.add_node("check_answer", check_answer_node)
 
     graph.add_edge(START, "preprocess")
-    graph.add_edge("preprocess", "retrieve")
+    graph.add_edge("preprocess", "clarify_question")
+    graph.add_conditional_edges(
+        "clarify_question",
+        route_after_clarification,
+        {"retrieve": "retrieve", "end": END},
+    )
     graph.add_edge("retrieve", "rerank")
     graph.add_conditional_edges(
         "rerank",
@@ -69,6 +77,7 @@ def run_agent(
     agent = build_agent(provider)
     history = [message.model_dump(mode="python") for message in request.history]
     initial: AgentState = {
+        "single_turn": request.single_turn,
         "question": request.question,
         "rewritten_question": request.question,
         "history": history,
@@ -83,6 +92,9 @@ def run_agent(
         "retrieval_exhausted": False,
         "document_ids": request.document_ids,
         "trace": [],
+        # Clarification fields — reset every run; resolved from history if needed
+        "needs_clarification": False,
+        "pending_clarification": None,
     }
     final_state: dict[str, Any] = agent.invoke(initial)
 
@@ -93,6 +105,7 @@ def run_agent(
             status="not_found",
             citations=[],
         )
+    # Clarification answers are a valid final state — pass them through as-is.
 
     return WorkflowRunOutput(
         answer=answer,

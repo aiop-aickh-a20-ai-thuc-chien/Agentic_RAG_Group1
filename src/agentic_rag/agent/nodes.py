@@ -7,12 +7,21 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from agentic_rag.agent.clarification import (
+    build_clarification_question,
+    build_pending_clarification,
+    detect_entities,
+    detect_intents,
+    resolve_clarification_reply,
+    should_clarify,
+)
 from agentic_rag.agent.grading import (
     preprocess_query,
     transform_query,
 )
 from agentic_rag.agent.node_contracts import (
     CheckAnswerNodeOutput,
+    ClarifyQuestionNodeOutput,
     GenerateNodeOutput,
     PreprocessNodeOutput,
     RerankNodeOutput,
@@ -20,9 +29,10 @@ from agentic_rag.agent.node_contracts import (
     TransformQueryNodeOutput,
 )
 from agentic_rag.agent.state import AgentState
-from agentic_rag.core.contracts import RetrievalInput, SearchResult
+from agentic_rag.core.contracts import Answer, RetrievalInput, SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
 from agentic_rag.generation.answering import generate_answer_with_trace
+from agentic_rag.language import detect_language
 from agentic_rag.model_runtime.factory import get_llm_client
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
@@ -103,12 +113,16 @@ def _generate(
     evidence_context: str,
     evidence_chunks: list[SearchResult],
     original_question: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    lang: str = "vi",
 ) -> Any:
     return generate_answer_with_trace(
         question=question,
         evidence_context=evidence_context,
         evidence_chunks=evidence_chunks,
         original_question=original_question,
+        history=history,
+        lang=lang,
     )
 
 
@@ -131,11 +145,38 @@ def _effective_question(state: AgentState) -> str:
 
 
 def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
-    """Resolve history context and/or decompose multi-intent queries."""
+    """Resolve history context and/or decompose multi-intent queries.
+
+    When the previous bot turn was a clarification question, the rule-based
+    resolver in clarification.py is tried first as a cheap fast-path.  The
+    LLM-based preprocess_query then handles any remaining rewrites.
+    """
     question = state["question"]
     history = state.get("history", [])
-    llm_client = get_llm_client("query_rewrite")
 
+    # Detect language once here; all downstream nodes read from state
+    lang = detect_language(question, history)
+
+    # Fast-path: rule-based resolution of clarification replies
+    resolved_by_rules = resolve_clarification_reply(question, history, lang=lang)
+    if resolved_by_rules is not None:
+        extra = [resolved_by_rules] if resolved_by_rules != question else []
+        return PreprocessNodeOutput(
+            rewritten_question=resolved_by_rules,
+            queries_tried=extra,
+            detected_language=lang,
+            trace=[
+                {
+                    "node": "preprocess",
+                    "type": "clarification_resolved",
+                    "original": question,
+                    "resolved": resolved_by_rules,
+                    "detected_language": lang,
+                }
+            ],
+        )
+
+    llm_client = get_llm_client("query_rewrite")
     result = preprocess_query(question, history, llm_client)
 
     if result["type"] == "multi":
@@ -145,7 +186,15 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
                 rewritten_question=questions[0],
                 queries_tried=[questions[0]],
                 pending_queries=questions[1:],
-                trace=[{"node": "preprocess", "type": "multi", "questions": questions}],
+                detected_language=lang,
+                trace=[
+                    {
+                        "node": "preprocess",
+                        "type": "multi",
+                        "questions": questions,
+                        "detected_language": lang,
+                    }
+                ],
             )
 
     rewritten: str = result.get("question", question)
@@ -153,7 +202,15 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
     return PreprocessNodeOutput(
         rewritten_question=rewritten,
         queries_tried=extra,
-        trace=[{"node": "preprocess", "type": "single", "question": rewritten}],
+        detected_language=lang,
+        trace=[
+            {
+                "node": "preprocess",
+                "type": "single",
+                "question": rewritten,
+                "detected_language": lang,
+            }
+        ],
     )
 
 
@@ -297,6 +354,7 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
         queries_tried=queries_tried,
         missing_entities=missing_entities,
         llm_client=llm_client,
+        lang=state.get("detected_language", "vi"),
     )
 
     method = result.get("method", "requery")
@@ -316,6 +374,7 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
             fresh = [q for q in queries if q not in queries_tried]
             if fresh:
                 return TransformQueryNodeOutput(
+                    rewritten_question=fresh[0],
                     queries_tried=[fresh[0]],
                     pending_queries=list(fresh[1:]),
                     retrieval_exhausted=False,
@@ -373,6 +432,7 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
         )
 
     return TransformQueryNodeOutput(
+        rewritten_question=query,
         queries_tried=[query],
         pending_queries=[],
         retrieval_exhausted=False,
@@ -393,7 +453,12 @@ def generate_node(state: AgentState) -> GenerateNodeOutput:
 
     evidence_context = build_evidence_context(docs)
     result = _generate(
-        _effective_question(state), evidence_context, docs, original_question=state["question"]
+        _effective_question(state),
+        evidence_context,
+        docs,
+        original_question=state["question"],
+        history=state.get("history", []),
+        lang=state.get("detected_language", "vi"),
     )
 
     return GenerateNodeOutput(
@@ -418,9 +483,75 @@ def check_answer_node(state: AgentState) -> CheckAnswerNodeOutput:
     return CheckAnswerNodeOutput(trace=[{"node": "check_answer", "status": answer.status}])
 
 
+def clarify_question_node(state: AgentState) -> ClarifyQuestionNodeOutput:
+    """Detect underspecified queries and ask for clarification before retrieval.
+
+    Uses the resolved question (after preprocess rewrites) as the signal.
+    If the question is clear enough, returns ``needs_clarification=False`` and
+    the graph proceeds normally to retrieve.  If not, returns an Answer with
+    ``status="clarification_needed"`` and the graph routes to END.
+    """
+    question = state.get("rewritten_question") or state["question"]
+    history = state.get("history", [])
+    lang = state.get("detected_language", "vi")
+
+    entities = detect_entities(question)
+    intents = detect_intents(question)
+    needs_clarification, reason = should_clarify(question, history)
+
+    if not needs_clarification:
+        return ClarifyQuestionNodeOutput(
+            needs_clarification=False,
+            detected_entities=entities,
+            detected_intents=intents,
+            trace=[
+                {
+                    "node": "clarify_question",
+                    "needs_clarification": False,
+                    "entities": entities,
+                    "intents": intents,
+                }
+            ],
+        )
+
+    clarification_q = build_clarification_question(reason, entities, intents, lang=lang)
+    pending = build_pending_clarification(reason, entities, intents)
+
+    return ClarifyQuestionNodeOutput(
+        needs_clarification=True,
+        clarification_reason=reason,
+        clarification_question=clarification_q,
+        detected_entities=entities,
+        detected_intents=intents,
+        pending_clarification=pending,
+        answer=Answer(
+            answer=clarification_q,
+            status="clarification_needed",
+            citations=[],
+        ),
+        trace=[
+            {
+                "node": "clarify_question",
+                "needs_clarification": True,
+                "reason": reason,
+                "entities": entities,
+                "intents": intents,
+                "clarification_question": clarification_q,
+            }
+        ],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routing functions
 # ---------------------------------------------------------------------------
+
+
+def route_after_clarification(state: AgentState) -> str:
+    """Route to END (return clarification question) or continue to retrieve."""
+    if state.get("needs_clarification") and not state.get("single_turn"):
+        return "end"
+    return "retrieve"
 
 
 def route_after_rerank(state: AgentState) -> str:

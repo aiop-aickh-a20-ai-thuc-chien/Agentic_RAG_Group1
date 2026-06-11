@@ -297,6 +297,7 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
                 question=request.question,
                 document_ids=request.document_ids,
                 history=request.history or [],
+                single_turn=_single_turn_mode(),
             ),
         )
         return StreamingResponse(
@@ -768,6 +769,7 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
                 question=request.question,
                 document_ids=request.document_ids,
                 history=request.history or [],
+                single_turn=_single_turn_mode(),
             ),
         )
         write_rag_trace(
@@ -1096,6 +1098,10 @@ def _safe_text_filename(title: str) -> str:
 
 def _collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _single_turn_mode() -> bool:
+    return os.getenv("AGENT_SINGLE_TURN", "false").strip().lower() in {"1", "true", "yes"}
 
 
 class _ReadableHTMLParser(HTMLParser):
