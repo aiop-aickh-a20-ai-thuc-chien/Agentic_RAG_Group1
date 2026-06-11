@@ -68,6 +68,7 @@ class ConversationMessage(_ContractModel):
 class WorkflowRunInput(_ContractModel):
     """Validated input for one Workflow run."""
 
+    single_turn: bool = False
     question: str
     history: list[ConversationMessage] = Field(default_factory=list)
     document_ids: list[str] | None = None
