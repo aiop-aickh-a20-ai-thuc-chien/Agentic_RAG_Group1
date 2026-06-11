@@ -135,6 +135,12 @@ type UploadedSource = {
   uploadedAt: number;
 };
 
+type SourceQualitySummary = {
+  duplicateCount: number;
+  conflictCount: number;
+  factCount: number;
+};
+
 type SourceMode = "pdf" | "url" | "text";
 type Theme = "light" | "dark";
 type SourceDebugTab = "source" | "markdown" | "chunks";
@@ -1022,7 +1028,7 @@ function SourcePanel({
       mode,
       source: uploaded.source ?? undefined,
       sourceType: uploaded.source_type ?? undefined,
-      metadata: {},
+      metadata: sourceChunks.chunks[0]?.chunk.metadata ?? {},
       totalChunks,
       chunks: sourceChunks.chunks,
       uploadedAt: Date.now(),
@@ -1495,13 +1501,14 @@ function SourcePanel({
                       <span className="mt-1 block text-xs leading-5 text-ink/52 dark:text-slate-300">
                         {formatChunkCount(source.totalChunks)} · {sourceLabel(source.mode)}
                       </span>
+                      <SourceQualityBadges summary={sourceQualitySummary(source)} />
                     </button>
                     <div className="flex shrink-0 items-start gap-2">
                       <Link
                         aria-label={`Xem debug ${source.name}`}
                         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-white text-mint transition hover:bg-paper dark:border-white/14 dark:bg-slate-900 dark:text-emerald-200 dark:hover:bg-slate-800"
                         href={`/citation-chat/sources/${encodeURIComponent(source.documentId)}`}
-                        title="Xem parse và chunk"
+                        title="Xem parse, chunk và quality"
                       >
                         <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                       </Link>
@@ -2172,6 +2179,74 @@ function displaySourceName(source: UploadedSource): string {
     return displayUrlName(source.source || source.name);
   }
   return source.name;
+}
+
+function SourceQualityBadges({ summary }: { summary: SourceQualitySummary | null }) {
+  if (!summary) return null;
+
+  const hasConflicts = summary.conflictCount > 0;
+  const hasDuplicates = summary.duplicateCount > 0;
+  if (!hasConflicts && !hasDuplicates) {
+    return (
+      <span className="mt-2 inline-flex w-fit rounded-full border border-mint/20 bg-mint/8 px-2 py-0.5 text-[11px] font-medium text-mint dark:border-emerald-300/24 dark:bg-emerald-300/12 dark:text-emerald-200">
+        quality OK
+      </span>
+    );
+  }
+
+  return (
+    <span className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+      {hasConflicts ? (
+        <span className="rounded-full border border-amber-300/45 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:border-amber-200/24 dark:bg-amber-300/18 dark:text-amber-100">
+          {summary.conflictCount} conflict
+        </span>
+      ) : null}
+      {hasDuplicates ? (
+        <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[11px] font-medium text-ink/62 dark:border-white/14 dark:bg-slate-900 dark:text-slate-300">
+          {summary.duplicateCount} duplicate
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function sourceQualitySummary(source: UploadedSource): SourceQualitySummary | null {
+  const summaries = (
+    source.chunks.length
+      ? source.chunks.map((result) =>
+          parseKnowledgeQualitySummary(result.chunk.metadata.knowledge_quality),
+        )
+      : [parseKnowledgeQualitySummary(source.metadata?.knowledge_quality)]
+  ).filter((summary): summary is SourceQualitySummary => summary !== null);
+
+  if (!summaries.length) return null;
+  return summaries.reduce(
+    (total, summary) => ({
+      duplicateCount: total.duplicateCount + summary.duplicateCount,
+      conflictCount: total.conflictCount + summary.conflictCount,
+      factCount: total.factCount + summary.factCount,
+    }),
+    { duplicateCount: 0, conflictCount: 0, factCount: 0 },
+  );
+}
+
+function parseKnowledgeQualitySummary(value: unknown): SourceQualitySummary | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const metadata = value as Record<string, unknown>;
+  return {
+    duplicateCount: metadataNumber(metadata.duplicate_count),
+    conflictCount: metadataNumber(metadata.conflict_count),
+    factCount: metadataNumber(metadata.fact_count),
+  };
+}
+
+function metadataNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(value, 0);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
+  }
+  return 0;
 }
 
 function sourceMatchesSearch(source: UploadedSource, normalizedQuery: string): boolean {

@@ -180,6 +180,20 @@ Inspect parser/chunker debug data:
 curl http://127.0.0.1:8000/sources/{document_id}/debug
 ```
 
+Inspect knowledge-quality conflicts and duplicates:
+
+```bash
+curl http://127.0.0.1:8000/sources/{document_id}/quality
+curl http://127.0.0.1:8000/knowledge-quality
+curl -X POST http://127.0.0.1:8000/knowledge-quality/scan
+```
+
+The knowledge-quality scan is offline-first and only supports
+`EVIDENCE_PROVIDER=local_pdf`. It writes compact summaries to
+`Chunk.metadata["knowledge_quality"]` and returns detailed facts/findings for
+review. See [knowledge-quality-conflict-detection.md](knowledge-quality-conflict-detection.md)
+for the research framing, demo fixture, and evaluation template.
+
 ## 4. Online Search Pipeline
 
 Online search answers questions using the currently configured evidence provider.
