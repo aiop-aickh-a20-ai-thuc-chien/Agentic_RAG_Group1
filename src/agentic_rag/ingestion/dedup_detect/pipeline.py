@@ -7,9 +7,13 @@ from collections.abc import Iterable, Sequence
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.core.ports import EmbeddingClient
 from agentic_rag.ingestion.dedup_detect.embedding import (
+    EmbeddingFallbackCandidate,
     EmbeddingVectorMap,
+    EmbeddingVectorResult,
     embedding_vectors_from_client,
+    embedding_vectors_from_first_available_client,
     find_embedding_duplicates,
+    openai_first_embedding_candidates,
 )
 from agentic_rag.ingestion.dedup_detect.exact import find_exact_duplicates
 from agentic_rag.ingestion.dedup_detect.models import (
@@ -27,6 +31,7 @@ def detect_duplicates(
     config: DedupConfig | None = None,
     embedding_vectors: EmbeddingVectorMap | None = None,
     embedding_client: EmbeddingClient | None = None,
+    embedding_fallback_candidates: Sequence[EmbeddingFallbackCandidate] | None = None,
 ) -> DedupReport:
     """Run exact, SimHash, and optional embedding duplicate detection."""
 
@@ -51,18 +56,36 @@ def detect_duplicates(
     embedding_matches: list[DuplicateMatch] = []
     if resolved_config.enable_embedding:
         vectors = embedding_vectors
+        provider = model = None
+        method = resolved_config.embedding_method
+        fallback_attempts: tuple[dict[str, str], ...] = ()
         if vectors is None and embedding_client is not None:
             vectors = embedding_vectors_from_client(document_list, embedding_client)
+            method = method or "embedding_client"
+        elif vectors is None and resolved_config.enable_embedding_provider_fallback:
+            result = _resolve_embedding_vectors_with_fallback(
+                document_list,
+                config=resolved_config,
+                candidates=embedding_fallback_candidates,
+            )
+            vectors = result.vectors
+            provider = result.provider
+            model = result.model
+            method = method or result.method
+            fallback_attempts = result.fallback_attempts
         if vectors is None:
             raise ValueError(
                 "Embedding dedup is enabled, but no embedding_vectors or "
-                "embedding_client was supplied."
+                "embedding_client was supplied and provider fallback is disabled."
             )
         embedding_matches = find_embedding_duplicates(
             document_list,
             vectors=vectors,
             similarity_threshold=resolved_config.embedding_similarity_threshold,
-            method=resolved_config.embedding_method,
+            method=method,
+            provider=provider,
+            model=model,
+            fallback_attempts=fallback_attempts,
             exclude_pairs=excluded_pairs,
         )
 
@@ -93,3 +116,23 @@ def _matched_pairs(matches: Iterable[DuplicateMatch]) -> set[tuple[str, str]]:
 
 def _pair_key(left: str, right: str) -> tuple[str, str]:
     return (left, right) if left <= right else (right, left)
+
+
+def _resolve_embedding_vectors_with_fallback(
+    documents: Sequence[DedupDocument],
+    *,
+    config: DedupConfig,
+    candidates: Sequence[EmbeddingFallbackCandidate] | None,
+) -> EmbeddingVectorResult:
+    return embedding_vectors_from_first_available_client(
+        documents,
+        candidates=candidates
+        or openai_first_embedding_candidates(
+            openai_model=config.embedding_openai_model,
+            openai_api_base=config.embedding_openai_api_base,
+            openai_api_key=config.embedding_openai_api_key,
+            sentence_transformer_model=config.embedding_sentence_transformer_model,
+            sentence_transformer_device=config.embedding_sentence_transformer_device,
+            timeout_seconds=config.embedding_timeout_seconds,
+        ),
+    )

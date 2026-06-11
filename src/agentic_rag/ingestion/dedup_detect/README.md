@@ -51,7 +51,9 @@ Limit:
 
 Technology:
 
-- Cosine similarity over supplied embedding vectors.
+- OpenAI-compatible embeddings first when API credentials are configured.
+- Local `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` fallback.
+- Cosine similarity over the selected embedding vectors.
 
 Use when:
 
@@ -64,34 +66,104 @@ Strength:
 
 Limit:
 
-- Requires an embedding method.
-- May call local models or external providers depending on how vectors are
-  produced before they are passed into this package.
+- OpenAI requires an API key or compatible API base.
+- Local fallback requires the `local-models` extra and a cached/downloadable
+  sentence-transformers model.
 
-## Choosing An Embedding Similarity Method
+## Layer 3 Runtime Order
 
-The `dedup_detect` module does not auto-download BERT or call APIs. You choose
-how to produce vectors, then pass them to `detect_duplicates()`.
+When `DedupConfig(enable_embedding=True)` is used without precomputed vectors or
+an explicit embedding client, `dedup_detect` builds Layer 3 candidates in this
+order:
+
+1. OpenAI-compatible embedding client through LiteLLM.
+2. Local sentence-transformers embedding client.
+
+OpenAI is attempted only when `DEDUP_DETECT_OPENAI_API_KEY`, `OPENAI_API_KEY`,
+`DEDUP_DETECT_OPENAI_API_BASE`, or a compatible embedding API base is configured.
+If OpenAI fails or is unavailable, the local sentence-transformers model is used.
+Matches still use cosine similarity, and match metadata records the provider,
+model, and failed fallback attempts.
+
+Useful variables:
+
+- `DEDUP_DETECT_OPENAI_EMBEDDING_MODEL`
+- `DEDUP_DETECT_OPENAI_API_KEY`
+- `DEDUP_DETECT_OPENAI_API_BASE`
+- `DEDUP_DETECT_SENTENCE_TRANSFORMER_MODEL`
+- `DEDUP_DETECT_SENTENCE_TRANSFORMER_DEVICE`
+
+Defaults:
+
+- OpenAI model: `text-embedding-3-small`
+- Local fallback model:
+  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+
+### Runtime Usage
+
+```python
+from agentic_rag.ingestion.dedup_detect import DedupConfig, detect_duplicates
+
+report = detect_duplicates(
+    documents,
+    config=DedupConfig(
+        enable_embedding=True,
+        embedding_similarity_threshold=0.92,
+    ),
+)
+```
 
 ### Option A: Existing Project Embedding Client
 
-Use the configured project embedding runtime from `agentic_rag.model_runtime`.
-This keeps duplicate detection aligned with retrieval embeddings.
+You can bypass the OpenAI-first fallback and provide the configured project
+embedding runtime directly.
 
-Good for:
+```python
+from agentic_rag.ingestion.dedup_detect import DedupConfig, detect_duplicates
+from agentic_rag.model_runtime.factory import get_embedding_client
 
-- Keeping dedup behavior aligned with retrieval embeddings.
-- Avoiding a second embedding stack.
+report = detect_duplicates(
+    documents,
+    config=DedupConfig(
+        enable_embedding=True,
+        embedding_similarity_threshold=0.92,
+        embedding_method="project-embedding-client",
+    ),
+    embedding_client=get_embedding_client(),
+)
+```
 
-Tradeoff:
+### Option B: Precomputed Vectors
 
-- Runtime may call an external service or load a local model depending on
-  environment configuration.
+If ingestion or retrieval already computed vectors, pass those vectors directly.
+This avoids extra provider calls.
 
-### Option B: Local BERT / Sentence-Transformers
+```python
+from agentic_rag.ingestion.dedup_detect import DedupConfig, detect_duplicates
 
-Use `sentence-transformers` through the project local-models extra or another
-local embedding wrapper, then pass vectors into this module.
+vectors = {
+    "a": [0.1, 0.2, 0.3],
+    "b": [0.1, 0.2, 0.3],
+    "c": [0.2, 0.1, 0.3],
+}
+
+report = detect_duplicates(
+    documents,
+    config=DedupConfig(
+        enable_embedding=True,
+        embedding_similarity_threshold=0.92,
+        embedding_method="precomputed-cosine",
+    ),
+    embedding_vectors=vectors,
+)
+```
+
+### Threshold Calibration Harness
+
+`src/agentic_rag/ingestion/dedup_detect/test/threshold_sweep.py` is a manual
+calibration script. It is not the production Layer 3 path. Use it to check
+whether the current sentence-transformers model and threshold are reasonable for
+sample duplicate / near-duplicate / different pairs.
 
 Recommended model profile:
 
@@ -126,19 +198,6 @@ uv run python src/agentic_rag/ingestion/dedup_detect/test/threshold_sweep.py
 
 The harness embeds labeled duplicate / near-duplicate / different pairs, sweeps
 cosine thresholds, and recommends the best threshold by F1 score.
-
-### Option C: Precomputed Vectors
-
-If ingestion or retrieval already computed vectors, pass those vectors directly.
-
-Good for:
-
-- Avoiding duplicate embedding calls.
-- Reusing vector-store payloads or batch embedding jobs.
-
-Tradeoff:
-
-- You must ensure all vectors use the same model and dimensions.
 
 ## Basic Usage
 
@@ -199,45 +258,6 @@ Each duplicate chunk gets `Chunk.metadata["deduplication"]`:
 
 This metadata is descriptive only. It records which layer detected the duplicate
 signal and enough match details for a later human review or a separate resolver.
-
-## Embedding Usage With Precomputed Vectors
-
-```python
-from agentic_rag.ingestion.dedup_detect import DedupConfig, detect_duplicates
-
-vectors = {
-    "a": [0.1, 0.2, 0.3],
-    "b": [0.1, 0.2, 0.3],
-    "c": [0.2, 0.1, 0.3],
-}
-
-report = detect_duplicates(
-    documents,
-    config=DedupConfig(
-        enable_embedding=True,
-        embedding_similarity_threshold=0.92,
-        embedding_method="precomputed-cosine",
-    ),
-    embedding_vectors=vectors,
-)
-```
-
-## Embedding Usage With Project Client
-
-```python
-from agentic_rag.ingestion.dedup_detect import DedupConfig, detect_duplicates
-from agentic_rag.model_runtime.factory import get_embedding_client
-
-report = detect_duplicates(
-    documents,
-    config=DedupConfig(
-        enable_embedding=True,
-        embedding_similarity_threshold=0.92,
-        embedding_method="project-embedding-client",
-    ),
-    embedding_client=get_embedding_client(),
-)
-```
 
 ## Suggested Thresholds
 

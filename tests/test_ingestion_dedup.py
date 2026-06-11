@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from agentic_rag.core.contracts import Chunk
+from agentic_rag.core.contracts import Chunk, EmbeddingInput, EmbeddingOutput
 from agentic_rag.ingestion.dedup_detect import (
     DedupConfig,
     DedupDocument,
+    EmbeddingFallbackCandidate,
     add_duplicate_metadata_to_chunks,
     cosine_similarity,
     detect_duplicates,
@@ -135,8 +136,60 @@ def test_embedding_layer_requires_vectors_or_client_when_enabled() -> None:
     with pytest.raises(ValueError, match="embedding_vectors or embedding_client"):
         detect_duplicates(
             [DedupDocument(document_id="a", text="text")],
-            config=DedupConfig(enable_embedding=True),
+            config=DedupConfig(
+                enable_embedding=True,
+                enable_embedding_provider_fallback=False,
+            ),
         )
+
+
+def test_embedding_layer_falls_back_from_openai_to_sentence_transformers() -> None:
+    documents = [
+        DedupDocument(document_id="a", text="VinFast VF 9 price"),
+        DedupDocument(document_id="b", text="VinFast VF9 listed price"),
+        DedupDocument(document_id="c", text="Warranty service"),
+    ]
+    candidates = [
+        EmbeddingFallbackCandidate(
+            name="openai:text-embedding-3-small",
+            provider="openai",
+            model="text-embedding-3-small",
+            client=_FailingEmbeddingClient(),
+        ),
+        EmbeddingFallbackCandidate(
+            name="sentence_transformers:sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            provider="sentence_transformers",
+            model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            client=_StaticEmbeddingClient(
+                vectors=[
+                    [1.0, 0.0],
+                    [0.99, 0.01],
+                    [0.0, 1.0],
+                ],
+                provider="sentence_transformers",
+                model="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            ),
+        ),
+    ]
+
+    report = detect_duplicates(
+        documents,
+        config=DedupConfig(
+            enable_exact=False,
+            enable_simhash=False,
+            enable_embedding=True,
+            embedding_similarity_threshold=0.95,
+        ),
+        embedding_fallback_candidates=candidates,
+    )
+
+    assert len(report.embedding_matches) == 1
+    match = report.embedding_matches[0]
+    assert {match.document_id, match.duplicate_document_id} == {"a", "b"}
+    assert match.metadata["provider"] == "sentence_transformers"
+    assert match.metadata["model"] == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    assert match.metadata["fallback_attempts"][0]["provider"] == "openai"
+    assert "openai unavailable" in match.metadata["fallback_attempts"][0]["error"]
 
 
 def test_documents_from_chunks_preserves_chunk_identity_and_metadata() -> None:
@@ -189,3 +242,30 @@ def test_add_duplicate_metadata_to_chunks_returns_enriched_copies() -> None:
     assert "deduplication" not in chunks[0].metadata
     assert enriched[0].metadata["deduplication"]["has_duplicate"] is True
     assert enriched[1].metadata["deduplication"]["matches"][0]["detected_layer"] == "exact_sha256"
+
+
+class _FailingEmbeddingClient:
+    def embed(self, request: EmbeddingInput) -> EmbeddingOutput:
+        raise RuntimeError("openai unavailable")
+
+
+class _StaticEmbeddingClient:
+    def __init__(
+        self,
+        *,
+        vectors: list[list[float]],
+        provider: str,
+        model: str,
+    ) -> None:
+        self._vectors = vectors
+        self._provider = provider
+        self._model = model
+
+    def embed(self, request: EmbeddingInput) -> EmbeddingOutput:
+        vectors = self._vectors[: len(request.texts)]
+        return EmbeddingOutput(
+            vectors=vectors,
+            provider=self._provider,
+            model=self._model,
+            dimensions=len(vectors[0]),
+        )

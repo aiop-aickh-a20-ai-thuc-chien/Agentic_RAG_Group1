@@ -29,11 +29,18 @@ class DedupConfig(_DedupModel):
     enable_exact: bool = True
     enable_simhash: bool = True
     enable_embedding: bool = False
+    enable_embedding_provider_fallback: bool = True
     simhash_bits: int = Field(default=64, ge=8, le=256)
     simhash_shingle_size: int = Field(default=4, ge=1, le=12)
     simhash_hamming_threshold: int = Field(default=6, ge=0)
     embedding_similarity_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
     embedding_method: str | None = None
+    embedding_openai_model: str | None = None
+    embedding_openai_api_base: str | None = None
+    embedding_openai_api_key: str | None = Field(default=None, repr=False)
+    embedding_sentence_transformer_model: str | None = None
+    embedding_sentence_transformer_device: str | None = None
+    embedding_timeout_seconds: float = Field(default=60.0, gt=0.0)
 
 
 class DuplicateMatch(_DedupModel):
