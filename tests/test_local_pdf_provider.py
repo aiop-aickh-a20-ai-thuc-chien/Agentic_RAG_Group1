@@ -317,6 +317,103 @@ def test_local_pdf_provider_uploads_text_chunks(
     assert chunk.text == "Noi dung tu nguoi dung"
 
 
+def test_local_pdf_provider_annotates_quality_against_existing_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    base_chunks = provider.document_chunks(document_id=base.document_id).chunks
+    update_chunks = provider.document_chunks(document_id=update.document_id).chunks
+    assert "knowledge_quality" in update_chunks[0].metadata
+    assert update_chunks[0].metadata["knowledge_quality"]["conflict_count"] == 1
+    assert update_chunks[0].metadata["knowledge_quality"]["fact_count"] == 1
+    assert base_chunks[0].metadata["knowledge_quality"]["conflict_count"] == 0
+
+
+def test_local_pdf_provider_reports_quality_for_selected_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    report = provider.knowledge_quality_report(document_ids=[base.document_id])
+
+    assert report.metadata["selected_document_ids"] == [base.document_id]
+    assert report.metadata["method"] == "deterministic_offline"
+    assert len(report.findings) == 1
+    assert report.findings[0].kind == "conflict"
+    assert set(report.findings[0].chunk_ids) == {
+        f"{base.document_id}_c0001",
+        f"{update.document_id}_c0001",
+    }
+    assert {fact.normalized_value for fact in report.facts} == {72.0, 96.0}
+
+
+def test_local_pdf_provider_rescans_and_persists_quality_metadata(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    report = provider.rescan_knowledge_quality()
+
+    assert len(report.findings) == 1
+    for document_id in (base.document_id, update.document_id):
+        chunk = provider.document_chunks(document_id=document_id).chunks[0]
+        assert chunk.metadata["knowledge_quality"]["conflict_count"] == 1
+        assert chunk.metadata["knowledge_quality"]["finding_ids"]
+
+
 def test_local_pdf_provider_can_persist_chunks_with_source_store(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

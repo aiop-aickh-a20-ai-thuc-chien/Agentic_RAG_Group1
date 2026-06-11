@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 AnswerStatus = Literal["answered", "not_found"]
 RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
+KnowledgeQualityFindingKind = Literal["exact_duplicate", "near_duplicate", "conflict"]
+KnowledgeQualitySeverity = Literal["info", "warning", "critical"]
+KnowledgeQualityStatus = Literal["open", "resolved", "ignored"]
 ModelRole = Literal[
     "query_rewrite",
     "query_transform",
@@ -129,6 +132,45 @@ class SourceDocumentChunks(_ContractModel):
 
     chunks: list[Chunk]
     total_chunks: int
+
+
+class KnowledgeQualityFact(_ContractModel):
+    """One normalized fact extracted from a source chunk for quality checks."""
+
+    fact_id: str
+    chunk_id: str
+    entity: str
+    attribute: str
+    value: str
+    normalized_value: float | str
+    unit: str | None = None
+    span: str
+    start: int | None = None
+    end: int | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class KnowledgeQualityFinding(_ContractModel):
+    """A duplicate or conflict finding across one or more chunks."""
+
+    finding_id: str
+    kind: KnowledgeQualityFindingKind
+    severity: KnowledgeQualitySeverity
+    status: KnowledgeQualityStatus = "open"
+    chunk_ids: list[str]
+    fact_ids: list[str] = Field(default_factory=list)
+    summary: str
+    suggested_action: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class KnowledgeQualityReport(_ContractModel):
+    """Facts and findings produced by a knowledge-quality scan."""
+
+    facts: list[KnowledgeQualityFact] = Field(default_factory=list)
+    findings: list[KnowledgeQualityFinding] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class LLMCompletionInput(_ContractModel):

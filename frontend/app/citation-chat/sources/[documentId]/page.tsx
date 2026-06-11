@@ -44,6 +44,44 @@ type SourceDebugResponse = {
   chunks: SourceChunk[];
 };
 
+type SourceDebugView = "ingestion" | "quality";
+
+type KnowledgeQualityFindingKind = "exact_duplicate" | "near_duplicate" | "conflict";
+type KnowledgeQualitySeverity = "info" | "warning" | "critical";
+
+type KnowledgeQualityFact = {
+  fact_id: string;
+  chunk_id: string;
+  entity: string;
+  attribute: string;
+  value: string;
+  normalized_value?: string | null;
+  unit?: string | null;
+  span?: string | null;
+  start?: number | null;
+  end?: number | null;
+  metadata: Record<string, unknown>;
+};
+
+type KnowledgeQualityFinding = {
+  finding_id: string;
+  kind: KnowledgeQualityFindingKind;
+  severity: KnowledgeQualitySeverity;
+  status: string;
+  chunk_ids: string[];
+  fact_ids: string[];
+  summary: string;
+  suggested_action?: string | null;
+  confidence?: number | null;
+  metadata: Record<string, unknown>;
+};
+
+type KnowledgeQualityReport = {
+  facts: KnowledgeQualityFact[];
+  findings: KnowledgeQualityFinding[];
+  metadata: Record<string, unknown>;
+};
+
 type ChunkHighlightStyle = {
   badge: string;
   border: string;
@@ -64,6 +102,7 @@ type ChunkHighlight = {
 const API_URL =
   process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000";
 const SOURCE_DEBUG_CACHE_PREFIX = "agentic-rag:source-debug:";
+const SOURCE_QUALITY_CACHE_PREFIX = "agentic-rag:source-quality:";
 const CHUNK_HIGHLIGHT_STYLES: ChunkHighlightStyle[] = [
   {
     badge: "bg-amber-100 text-amber-800 dark:bg-amber-300/18 dark:text-amber-100",
@@ -110,8 +149,12 @@ export default function SourceDebugPage() {
     ? rawDocumentId[0]
     : rawDocumentId ?? "";
   const [debug, setDebug] = useState<SourceDebugResponse | null>(null);
+  const [quality, setQuality] = useState<KnowledgeQualityReport | null>(null);
+  const [activeView, setActiveView] = useState<SourceDebugView>("ingestion");
   const [error, setError] = useState("");
+  const [qualityError, setQualityError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isQualityLoading, setIsQualityLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +203,53 @@ export default function SourceDebugPage() {
     };
   }, [documentId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadQuality() {
+      if (!documentId) return;
+
+      const cachedQuality = readCachedKnowledgeQuality(documentId);
+      if (cachedQuality) {
+        setQuality(cachedQuality);
+        setIsQualityLoading(false);
+      } else {
+        setIsQualityLoading(true);
+      }
+      setQualityError("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/sources/${encodeURIComponent(documentId)}/quality`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          throw new Error(`Không lấy được báo cáo quality: ${response.status}`);
+        }
+        const payload = (await response.json()) as KnowledgeQualityReport;
+        writeCachedKnowledgeQuality(documentId, payload);
+        if (!cancelled) {
+          setQuality(payload);
+        }
+      } catch (loadError) {
+        if (!cancelled && !readCachedKnowledgeQuality(documentId)) {
+          setQualityError(sourceErrorMessage(loadError));
+          setQuality(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsQualityLoading(false);
+        }
+      }
+    }
+
+    void loadQuality();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId]);
+
   const title = debug?.name ?? "Debug ingestion";
   const sourceType = debug?.source_type ?? "";
   const chunkInputType = debug?.chunk_input_type ?? "";
@@ -174,6 +264,10 @@ export default function SourceDebugPage() {
     () => new Map(chunkHighlights.map((highlight) => [highlight.key, highlight])),
     [chunkHighlights],
   );
+  const debugViews: Array<{ id: SourceDebugView; label: string }> = [
+    { id: "ingestion", label: "Ingestion" },
+    { id: "quality", label: "Quality" },
+  ];
 
   return (
     <main className="h-screen overflow-hidden bg-mist px-4 py-5 text-ink dark:bg-slate-950 dark:text-slate-100 sm:px-6">
@@ -205,12 +299,35 @@ export default function SourceDebugPage() {
               </div>
             ) : null}
           </div>
+          <div className="mt-4 grid max-w-sm grid-cols-2 gap-1 rounded-md bg-paper/70 p-1 dark:bg-slate-900/76">
+            {debugViews.map((view) => (
+              <button
+                className={cn(
+                  "h-9 rounded px-3 text-sm font-medium transition",
+                  activeView === view.id
+                    ? "bg-white text-mint shadow-sm dark:bg-slate-800 dark:text-emerald-200"
+                    : "text-ink/58 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-slate-800/70",
+                )}
+                key={view.id}
+                onClick={() => setActiveView(view.id)}
+                type="button"
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
         </header>
 
         {isLoading ? (
           <StateCard icon={Loader2} text="Đang tải source debug..." spin />
         ) : error ? (
           <StateCard icon={ShieldAlert} text={error} tone="danger" />
+        ) : debug && activeView === "quality" ? (
+          <QualityReportView
+            error={qualityError}
+            isLoading={isQualityLoading}
+            report={quality}
+          />
         ) : debug ? (
           <section className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[1.1fr_1fr_1fr]">
             <DebugColumn
@@ -317,6 +434,240 @@ function OriginalSource({
             <DebugField key={key} label={key} value={formatDebugValue(value)} />
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function QualityReportView({
+  error,
+  isLoading,
+  report,
+}: {
+  error: string;
+  isLoading: boolean;
+  report: KnowledgeQualityReport | null;
+}) {
+  if (isLoading) {
+    return <StateCard icon={Loader2} text="Đang tải báo cáo quality..." spin />;
+  }
+
+  if (error) {
+    return <StateCard icon={ShieldAlert} text={error} tone="danger" />;
+  }
+
+  if (!report) {
+    return <StateCard icon={ShieldAlert} text="Chưa có báo cáo quality cho source này." />;
+  }
+
+  const duplicateFindings = report.findings.filter((finding) =>
+    finding.kind === "exact_duplicate" || finding.kind === "near_duplicate",
+  );
+  const conflictFindings = report.findings.filter((finding) => finding.kind === "conflict");
+
+  return (
+    <section className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_minmax(0,1fr)]">
+      <DebugColumn
+        description="Tổng quan fact extraction và metadata của quality run"
+        icon={FileText}
+        title="Quality summary"
+      >
+        <QualitySummary report={report} />
+      </DebugColumn>
+
+      <DebugColumn
+        description="Các fact bị trùng chính xác hoặc gần giống"
+        icon={Layers3}
+        title="Duplicates"
+      >
+        <QualityFindingList
+          emptyText="Không phát hiện duplicate trong source này."
+          findings={duplicateFindings}
+        />
+      </DebugColumn>
+
+      <DebugColumn
+        description="Các fact có giá trị mâu thuẫn cần kiểm tra"
+        icon={ShieldAlert}
+        title="Conflicts"
+      >
+        <QualityFindingList
+          emptyText="Không phát hiện conflict trong source này."
+          findings={conflictFindings}
+        />
+      </DebugColumn>
+    </section>
+  );
+}
+
+function QualitySummary({ report }: { report: KnowledgeQualityReport }) {
+  const criticalCount = report.findings.filter((finding) => finding.severity === "critical").length;
+  const warningCount = report.findings.filter((finding) => finding.severity === "warning").length;
+  const metadataEntries = Object.entries(report.metadata);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Metric label="Facts" value={String(report.facts.length)} />
+        <Metric label="Findings" value={String(report.findings.length)} />
+        <Metric label="Critical" value={String(criticalCount)} />
+        <Metric label="Warning" value={String(warningCount)} />
+      </div>
+
+      {!report.findings.length ? (
+        <EmptyBlock text="Không phát hiện duplicate hoặc conflict. Vẫn nên kiểm tra sample fact nếu source quan trọng." />
+      ) : null}
+
+      <QualityFactList facts={report.facts} />
+
+      {metadataEntries.length ? (
+        <details className="rounded-md border border-line bg-white/70 dark:border-white/14 dark:bg-slate-950/42">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-ink/62 dark:text-slate-300">
+            Quality metadata ({metadataEntries.length})
+          </summary>
+          <div className="max-h-48 space-y-2 overflow-y-auto border-t border-line p-3 dark:border-white/14">
+            {metadataEntries.map(([key, value]) => (
+              <DebugField key={key} label={key} value={formatDebugValue(value)} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function QualityFactList({ facts }: { facts: KnowledgeQualityFact[] }) {
+  if (!facts.length) {
+    return <EmptyBlock text="Endpoint chưa trả về fact nào cho source này." />;
+  }
+
+  return (
+    <div className="rounded-md border border-line bg-white/70 dark:border-white/14 dark:bg-slate-950/42">
+      <div className="border-b border-line px-3 py-2 text-xs font-semibold text-ink/62 dark:border-white/14 dark:text-slate-300">
+        Facts extracted
+      </div>
+      <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+        {facts.map((fact) => (
+          <article
+            className="min-w-0 rounded-md border border-line bg-paper/70 p-3 dark:border-white/14 dark:bg-slate-900/70"
+            key={fact.fact_id}
+          >
+            <p className="break-words text-sm font-semibold leading-5 [overflow-wrap:anywhere]">
+              {fact.entity || "-"} · {fact.attribute || "-"}
+            </p>
+            <p className="mt-1 break-words text-xs leading-5 text-ink/70 [overflow-wrap:anywhere] dark:text-slate-200">
+              {fact.value || "-"}
+              {fact.unit ? ` ${fact.unit}` : ""}
+            </p>
+            {fact.normalized_value ? (
+              <p className="mt-1 break-words text-[11px] text-ink/48 [overflow-wrap:anywhere] dark:text-slate-400">
+                normalized: {fact.normalized_value}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge>{fact.chunk_id}</Badge>
+              <Badge>{formatFactSpan(fact)}</Badge>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QualityFindingList({
+  emptyText,
+  findings,
+}: {
+  emptyText: string;
+  findings: KnowledgeQualityFinding[];
+}) {
+  if (!findings.length) {
+    return <EmptyBlock text={emptyText} />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {findings
+        .slice()
+        .sort((left, right) => findingSeverityRank(right) - findingSeverityRank(left))
+        .map((finding) => (
+          <QualityFindingCard finding={finding} key={finding.finding_id} />
+        ))}
+    </div>
+  );
+}
+
+function QualityFindingCard({ finding }: { finding: KnowledgeQualityFinding }) {
+  const metadataEntries = Object.entries(finding.metadata);
+
+  return (
+    <article className="min-w-0 overflow-hidden rounded-md border border-line bg-white/70 p-4 dark:border-white/14 dark:bg-slate-950/42">
+      <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            "rounded-full px-2 py-1 text-xs font-semibold",
+            severityBadgeClass(finding.severity),
+          )}
+        >
+          {severityLabel(finding.severity)}
+        </span>
+        <span className="rounded-full border border-line bg-paper/70 px-2 py-1 text-xs font-medium text-ink/62 dark:border-white/14 dark:bg-slate-900 dark:text-slate-300">
+          {findingKindLabel(finding.kind)}
+        </span>
+        {finding.status ? <Badge>{finding.status}</Badge> : null}
+      </div>
+
+      <p className="break-words text-sm font-semibold leading-6 [overflow-wrap:anywhere]">
+        {finding.summary || "Finding chưa có summary."}
+      </p>
+      {finding.suggested_action ? (
+        <p className="mt-2 break-words text-xs leading-5 text-ink/62 [overflow-wrap:anywhere] dark:text-slate-300">
+          {finding.suggested_action}
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <DebugField label="Confidence" value={formatConfidence(finding.confidence)} />
+        <DebugField label="Finding ID" value={finding.finding_id} />
+      </div>
+
+      <QualityIdChips ids={finding.chunk_ids} label="Chunks" />
+      <QualityIdChips ids={finding.fact_ids} label="Facts" />
+
+      {metadataEntries.length ? (
+        <details className="mt-3 rounded-md border border-line bg-paper/70 dark:border-white/14 dark:bg-slate-900/70">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-ink/62 dark:text-slate-300">
+            Metadata ({metadataEntries.length})
+          </summary>
+          <div className="max-h-40 space-y-2 overflow-y-auto border-t border-line p-3 dark:border-white/14">
+            {metadataEntries.map(([key, value]) => (
+              <DebugField key={key} label={key} value={formatDebugValue(value)} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+function QualityIdChips({ ids, label }: { ids: string[]; label: string }) {
+  if (!ids.length) return null;
+
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-[11px] font-semibold uppercase text-ink/42 dark:text-slate-400">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.map((id) => (
+          <span
+            className="max-w-full break-words rounded-full border border-line bg-paper/70 px-2 py-1 text-[11px] text-ink/62 [overflow-wrap:anywhere] dark:border-white/14 dark:bg-slate-900 dark:text-slate-300"
+            key={id}
+          >
+            {id}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -905,6 +1256,48 @@ function debugLabelsForSource(sourceType: string, chunkInputType = "") {
   };
 }
 
+function findingKindLabel(kind: KnowledgeQualityFindingKind): string {
+  if (kind === "exact_duplicate") return "Exact duplicate";
+  if (kind === "near_duplicate") return "Near duplicate";
+  return "Conflict";
+}
+
+function severityLabel(severity: KnowledgeQualitySeverity): string {
+  if (severity === "critical") return "Critical";
+  if (severity === "warning") return "Warning";
+  return "Info";
+}
+
+function severityBadgeClass(severity: KnowledgeQualitySeverity): string {
+  if (severity === "critical") {
+    return "bg-danger/12 text-danger dark:bg-red-300/14 dark:text-red-200";
+  }
+  if (severity === "warning") {
+    return "bg-amber-100 text-amber-800 dark:bg-amber-300/18 dark:text-amber-100";
+  }
+  return "bg-mint/10 text-mint dark:bg-emerald-300/12 dark:text-emerald-200";
+}
+
+function findingSeverityRank(finding: KnowledgeQualityFinding): number {
+  if (finding.severity === "critical") return 3;
+  if (finding.severity === "warning") return 2;
+  return 1;
+}
+
+function formatConfidence(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  const percent = value <= 1 ? value * 100 : value;
+  return `${Math.round(percent)}%`;
+}
+
+function formatFactSpan(fact: KnowledgeQualityFact): string {
+  if (fact.span) return fact.span;
+  if (typeof fact.start === "number" && typeof fact.end === "number") {
+    return `${fact.start}-${fact.end}`;
+  }
+  return "no span";
+}
+
 function metadataValue(metadata: Record<string, unknown>, key: string): string | null {
   const value = metadata[key];
   if (typeof value === "string" && value.trim()) return value;
@@ -947,6 +1340,43 @@ function writeCachedSourceDebug(documentId: string, debug: SourceDebugResponse) 
 
 function sourceDebugCacheKey(documentId: string): string {
   return `${SOURCE_DEBUG_CACHE_PREFIX}${documentId}`;
+}
+
+function readCachedKnowledgeQuality(documentId: string): KnowledgeQualityReport | null {
+  if (typeof window === "undefined" || !documentId) return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(sourceQualityCacheKey(documentId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as KnowledgeQualityReport;
+    if (!Array.isArray(parsed.facts) || !Array.isArray(parsed.findings)) {
+      return null;
+    }
+    return {
+      facts: parsed.facts,
+      findings: parsed.findings,
+      metadata:
+        parsed.metadata && typeof parsed.metadata === "object" && !Array.isArray(parsed.metadata)
+          ? parsed.metadata
+          : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedKnowledgeQuality(documentId: string, report: KnowledgeQualityReport) {
+  if (typeof window === "undefined" || !documentId) return;
+
+  try {
+    window.sessionStorage.setItem(sourceQualityCacheKey(documentId), JSON.stringify(report));
+  } catch {
+    // Large reports can exceed sessionStorage quota; the page still works without cache.
+  }
+}
+
+function sourceQualityCacheKey(documentId: string): string {
+  return `${SOURCE_QUALITY_CACHE_PREFIX}${documentId}`;
 }
 
 function sourceErrorMessage(error: unknown): string {

@@ -18,8 +18,11 @@ from agentic_rag.api import (
     delete_all_sources,
     delete_source,
     health,
+    knowledge_quality_report,
     list_sources,
+    scan_knowledge_quality,
     source_debug,
+    source_quality,
     source_raw,
     upload_text_source,
     upload_url_source,
@@ -432,3 +435,96 @@ def test_list_sources_returns_local_documents(
 
     response_with_chunks = list_sources(include_chunks=True)
     assert response_with_chunks.sources[0].chunks[0].chunk.text == "Noi dung"
+
+
+def test_source_quality_returns_local_conflict_report(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+
+    base = upload_text_source(SourceTextRequest(title="Base", text="VF8 duoc bao hanh 8 nam."))
+    update = upload_text_source(SourceTextRequest(title="Update", text="VF8 duoc bao hanh 6 nam."))
+
+    report = source_quality(base.document_id)
+
+    assert report.metadata["provider"] == "local_pdf"
+    assert report.metadata["selected_document_ids"] == [base.document_id]
+    assert len(report.findings) == 1
+    assert report.findings[0].kind == "conflict"
+    assert set(report.findings[0].chunk_ids) == {
+        f"{base.document_id}_c0001",
+        f"{update.document_id}_c0001",
+    }
+    assert len(report.facts) == 2
+
+
+def test_knowledge_quality_scan_can_filter_and_refresh_local_metadata(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    base = upload_text_source(SourceTextRequest(title="Base", text="VF8 duoc bao hanh 8 nam."))
+    update = upload_text_source(SourceTextRequest(title="Update", text="VF8 duoc bao hanh 6 nam."))
+
+    filtered = knowledge_quality_report(document_ids=[update.document_id])
+    rescanned = scan_knowledge_quality()
+
+    assert filtered.metadata["selected_document_ids"] == [update.document_id]
+    assert len(filtered.findings) == 1
+    assert rescanned.metadata["selected_document_ids"] is None
+    assert len(rescanned.findings) == 1
+    for document_id in (base.document_id, update.document_id):
+        chunk = provider.document_chunks(document_id=document_id).chunks[0]
+        assert chunk.metadata["knowledge_quality"]["conflict_count"] == 1
+
+
+def test_knowledge_quality_endpoints_reject_non_local_provider(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "ragflow")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: object())
+
+    with pytest.raises(HTTPException) as source_raised:
+        source_quality("doc-1")
+    with pytest.raises(HTTPException) as aggregate_raised:
+        knowledge_quality_report()
+    with pytest.raises(HTTPException) as scan_raised:
+        scan_knowledge_quality()
+
+    assert source_raised.value.status_code == 404
+    assert aggregate_raised.value.status_code == 404
+    assert scan_raised.value.status_code == 404
+    assert "local PDF" in str(source_raised.value.detail)
