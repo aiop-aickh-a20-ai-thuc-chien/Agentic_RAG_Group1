@@ -10,10 +10,10 @@ from agentic_rag.ingestion.dedup_detect.embedding import (
     EmbeddingFallbackCandidate,
     EmbeddingVectorMap,
     EmbeddingVectorResult,
+    configured_embedding_candidates,
     embedding_vectors_from_client,
     embedding_vectors_from_first_available_client,
     find_embedding_duplicates,
-    openai_first_embedding_candidates,
 )
 from agentic_rag.ingestion.dedup_detect.exact import find_exact_duplicates
 from agentic_rag.ingestion.dedup_detect.models import (
@@ -62,10 +62,9 @@ def detect_duplicates(
         if vectors is None and embedding_client is not None:
             vectors = embedding_vectors_from_client(document_list, embedding_client)
             method = method or "embedding_client"
-        elif vectors is None and resolved_config.enable_embedding_provider_fallback:
+        elif vectors is None:
             result = _resolve_embedding_vectors_with_fallback(
                 document_list,
-                config=resolved_config,
                 candidates=embedding_fallback_candidates,
             )
             vectors = result.vectors
@@ -76,7 +75,7 @@ def detect_duplicates(
         if vectors is None:
             raise ValueError(
                 "Embedding dedup is enabled, but no embedding_vectors or "
-                "embedding_client was supplied and provider fallback is disabled."
+                "embedding_client was supplied."
             )
         embedding_matches = find_embedding_duplicates(
             document_list,
@@ -121,18 +120,9 @@ def _pair_key(left: str, right: str) -> tuple[str, str]:
 def _resolve_embedding_vectors_with_fallback(
     documents: Sequence[DedupDocument],
     *,
-    config: DedupConfig,
     candidates: Sequence[EmbeddingFallbackCandidate] | None,
 ) -> EmbeddingVectorResult:
     return embedding_vectors_from_first_available_client(
         documents,
-        candidates=candidates
-        or openai_first_embedding_candidates(
-            openai_model=config.embedding_openai_model,
-            openai_api_base=config.embedding_openai_api_base,
-            openai_api_key=config.embedding_openai_api_key,
-            sentence_transformer_model=config.embedding_sentence_transformer_model,
-            sentence_transformer_device=config.embedding_sentence_transformer_device,
-            timeout_seconds=config.embedding_timeout_seconds,
-        ),
+        candidates=candidates or configured_embedding_candidates(),
     )

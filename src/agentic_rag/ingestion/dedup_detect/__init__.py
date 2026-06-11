@@ -3,11 +3,11 @@
 from agentic_rag.ingestion.dedup_detect.embedding import (
     EmbeddingFallbackCandidate,
     EmbeddingVectorResult,
+    configured_embedding_candidates,
     cosine_similarity,
     embedding_vectors_from_client,
     embedding_vectors_from_first_available_client,
     find_embedding_duplicates,
-    openai_first_embedding_candidates,
 )
 from agentic_rag.ingestion.dedup_detect.exact import find_exact_duplicates, sha256_fingerprint
 from agentic_rag.ingestion.dedup_detect.metadata import (
@@ -40,6 +40,7 @@ __all__ = [
     "EmbeddingFallbackCandidate",
     "EmbeddingVectorResult",
     "add_duplicate_metadata_to_chunks",
+    "configured_embedding_candidates",
     "cosine_similarity",
     "detect_duplicates",
     "documents_from_chunks",
@@ -51,7 +52,6 @@ __all__ = [
     "find_simhash_duplicates",
     "hamming_distance",
     "normalize_text",
-    "openai_first_embedding_candidates",
     "sha256_fingerprint",
     "simhash_fingerprint",
 ]

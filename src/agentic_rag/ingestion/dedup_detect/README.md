@@ -51,8 +51,7 @@ Limit:
 
 Technology:
 
-- OpenAI-compatible embeddings first when API credentials are configured.
-- Local `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` fallback.
+- The shared project embedding runtime configured through `.env`.
 - Cosine similarity over the selected embedding vectors.
 
 Use when:
@@ -66,38 +65,31 @@ Strength:
 
 Limit:
 
-- OpenAI requires an API key or compatible API base.
-- Local fallback requires the `local-models` extra and a cached/downloadable
-  sentence-transformers model.
+- Runtime requirements depend on the configured embedding provider.
+- Local sentence-transformers models require the `local-models` extra and a
+  cached/downloadable model.
 
-## Layer 3 Runtime Order
+## Layer 3 Runtime Configuration
 
 When `DedupConfig(enable_embedding=True)` is used without precomputed vectors or
-an explicit embedding client, `dedup_detect` builds Layer 3 candidates in this
-order:
+an explicit embedding client, `dedup_detect` uses the same embedding client as
+the rest of the project.
 
-1. OpenAI-compatible embedding client through LiteLLM.
-2. Local sentence-transformers embedding client.
+Do not configure dedup-specific embedding variables. Use the existing
+`.env.example` contract:
 
-OpenAI is attempted only when `DEDUP_DETECT_OPENAI_API_KEY`, `OPENAI_API_KEY`,
-`DEDUP_DETECT_OPENAI_API_BASE`, or a compatible embedding API base is configured.
-If OpenAI fails or is unavailable, the local sentence-transformers model is used.
-Matches still use cosine similarity, and match metadata records the provider,
-model, and failed fallback attempts.
+```env
+EMBEDDING_PROVIDER=sentence_transformers
+EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_API_BASE=
+EMBEDDING_API_KEY=
+EMBEDDING_DIMENSIONS=
+EMBEDDING_TIMEOUT_SECONDS=60
+```
 
-Useful variables:
-
-- `DEDUP_DETECT_OPENAI_EMBEDDING_MODEL`
-- `DEDUP_DETECT_OPENAI_API_KEY`
-- `DEDUP_DETECT_OPENAI_API_BASE`
-- `DEDUP_DETECT_SENTENCE_TRANSFORMER_MODEL`
-- `DEDUP_DETECT_SENTENCE_TRANSFORMER_DEVICE`
-
-Defaults:
-
-- OpenAI model: `text-embedding-3-small`
-- Local fallback model:
-  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+If you want OpenAI or another API-based embedding provider, set the shared
+`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, and `EMBEDDING_API_KEY` values for the
+project. Dedup detection will use that same client.
 
 ### Runtime Usage
 
