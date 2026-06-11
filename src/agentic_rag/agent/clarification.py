@@ -13,8 +13,15 @@ from __future__ import annotations
 # Lower-case canonical names; display names are obtained via .upper() or
 # a lookup table below.
 VINFAST_MODELS: list[str] = [
-    "vf3", "vf5", "vf6", "vf7", "vf8", "vf9",
-    "vfe34", "vf e34", "vf34",
+    "vf3",
+    "vf5",
+    "vf6",
+    "vf7",
+    "vf8",
+    "vf9",
+    "vfe34",
+    "vf e34",
+    "vf34",
 ]
 
 # Human-readable display names used in clarification messages.
@@ -33,62 +40,142 @@ _MODEL_DISPLAY: dict[str, str] = {
 INTENT_KEYWORDS: dict[str, list[str]] = {
     "price": [
         # English
-        "price", "cost", "how much", "vnd", "million", "expensive", "cheap",
+        "price",
+        "cost",
+        "how much",
+        "vnd",
+        "million",
+        "expensive",
+        "cheap",
         # Vietnamese
-        "giá", "bao nhiêu", "chi phí", "triệu", "tỷ", "đắt", "rẻ",
-        "mua", "giá bán", "giá xe",
+        "giá",
+        "bao nhiêu",
+        "chi phí",
+        "triệu",
+        "tỷ",
+        "đắt",
+        "rẻ",
+        "mua",
+        "giá bán",
+        "giá xe",
     ],
     "battery_range": [
         # English
-        "battery", "range", "km", "distance", "mileage",
+        "battery",
+        "range",
+        "km",
+        "distance",
+        "mileage",
         # Vietnamese
-        "pin", "tầm hoạt động", "quãng đường", "ắc quy", "bao xa",
-        "chạy được", "đi được",
+        "pin",
+        "tầm hoạt động",
+        "quãng đường",
+        "ắc quy",
+        "bao xa",
+        "chạy được",
+        "đi được",
     ],
     "charging": [
         # English
-        "charge", "charging", "fast charge", "charger",
+        "charge",
+        "charging",
+        "fast charge",
+        "charger",
         # Vietnamese
-        "sạc", "nhanh", "thời gian sạc", "cổng sạc", "trạm sạc",
+        "sạc",
+        "nhanh",
+        "thời gian sạc",
+        "cổng sạc",
+        "trạm sạc",
     ],
     "specs": [
         # English
-        "spec", "specification", "motor", "dimension", "size", "weight",
-        "horsepower", "torque", "acceleration",
+        "spec",
+        "specification",
+        "motor",
+        "dimension",
+        "size",
+        "weight",
+        "horsepower",
+        "torque",
+        "acceleration",
         # Vietnamese
-        "thông số", "động cơ", "kích thước", "cấu hình", "tốc độ",
-        "khối lượng", "chiều dài", "chiều rộng",
+        "thông số",
+        "động cơ",
+        "kích thước",
+        "cấu hình",
+        "tốc độ",
+        "khối lượng",
+        "chiều dài",
+        "chiều rộng",
     ],
     "warranty": [
         # English
-        "warranty", "guarantee", "service",
+        "warranty",
+        "guarantee",
+        "service",
         # Vietnamese
-        "bảo hành", "bảo đảm", "bảo dưỡng", "dịch vụ",
+        "bảo hành",
+        "bảo đảm",
+        "bảo dưỡng",
+        "dịch vụ",
     ],
     "comparison": [
         # English
-        "compare", "comparison", "difference", "vs", "versus", "better",
-        "worse", "between",
+        "compare",
+        "comparison",
+        "difference",
+        "vs",
+        "versus",
+        "better",
+        "worse",
+        "between",
         # Vietnamese
-        "so sánh", "khác nhau", "hơn", "tốt hơn", "thua", "giữa",
-        "hay là", "hay không",
+        "so sánh",
+        "khác nhau",
+        "hơn",
+        "tốt hơn",
+        "thua",
+        "giữa",
+        "hay là",
+        "hay không",
     ],
     "safety": [
         # English
-        "safety", "adas", "airbag", "autonomous", "brake", "crash",
+        "safety",
+        "adas",
+        "airbag",
+        "autonomous",
+        "brake",
+        "crash",
         # Vietnamese
-        "an toàn", "túi khí", "phanh", "hỗ trợ lái", "tự lái",
-        "va chạm", "đánh giá an toàn",
+        "an toàn",
+        "túi khí",
+        "phanh",
+        "hỗ trợ lái",
+        "tự lái",
+        "va chạm",
+        "đánh giá an toàn",
     ],
 }
 
 # Short phrases that signal a vague follow-up
 _VAGUE_PHRASES: list[str] = [
     # English
-    "is it good", "what about it", "tell me more", "details", "more info",
+    "is it good",
+    "what about it",
+    "tell me more",
+    "details",
+    "more info",
     # Vietnamese
-    "thế nào", "như thế nào", "tốt không", "hay không", "được không",
-    "kể thêm", "thêm thông tin", "cho biết thêm",
+    "thế nào",
+    "như thế nào",
+    "tốt không",
+    "hay không",
+    "được không",
+    "kể thêm",
+    "thêm thông tin",
+    "cho biết thêm",
 ]
 
 # ---------------------------------------------------------------------------
@@ -118,9 +205,7 @@ def detect_intents(question: str) -> list[str]:
     """
     q = question.lower()
     return [
-        intent
-        for intent, keywords in INTENT_KEYWORDS.items()
-        if any(kw in q for kw in keywords)
+        intent for intent, keywords in INTENT_KEYWORDS.items() if any(kw in q for kw in keywords)
     ]
 
 
@@ -192,16 +277,20 @@ def _is_reply_to_clarification(
             content = msg.get("content", "").lower()
             # Heuristic: clarification questions contain these phrases
             clarification_markers = [
+                # Vietnamese (current bot language)
+                "bạn muốn biết gì về",
+                "bạn đang hỏi về",
+                "của mẫu xe vinfast nào",
+                "bạn muốn so sánh",
+                "muốn so sánh",
+                "bạn có thể nói rõ hơn",
+                "bạn có thể làm rõ",
+                # English fallback
                 "what would you like to know",
                 "which vinfast model",
                 "which model",
-                "bạn muốn biết gì về",
-                "bạn hỏi về model nào",
-                "model nào",
                 "you want to compare",
-                "muốn so sánh",
                 "could you clarify",
-                "bạn có thể làm rõ",
             ]
             if any(marker in content for marker in clarification_markers):
                 return True
@@ -212,13 +301,18 @@ def _is_reply_to_clarification(
 # ---------------------------------------------------------------------------
 # Clarification question builder
 # ---------------------------------------------------------------------------
-
-
 def build_clarification_question(
     reason: str,
     entities: list[str],
     intents: list[str],
+    lang: str = "vi",
 ) -> str:
+    if lang == "en":
+        return _build_clarification_question_en(reason, entities, intents)
+    return _build_clarification_question_vi(reason, entities, intents)
+
+
+def _build_clarification_question_vi(reason: str, entities: list[str], intents: list[str]) -> str:
     """Return a natural-language clarification question in Vietnamese.
 
     The chatbot's tone matches the rest of the agent: polite, informative,
@@ -244,7 +338,9 @@ def build_clarification_question(
             "comparison": "so sánh",
             "safety": "an toàn",
         }
-        intent_label = intent_map.get(intents[0], intents[0].replace("_", " ")) if intents else "vấn đề đó"
+        intent_label = (
+            intent_map.get(intents[0], intents[0].replace("_", " ")) if intents else "vấn đề đó"
+        )
         return (
             f"Bạn đang hỏi về {intent_label} của mẫu xe VinFast nào? "
             "Ví dụ: VF3, VF5, VF6, VF7, VF8, hoặc VF9."
@@ -272,6 +368,61 @@ def build_clarification_question(
     return (
         "Bạn có thể nói rõ hơn câu hỏi được không? "
         "Vui lòng cho biết mẫu xe VinFast (ví dụ: VF3, VF8) và thông tin bạn cần."
+    )
+
+
+def _build_clarification_question_en(
+    reason: str,
+    entities: list[str],
+    intents: list[str],
+) -> str:
+    display_models = ", ".join(_MODEL_DISPLAY.get(e, e.upper()) for e in entities)
+
+    if reason == "entity_without_intent":
+        model = _MODEL_DISPLAY.get(entities[0], entities[0].upper()) if entities else "that model"
+        return (
+            f"What would you like to know about {model}? "
+            "I can help with price, battery/range, specs, charging, "
+            "warranty, safety, or comparisons with other models."
+        )
+
+    if reason == "intent_without_entity":
+        intent_map = {
+            "price": "price",
+            "battery_range": "battery/range",
+            "charging": "charging",
+            "specs": "specifications",
+            "warranty": "warranty",
+            "comparison": "comparison",
+            "safety": "safety",
+        }
+        intent_label = (
+            intent_map.get(intents[0], intents[0].replace("_", " ")) if intents else "that topic"
+        )
+        return (
+            f"Which VinFast model are you asking about {intent_label} for? "
+            "For example: VF3, VF5, VF6, VF7, VF8, or VF9."
+        )
+
+    if reason == "comparison_missing_entities":
+        if display_models:
+            return (
+                f"You mentioned {display_models} — "
+                "which other model would you like to compare with?"
+            )
+        return "Which VinFast models would you like to compare?"
+
+    if reason == "vague_question":
+        return (
+            "Could you be more specific? "
+            "You can ask about price, specs, battery/range, charging, "
+            "warranty, safety, or comparisons for a specific VinFast model."
+        )
+
+    # Fallback
+    return (
+        "Could you clarify your question? "
+        "Please specify the VinFast model (e.g. VF3, VF8) and what you'd like to know."
     )
 
 
@@ -312,6 +463,7 @@ def build_pending_clarification(
 def resolve_clarification_reply(
     new_question: str,
     history: list[dict[str, str]],
+    lang: str = "vi",
 ) -> str | None:
     """Attempt to resolve a short reply using the pending-clarification context
     stored in the conversation history.
@@ -336,23 +488,46 @@ def resolve_clarification_reply(
 
     missing = pending.get("missing")
 
-    # Previous turn had model, reply provides intent → "What is the <intent> of <model>?"
+    _INTENT_VI = {
+        "price": "giá",
+        "battery_range": "pin/tầm xa",
+        "charging": "sạc",
+        "specs": "thông số",
+        "warranty": "bảo hành",
+        "comparison": "so sánh",
+        "safety": "an toàn",
+    }
+    _INTENT_EN = {
+        "price": "price",
+        "battery_range": "battery/range",
+        "charging": "charging",
+        "specs": "specifications",
+        "warranty": "warranty",
+        "comparison": "comparison",
+        "safety": "safety",
+    }
+    intent_labels = _INTENT_EN if lang == "en" else _INTENT_VI
+
     if missing == "intent" and pending.get("entity") and new_intents:
-        intent_label = new_intents[0].replace("_", " ")
+        intent_label = intent_labels.get(new_intents[0], new_intents[0].replace("_", " "))
         model = pending["entity"]
-        return f"What is the {intent_label} of {model}?"
+        if lang == "en":
+            return f"What is the {intent_label} of {model}?"
+        return f"{model} {intent_label} như thế nào?"
 
-    # Previous turn had intent, reply provides model → "What is the <intent> of <model>?"
     if missing == "entity" and pending.get("intent") and new_entities:
-        intent_label = pending["intent"].replace("_", " ")
+        intent_label = intent_labels.get(pending["intent"], pending["intent"].replace("_", " "))
         model = _MODEL_DISPLAY.get(new_entities[0], new_entities[0].upper())
-        return f"What is the {intent_label} of {model}?"
+        if lang == "en":
+            return f"What is the {intent_label} of {model}?"
+        return f"{model} {intent_label} như thế nào?"
 
-    # Comparison: we have one model, reply provides the second
     if missing == "comparison_model" and pending.get("entity") and new_entities:
         model1 = pending["entity"]
         model2 = _MODEL_DISPLAY.get(new_entities[0], new_entities[0].upper())
-        return f"Compare {model1} and {model2}"
+        if lang == "en":
+            return f"Compare {model1} and {model2}"
+        return f"So sánh {model1} và {model2}"
 
     return None
 
@@ -366,20 +541,29 @@ def _extract_pending_from_history(
             continue
         content = msg.get("content", "").lower()
 
-        # Detect entity_without_intent pattern
-        if "what would you like to know about" in content:
+        # Detect entity_without_intent pattern (Vietnamese + English)
+        if "bạn muốn biết gì về" in content or "what would you like to know about" in content:
             for model_key, model_display in _MODEL_DISPLAY.items():
                 if model_key in content or model_display.lower() in content:
                     return {"entity": model_display, "missing": "intent"}
 
-        # Detect intent_without_entity pattern
-        if "which vinfast model are you asking about for" in content:
+        # Detect intent_without_entity pattern (Vietnamese + English)
+        if (
+            "của mẫu xe vinfast nào" in content
+            or "bạn đang hỏi về" in content
+            or "which vinfast model are you asking about" in content
+        ):
             for intent in INTENT_KEYWORDS:
                 if intent.replace("_", " ") in content:
                     return {"intent": intent, "missing": "entity"}
 
-        # Detect comparison_missing_entities pattern
-        if "which model would you like to compare" in content or "which vinfast models would you like to compare" in content:
+        # Detect comparison_missing_entities pattern (Vietnamese + English)
+        if (
+            "bạn muốn so sánh" in content
+            or "muốn so sánh" in content
+            or "which model would you like to compare" in content
+            or "which vinfast models would you like to compare" in content
+        ):
             for model_key, model_display in _MODEL_DISPLAY.items():
                 if model_key in content or model_display.lower() in content:
                     return {"entity": model_display, "missing": "comparison_model"}
