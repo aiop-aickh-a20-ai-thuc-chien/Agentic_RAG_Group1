@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 from dataclasses import dataclass
@@ -146,17 +147,18 @@ def load_sentence_transformer(
     local_files_only: bool,
 ) -> _SentenceTransformerModel:
     try:
-        from sentence_transformers import SentenceTransformer
+        sentence_transformers = importlib.import_module("sentence_transformers")
     except ImportError as exc:
         raise RuntimeError(
             "sentence-transformers is not installed. Run: uv sync --extra local-models"
         ) from exc
+    sentence_transformer = sentence_transformers.SentenceTransformer
     kwargs: dict[str, object] = {}
     if device:
         kwargs["device"] = device
     if local_files_only:
         kwargs["local_files_only"] = True
-    return cast(_SentenceTransformerModel, SentenceTransformer(model_name, **kwargs))
+    return cast(_SentenceTransformerModel, sentence_transformer(model_name, **kwargs))
 
 
 def coerce_vectors(raw_vectors: object) -> list[list[float]]:
