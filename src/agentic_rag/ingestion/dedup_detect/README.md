@@ -158,47 +158,6 @@ report = detect_duplicates(
 )
 ```
 
-### Threshold Calibration Harness
-
-`src/agentic_rag/ingestion/dedup_detect/test/threshold_sweep.py` is a manual
-calibration script. It is not the production Layer 3 path. Use it to check
-whether the current sentence-transformers model and threshold are reasonable for
-sample duplicate / near-duplicate / different pairs.
-
-Recommended model profile:
-
-- Multilingual/Vietnamese content:
-  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
-- English-heavy content:
-  `sentence-transformers/all-MiniLM-L6-v2`
-
-Good for:
-
-- Offline semantic duplicate detection.
-- Keeping sensitive documents local.
-
-Tradeoff:
-
-- Requires model install/download.
-- CPU inference can be slow on large batches.
-
-Threshold test harness:
-
-- `src/agentic_rag/ingestion/dedup_detect/test/`
-- Default model:
-  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
-- Optional env override:
-  `DEDUP_DETECT_SENTENCE_TRANSFORMER_MODEL`
-- Command:
-
-```powershell
-uv sync --extra local-models
-uv run python src/agentic_rag/ingestion/dedup_detect/test/threshold_sweep.py
-```
-
-The harness embeds labeled duplicate / near-duplicate / different pairs, sweeps
-cosine thresholds, and recommends the best threshold by F1 score.
-
 ## Basic Usage
 
 ```python
