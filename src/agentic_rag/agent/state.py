@@ -26,3 +26,13 @@ class AgentState(TypedDict):
     document_ids: NotRequired[list[str] | None]
     answer: NotRequired[Answer]
     trace: Annotated[list[dict[str, Any]], operator.add]
+    # Clarification node fields
+    single_turn: NotRequired[bool]
+    needs_clarification: NotRequired[bool]
+    clarification_question: NotRequired[str | None]
+    clarification_reason: NotRequired[str | None]
+    detected_entities: NotRequired[list[str]]
+    detected_intents: NotRequired[list[str]]
+    pending_clarification: NotRequired[dict[str, str] | None]
+    # Language detection — set once in preprocess, read by all downstream nodes
+    detected_language: NotRequired[str]
