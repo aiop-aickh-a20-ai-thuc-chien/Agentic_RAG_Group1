@@ -276,7 +276,7 @@ export default function EvalRunPage() {
                   <span>Pipeline: {progress.success} / {progress.total}</span>
                   <span>{pct}%</span>
                 </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
+                <div className="h-3 bg-gray-200 ring-1 ring-inset ring-black/5 rounded-full overflow-hidden flex shadow-inner">
                   <div className={cn("h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500",
                     progress.status === "running" && "progress-active")} style={{ width: `${pct}%` }} />
                   <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${failPct}%` }} />
@@ -290,7 +290,7 @@ export default function EvalRunPage() {
                     <span>RAGAS: {progress.ragas_done} / {progress.success}</span>
                     <span>{ragasPct}%</span>
                   </div>
-                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                  <div className="h-3 bg-gray-200 ring-1 ring-inset ring-black/5 rounded-full overflow-hidden shadow-inner">
                     <div className={cn("h-full bg-gradient-to-r from-violet-500 to-violet-400 transition-all duration-500",
                       progress.status === "running" && ragasPct < 100 && "progress-active")} style={{ width: `${ragasPct}%` }} />
                   </div>

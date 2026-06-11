@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 from collections.abc import Iterable
 from functools import lru_cache
@@ -230,8 +231,22 @@ def _rank_by_scores(
     ]
 
 
+def _preimport_sklearn_before_torch() -> None:
+    """Nạp scikit-learn TRƯỚC khi torch/sentence-transformers load.
+
+    Trên Windows, nếu torch nạp trước rồi sentence-transformers mới kéo
+    scikit-learn vào sau, xảy ra xung đột DLL native → access violation
+    (exit 0xC0000005) crash cả tiến trình. Nạp sklearn sớm để cố định thứ tự.
+    Đây là chokepoint torch đầu tiên của server (embedding dùng API, không nạp torch).
+    """
+    # sklearn đi kèm sentence-transformers — nếu chưa có thì import dưới sẽ báo lỗi rõ.
+    with contextlib.suppress(ImportError):
+        importlib.import_module("sklearn")
+
+
 @lru_cache(maxsize=8)
 def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderModel:
+    _preimport_sklearn_before_torch()
     try:
         sentence_transformers = importlib.import_module("sentence_transformers")
     except ImportError as exc:

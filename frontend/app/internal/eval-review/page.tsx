@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Archive, CheckCircle2, ChevronDown, ChevronRight, Search, Trash2, Undo2, X } from "lucide-react";
+import { Archive, CheckCircle2, ChevronDown, ChevronRight, Clock, Search, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "../_components/fx";
@@ -17,10 +17,104 @@ type Question = {
   is_approved: boolean; reviewed_by: string | null;
   deleted_at: string | null; created_at: string;
   has_results: boolean;
+  eval_count: number;
+};
+type HistoryEntry = {
+  run_id: string; run_name: string; dataset_name: string | null;
+  ran_at: string;
+  recall_at_5: number | null; mrr_at_5: number | null;
+  citation_chunk_match: number | null; guardrail_pass: boolean | null;
+  ragas_faithfulness: number | null; ragas_answer_relevancy: number | null;
+  eval_error: string | null;
 };
 type Tab = "pending" | "approved" | "archived";
 type ChunkContent = { chunk_id: string; document_id: string; text: string; metadata: Record<string, unknown> };
 type PanelState = { chunkId: string; question: string; groundTruth: string };
+
+function fmtPct(v: number | null) {
+  if (v === null || v === undefined) return "—";
+  return (v * 100).toFixed(1) + "%";
+}
+
+function HistoryOverlay({ questionId, questionText, onClose }: Readonly<{
+  questionId: string; questionText: string; onClose: () => void;
+}>) {
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API}/internal/questions/${questionId}/history`)
+      .then((r) => r.json())
+      .then((d: HistoryEntry[]) => { setEntries(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [questionId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-end p-4 pointer-events-none">
+      <div className="pointer-events-auto w-[520px] max-h-[70vh] flex flex-col bg-white rounded-2xl border border-black/10 shadow-2xl shadow-black/10 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-black/6 bg-gray-50/60 shrink-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <Clock size={13} className="text-gray-400 shrink-0" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Lịch sử đánh giá</p>
+            </div>
+            <p className="text-sm text-gray-700 line-clamp-2 leading-relaxed">{questionText}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 shrink-0 mt-0.5 transition-colors"><X size={15} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto divide-y divide-black/5">
+          {loading && (
+            <div className="py-10 text-center text-sm text-gray-400">Đang tải...</div>
+          )}
+          {!loading && entries.length === 0 && (
+            <div className="py-10 text-center text-sm text-gray-400">Chưa có lần đánh giá nào</div>
+          )}
+          {entries.map((e, i) => (
+            <div key={`${e.run_id}-${i}`} className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{e.run_name}</p>
+                  {e.dataset_name && (
+                    <p className="text-xs text-gray-400">{e.dataset_name}</p>
+                  )}
+                </div>
+                <span className="text-[11px] text-gray-400 tabular-nums shrink-0 mt-0.5">
+                  {new Date(e.ran_at).toLocaleDateString("vi-VN")}
+                </span>
+              </div>
+              {e.eval_error ? (
+                <p className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded">{e.eval_error}</p>
+              ) : (
+                <div className="grid grid-cols-5 gap-1">
+                  {[
+                    ["Recall", fmtPct(e.recall_at_5)],
+                    ["MRR",    fmtPct(e.mrr_at_5)],
+                    ["Cite",   fmtPct(e.citation_chunk_match)],
+                    ["Faith",  fmtPct(e.ragas_faithfulness)],
+                    ["Relev",  fmtPct(e.ragas_answer_relevancy)],
+                  ].map(([k, v]) => (
+                    <div key={k} className="text-center bg-gray-50 rounded-lg px-1.5 py-1.5">
+                      <p className="text-[10px] text-gray-400 mb-0.5">{k}</p>
+                      <p className={cn("text-xs font-mono font-semibold", v === "—" ? "text-gray-300" : "text-gray-700")}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="px-5 py-2.5 border-t border-black/6 bg-gray-50/40 shrink-0">
+          <p className="text-[11px] text-gray-400">{entries.length} lần đánh giá</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ChunkPanel({ state, onClose }: Readonly<{ state: PanelState; onClose: () => void }>) {
   const [data, setData] = useState<ChunkContent | null>(null);
@@ -79,6 +173,7 @@ export default function EvalReviewPage() {
   const [search,         setSearch]         = useState("");
   const [loading,        setLoading]        = useState(false);
   const [panel,          setPanel]          = useState<PanelState | null>(null);
+  const [historyPanel,   setHistoryPanel]   = useState<{ id: string; question: string } | null>(null);
   const [editing,        setEditing]        = useState<{ id: string; question: string; groundTruth: string } | null>(null);
 
   useEffect(() => {
@@ -431,6 +526,19 @@ export default function EvalReviewPage() {
                                 <Trash2 size={16} />
                               </button>
                             )}
+                            {/* Badge lịch sử eval — chỉ hiện khi có ≥1 lần chạy */}
+                            {q.eval_count > 0 && (
+                              <button
+                                onClick={() => setHistoryPanel({ id: q.id, question: q.question })}
+                                title={`Xem lịch sử ${q.eval_count} lần đánh giá`}
+                                className="relative p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 hover:scale-110 transition-all pressable"
+                              >
+                                <Clock size={15} />
+                                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] flex items-center justify-center text-[9px] font-bold bg-indigo-500 text-white rounded-full px-0.5 leading-none">
+                                  {q.eval_count}
+                                </span>
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="px-2 py-3">
@@ -484,6 +592,15 @@ export default function EvalReviewPage() {
 
         {panel && <ChunkPanel state={panel} onClose={() => setPanel(null)} />}
       </div>
+
+      {/* Overlay lịch sử eval theo câu — float góc dưới phải */}
+      {historyPanel && (
+        <HistoryOverlay
+          questionId={historyPanel.id}
+          questionText={historyPanel.question}
+          onClose={() => setHistoryPanel(null)}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 3.0
 _BATCH_SIZE = 3
+_RAGAS_MAX_FAILURES = 3  # số batch lỗi liên tiếp trước khi RAGAS bỏ cuộc cho 1 run
 
 # Guard chống 2 worker thread cùng chạy cho 1 run_id
 _running_workers: set[str] = set()
@@ -222,7 +223,10 @@ def _setup_ragas() -> dict[str, Any]:
         _mod.ChatVertexAI = None  # type: ignore[attr-defined]
         sys.modules[_lc_vertexai] = _mod
 
-    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    # QUAN TRỌNG — thứ tự import bắt buộc: ragas PHẢI import trước langchain_openai.
+    # Đảo lại (langchain_openai trước) gây segfault native (exit 0xC0000005) khi
+    # ragas load sau → crash cả uvicorn server. isort: off để ruff không sort lại.
+    # isort: off
     from ragas import evaluate
     from ragas.embeddings import LangchainEmbeddingsWrapper
     from ragas.llms import LangchainLLMWrapper
@@ -232,6 +236,10 @@ def _setup_ragas() -> dict[str, Any]:
         context_recall,
         faithfulness,
     )
+
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+    # isort: on
 
     _llm = LangchainLLMWrapper(
         ChatOpenAI(
@@ -303,6 +311,34 @@ def _process_ragas_batch(run_id: str, rows: list[dict[str, Any]], ctx: dict[str,
     logger.info("RAGAS batch done: %d rows for run %s", len(rows), run_id)
 
 
+def _run_ragas_batch_safe(
+    run_id: str, rows: list[dict[str, Any]], ctx: dict[str, Any], failures: int
+) -> tuple[int, bool]:
+    """Process 1 batch, bọc lỗi. Trả (số lỗi liên tiếp mới, có nên dừng hẳn).
+
+    Batch lỗi không đánh dấu lại được câu nào (ragas_faithfulness vẫn NULL) →
+    _fetch_ragas_batch trả lại đúng batch đó. Đếm lỗi liên tiếp để bỏ cuộc, tránh
+    vòng lặp vô hạn burn CPU khi lỗi mang tính hệ thống (API key, rate limit...).
+    """
+    try:
+        _process_ragas_batch(run_id, rows, ctx)
+        return 0, False
+    except Exception as exc:
+        failures += 1
+        logger.exception(
+            "RAGAS batch failed for run %s (lần %d/%d): %s",
+            run_id,
+            failures,
+            _RAGAS_MAX_FAILURES,
+            exc,
+        )
+        if failures >= _RAGAS_MAX_FAILURES:
+            logger.error("RAGAS bỏ cuộc cho run %s sau %d lỗi liên tiếp", run_id, failures)
+            return failures, True
+        time.sleep(_POLL_INTERVAL)
+        return failures, False
+
+
 def _ragas_consumer(run_id: str, pipeline_done: threading.Event) -> None:
     """
     Consumer thread: poll DB cho batch mới ngay khi pipeline produce đủ 3 câu.
@@ -319,20 +355,18 @@ def _ragas_consumer(run_id: str, pipeline_done: threading.Event) -> None:
 
     logger.info("RAGAS consumer started for run %s", run_id)
 
+    failures = 0
     while True:
         rows = _fetch_ragas_batch(run_id, _BATCH_SIZE)
 
-        if len(rows) == _BATCH_SIZE:
-            # Full batch sẵn sàng — process ngay
-            _process_ragas_batch(run_id, rows, ctx)
+        if rows and (len(rows) == _BATCH_SIZE or pipeline_done.is_set()):
+            failures, should_stop = _run_ragas_batch_safe(run_id, rows, ctx, failures)
+            if should_stop:
+                break
         elif pipeline_done.is_set():
-            # Pipeline xong, xử lý nốt phần còn lại (< BATCH_SIZE)
-            if rows:
-                _process_ragas_batch(run_id, rows, ctx)
-            break
+            break  # Pipeline xong + không còn câu nào chờ RAGAS → done
         else:
-            # Chưa đủ batch, chờ pipeline produce thêm
-            time.sleep(_POLL_INTERVAL)
+            time.sleep(_POLL_INTERVAL)  # Chưa đủ batch, chờ pipeline produce thêm
 
     logger.info("RAGAS consumer done for run %s", run_id)
 

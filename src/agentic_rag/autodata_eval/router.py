@@ -123,7 +123,9 @@ def list_all_questions(include_deleted: bool = False) -> list[dict[str, Any]]:
                   a.reviewed_at,
                   EXISTS(
                     SELECT 1 FROM eval_results er WHERE er.question_id = q.id
-                  ) AS has_results
+                  ) AS has_results,
+                  (SELECT COUNT(*) FROM eval_results er
+                   WHERE er.question_id = q.id)::int AS eval_count
                 FROM eval_questions q
                 LEFT JOIN global_order go ON go.id = q.id
                 LEFT JOIN eval_questions_approved a ON a.question_id = q.id
@@ -153,11 +155,10 @@ def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict
                   a.reviewed_by,
                   a.reviewed_at,
                   EXISTS(
-                    SELECT 1 FROM eval_results er
-                    WHERE er.question_id = q.id AND er.run_id IN (
-                      SELECT id FROM eval_runs WHERE dataset_id = %s
-                    )
-                  ) AS has_results
+                    SELECT 1 FROM eval_results er WHERE er.question_id = q.id
+                  ) AS has_results,
+                  (SELECT COUNT(*) FROM eval_results er
+                   WHERE er.question_id = q.id)::int AS eval_count
                 FROM eval_dataset_questions dq
                 JOIN eval_questions q ON q.id = dq.question_id
                 LEFT JOIN global_order go ON go.id = q.id
@@ -165,7 +166,7 @@ def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict
                 WHERE dq.dataset_id = %s {deleted_filter}
                 ORDER BY q.created_at DESC
                 """,
-            (str(dataset_id), str(dataset_id)),
+            (str(dataset_id),),
         )
         return cur.fetchall()
 
@@ -188,6 +189,35 @@ def update_question(question_id: UUID, body: QuestionUpdate) -> dict[str, Any]:
     if not row:
         raise HTTPException(status_code=404, detail="Không tìm thấy câu hỏi")
     return row
+
+
+@router.get("/questions/{question_id}/history")
+def question_history(question_id: UUID) -> list[dict[str, Any]]:
+    """Lịch sử đánh giá của 1 câu — mọi run từng chấm câu này, mới nhất trước."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+              r.id          AS run_id,
+              r.name        AS run_name,
+              d.name        AS dataset_name,
+              r.created_at  AS ran_at,
+              er.recall_at_5,
+              er.mrr_at_5,
+              er.citation_chunk_match,
+              er.guardrail_pass,
+              er.ragas_faithfulness,
+              er.ragas_answer_relevancy,
+              er.eval_error
+            FROM eval_results er
+            JOIN eval_runs r ON r.id = er.run_id
+            LEFT JOIN eval_datasets d ON d.id = r.dataset_id
+            WHERE er.question_id = %s
+            ORDER BY er.ran_at DESC NULLS LAST
+            """,
+            (str(question_id),),
+        )
+        return cur.fetchall()
 
 
 def _parse_chunk_ids(raw: Any) -> list[str]:
@@ -1128,20 +1158,25 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
 @router.get("/compare", response_model=list[RunSummary])
 def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
     with get_conn() as conn, conn.cursor() as cur:
+        # ── Run nội bộ của dataset ─────────────────────────────────────────────
         cur.execute(
             """
                 SELECT
                   r.id          AS run_id,
                   r.name,
                   r.config,
-                  COUNT(res.id)                                      AS total_questions,
-                  AVG(res.recall_at_5)                               AS avg_recall,
-                  AVG(res.mrr_at_5)                                  AS avg_mrr,
-                  AVG(res.citation_chunk_match)                      AS avg_citation,
+                  COUNT(res.id)                                           AS total_questions,
+                  AVG(res.recall_at_5)                                    AS avg_recall,
+                  AVG(res.mrr_at_5)                                       AS avg_mrr,
+                  AVG(res.citation_chunk_match)                           AS avg_citation,
                   AVG(CASE WHEN res.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,
-                  BOOL_OR(res.ragas_faithfulness IS NOT NULL)        AS has_ragas,
-                  AVG(res.ragas_faithfulness)                        AS avg_ragas_faithfulness,
-                  AVG(res.ragas_answer_relevancy)                    AS avg_ragas_relevancy
+                  BOOL_OR(res.ragas_faithfulness IS NOT NULL)             AS has_ragas,
+                  AVG(res.ragas_faithfulness)                             AS avg_ragas_faithfulness,
+                  AVG(res.ragas_answer_relevancy)                         AS avg_ragas_relevancy,
+                  FALSE                                                   AS external,
+                  NULL                                                    AS source_dataset_name,
+                  COUNT(res.id)                                           AS coverage,
+                  COUNT(res.id)                                           AS coverage_total
                 FROM eval_runs r
                 LEFT JOIN eval_results res ON res.run_id = r.id
                 WHERE r.dataset_id = %s
@@ -1150,7 +1185,56 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                 """,
             (str(dataset_id),),
         )
-        return cur.fetchall()
+        native = list(cur.fetchall())
+
+        # ── Lấy câu hỏi của dataset hiện tại ─────────────────────────────────
+        cur.execute(
+            "SELECT question_id FROM eval_dataset_questions WHERE dataset_id = %s",
+            (str(dataset_id),),
+        )
+        qb_ids = [str(r["question_id"]) for r in cur.fetchall()]
+        if not qb_ids:
+            return native
+
+        total_qb = len(qb_ids)
+
+        # ── Run kế thừa từ dataset khác phủ ≥ 50% câu của dataset hiện tại ──
+        cur.execute(
+            """
+                SELECT
+                  r.id          AS run_id,
+                  r.name,
+                  r.config,
+                  COUNT(er.id)                                            AS total_questions,
+                  AVG(er.recall_at_5)                                     AS avg_recall,
+                  AVG(er.mrr_at_5)                                        AS avg_mrr,
+                  AVG(er.citation_chunk_match)                            AS avg_citation,
+                  AVG(CASE WHEN er.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,
+                  BOOL_OR(er.ragas_faithfulness IS NOT NULL)              AS has_ragas,
+                  AVG(er.ragas_faithfulness)                              AS avg_ragas_faithfulness,
+                  AVG(er.ragas_answer_relevancy)                          AS avg_ragas_relevancy,
+                  TRUE                                                    AS external,
+                  d.name                                                  AS source_dataset_name,
+                  COUNT(er.id)                                            AS coverage
+                FROM eval_runs r
+                JOIN eval_datasets d ON d.id = r.dataset_id
+                JOIN eval_results er ON er.run_id = r.id
+                WHERE r.dataset_id IS NOT NULL
+                  AND r.dataset_id != %s
+                  AND er.question_id = ANY(%s)
+                GROUP BY r.id, d.name
+                HAVING COUNT(er.id) * 2 >= %s
+                ORDER BY r.created_at DESC
+                """,
+            (str(dataset_id), qb_ids, total_qb),
+        )
+        external = []
+        for row in cur.fetchall():
+            d = dict(row)
+            d["coverage_total"] = total_qb
+            external.append(d)
+
+        return native + external
 
 
 # ── Startup recovery ──────────────────────────────────────────────────────────

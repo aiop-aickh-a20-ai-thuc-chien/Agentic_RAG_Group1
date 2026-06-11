@@ -57,6 +57,7 @@ class QuestionWithStatus(Question):
     reviewed_at: datetime | None = None
     has_results: bool = False
     global_seq: int = 0
+    eval_count: int = 0
 
 
 class QuestionUpdate(BaseModel):
@@ -177,3 +178,8 @@ class RunSummary(BaseModel):
     has_ragas: bool
     avg_ragas_faithfulness: float | None
     avg_ragas_relevancy: float | None
+    # Run kế thừa — tính điểm trên subset câu của dataset hiện tại
+    external: bool = False
+    source_dataset_name: str | None = None
+    coverage: int = 0  # số câu của dataset hiện tại có kết quả trong run này
+    coverage_total: int = 0  # tổng số câu của dataset hiện tại

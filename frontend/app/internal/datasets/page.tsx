@@ -33,6 +33,7 @@ export default function DatasetsPage() {
   const [srcSelected, setSrcSelected] = useState<Set<string>>(new Set());
   const [srcSearch,   setSrcSearch]   = useState("");
   const [importing,   setImporting]   = useState(false);
+  const [importSource, setImportSource] = useState<string>(""); // "" = tất cả câu đã duyệt; còn lại = id dataset nguồn
 
   // Delete dataset confirm
   const [confirmDelete, setConfirmDelete] = useState<Dataset | null>(null);
@@ -98,13 +99,16 @@ export default function DatasetsPage() {
     setQuestions((prev) => prev.filter((q) => q.id !== qid));
   }
 
-  // Mở panel import — load tất cả câu approved từ global pool, bỏ qua những câu đã có trong dataset
-  function openImport() {
+  // Load pool theo nguồn: "" = toàn bộ kho approved, hoặc id 1 dataset nguồn.
+  // Luôn bỏ qua câu đã có trong dataset đang mở + chỉ lấy câu approved.
+  function loadPool(source: string) {
     if (!activeId) return;
-    setSrcSelected(new Set()); setSrcSearch("");
-    setShowImport(true);
+    setSrcSelected(new Set());
     setPoolLoading(true);
-    fetch(`${API}/internal/questions?include_deleted=false`)
+    const url = source
+      ? `${API}/internal/datasets/${source}/questions?include_deleted=false`
+      : `${API}/internal/questions?include_deleted=false`;
+    fetch(url)
       .then((r) => r.json())
       .then((all: Question[]) => {
         const alreadyIn = new Set(questions.map((q) => q.id));
@@ -112,6 +116,20 @@ export default function DatasetsPage() {
         setPoolLoading(false);
       })
       .catch(() => setPoolLoading(false));
+  }
+
+  // Mở panel import — mặc định lấy từ toàn bộ kho câu đã duyệt
+  function openImport() {
+    if (!activeId) return;
+    setSrcSearch("");
+    setImportSource("");
+    setShowImport(true);
+    loadPool("");
+  }
+
+  function changeSource(source: string) {
+    setImportSource(source);
+    loadPool(source);
   }
 
   async function doImport() {
@@ -287,12 +305,27 @@ export default function DatasetsPage() {
               <div className="bg-white rounded-xl border border-black/8 px-5 py-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Thêm từ câu đã duyệt</p>
+                    <p className="text-sm font-medium text-gray-700">Thêm câu vào dataset</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {poolLoading ? "Đang tải..." : `${pool.length} câu approved chưa có trong dataset này`}
                     </p>
                   </div>
                   <button onClick={() => setShowImport(false)} className="text-gray-400 hover:text-gray-600"><X size={15} /></button>
+                </div>
+
+                {/* Chọn nguồn: toàn bộ kho hay kế thừa từ 1 dataset có sẵn */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">Lấy từ:</span>
+                  <select
+                    value={importSource}
+                    onChange={(e) => changeSource(e.target.value)}
+                    className="text-sm border border-black/12 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40 max-w-[280px]"
+                  >
+                    <option value="">Tất cả câu đã duyệt</option>
+                    {datasets.filter((d) => d.id !== activeId).map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex items-center gap-2">

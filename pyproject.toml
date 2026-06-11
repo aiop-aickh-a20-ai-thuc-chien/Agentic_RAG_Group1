@@ -33,6 +33,7 @@ dependencies = [
 evaluation = [
     "datasets",
     "langchain-community",
+    "langchain-openai",
     "openpyxl>=3.1.0",
     "ragas>=0.2",
 ]
