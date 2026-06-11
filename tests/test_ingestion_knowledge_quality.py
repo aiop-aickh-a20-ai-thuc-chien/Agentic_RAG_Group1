@@ -49,10 +49,16 @@ def test_package_exports_only_knowledge_quality_processor() -> None:
     ports = importlib.import_module("agentic_rag.ingestion.knowledge_quality.ports")
 
     assert knowledge_quality.__all__ == [
+        "AVAILABLE_KNOWLEDGE_QUALITY_METHODS",
+        "MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS",
         "DeterministicKnowledgeQualityProcessor",
+        "KnowledgeQualityConfigurationError",
+        "KnowledgeQualityInvocationError",
         "KnowledgeQualityProcessor",
+        "UnknownKnowledgeQualityMethodError",
         "analyze_chunks",
         "annotate_chunks_with_quality",
+        "parse_knowledge_quality_methods",
     ]
     assert knowledge_quality.KnowledgeQualityProcessor is ports.KnowledgeQualityProcessor
 

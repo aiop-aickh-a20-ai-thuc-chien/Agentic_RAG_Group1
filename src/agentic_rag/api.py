@@ -51,6 +51,12 @@ from agentic_rag.generation.evidence import (
     ragflow_provider_from_env,
     source_provider_from_env,
 )
+from agentic_rag.ingestion.knowledge_quality import (
+    KnowledgeQualityConfigurationError,
+    KnowledgeQualityInvocationError,
+    UnknownKnowledgeQualityMethodError,
+    parse_knowledge_quality_methods,
+)
 from agentic_rag.integrations.local_pdf.providers import (
     LocalPdfEvidenceProvider,
     local_pdf_backend_status,
@@ -533,12 +539,23 @@ def source_debug(document_id: str) -> SourceDebugResponse:
 
 
 @api.get("/sources/{document_id}/quality", response_model=KnowledgeQualityReport)
-def source_quality(document_id: str) -> KnowledgeQualityReport:
+def source_quality(
+    document_id: str,
+    methods: Annotated[str | None, Query()] = None,
+) -> KnowledgeQualityReport:
     """Return duplicate/conflict quality findings that involve one local source."""
 
+    selected_methods = _quality_methods_or_422(methods)
     provider = _local_pdf_quality_provider()
     try:
-        return provider.knowledge_quality_report(document_ids=[document_id])
+        return provider.knowledge_quality_report(
+            document_ids=[document_id],
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -546,12 +563,21 @@ def source_quality(document_id: str) -> KnowledgeQualityReport:
 @api.get("/knowledge-quality", response_model=KnowledgeQualityReport)
 def knowledge_quality_report(
     document_ids: Annotated[list[str] | None, Query()] = None,
+    methods: Annotated[str | None, Query()] = None,
 ) -> KnowledgeQualityReport:
     """Return a fresh deterministic quality report for the local knowledge base."""
 
+    selected_methods = _quality_methods_or_422(methods)
     provider = _local_pdf_quality_provider()
     try:
-        return provider.knowledge_quality_report(document_ids=document_ids)
+        return provider.knowledge_quality_report(
+            document_ids=document_ids,
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -559,12 +585,21 @@ def knowledge_quality_report(
 @api.post("/knowledge-quality/scan", response_model=KnowledgeQualityReport)
 def scan_knowledge_quality(
     document_ids: Annotated[list[str] | None, Query()] = None,
+    methods: Annotated[str | None, Query()] = None,
 ) -> KnowledgeQualityReport:
     """Re-scan local chunks and refresh persisted quality annotations when possible."""
 
+    selected_methods = _quality_methods_or_422(methods)
     provider = _local_pdf_quality_provider()
     try:
-        return provider.rescan_knowledge_quality(document_ids=document_ids)
+        return provider.rescan_knowledge_quality(
+            document_ids=document_ids,
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -695,6 +730,13 @@ def _local_pdf_quality_provider() -> LocalPdfEvidenceProvider:
             detail="Knowledge quality is only supported for local PDF sources.",
         )
     return provider
+
+
+def _quality_methods_or_422(methods: str | None) -> list[str]:
+    try:
+        return parse_knowledge_quality_methods(methods)
+    except UnknownKnowledgeQualityMethodError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _source_provider_label(provider_name: str) -> str:

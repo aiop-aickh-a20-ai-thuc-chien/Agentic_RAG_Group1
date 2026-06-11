@@ -27,7 +27,7 @@ from agentic_rag.api import (
     upload_text_source,
     upload_url_source,
 )
-from agentic_rag.core.contracts import Chunk
+from agentic_rag.core.contracts import Chunk, KnowledgeQualityReport
 from agentic_rag.generation.answering import format_evidence_context
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
@@ -528,3 +528,89 @@ def test_knowledge_quality_endpoints_reject_non_local_provider(
     assert aggregate_raised.value.status_code == 404
     assert scan_raised.value.status_code == 404
     assert "local PDF" in str(source_raised.value.detail)
+
+
+def test_knowledge_quality_endpoints_forward_selected_methods(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeProvider:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, list[str] | None, list[str] | None]] = []
+
+        def knowledge_quality_report(
+            self,
+            *,
+            document_ids: list[str] | None = None,
+            methods: list[str] | None = None,
+        ) -> KnowledgeQualityReport:
+            self.calls.append(("report", document_ids, methods))
+            return KnowledgeQualityReport(metadata={"methods": methods or []})
+
+        def rescan_knowledge_quality(
+            self,
+            *,
+            document_ids: list[str] | None = None,
+            methods: list[str] | None = None,
+        ) -> KnowledgeQualityReport:
+            self.calls.append(("scan", document_ids, methods))
+            return KnowledgeQualityReport(metadata={"methods": methods or []})
+
+    provider = FakeProvider()
+    monkeypatch.setattr("agentic_rag.api._local_pdf_quality_provider", lambda: provider)
+
+    source_quality("doc-1", methods="metadata_rules,semantic_rules")
+    knowledge_quality_report(methods="semantic_rules")
+    scan_knowledge_quality(methods="deterministic_v1,metadata_rules")
+
+    assert provider.calls == [
+        ("report", ["doc-1"], ["metadata_rules", "semantic_rules"]),
+        ("report", None, ["semantic_rules"]),
+        ("scan", None, ["deterministic_v1", "metadata_rules"]),
+    ]
+
+
+def test_knowledge_quality_endpoint_rejects_unknown_method(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("agentic_rag.api._local_pdf_quality_provider", lambda: object())
+
+    with pytest.raises(HTTPException) as raised:
+        knowledge_quality_report(methods="unknown")
+
+    assert raised.value.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (
+            "agentic_rag.ingestion.knowledge_quality.KnowledgeQualityConfigurationError",
+            422,
+        ),
+        (
+            "agentic_rag.ingestion.knowledge_quality.KnowledgeQualityInvocationError",
+            502,
+        ),
+    ],
+)
+def test_knowledge_quality_endpoint_maps_model_method_errors(
+    monkeypatch: MonkeyPatch,
+    error: str,
+    status_code: int,
+) -> None:
+    module_name, class_name = error.rsplit(".", 1)
+    error_type = getattr(__import__(module_name, fromlist=[class_name]), class_name)
+
+    class FakeProvider:
+        def knowledge_quality_report(self, **kwargs: object) -> KnowledgeQualityReport:
+            raise error_type("quality method failed")
+
+    monkeypatch.setattr(
+        "agentic_rag.api._local_pdf_quality_provider",
+        lambda: FakeProvider(),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        knowledge_quality_report(methods="semantic_verifier")
+
+    assert raised.value.status_code == status_code

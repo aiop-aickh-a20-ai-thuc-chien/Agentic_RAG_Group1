@@ -6,7 +6,7 @@ import hashlib
 import re
 import unicodedata
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
 from agentic_rag.core.contracts import (
@@ -14,6 +14,21 @@ from agentic_rag.core.contracts import (
     KnowledgeQualityFact,
     KnowledgeQualityFinding,
     KnowledgeQualityReport,
+)
+from agentic_rag.core.ports import LLMClient
+from agentic_rag.ingestion.knowledge_quality.model_methods import (
+    agentic_review_findings,
+    semantic_verifier_findings,
+)
+from agentic_rag.ingestion.knowledge_quality.registry import (
+    AVAILABLE_KNOWLEDGE_QUALITY_METHODS,
+    MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS,
+    KnowledgeQualityConfigurationError,
+    parse_knowledge_quality_methods,
+)
+from agentic_rag.ingestion.knowledge_quality.rules import (
+    metadata_rule_findings,
+    semantic_rule_findings,
 )
 
 _ENTITY_RE = re.compile(r"\b(?:vinfast\s+)?vf\s*-?\s*[0-9][a-z0-9]*(?:\s+plus)?\b", re.I)
@@ -58,6 +73,15 @@ class _FactCandidate(NamedTuple):
     end: int
 
 
+class _AnalysisContext(NamedTuple):
+    chunks: list[Chunk]
+    facts: list[KnowledgeQualityFact]
+    llm_client: LLMClient | None
+
+
+_MethodRunner = Callable[[_AnalysisContext], list[KnowledgeQualityFinding]]
+
+
 class DeterministicKnowledgeQualityProcessor:
     """Annotate chunks with deterministic duplicate/conflict quality metadata."""
 
@@ -71,24 +95,31 @@ def analyze_chunks(
     chunks: list[Chunk],
     *,
     existing_chunks: list[Chunk] | None = None,
+    methods: list[str] | None = None,
+    llm_client: LLMClient | None = None,
 ) -> KnowledgeQualityReport:
     """Return duplicate/conflict findings for the provided chunks."""
 
     all_chunks = [*(existing_chunks or []), *chunks]
+    selected_methods = parse_knowledge_quality_methods(methods)
+    if MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS.intersection(selected_methods) and llm_client is None:
+        raise KnowledgeQualityConfigurationError(
+            "semantic_verifier and agentic_review require an enabled INGESTION_LLM_* profile."
+        )
     facts = _extract_facts(all_chunks)
-    findings = [
-        *_exact_duplicate_findings(all_chunks),
-        *_near_duplicate_findings(all_chunks),
-        *_conflict_findings(facts),
-    ]
+    findings: list[KnowledgeQualityFinding] = []
+    context = _AnalysisContext(chunks=all_chunks, facts=facts, llm_client=llm_client)
+    for method in selected_methods:
+        findings.extend(_KNOWLEDGE_QUALITY_METHOD_REGISTRY[method](context))
     return KnowledgeQualityReport(
         facts=facts,
-        findings=findings,
+        findings=_deduplicate_findings(findings),
         metadata={
             "chunk_count": len(all_chunks),
             "new_chunk_count": len(chunks),
             "existing_chunk_count": len(existing_chunks or []),
-            "method": "deterministic_offline",
+            "method": selected_methods[0],
+            "methods": selected_methods,
         },
     )
 
@@ -97,10 +128,19 @@ def annotate_chunks_with_quality(
     chunks: list[Chunk],
     *,
     existing_chunks: list[Chunk] | None = None,
+    methods: list[str] | None = None,
+    llm_client: LLMClient | None = None,
+    report: KnowledgeQualityReport | None = None,
 ) -> list[Chunk]:
     """Attach a compact quality summary to each provided chunk."""
 
-    report = analyze_chunks(chunks, existing_chunks=existing_chunks)
+    if report is None:
+        report = analyze_chunks(
+            chunks,
+            existing_chunks=existing_chunks,
+            methods=methods,
+            llm_client=llm_client,
+        )
     chunk_findings = _findings_by_chunk(report.findings)
     facts_by_chunk = _facts_by_chunk(report.facts)
     output: list[Chunk] = []
@@ -116,6 +156,7 @@ def annotate_chunks_with_quality(
             "fact_count": len(facts),
             "finding_ids": [finding.finding_id for finding in findings],
             "fact_ids": [fact.fact_id for fact in facts],
+            "methods": report.metadata.get("methods", ["deterministic_v1"]),
         }
         metadata = {**chunk.metadata, "knowledge_quality": summary}
         output.append(chunk.model_copy(update={"metadata": metadata}))
@@ -252,7 +293,10 @@ def _exact_duplicate_findings(chunks: list[Chunk]) -> list[KnowledgeQualityFindi
                 summary=f"Exact duplicate text appears in {len(chunk_ids)} chunks.",
                 suggested_action="Keep the most authoritative source or remove duplicate chunks.",
                 confidence=1.0,
-                metadata={"sources": [_chunk_source(chunk) for chunk in group]},
+                metadata={
+                    "method": "deterministic_v1",
+                    "sources": [_chunk_source(chunk) for chunk in group],
+                },
             )
         )
     return findings
@@ -292,6 +336,7 @@ def _near_duplicate_findings(chunks: list[Chunk]) -> list[KnowledgeQualityFindin
                         ),
                         confidence=round(score, 4),
                         metadata={
+                            "method": "deterministic_v1",
                             "similarity": round(score, 4),
                             "sources": [_chunk_source(left), _chunk_source(right)],
                         },
@@ -332,6 +377,8 @@ def _conflict_findings(facts: list[KnowledgeQualityFact]) -> list[KnowledgeQuali
                         ),
                         confidence=0.95,
                         metadata={
+                            "method": "deterministic_v1",
+                            "conflict_type": "numeric",
                             "entity": left.entity,
                             "attribute": attribute,
                             "left_value": left.value,
@@ -479,3 +526,39 @@ def _deduplicate_findings(
     for finding in findings:
         deduped[finding.finding_id] = finding
     return list(deduped.values())
+
+
+def _run_deterministic_v1(context: _AnalysisContext) -> list[KnowledgeQualityFinding]:
+    return [
+        *_exact_duplicate_findings(context.chunks),
+        *_near_duplicate_findings(context.chunks),
+        *_conflict_findings(context.facts),
+    ]
+
+
+def _run_metadata_rules(context: _AnalysisContext) -> list[KnowledgeQualityFinding]:
+    return metadata_rule_findings(context.chunks)
+
+
+def _run_semantic_rules(context: _AnalysisContext) -> list[KnowledgeQualityFinding]:
+    return semantic_rule_findings(context.chunks)
+
+
+def _run_semantic_verifier(context: _AnalysisContext) -> list[KnowledgeQualityFinding]:
+    assert context.llm_client is not None
+    return semantic_verifier_findings(context.chunks, llm_client=context.llm_client)
+
+
+def _run_agentic_review(context: _AnalysisContext) -> list[KnowledgeQualityFinding]:
+    assert context.llm_client is not None
+    return agentic_review_findings(context.chunks, llm_client=context.llm_client)
+
+
+_KNOWLEDGE_QUALITY_METHOD_REGISTRY: dict[str, _MethodRunner] = {
+    "deterministic_v1": _run_deterministic_v1,
+    "metadata_rules": _run_metadata_rules,
+    "semantic_rules": _run_semantic_rules,
+    "semantic_verifier": _run_semantic_verifier,
+    "agentic_review": _run_agentic_review,
+}
+assert tuple(_KNOWLEDGE_QUALITY_METHOD_REGISTRY) == AVAILABLE_KNOWLEDGE_QUALITY_METHODS
