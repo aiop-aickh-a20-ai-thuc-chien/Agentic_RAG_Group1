@@ -25,6 +25,7 @@ from agentic_rag.model_runtime.embeddings import (
 from agentic_rag.model_runtime.llm import LiteLLMClient
 from agentic_rag.model_runtime.rerankers import (
     LiteLLMReranker,
+    ListwiseLLMReranker,
     ScoreReranker,
     SentenceTransformersReranker,
     preload_local_reranker,
@@ -79,6 +80,8 @@ def get_reranker() -> Reranker:
         return ScoreReranker()
     if config.provider == "sentence_transformers":
         return SentenceTransformersReranker(config=config, device=config.device)
+    if config.provider == "listwise_llm":
+        return ListwiseLLMReranker(config=config)
     return LiteLLMReranker(config=config)
 
 

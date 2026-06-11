@@ -72,6 +72,20 @@ class RerankerConfig(_RuntimeConfigModel):
         return self.model
 
 
+class SparseConfig(_RuntimeConfigModel):
+    """Resolved sparse retrieval configuration."""
+
+    provider: str
+    model: str | None = None
+
+
+class DenseConfig(_RuntimeConfigModel):
+    """Resolved dense retrieval configuration."""
+
+    provider: str
+    model: str | None = None
+
+
 def resolve_llm_profile(role: ModelRole) -> LLMProfileConfig:
     """Resolve one role-aware LLM profile without importing provider libraries."""
 
@@ -146,10 +160,12 @@ def resolve_reranker_config() -> RerankerConfig:
         model = None
     elif provider == "sentence_transformers":
         model = model or DEFAULT_RERANKER_MODEL
+    elif provider == "listwise_llm":
+        model = model or "castorini/rankzephyr-7b-v1-full"
     elif not model:
         raise ModelRuntimeConfigurationError(
-            "RERANK_MODEL is required when RERANK_PROVIDER is not 'score' or "
-            "'sentence_transformers'."
+            "RERANK_MODEL is required when RERANK_PROVIDER is not 'score', "
+            "'listwise_llm', or 'sentence_transformers'."
         )
 
     return RerankerConfig(
@@ -166,6 +182,36 @@ def resolve_reranker_config() -> RerankerConfig:
     )
 
 
+def resolve_sparse_config() -> SparseConfig:
+    """Resolve sparse retrieval configuration."""
+
+    load_local_env()
+    provider = (_env_value("SPARSE_PROVIDER") or "bm25").lower()
+    model = _env_value("SPARSE_MODEL")
+    if provider == "neural" and not model:
+        model = "BAAI/bge-m3"
+
+    return SparseConfig(
+        provider=provider,
+        model=model,
+    )
+
+
+def resolve_dense_config() -> DenseConfig:
+    """Resolve dense retrieval configuration."""
+
+    load_local_env()
+    provider = (_env_value("DENSE_PROVIDER") or "vector_store").lower()
+    model = _env_value("DENSE_MODEL")
+    if provider == "colbert" and not model:
+        model = "BAAI/bge-m3"
+
+    return DenseConfig(
+        provider=provider,
+        model=model,
+    )
+
+
 def validate_model_runtime_config() -> None:
     """Validate all model-runtime profiles without contacting providers."""
 
@@ -173,6 +219,8 @@ def validate_model_runtime_config() -> None:
         resolve_llm_profile(role)
     resolve_embedding_config()
     resolve_reranker_config()
+    resolve_sparse_config()
+    resolve_dense_config()
 
 
 def _env_value(name: str, *, fallback_name: str | None = None) -> str | None:

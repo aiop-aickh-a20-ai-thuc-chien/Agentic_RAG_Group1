@@ -16,7 +16,12 @@ from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, EmbeddingOutput, SearchResult
-from agentic_rag.model_runtime.config import EmbeddingConfig, resolve_embedding_config
+from agentic_rag.model_runtime.config import (
+    EmbeddingConfig,
+    resolve_embedding_config,
+    resolve_sparse_config,
+    resolve_dense_config,
+)
 from agentic_rag.model_runtime.embeddings import (
     EmbeddingCompatibilityAdapter,
     validate_embedding_output,
@@ -86,8 +91,13 @@ class Store:
 
         return {**base, "requery": requery}
 
-    def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
-        """Build or refresh a BM25 index from shared chunks."""
+    def _build_bm25_index(self, chunks: list[Chunk]) -> Any:
+        """Build or refresh a sparse index (BM25 or Neural) from shared chunks."""
+        config = resolve_sparse_config()
+        if config.provider == "neural":
+            from agentic_rag.retrieval.sparse_neural import NeuralSparseIndex
+            return NeuralSparseIndex(chunks, model_name=config.model or "BAAI/bge-m3")
+
         corpus = [_tokenize(chunk.text) for chunk in chunks]
         store = BM25Okapi(corpus=corpus)  # type: ignore[no-untyped-call]
         return store
@@ -122,6 +132,10 @@ class Store:
 
     def _build_vector_index(self, chunks: list[Chunk]) -> Any:
         """Build or refresh a dense vector index from shared chunks."""
+        dense_config = resolve_dense_config()
+        if dense_config.provider == "colbert":
+            from agentic_rag.retrieval.dense_colbert import ColbertIndex
+            return ColbertIndex(chunks, model_name=dense_config.model or "BAAI/bge-m3")
 
         embedding = _configured_embedding()
         if _configured_vector_store() == "pgvector":

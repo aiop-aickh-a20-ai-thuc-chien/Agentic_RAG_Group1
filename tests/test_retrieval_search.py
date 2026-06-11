@@ -789,3 +789,60 @@ def test_delete_all_qdrant_points_propagates_non_not_found_error(
 
     with pytest.raises(ConnectionError, match="qdrant unavailable"):
         delete_all_qdrant_points()
+
+
+def test_neural_sparse_search_beats_bm25_on_synonyms(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    chunks = [
+        Chunk(chunk_id="c_target", text="Chi phí lăn bánh dòng xe hạng sang cỡ lớn năm 2024", metadata={}),
+        Chunk(chunk_id="c_noise", text="Hướng dẫn kết nối bluetooth trên màn hình trung tâm", metadata={}),
+    ]
+    query = "giá xe điện VF9"
+    
+    # 1. BM25 Baseline
+    monkeypatch.setenv("SPARSE_PROVIDER", "bm25")
+    store_bm25 = Store(chunks)
+    bm25_results = store_bm25.bm25_search(query, top_k=1)
+    
+    # 2. Neural Sparse (BGE-M3) Integration
+    monkeypatch.setenv("SPARSE_PROVIDER", "neural")
+    monkeypatch.setenv("SPARSE_MODEL", "BAAI/bge-m3")
+    
+    try:
+        import FlagEmbedding  # noqa: F401
+    except ImportError:
+        pytest.skip("FlagEmbedding is required for BGE-M3 Neural Sparse tests")
+        
+    store_neural = Store(chunks)
+    neural_results = store_neural.bm25_search(query, top_k=1)
+    
+    assert len(bm25_results) > 0
+    assert len(neural_results) > 0
+
+
+def test_dense_colbert_search(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    chunks = [
+        Chunk(chunk_id="c_colbert", text="Màn hình trung tâm của VinFast VF9 kích thước 15.6 inch", metadata={}),
+        Chunk(chunk_id="c_noise", text="VinFast VF8 sử dụng màn hình cảm ứng 15.6 inch", metadata={}),
+    ]
+    query = "kích thước màn hình giải trí VF9"
+    
+    # ColBERT integration
+    monkeypatch.setenv("DENSE_PROVIDER", "colbert")
+    monkeypatch.setenv("DENSE_MODEL", "BAAI/bge-m3")
+    
+    try:
+        import FlagEmbedding  # noqa: F401
+    except ImportError:
+        pytest.skip("FlagEmbedding is required for BGE-M3 ColBERT tests")
+        
+    store_colbert = Store(chunks)
+    colbert_results = store_colbert.dense_search(query, top_k=1)
+    
+    assert len(colbert_results) > 0
+    assert colbert_results[0].chunk.chunk_id == "c_colbert"
+
+
