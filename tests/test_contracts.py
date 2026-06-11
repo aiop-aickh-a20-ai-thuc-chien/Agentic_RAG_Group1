@@ -243,7 +243,7 @@ def test_embedding_contract_rejects_empty_texts() -> None:
 
     output = EmbeddingOutput(
         vectors=[[0.1, 0.2], [0.3, 0.4]],
-        provider="huggingface",
+        provider="sentence_transformers",
         model="sentence-transformers/test",
         dimensions=2,
     )

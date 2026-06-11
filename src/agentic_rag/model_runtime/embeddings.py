@@ -36,16 +36,17 @@ class LiteLLMEmbeddingClient(BaseModel):
         try:
             litellm = importlib.import_module("litellm")
             response = litellm.embedding(**self._embedding_kwargs(request))
+            vectors = _extract_litellm_vectors(response)
+            return validate_embedding_output(
+                vectors,
+                config=self.config,
+                input_count=len(request.texts),
+                model_name=self._model_name(),
+            )
+        except ModelInvocationError:
+            raise
         except Exception as exc:
             raise ModelInvocationError(f"Embedding invocation failed: {exc}") from exc
-
-        vectors = _extract_litellm_vectors(response)
-        return validate_embedding_output(
-            vectors,
-            config=self.config,
-            input_count=len(request.texts),
-            model_name=self._model_name(),
-        )
 
     def _embedding_kwargs(self, request: EmbeddingInput) -> dict[str, object]:
         kwargs: dict[str, object] = {
@@ -80,22 +81,25 @@ class HuggingFaceEmbeddingClient(BaseModel):
     def embed(self, request: EmbeddingInput) -> EmbeddingOutput:
         """Return normalized embeddings from a cached local model."""
 
-        model = _load_sentence_transformer(self.config.model, self.device)
         try:
+            model = _load_sentence_transformer(self.config.model, self.device)
             raw_vectors = model.encode(
                 request.texts,
                 convert_to_numpy=False,
                 show_progress_bar=False,
             )
+            return validate_embedding_output(
+                _coerce_vectors(raw_vectors),
+                config=self.config,
+                input_count=len(request.texts),
+                model_name=self.config.model,
+            )
+        except ModelRuntimeConfigurationError:
+            raise
+        except ModelInvocationError:
+            raise
         except Exception as exc:
             raise ModelInvocationError(f"Local embedding invocation failed: {exc}") from exc
-
-        return validate_embedding_output(
-            _coerce_vectors(raw_vectors),
-            config=self.config,
-            input_count=len(request.texts),
-            model_name=self.config.model,
-        )
 
 
 class EmbeddingCompatibilityAdapter(BaseModel):

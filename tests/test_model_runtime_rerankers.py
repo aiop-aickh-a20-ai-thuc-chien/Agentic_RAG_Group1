@@ -138,9 +138,38 @@ def test_litellm_reranker_passes_documents_and_top_n(monkeypatch: MonkeyPatch) -
     assert captured["api_base"] == "https://example.test/v1"
     assert captured["api_key"] == "secret"
     assert captured["timeout"] == 7.0
+    assert "custom_llm_provider" not in captured
     assert [result.chunk.chunk_id for result in output.results] == ["chunk-b"]
     assert output.results[0].score == 0.91
     assert output.metadata["used_provider"] == "cohere"
+
+
+def test_local_reranker_passes_explicit_hosted_vllm_provider(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_rerank(**kwargs: Any) -> object:
+        captured.update(kwargs)
+        return {"results": [{"index": 0, "relevance_score": 0.88}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(rerank=fake_rerank))
+    reranker = LiteLLMReranker(
+        config=_config(
+            provider="local",
+            model="local-reranker",
+            api_base="http://127.0.0.1:8001",
+        )
+    )
+
+    output = reranker.rerank(_request([_result("chunk-a", 0.2, 1)], top_k=1))
+
+    assert captured["model"] == "local-reranker"
+    assert captured["custom_llm_provider"] == "hosted_vllm"
+    assert captured["api_base"] == "http://127.0.0.1:8001"
+    assert output.metadata["configured_provider"] == "local"
+    assert output.metadata["used_provider"] == "local"
+    assert output.metadata["model"] == "local-reranker"
 
 
 @pytest.mark.parametrize(

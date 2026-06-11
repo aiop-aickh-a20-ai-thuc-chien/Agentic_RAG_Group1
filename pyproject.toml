@@ -26,12 +26,15 @@ dependencies = [
     "turbovec>=0.7.0",
     # Storage/cloud adapters
     "boto3>=1.34,<2",
+    # Language detection
+    "lingua-language-detector>=2.0.2",
 ]
 
 [project.optional-dependencies]
 # Evaluation workbook tooling and deferred RAGAS dependencies.
 evaluation = [
     "datasets",
+    "langchain-community",
     "openpyxl>=3.1.0",
     "ragas>=0.2",
 ]
@@ -45,7 +48,21 @@ observability = [
 # selection is machine-specific; do not pin CUDA wheels in project metadata.
 local-models = [
     "sentence-transformers>=5,<6",
-    "torch>=2.12,<3",
+    "torch>=2.5,<3",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124",  marker = "sys_platform == 'linux'" }
+
+[tool.uv]
+required-environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [build-system]
@@ -103,9 +120,13 @@ module = [
 follow_untyped_imports = true
 
 [[tool.mypy.overrides]]
-module = ["ragas", "ragas.*", "datasets", "datasets.*"]
+module = ["ragas", "ragas.*", "datasets", "datasets.*", "langchain_openai", "langchain_openai.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["openpyxl", "openpyxl.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["lingua", "lingua.*"]
 ignore_missing_imports = true

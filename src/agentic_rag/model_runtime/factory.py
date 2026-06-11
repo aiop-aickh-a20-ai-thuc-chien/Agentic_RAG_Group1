@@ -66,7 +66,7 @@ def get_embedding_client() -> EmbeddingClient:
     """Return the configured embedding client."""
 
     config = resolve_embedding_config()
-    if config.provider == "huggingface":
+    if config.provider == "sentence_transformers":
         return HuggingFaceEmbeddingClient(config=config, device=config.device)
     return LiteLLMEmbeddingClient(config=config)
 

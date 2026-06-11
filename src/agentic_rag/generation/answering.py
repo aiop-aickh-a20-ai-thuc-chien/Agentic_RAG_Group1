@@ -16,6 +16,7 @@ from agentic_rag.core.contracts import (
     SearchResult,
 )
 from agentic_rag.core.ports import LLMClient
+from agentic_rag.language import detect_language as _detect_language
 from agentic_rag.model_runtime.config import LLMProfileConfig, resolve_llm_profile
 from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
 from agentic_rag.model_runtime.factory import get_llm_client
@@ -38,9 +39,25 @@ try:
 except ImportError:
     _ls_traceable = _noop_traceable  # type: ignore[assignment]
 
-NOT_FOUND_ANSWER = "Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp."
+# ---------------------------------------------------------------------------
+# Language helpers
+# ---------------------------------------------------------------------------
+
+_NOT_FOUND_ANSWERS: dict[str, str] = {
+    "vi": "Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp.",
+    "en": "The information is not available in the provided documents.",
+}
+
+# Kept for backward compatibility — always Vietnamese
+NOT_FOUND_ANSWER = _NOT_FOUND_ANSWERS["vi"]
+
 MIN_EVIDENCE_TEXT_LENGTH = 12
 MAX_AUTO_CITATIONS = 3
+
+
+def _not_found_answer(lang: str = "vi") -> str:
+    """Return the not-found message in the requested language."""
+    return _NOT_FOUND_ANSWERS.get(lang, _NOT_FOUND_ANSWERS["en"])
 
 
 class _GenerationModel(BaseModel):
@@ -91,8 +108,11 @@ def _traced_complete(prompt: str, client: LLMClient) -> str:
 def _traced_parse(
     answer_text: str,
     usable_evidence: list[SearchResult],
+    lang: str = "vi",
 ) -> tuple[Answer, dict[str, object]]:
-    return _answer_from_text_with_trace(answer_text=answer_text, usable_evidence=usable_evidence)
+    return _answer_from_text_with_trace(
+        answer_text=answer_text, usable_evidence=usable_evidence, lang=lang
+    )
 
 
 def generate_answer(
@@ -114,12 +134,17 @@ def generate_answer_with_trace(
     evidence_context: str,
     evidence_chunks: list[SearchResult],
     original_question: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    lang: str | None = None,
 ) -> GenerationResult:
     """Generate a grounded answer and return trace details for debugging."""
 
+    if lang is None:
+        lang = _detect_language(original_question or question, history)
+
     usable_evidence = _usable_evidence(evidence_chunks)
     if not question.strip() or not usable_evidence:
-        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=_not_found_answer(lang), status="not_found", citations=[])
         return GenerationResult(
             answer=answer,
             trace=_build_generation_trace(
@@ -133,12 +158,13 @@ def generate_answer_with_trace(
                 guardrail_reason="missing_question_or_evidence",
                 llm_source="skipped",
                 streaming=False,
+                lang=lang,
             ),
         )
 
     context = evidence_context.strip() or format_evidence_context(usable_evidence)
     if len(context) < MIN_EVIDENCE_TEXT_LENGTH:
-        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=_not_found_answer(lang), status="not_found", citations=[])
         return GenerationResult(
             answer=answer,
             trace=_build_generation_trace(
@@ -152,16 +178,21 @@ def generate_answer_with_trace(
                 guardrail_reason="evidence_context_too_short",
                 llm_source="skipped",
                 streaming=False,
+                lang=lang,
             ),
         )
 
     prompt = build_grounded_prompt(
-        question=question, evidence_context=context, original_question=original_question
+        question=question,
+        evidence_context=context,
+        original_question=original_question,
+        history=history,
+        lang=lang,
     )
     client = get_llm_client("generation")
     llm_source = "configured_llm" if client else "deterministic_fallback"
     answer_text = _traced_complete(prompt, client) if client else _fallback_answer(usable_evidence)
-    answer, parse_trace = _traced_parse(answer_text, usable_evidence)
+    answer, parse_trace = _traced_parse(answer_text, usable_evidence, lang=lang)
 
     return GenerationResult(
         answer=answer,
@@ -176,6 +207,7 @@ def generate_answer_with_trace(
             guardrail_reason=_guardrail_reason(answer=answer, parse_trace=parse_trace),
             llm_source=llm_source,
             streaming=False,
+            lang=lang,
         ),
     )
 
@@ -184,12 +216,17 @@ def stream_answer(
     question: str,
     evidence_context: str,
     evidence_chunks: list[SearchResult],
+    lang: str | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> Iterator[AnswerStreamEvent]:
     """Stream a grounded answer directly from the configured LLM when available."""
 
+    if lang is None:
+        lang = _detect_language(question, history)
+
     usable_evidence = _usable_evidence(evidence_chunks)
     if not question.strip() or not usable_evidence:
-        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=_not_found_answer(lang), status="not_found", citations=[])
         yield AnswerDone(
             answer=answer,
             trace=_build_generation_trace(
@@ -203,13 +240,14 @@ def stream_answer(
                 guardrail_reason="missing_question_or_evidence",
                 llm_source="skipped",
                 streaming=True,
+                lang=lang,
             ),
         )
         return
 
     context = evidence_context.strip() or format_evidence_context(usable_evidence)
     if len(context) < MIN_EVIDENCE_TEXT_LENGTH:
-        answer = Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[])
+        answer = Answer(answer=_not_found_answer(lang), status="not_found", citations=[])
         yield AnswerDone(
             answer=answer,
             trace=_build_generation_trace(
@@ -223,17 +261,21 @@ def stream_answer(
                 guardrail_reason="evidence_context_too_short",
                 llm_source="skipped",
                 streaming=True,
+                lang=lang,
             ),
         )
         return
 
-    prompt = build_grounded_prompt(question=question, evidence_context=context)
+    prompt = build_grounded_prompt(
+        question=question, evidence_context=context, history=history, lang=lang
+    )
     client = get_llm_client("generation")
     if client is None:
         raw_answer = _fallback_answer(usable_evidence)
         final_answer, parse_trace = _answer_from_text_with_trace(
             answer_text=raw_answer,
             usable_evidence=usable_evidence,
+            lang=lang,
         )
         trace = _build_generation_trace(
             question=question,
@@ -246,6 +288,7 @@ def stream_answer(
             guardrail_reason=_guardrail_reason(answer=final_answer, parse_trace=parse_trace),
             llm_source="deterministic_fallback",
             streaming=True,
+            lang=lang,
         )
         for delta in _chunk_text(final_answer.answer):
             yield AnswerDelta(text=delta)
@@ -263,7 +306,7 @@ def stream_answer(
         yield AnswerDelta(text=stream_delta.text)
 
     final_answer, parse_trace = _answer_from_text_with_trace(
-        answer_text=answer_text.strip(), usable_evidence=usable_evidence
+        answer_text=answer_text.strip(), usable_evidence=usable_evidence, lang=lang
     )
     if final_answer.status == "answered" and final_answer.answer.startswith(answer_text):
         marker_delta = final_answer.answer[len(answer_text) :]
@@ -283,6 +326,7 @@ def stream_answer(
             guardrail_reason=_guardrail_reason(answer=final_answer, parse_trace=parse_trace),
             llm_source="configured_llm",
             streaming=True,
+            lang=lang,
         ),
     )
 
@@ -321,20 +365,25 @@ def apply_citation_markers(answer: str, citations: list[Citation]) -> str:
     return _append_marker(stripped, marker_suffix)
 
 
-def _answer_from_text(answer_text: str, usable_evidence: list[SearchResult]) -> Answer:
+def _answer_from_text(
+    answer_text: str, usable_evidence: list[SearchResult], lang: str = "vi"
+) -> Answer:
     return _answer_from_text_with_trace(
         answer_text=answer_text,
         usable_evidence=usable_evidence,
+        lang=lang,
     )[0]
 
 
 def _answer_from_text_with_trace(
     answer_text: str,
     usable_evidence: list[SearchResult],
+    lang: str = "vi",
 ) -> tuple[Answer, dict[str, object]]:
     parsed = _parse_generation_text(answer_text)
     cleaned_answer_text = _strip_trailing_citation_list(parsed.answer_text)
     parse_trace: dict[str, object] = {
+        "lang": lang,
         "structured": parsed.structured,
         "requested_citation_ids": parsed.requested_citation_ids,
         "declared_status": parsed.status,
@@ -347,7 +396,7 @@ def _answer_from_text_with_trace(
         or _is_not_found_answer(cleaned_answer_text)
     ):
         parse_trace["decision"] = "not_found_text"
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
+        return Answer(answer=_not_found_answer(lang), status="not_found", citations=[]), parse_trace
 
     citations = _citations_from_evidence(usable_evidence)
     marked_answer, selected_citations, citation_trace = _select_answer_citations(
@@ -358,12 +407,12 @@ def _answer_from_text_with_trace(
     parse_trace["citation_selection"] = citation_trace
     if not selected_citations:
         parse_trace["decision"] = "no_valid_citation"
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
+        return Answer(answer=_not_found_answer(lang), status="not_found", citations=[]), parse_trace
 
     citation_payload = [citation.model_dump() for citation in selected_citations]
     if not validate_answer_with_citations(marked_answer, citation_payload, usable_evidence):
         parse_trace["decision"] = "citation_validation_failed"
-        return Answer(answer=NOT_FOUND_ANSWER, status="not_found", citations=[]), parse_trace
+        return Answer(answer=_not_found_answer(lang), status="not_found", citations=[]), parse_trace
 
     parse_trace["decision"] = "answered"
     return Answer(
@@ -414,16 +463,37 @@ def validate_answer_with_citations(
 
 
 def build_grounded_prompt(
-    *, question: str, evidence_context: str, original_question: str | None = None
+    *,
+    question: str,
+    evidence_context: str,
+    original_question: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    lang: str | None = None,
 ) -> str:
     """Build a prompt that constrains the LLM to retrieved evidence."""
+
+    source_question = original_question.strip() if original_question else question.strip()
+    if lang is None:
+        lang = _detect_language(source_question, history)
+    not_found_msg = _not_found_answer(lang)
+    translate_note = (
+        "Translate all product names, terms, and any text from the evidence into English. "
+        if lang == "en"
+        else ""
+    )
+
+    history_block = ""
+    if history:
+        history_text = "\n".join(
+            f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}" for m in history[-6:]
+        )
+        history_block = f"<conversation_history>\n{history_text}\n</conversation_history>\n\n"
 
     return (
         "<task>\n"
         "Answer the user's question using only the supplied evidence.\n"
         "</task>\n\n"
-        "<context>\n"
-        "<question>\n"
+        "<context>\n" + history_block + "<question>\n"
         f"{question.strip()}\n"
         "</question>\n\n"
         "<evidence_context>\n"
@@ -431,10 +501,11 @@ def build_grounded_prompt(
         "</evidence_context>\n"
         "</context>\n\n"
         "<instructions>\n"
-        "- IMPORTANT: The user's original question is: \""
-        f'{original_question.strip() if original_question else question.strip()}". '
-        "Detect the language of this question and write your entire answer in that same language. "
-        "English → English. Vietnamese → Vietnamese. Never mix languages.\n"
+        "- IMPORTANT: The user's question is written in "
+        f"{'English' if lang == 'en' else 'Vietnamese'}. "
+        f"Write your entire answer in {'English' if lang == 'en' else 'Vietnamese'} only. "
+        f"{translate_note}"
+        "Never include words from another language.\n"
         "- Be thorough and complete: cover all entities, aspects, or items mentioned "
         "in the question. Do not stop after the first relevant fact.\n"
         "- For comparison or multi-entity questions, address each entity separately "
@@ -450,7 +521,7 @@ def build_grounded_prompt(
         "- Use only marker numbers that appear in the evidence context.\n"
         "- If you return JSON for internal parsing, use keys answer, status, "
         "used_citation_ids, and reason; otherwise return only the user-facing answer.\n"
-        f"- If the evidence is insufficient, answer exactly: {NOT_FOUND_ANSWER}\n"
+        f"- If the evidence is insufficient, answer exactly: {not_found_msg}\n"
         "</instructions>\n"
     )
 
@@ -710,6 +781,7 @@ def _format_location(*, page: object | None, section: object | None) -> str:
 def _is_not_found_answer(answer: str) -> bool:
     normalized = answer.strip().lower().rstrip(".")
     return normalized in {
+        # Vietnamese variants
         NOT_FOUND_ANSWER.lower().rstrip("."),
         "không có trong tài liệu được cung cấp",
         "không tìm thấy trong tài liệu",
@@ -718,6 +790,14 @@ def _is_not_found_answer(answer: str) -> bool:
         "khong co trong tai lieu",
         "khong tim thay trong tai lieu",
         "khong co thong tin trong tai lieu duoc cung cap",
+        # English variants
+        _NOT_FOUND_ANSWERS["en"].lower().rstrip("."),
+        "the information is not available in the provided documents",
+        "the information is not in the documents",
+        "this information is not available in the provided documents",
+        "i could not find this information in the provided documents",
+        "no information found in the provided documents",
+        "not found in the documents",
     }
 
 
@@ -790,6 +870,7 @@ def _build_generation_trace(
     guardrail_reason: str,
     llm_source: str,
     streaming: bool,
+    lang: str = "vi",
 ) -> dict[str, object]:
     evidence_ids = [result.chunk.chunk_id for result in evidence_chunks]
     citations = [citation.model_dump() for citation in answer.citations]
@@ -799,17 +880,19 @@ def _build_generation_trace(
                 "prompt": "grounded_evidence_prompt",
                 "citation_style": "inline_numeric_markers",
                 "output_contract": "internal_parse_answer_status_used_citation_ids",
+                "detected_lang": lang,
             },
             "latency_ms": 1,
             "input": {
                 "question": question,
+                "detected_lang": lang,
                 "evidence_chunk_ids": evidence_ids,
                 "evidence_context_chars": len(evidence_context),
             },
             "output": {
                 "prompt_preview": prompt[:2000],
                 "instruction_summary": [
-                    "answer in Vietnamese",
+                    f"answer in detected language ({lang})",
                     "use only evidence context for document questions",
                     "do not invent facts or citations",
                     "place citation markers next to supported claims",
