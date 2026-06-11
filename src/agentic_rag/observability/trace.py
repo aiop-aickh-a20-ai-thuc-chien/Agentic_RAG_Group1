@@ -779,7 +779,7 @@ def _generation_trace(
             "output": {
                 "evidence_context_preview": _preview(evidence_context, 2000),
                 "instruction_summary": [
-                    "answer in Vietnamese",
+                    "answer in same language with the user's question",
                     "use only evidence context",
                     "do not invent facts or citations",
                     "place citation markers next to supported claims",
