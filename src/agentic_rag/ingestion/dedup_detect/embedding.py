@@ -48,10 +48,7 @@ def embedding_vectors_from_client(
     """Embed documents with the shared project embedding client contract."""
 
     output = client.embed(EmbeddingInput(texts=[document.text for document in documents]))
-    return {
-        document.document_id: output.vectors[index]
-        for index, document in enumerate(documents)
-    }
+    return {document.document_id: output.vectors[index] for index, document in enumerate(documents)}
 
 
 def embedding_vectors_from_first_available_client(
@@ -85,9 +82,7 @@ def embedding_vectors_from_first_available_client(
             fallback_attempts=tuple(attempts),
         )
 
-    attempted = ", ".join(
-        f"{attempt['provider']}/{attempt['model']}" for attempt in attempts
-    )
+    attempted = ", ".join(f"{attempt['provider']}/{attempt['model']}" for attempt in attempts)
     raise RuntimeError(f"All embedding providers failed for dedup Layer 3: {attempted}")
 
 
@@ -168,10 +163,7 @@ def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     if not left:
         raise ValueError("Embedding vectors must not be empty.")
 
-    dot = sum(
-        left_value * right_value
-        for left_value, right_value in zip(left, right, strict=True)
-    )
+    dot = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
     left_norm = math.sqrt(sum(value * value for value in left))
     right_norm = math.sqrt(sum(value * value for value in right))
     if left_norm == 0.0 or right_norm == 0.0:
