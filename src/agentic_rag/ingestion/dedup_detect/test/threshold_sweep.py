@@ -6,7 +6,6 @@ import argparse
 import importlib
 import json
 import os
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
@@ -42,8 +41,22 @@ class _SentenceTransformerModel(Protocol):
         """Encode texts into vectors."""
 
 
-@dataclass(frozen=True)
 class LabeledPair:
+    """One labeled pair for manual embedding-threshold calibration."""
+
+    def __init__(
+        self,
+        *,
+        pair_id: str,
+        left: str,
+        right: str,
+        label: PairLabel,
+    ) -> None:
+        self.pair_id = pair_id
+        self.left = left
+        self.right = right
+        self.label = label
+
     pair_id: str
     left: str
     right: str

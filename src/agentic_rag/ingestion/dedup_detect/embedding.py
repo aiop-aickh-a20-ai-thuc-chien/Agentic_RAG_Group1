@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import EmbeddingInput
 from agentic_rag.core.ports import EmbeddingClient
@@ -29,8 +30,13 @@ DEDUP_SENTENCE_TRANSFORMER_MODEL_ENV = "DEDUP_DETECT_SENTENCE_TRANSFORMER_MODEL"
 DEDUP_SENTENCE_TRANSFORMER_DEVICE_ENV = "DEDUP_DETECT_SENTENCE_TRANSFORMER_DEVICE"
 
 
-@dataclass(frozen=True)
-class EmbeddingFallbackCandidate:
+class _EmbeddingModel(BaseModel):
+    """Base model for strict embedding fallback contracts."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+
+
+class EmbeddingFallbackCandidate(_EmbeddingModel):
     """One Layer 3 embedding provider candidate."""
 
     name: str
@@ -39,8 +45,7 @@ class EmbeddingFallbackCandidate:
     model: str
 
 
-@dataclass(frozen=True)
-class EmbeddingVectorResult:
+class EmbeddingVectorResult(_EmbeddingModel):
     """Embedding vectors plus provider metadata from fallback resolution."""
 
     vectors: dict[str, list[float]]
