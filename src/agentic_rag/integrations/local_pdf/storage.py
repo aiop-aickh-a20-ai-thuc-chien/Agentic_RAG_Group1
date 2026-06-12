@@ -69,6 +69,9 @@ class LocalSourceStore(Protocol):
     def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
         """Return chunks for multiple documents in one query."""
 
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        """Replace stored chunks for one already-persisted document."""
+
     def list_documents(self) -> list[StoredSourceDocument]:
         """Return stored source document metadata."""
 
@@ -179,6 +182,28 @@ class S3LocalSourceStore:
 
     def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
         return [chunk for document_id in document_ids for chunk in self.read_chunks(document_id)]
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        manifest = self._read_manifest(document_id)
+        if manifest is None:
+            raise ValueError(f"Document {document_id!r} not found in source store.")
+        base_key = self._document_prefix(document_id)
+        chunks_key = _manifest_text(manifest, "chunks_key") or f"{base_key}/chunks/chunks.jsonl"
+        chunks_payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
+        self._put_bytes(
+            chunks_key,
+            f"{chunks_payload}\n".encode() if chunks_payload else b"",
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        now = datetime.now(UTC).isoformat()
+        manifest["chunks_key"] = chunks_key
+        manifest["total_chunks"] = len(chunks)
+        manifest["updated_at"] = now
+        metadata = manifest.get("metadata")
+        if isinstance(metadata, dict):
+            metadata["updated_at"] = now
+        self._put_json(f"{base_key}/manifest.json", manifest)
+        self._invalidate_list_cache()
 
     def _invalidate_list_cache(self) -> None:
         _list_cache.pop(self._cache_key, None)
@@ -418,27 +443,24 @@ class PostgresLocalSourceStore:
                     (document_id,),
                 )
                 if chunks:
-                    rows = [
-                        (
-                            _storage_chunk_id(chunk=chunk, fallback_index=index),
-                            document_id,
-                            chunk.chunk_id,
-                            _chunk_index(chunk=chunk, fallback_index=index),
-                            chunk.text,
-                            Jsonb(chunk.metadata),
-                        )
-                        for index, chunk in enumerate(chunks, start=1)
-                    ]
-                    placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(rows))
-                    flat_values = [v for row in rows for v in row]
-                    cur.execute(
-                        f"""
-                        insert into {self._chunks_table}
-                            (storage_chunk_id, document_id, chunk_id, chunk_index, text, metadata)
-                        values {placeholders}
-                        """,
-                        flat_values,
-                    )
+                    self._insert_chunk_rows(cur, document_id=document_id, chunks=chunks)
+            conn.commit()
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"update {self._documents_table} set updated_at = now() where document_id = %s",
+                    (document_id,),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(f"Document {document_id!r} not found in store.")
+                cur.execute(
+                    f"delete from {self._chunks_table} where document_id = %s",
+                    (document_id,),
+                )
+                if chunks:
+                    self._insert_chunk_rows(cur, document_id=document_id, chunks=chunks)
             conn.commit()
 
     def delete_document(self, document_id: str) -> None:
@@ -486,27 +508,52 @@ class PostgresLocalSourceStore:
                     d.source_type,
                     d.source,
                     d.metadata,
+                    d.created_at,
+                    d.updated_at,
                     count(c.storage_chunk_id) as chunk_count
                 from {self._documents_table} d
                 left join {self._chunks_table} c on c.document_id = d.document_id
-                group by d.document_id, d.dataset_id, d.name, d.source_type, d.source, d.metadata
+                group by
+                    d.document_id,
+                    d.dataset_id,
+                    d.name,
+                    d.source_type,
+                    d.source,
+                    d.metadata,
+                    d.created_at,
+                    d.updated_at
                 order by max(coalesce(c.created_at, d.created_at)) desc, d.created_at desc
                 """
             )
             rows = cur.fetchall()
 
-        return [
-            StoredSourceDocument(
-                document_id=str(document_id),
-                dataset_id=str(dataset_id),
-                name=str(name),
-                source_type=str(source_type),
-                source=str(source),
-                total_chunks=int(total_chunks),
-                metadata=dict(metadata) if isinstance(metadata, dict) else {},
+        documents: list[StoredSourceDocument] = []
+        for (
+            document_id,
+            dataset_id,
+            name,
+            source_type,
+            source,
+            metadata,
+            created_at,
+            updated_at,
+            total_chunks,
+        ) in rows:
+            document_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+            document_metadata.setdefault("created_at", str(created_at))
+            document_metadata.setdefault("updated_at", str(updated_at))
+            documents.append(
+                StoredSourceDocument(
+                    document_id=str(document_id),
+                    dataset_id=str(dataset_id),
+                    name=str(name),
+                    source_type=str(source_type),
+                    source=str(source),
+                    total_chunks=int(total_chunks),
+                    metadata=document_metadata,
+                )
             )
-            for document_id, dataset_id, name, source_type, source, metadata, total_chunks in rows
-        ]
+        return documents
 
     def _ensure_schema(self) -> None:
         with self._pool.connection() as conn:
@@ -581,6 +628,29 @@ class PostgresLocalSourceStore:
             )
         return chunks
 
+    def _insert_chunk_rows(self, cur: Any, *, document_id: str, chunks: list[Chunk]) -> None:
+        rows = [
+            (
+                _storage_chunk_id(chunk=chunk, fallback_index=index),
+                document_id,
+                chunk.chunk_id,
+                _chunk_index(chunk=chunk, fallback_index=index),
+                chunk.text,
+                Jsonb(chunk.metadata),
+            )
+            for index, chunk in enumerate(chunks, start=1)
+        ]
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(rows))
+        flat_values = [value for row in rows for value in row]
+        cur.execute(
+            f"""
+            insert into {self._chunks_table}
+                (storage_chunk_id, document_id, chunk_id, chunk_index, text, metadata)
+            values {placeholders}
+            """,
+            flat_values,
+        )
+
 
 def _safe_table_name(value: str) -> str:
     import re
@@ -633,6 +703,9 @@ def _manifest_text(manifest: dict[str, object], key: str) -> str | None:
 def _stored_document_from_manifest(manifest: dict[str, object]) -> StoredSourceDocument:
     metadata = manifest.get("metadata")
     document_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    created_at = manifest.get("created_at")
+    if isinstance(created_at, str):
+        document_metadata.setdefault("created_at", created_at)
     updated_at = manifest.get("updated_at")
     if isinstance(updated_at, str):
         document_metadata.setdefault("updated_at", updated_at)

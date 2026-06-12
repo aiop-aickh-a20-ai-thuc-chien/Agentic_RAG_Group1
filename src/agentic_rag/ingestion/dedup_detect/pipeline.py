@@ -39,6 +39,8 @@ def detect_duplicates(
     document_list = list(documents)
     exact_matches = find_exact_duplicates(document_list) if resolved_config.enable_exact else []
     excluded_pairs = _matched_pairs(exact_matches)
+    # Chunk-level cascade: chunks already flagged in L1 are skipped entirely by L2/L3.
+    excluded_chunk_ids = _duplicate_chunk_ids(exact_matches)
 
     simhash_matches = (
         find_simhash_duplicates(
@@ -47,11 +49,13 @@ def detect_duplicates(
             shingle_size=resolved_config.simhash_shingle_size,
             hamming_threshold=resolved_config.simhash_hamming_threshold,
             exclude_pairs=excluded_pairs,
+            exclude_chunk_ids=excluded_chunk_ids,
         )
         if resolved_config.enable_simhash
         else []
     )
     excluded_pairs.update(_matched_pairs(simhash_matches))
+    excluded_chunk_ids.update(_duplicate_chunk_ids(simhash_matches))
 
     embedding_matches: list[DuplicateMatch] = []
     if resolved_config.enable_embedding:
@@ -86,6 +90,7 @@ def detect_duplicates(
             model=model,
             fallback_attempts=fallback_attempts,
             exclude_pairs=excluded_pairs,
+            exclude_chunk_ids=excluded_chunk_ids,
         )
 
     return DedupReport(
@@ -111,6 +116,11 @@ def documents_from_chunks(chunks: Sequence[Chunk]) -> list[DedupDocument]:
 
 def _matched_pairs(matches: Iterable[DuplicateMatch]) -> set[tuple[str, str]]:
     return {_pair_key(match.document_id, match.duplicate_document_id) for match in matches}
+
+
+def _duplicate_chunk_ids(matches: Iterable[DuplicateMatch]) -> set[str]:
+    """Return the duplicate-side chunk IDs from a list of matches."""
+    return {match.duplicate_document_id for match in matches}
 
 
 def _pair_key(left: str, right: str) -> tuple[str, str]:

@@ -2,12 +2,27 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Archive, CheckCircle2, ChevronDown, ChevronRight, Clock, Search, Trash2, Undo2, X } from "lucide-react";
+import { Archive, CheckCircle2, ChevronDown, ChevronRight, Clock, Layers, Search, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { TableSkeleton } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
+
+const DEDUP_LAYERS = [
+  { key: "exact_sha256",         label: "L1 Exact"     },
+  { key: "simhash",              label: "L2 SimHash"   },
+  { key: "embedding_similarity", label: "L3 Embedding" },
+] as const;
+type FlaggedMap = Record<string, string[]>;
+
+// Gom mọi chunk_id bị flag ở các layer đang chọn thành 1 Set
+function collectFlaggedChunkIds(layers: Set<string>, flaggedByLayer: FlaggedMap): Set<string> {
+  const out = new Set<string>();
+  for (const layer of layers)
+    for (const cid of flaggedByLayer[layer] ?? []) out.add(cid);
+  return out;
+}
 
 type Dataset  = { id: string; name: string; is_benchmark: boolean };
 type Question = {
@@ -175,14 +190,35 @@ export default function EvalReviewPage() {
   const [panel,          setPanel]          = useState<PanelState | null>(null);
   const [historyPanel,   setHistoryPanel]   = useState<{ id: string; question: string } | null>(null);
   const [editing,        setEditing]        = useState<{ id: string; question: string; groundTruth: string } | null>(null);
+  // Lọc dedup: ẩn câu sinh từ chunk bị flag ở layer được chọn
+  const [hideDedupLayers, setHideDedupLayers] = useState<Set<string>>(new Set());
+  const [flaggedByLayer,  setFlaggedByLayer]  = useState<FlaggedMap>({});
+  const toggleHideLayer = (key: string) =>
+    setHideDedupLayers((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   useEffect(() => {
     fetch(`${API}/internal/datasets`)
       .then((r) => r.json())
       .then((d: Dataset[]) => setDatasets(d))
       .catch(() => {});
+    fetch(`${API}/internal/dedup/flagged-chunk-ids`)
+      .then((r) => r.json())
+      .then((d: FlaggedMap) => setFlaggedByLayer(d && typeof d === "object" ? d : {}))
+      .catch(() => {});
     loadQuestions();
   }, []);
+
+  // Khi đổi layer ẩn: bỏ chọn những câu vừa bị ẩn để không thao tác nhầm
+  useEffect(() => {
+    const hidden = collectFlaggedChunkIds(hideDedupLayers, flaggedByLayer);
+    if (hidden.size === 0) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const q of questions)
+        if ((q.source_chunk_ids ?? []).some((cid) => hidden.has(cid))) next.delete(q.id);
+      return next;
+    });
+  }, [hideDedupLayers, flaggedByLayer, questions]);
 
   function loadQuestions() {
     setLoading(true);
@@ -293,11 +329,19 @@ export default function EvalReviewPage() {
     setEditing(null);
   }
 
+  // Tập chunk_id bị flag ở các layer đang chọn để ẩn
+  const hiddenChunkIds = collectFlaggedChunkIds(hideDedupLayers, flaggedByLayer);
+  const isHiddenByDedup = (q: Question) =>
+    hiddenChunkIds.size > 0 && (q.source_chunk_ids ?? []).some((cid) => hiddenChunkIds.has(cid));
+
   const byTab = questions.filter((q) => {
+    if (isHiddenByDedup(q)) return false;
     if (tab === "pending")  return !q.deleted_at && !q.is_approved;
     if (tab === "approved") return !q.deleted_at && q.is_approved;
     return !!q.deleted_at;
   });
+
+  const hiddenCount = questions.filter(isHiddenByDedup).length;
 
   const filtered = search.trim()
     ? byTab.filter((q) =>
@@ -309,10 +353,11 @@ export default function EvalReviewPage() {
   const toggleQ   = (id: string) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAll = () => setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((q) => q.id)));
 
+  const visible = questions.filter((q) => !isHiddenByDedup(q));
   const counts = {
-    pending:  questions.filter((q) => !q.deleted_at && !q.is_approved).length,
-    approved: questions.filter((q) => !q.deleted_at && q.is_approved).length,
-    archived: questions.filter((q) => !!q.deleted_at).length,
+    pending:  visible.filter((q) => !q.deleted_at && !q.is_approved).length,
+    approved: visible.filter((q) => !q.deleted_at && q.is_approved).length,
+    archived: visible.filter((q) => !!q.deleted_at).length,
   };
 
   const TABS: { key: Tab; label: string; count: number; active: string; hover: string }[] = [
@@ -366,6 +411,37 @@ export default function EvalReviewPage() {
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
+          {/* Lọc dedup: ẩn câu sinh từ chunk bị flag */}
+          <div className="flex items-center gap-1.5">
+            <Layers size={13} className="text-gray-400 shrink-0" />
+            <span className="text-xs text-gray-400 shrink-0 mr-0.5">Ẩn trùng:</span>
+            {DEDUP_LAYERS.map(({ key, label }) => {
+              const active = hideDedupLayers.has(key);
+              const flaggedCount = (flaggedByLayer[key] ?? []).length;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleHideLayer(key)}
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full border transition-all pressable",
+                    active
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-black/12 bg-white text-gray-600 hover:border-emerald-300 hover:bg-emerald-50"
+                  )}
+                  title={`${flaggedCount} chunk bị flag ở ${label}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            {hiddenCount > 0 && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+                đã ẩn {hiddenCount}
+              </span>
+            )}
+          </div>
+
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input

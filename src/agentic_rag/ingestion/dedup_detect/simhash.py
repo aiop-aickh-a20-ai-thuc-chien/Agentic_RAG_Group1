@@ -54,25 +54,33 @@ def find_simhash_duplicates(
     shingle_size: int = 4,
     hamming_threshold: int = 6,
     exclude_pairs: set[tuple[str, str]] | None = None,
+    exclude_chunk_ids: set[str] | None = None,
 ) -> list[DuplicateMatch]:
-    """Find near-duplicate document pairs by SimHash Hamming distance."""
+    """Find near-duplicate document pairs by SimHash Hamming distance.
+
+    ``exclude_chunk_ids`` skips any document that was already caught as a
+    duplicate by an earlier layer — ensuring chunk-level cascade (once flagged,
+    done) rather than only pair-level deduplication.
+    """
 
     if hamming_threshold < 0:
         raise ValueError("hamming_threshold must be non-negative.")
 
-    excluded = exclude_pairs or set()
+    excluded_pairs = exclude_pairs or set()
+    excluded_chunks = exclude_chunk_ids or set()
     indexed = [
         (
             document,
             simhash_fingerprint(document.text, bits=bits, shingle_size=shingle_size),
         )
         for document in documents
+        if document.document_id not in excluded_chunks
     ]
     matches: list[DuplicateMatch] = []
     for left_index, (left, left_hash) in enumerate(indexed):
         for right, right_hash in indexed[left_index + 1 :]:
             pair = _pair_key(left.document_id, right.document_id)
-            if pair in excluded:
+            if pair in excluded_pairs:
                 continue
             distance = hamming_distance(left_hash, right_hash)
             if distance > hamming_threshold:

@@ -15,6 +15,7 @@ import {
   Maximize2,
   Minimize2,
   FileText,
+  Layers,
   Link as LinkIcon,
   Loader2,
   Menu,
@@ -108,6 +109,13 @@ type SourceChunksResponse = {
   chunks: SourceChunk[];
 };
 
+type DedupStats = {
+  corpus_chunks: number;
+  exact_chunks: number;
+  simhash_chunks: number;
+  embedding_chunks: number;
+};
+
 type SourceListItem = {
   provider: string;
   dataset_id: string;
@@ -182,6 +190,7 @@ type StreamEvent = {
 
 type ChatPageCache = {
   answer: AnswerResponse | null;
+  excludeDedupLayers: string[];
   messages: ChatMessage[];
   selectedCitationChunkId: string | null;
   selectedDocumentIds: string[];
@@ -211,6 +220,16 @@ const sourceModes: Array<{ id: SourceMode; label: string; icon: LucideIcon }> = 
   { id: "text", label: "Văn bản", icon: FileText },
 ];
 
+const DEDUP_LAYERS = [
+  { key: "exact_sha256", label: "L1 Exact", field: "exact_chunks" },
+  { key: "simhash", label: "L2 SimHash", field: "simhash_chunks" },
+  {
+    key: "embedding_similarity",
+    label: "L3 Embedding",
+    field: "embedding_chunks",
+  },
+] as const;
+
 export default function CitationChatPage() {
   const { isDark, toggleTheme } = useTheme();
   const [showSources, setShowSources] = useState(true);
@@ -221,6 +240,8 @@ export default function CitationChatPage() {
   const [fileName, setFileName] = useState("");
   const [uploadedSources, setUploadedSources] = useState<UploadedSource[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [excludeDedupLayers, setExcludeDedupLayers] = useState<Set<string>>(new Set());
+  const [dedupStats, setDedupStats] = useState<DedupStats | null>(null);
   const [sourceStatus, setSourceStatus] = useState<SourceProcessingStatus>("idle");
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [selectedCitationChunkId, setSelectedCitationChunkId] = useState<string | null>(null);
@@ -270,6 +291,19 @@ export default function CitationChatPage() {
     setUploadedSources([]);
     setSelectedDocumentIds([]);
   }, []);
+
+  const toggleDedupLayer = useCallback((key: string) => {
+    setExcludeDedupLayers((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
   const citationCount = visibleCitationItems(answer?.citations ?? [], answer?.answer ?? "").length;
   const isSourceBusy = sourceStatus === "uploading" || sourceStatus === "processing";
   const selectedSources = useMemo(
@@ -280,7 +314,6 @@ export default function CitationChatPage() {
     () => selectedSources.flatMap((source) => source.chunks),
     [selectedSources],
   );
-
   useEffect(() => {
     let cancelled = false;
 
@@ -293,6 +326,7 @@ export default function CitationChatPage() {
       setSourceMode(cachedChatState?.sourceMode ?? readCachedSourceMode());
       setUploadedSources(cachedSources);
       setSelectedDocumentIds(cachedSelectedIds);
+      setExcludeDedupLayers(new Set(cachedChatState?.excludeDedupLayers ?? []));
       setAnswer(cachedChatState?.answer ?? null);
       setSelectedCitationChunkId(cachedChatState?.selectedCitationChunkId ?? null);
       setMessages(cachedChatState?.messages ?? [createWelcomeMessage()]);
@@ -348,6 +382,29 @@ export default function CitationChatPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    fetch(`${API_URL}/internal/dedup?limit=1`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (cancelled) return;
+        const counts = payload?.counts;
+        if (!counts) return;
+        setDedupStats({
+          corpus_chunks: counts.corpus_chunks ?? 0,
+          exact_chunks: counts.exact_chunks ?? 0,
+          simhash_chunks: counts.simhash_chunks ?? 0,
+          embedding_chunks: counts.embedding_chunks ?? 0,
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!hasRestoredClientState) return;
     writeCachedSources(uploadedSources);
   }, [hasRestoredClientState, uploadedSources]);
@@ -356,6 +413,7 @@ export default function CitationChatPage() {
     if (!hasRestoredClientState) return;
     writeCachedChatState({
       answer,
+      excludeDedupLayers: [...excludeDedupLayers],
       messages,
       selectedCitationChunkId,
       selectedDocumentIds,
@@ -363,6 +421,7 @@ export default function CitationChatPage() {
     });
   }, [
     answer,
+    excludeDedupLayers,
     hasRestoredClientState,
     messages,
     selectedCitationChunkId,
@@ -453,6 +512,7 @@ export default function CitationChatPage() {
         body: JSON.stringify({
           question: userQuestion,
           document_ids: selectedDocumentIds,
+          exclude_dedup_layers: [...excludeDedupLayers],
           history: requestHistory,
           use_mock_evidence: false,
         }),
@@ -705,7 +765,10 @@ export default function CitationChatPage() {
               {/* xl: display:contents (panel là cột grid như cũ) · mobile: drawer trượt trái */}
               <div className="max-xl:fixed max-xl:inset-y-0 max-xl:left-0 max-xl:z-40 max-xl:grid max-xl:w-[88%] max-xl:max-w-sm max-xl:bg-paper max-xl:p-3 max-xl:shadow-2xl dark:max-xl:bg-slate-950 xl:contents">
                 <SourcePanel
+                  dedupStats={dedupStats}
+                  excludeDedupLayers={excludeDedupLayers}
                   fileName={fileName}
+                  isLoading={isLoading}
                   onSourceRemove={handleSourceRemove}
                   onSourceReady={handleSourceReady}
                   onClearAll={handleClearAll}
@@ -720,6 +783,7 @@ export default function CitationChatPage() {
                   sourcePlaceholder={sourcePlaceholder}
                   sourceStatus={sourceStatus}
                   sourceText={sourceText}
+                  toggleDedupLayer={toggleDedupLayer}
                   uploadedSources={uploadedSources}
                 />
               </div>
@@ -1220,7 +1284,10 @@ function parseSourceUrls(value: string): string[] {
 }
 
 const SourcePanel = memo(function SourcePanel({
+  dedupStats,
+  excludeDedupLayers,
   fileName,
+  isLoading,
   onSourceRemove,
   onSourceReady,
   onClearAll,
@@ -1235,9 +1302,13 @@ const SourcePanel = memo(function SourcePanel({
   sourcePlaceholder,
   sourceStatus,
   sourceText,
+  toggleDedupLayer,
   uploadedSources,
 }: {
+  dedupStats: DedupStats | null;
+  excludeDedupLayers: Set<string>;
   fileName: string;
+  isLoading: boolean;
   onSourceRemove: (documentId: string) => void;
   onSourceReady: (source: UploadedSource) => void;
   onClearAll: () => void;
@@ -1252,6 +1323,7 @@ const SourcePanel = memo(function SourcePanel({
   sourcePlaceholder: string;
   sourceStatus: SourceProcessingStatus;
   sourceText: string;
+  toggleDedupLayer: (key: string) => void;
   uploadedSources: UploadedSource[];
 }) {
   const [queuedSources, setQueuedSources] = useState<QueuedSource[]>([]);
@@ -1259,6 +1331,7 @@ const SourcePanel = memo(function SourcePanel({
   // Khu upload mở mặc định; tự thu gọn 1 lần khi tài liệu nạp xong để nhường chỗ
   // cho danh sách (không cãi lại nếu sau đó user tự mở).
   const [showUpload, setShowUpload] = useState(true);
+  const [showDedupFilter, setShowDedupFilter] = useState(false);
   const autoCollapsedRef = useRef(false);
   useEffect(() => {
     if (!autoCollapsedRef.current && uploadedSources.length > 0) {
@@ -1274,6 +1347,12 @@ const SourcePanel = memo(function SourcePanel({
   const allSourcesSelected =
     uploadedSourceIds.length > 0 &&
     uploadedSourceIds.every((documentId) => selectedDocumentIds.includes(documentId));
+  const dedupTotal = dedupStats?.corpus_chunks ?? 0;
+  const dedupRemoved = DEDUP_LAYERS
+    .filter((layer) => excludeDedupLayers.has(layer.key))
+    .reduce((sum, layer) => sum + (dedupStats?.[layer.field] ?? 0), 0);
+  const dedupRemaining = Math.max(dedupTotal - dedupRemoved, 0);
+  const isDedupFiltering = excludeDedupLayers.size > 0;
 
   function resetSource() {
     setSourceStatus("idle");
@@ -1655,6 +1734,97 @@ const SourcePanel = memo(function SourcePanel({
         </div>
         </>
         )}
+      </Panel>
+
+      <Panel className="shrink-0">
+        <button
+          aria-expanded={showDedupFilter}
+          className="flex w-full items-start justify-between gap-3 text-left"
+          onClick={() => setShowDedupFilter((value) => !value)}
+          type="button"
+        >
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              <Layers className="h-4 w-4 text-mint dark:text-emerald-300" aria-hidden="true" />
+              Lọc retrieval
+            </p>
+            <p className="mt-0.5 text-xs text-ink/50 dark:text-slate-400">
+              Loại chunk trùng khỏi kết quả tìm kiếm
+            </p>
+          </div>
+          <span
+            className={cn(
+              "shrink-0 rounded-full border px-2 py-1 text-xs font-medium tabular-nums",
+              isDedupFiltering
+                ? "border-mint/30 bg-mint/8 text-mint dark:border-emerald-300/28 dark:bg-emerald-300/12 dark:text-emerald-200"
+                : "border-line bg-white/70 text-ink/52 dark:border-white/14 dark:bg-slate-900 dark:text-slate-400",
+            )}
+          >
+            {dedupStats ? (
+              isDedupFiltering ? (
+                <>
+                  <span className="line-through">{dedupTotal}</span>
+                  {" → "}
+                  <span>{dedupRemaining}</span>
+                </>
+              ) : (
+                <>{dedupTotal} chunk</>
+              )
+            ) : (
+              "..."
+            )}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-ink/40 transition-transform dark:text-slate-400",
+              showDedupFilter && "rotate-180",
+            )}
+            aria-hidden="true"
+          />
+        </button>
+
+        {showDedupFilter ? (
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            {DEDUP_LAYERS.map(({ key, label, field }, index) => {
+              const active = excludeDedupLayers.has(key);
+              const count = dedupStats?.[field];
+              return (
+                <button
+                  aria-pressed={active}
+                  className={cn(
+                    "min-h-16 rounded-md border px-2 py-2 text-left transition disabled:pointer-events-none disabled:opacity-60",
+                    active
+                      ? "border-mint bg-mint/10 text-mint shadow-sm dark:border-emerald-300/54 dark:bg-emerald-300/12 dark:text-emerald-100"
+                      : "border-line bg-white/74 text-ink/64 hover:border-mint/35 hover:bg-mint/5 dark:border-white/14 dark:bg-slate-950/62 dark:text-slate-300 dark:hover:border-emerald-300/28 dark:hover:bg-emerald-300/8",
+                  )}
+                  disabled={isLoading}
+                  key={key}
+                  onClick={() => toggleDedupLayer(key)}
+                  title={label}
+                  type="button"
+                >
+                  <span className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-semibold">L{index + 1}</span>
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 items-center justify-center rounded-full border",
+                        active
+                          ? "border-mint bg-mint text-white dark:border-emerald-300 dark:bg-emerald-300 dark:text-slate-950"
+                          : "border-line bg-white text-transparent dark:border-white/18 dark:bg-slate-900",
+                      )}
+                      aria-hidden="true"
+                    >
+                      <Check className="h-3 w-3" />
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-[11px] text-ink/46 dark:text-slate-500">
+                    {count != null ? `-${count}` : "-"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </Panel>
 
       <Panel className="flex min-h-0 flex-1 flex-col">
@@ -2454,6 +2624,9 @@ function readCachedChatState(): ChatPageCache | null {
     }
     return {
       answer: parsed.answer ?? null,
+      excludeDedupLayers: Array.isArray(parsed.excludeDedupLayers)
+        ? parsed.excludeDedupLayers.filter((layer) => typeof layer === "string")
+        : [],
       messages: parsed.messages.length ? parsed.messages : [createWelcomeMessage()],
       selectedCitationChunkId: parsed.selectedCitationChunkId ?? null,
       selectedDocumentIds: Array.isArray(parsed.selectedDocumentIds)

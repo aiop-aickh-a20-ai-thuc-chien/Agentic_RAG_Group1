@@ -18,13 +18,14 @@ from agentic_rag.api import (
     delete_all_sources,
     delete_source,
     health,
+    internal_dedup_candidates,
     list_sources,
     source_debug,
     source_raw,
     upload_text_source,
     upload_url_source,
 )
-from agentic_rag.core.contracts import Chunk
+from agentic_rag.core.contracts import Answer, Chunk, WorkflowRunOutput
 from agentic_rag.generation.answering import format_evidence_context
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
@@ -38,7 +39,17 @@ def _disable_model_runtime_env(monkeypatch: MonkeyPatch) -> Iterator[None]:
 
     clear_model_runtime_caches()
     monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    monkeypatch.delenv("QDRANT_COLLECTION", raising=False)
+    # api.py chạy load_dotenv() lúc import — phải gỡ NEON_CONNECTION kẻo upload
+    # trong test ghi thật vào bảng dedup_candidates trên Neon.
+    monkeypatch.delenv("NEON_CONNECTION", raising=False)
+    monkeypatch.setattr("agentic_rag.autodata_eval.db._conninfo", None)
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    monkeypatch.setattr("agentic_rag.retrieval.config.load_local_env", lambda: None)
     yield
     clear_model_runtime_caches()
 
@@ -129,6 +140,34 @@ def test_answer_endpoint_handles_small_talk_without_evidence(
     assert answer.status == "answered"
     assert answer.citations == []
     assert "tải tài liệu" in answer.answer
+
+
+def test_answer_endpoint_passes_excluded_dedup_layers_to_agent(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_run_agent(**kwargs: Any) -> WorkflowRunOutput:
+        seen.update(kwargs)
+        return WorkflowRunOutput(
+            answer=Answer(answer="ok", citations=[], status="answered"),
+        )
+
+    monkeypatch.setenv("AGENT_MODE", "true")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: object())
+    monkeypatch.setattr("agentic_rag.api.run_agent", fake_run_agent)
+
+    answer = answer_question(
+        AnswerRequest(
+            question="Pin bao hanh bao lau?",
+            document_ids=["doc-1"],
+            exclude_dedup_layers=["exact_sha256"],
+        )
+    )
+
+    assert answer.answer == "ok"
+    assert seen["request"].document_ids == ["doc-1"]
+    assert seen["request"].exclude_dedup_layers == ["exact_sha256"]
 
 
 def test_stream_answer_events_include_deltas_citations_and_done() -> None:
@@ -432,3 +471,89 @@ def test_list_sources_returns_local_documents(
 
     response_with_chunks = list_sources(include_chunks=True)
     assert response_with_chunks.sources[0].chunks[0].chunk.text == "Noi dung"
+
+
+def test_internal_dedup_candidates_returns_local_pairs(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from agentic_rag.autodata_eval import dedup_store
+
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source = kwargs["source"]
+        source_key = "a" if source.startswith("Doc-A") else "b"
+        return [
+            Chunk(
+                chunk_id=f"text_{source_key}_c0001",
+                text=text,
+                metadata={"source": source, "source_type": "text"},
+            )
+        ]
+
+    # In-memory thay cho bảng Neon: upload ghi vào đây, endpoint đọc từ đây.
+    stored_rows: dict[str, dict[str, object]] = {}
+
+    def fake_replace_document(document_id: str, rows: list[dict[str, object]]) -> int:
+        for key in [
+            k for k, v in stored_rows.items() if v.get("duplicate_document_id") == document_id
+        ]:
+            stored_rows.pop(key)
+        for row in rows:
+            stored_rows[str(row["id"])] = row
+        return len(rows)
+
+    def fake_query(
+        *,
+        layer: str | None = None,
+        status: str | None = None,
+        source_type: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        rows = [r for r in stored_rows.values() if not layer or r.get("layer") == layer]
+        page = rows[offset : offset + limit]
+        return {
+            "items": [dedup_store._row_to_item(row) for row in page],
+            "total": len(rows),
+            "limit": limit,
+            "offset": offset,
+            "counts": {
+                "pairs": len(stored_rows),
+                "unique_candidates": len(
+                    {r.get("duplicate_chunk_id") for r in stored_rows.values()}
+                ),
+                "exact": sum(1 for r in stored_rows.values() if r.get("layer") == "exact_sha256"),
+                "simhash": sum(1 for r in stored_rows.values() if r.get("layer") == "simhash"),
+                "embedding": sum(
+                    1 for r in stored_rows.values() if r.get("layer") == "embedding_similarity"
+                ),
+            },
+        }
+
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setenv("DEDUP_ENABLE_EMBEDDING", "false")
+    monkeypatch.setattr(dedup_store, "replace_document_candidates", fake_replace_document)
+    monkeypatch.setattr(dedup_store, "query_candidates", fake_query)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    first = provider.upload_text(title="Doc A", text="Same body")
+    provider.upload_text(title="Doc B", text="Same body")
+    response = internal_dedup_candidates(layer="exact_sha256")
+
+    assert response.provider == "local_pdf"
+    assert response.total == 1
+    assert response.counts.exact == 1
+    assert response.items[0].layer == "exact_sha256"
+    assert response.items[0].canonical is not None
+    assert response.items[0].canonical.document_id == first.document_id
+    assert response.items[0].duplicate.document_id != first.document_id

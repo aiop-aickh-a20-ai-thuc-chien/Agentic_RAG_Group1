@@ -86,8 +86,9 @@ def _retrieve_query(
     provider: SourceEvidenceProvider,
     query: str,
     document_ids: list[str] | None,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> list[SearchResult]:
-    bm25, dense = _search_via_provider(provider, query, document_ids)
+    bm25, dense = _search_via_provider(provider, query, document_ids, exclude_dedup_layers)
     if not dense:
         return bm25
     return _fuse(bm25, dense)
@@ -223,6 +224,7 @@ def make_retrieve_node(
         queries_this_round = [current_query, *pending]
 
         document_ids = state.get("document_ids")
+        exclude_dedup_layers = state.get("exclude_dedup_layers") or None
         new_fused: list[SearchResult] = []
         extra_tried: list[str] = []
         per_query: list[dict[str, Any]] = []
@@ -232,6 +234,7 @@ def make_retrieve_node(
             queries=queries_this_round,
             document_ids=document_ids,
             worker_count=worker_count,
+            exclude_dedup_layers=exclude_dedup_layers,
         )
 
         for query_index, (query, results) in enumerate(
@@ -601,8 +604,15 @@ def _search_via_provider(
     provider: SourceEvidenceProvider,
     query: str,
     document_ids: list[str] | None,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> tuple[list[SearchResult], list[SearchResult]]:
-    chunks = provider.retrieve(RetrievalInput(question=query, document_ids=document_ids)).results
+    chunks = provider.retrieve(
+        RetrievalInput(
+            question=query,
+            document_ids=document_ids,
+            exclude_dedup_layers=exclude_dedup_layers or [],
+        )
+    ).results
     bm25 = [r for r in chunks if r.retriever == "bm25"]
     dense = [r for r in chunks if r.retriever == "dense"]
     if not bm25 and not dense:
@@ -626,17 +636,18 @@ def _retrieve_queries_parallel(
     queries: list[str],
     document_ids: list[str] | None,
     worker_count: int,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> list[list[SearchResult]]:
     if not queries:
         return []
     if worker_count <= 1 or len(queries) == 1:
-        return [_retrieve_query(provider, query, document_ids) for query in queries]
+        return [_retrieve_query(provider, query, document_ids, exclude_dedup_layers) for query in queries]
 
     max_workers = min(worker_count, len(queries))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return list(
             executor.map(
-                lambda query: _retrieve_query(provider, query, document_ids),
+                lambda query: _retrieve_query(provider, query, document_ids, exclude_dedup_layers),
                 queries,
             )
         )

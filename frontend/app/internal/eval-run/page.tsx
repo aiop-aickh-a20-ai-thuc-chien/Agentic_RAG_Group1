@@ -2,16 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Loader2, Pause, Pencil, Play, RefreshCw, Trash2, X } from "lucide-react";
+import { Layers, Loader2, Pause, Pencil, Play, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { CountUp, Spotlight } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
-type Dataset  = { id: string; name: string; is_benchmark: boolean };
-type Run      = { id: string; name: string; status: string; total: number; success: number; failed: number; created_at: string };
-type Progress = { run_id: string; status: string; total: number; success: number; failed: number; not_started: number; ragas_done: number };
+type Dataset    = { id: string; name: string; is_benchmark: boolean };
+type Run        = { id: string; name: string; status: string; total: number; success: number; failed: number; created_at: string };
+type Progress   = { run_id: string; status: string; total: number; success: number; failed: number; not_started: number; ragas_done: number };
+type DedupStats = { corpus_chunks: number; exact_chunks: number; simhash_chunks: number; embedding_chunks: number };
+
+const DEDUP_LAYERS = [
+  { key: "exact_sha256",         label: "L1 Exact",     field: "exact_chunks"    },
+  { key: "simhash",              label: "L2 SimHash",   field: "simhash_chunks"  },
+  { key: "embedding_similarity", label: "L3 Embedding", field: "embedding_chunks" },
+] as const;
 
 const STATUS_LABEL: Record<string, string> = {
   queued:  "Đang chờ",
@@ -43,6 +50,14 @@ export default function EvalRunPage() {
   const [progress,   setProgress]   = useState<Progress | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Dedup filter
+  const [excludeDedupLayers, setExcludeDedupLayers] = useState<Set<string>>(new Set());
+  const [dedupStats,         setDedupStats]         = useState<DedupStats | null>(null);
+  // Câu hỏi bị ẩn vì ground-truth nằm trong chunk bị lọc (backend tự loại khi tạo run)
+  const [affectedQ,          setAffectedQ]          = useState<{ total: number; affected: number; remaining: number } | null>(null);
+  const toggleDedupLayer = (key: string) =>
+    setExcludeDedupLayers((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
   // Rename state
   const [editingId,   setEditingId]   = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>("");
@@ -57,7 +72,29 @@ export default function EvalRunPage() {
       .then((r) => r.json())
       .then((d: Dataset[]) => { setDatasets(d); if (d.length) setDatasetId(d[0].id); })
       .catch(() => {});
+    fetch(`${API}/internal/dedup?limit=1`)
+      .then((r) => r.json())
+      .then((d) => {
+        const c = d?.counts;
+        if (c) setDedupStats({
+          corpus_chunks:    c.corpus_chunks    ?? 0,
+          exact_chunks:     c.exact_chunks     ?? 0,
+          simhash_chunks:   c.simhash_chunks   ?? 0,
+          embedding_chunks: c.embedding_chunks ?? 0,
+        });
+      })
+      .catch(() => {});
   }, []);
+
+  // Preview số câu hỏi sẽ bị ẩn theo dataset + layer đang chọn
+  useEffect(() => {
+    if (!datasetId) { setAffectedQ(null); return; }
+    const layers = [...excludeDedupLayers].join(",");
+    fetch(`${API}/internal/datasets/${datasetId}/dedup-affected?layers=${encodeURIComponent(layers)}`)
+      .then((r) => r.json())
+      .then((d) => setAffectedQ(typeof d?.total === "number" ? d : null))
+      .catch(() => setAffectedQ(null));
+  }, [datasetId, excludeDedupLayers]);
 
   useEffect(() => {
     if (!datasetId) return;
@@ -103,7 +140,11 @@ export default function EvalRunPage() {
       const r = await fetch(`${API}/internal/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataset_id: datasetId, name: runName.trim() }),
+        body: JSON.stringify({
+          dataset_id: datasetId,
+          name: runName.trim(),
+          config: excludeDedupLayers.size ? { exclude_dedup_layers: [...excludeDedupLayers] } : {},
+        }),
       });
       const d: Run = await r.json();
       setRuns((prev) => [d, ...prev]);
@@ -235,6 +276,91 @@ export default function EvalRunPage() {
               className="w-full text-sm border border-black/12 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
           </div>
+          {/* Dedup filter */}
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Layers size={13} className="text-gray-400 shrink-0" />
+              <span className="text-xs font-medium text-gray-500">Loại bỏ chunk trùng khi retrieval</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {DEDUP_LAYERS.map(({ key, label, field }) => {
+                const count = dedupStats?.[field];
+                const active = excludeDedupLayers.has(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleDedupLayer(key)}
+                    className={cn(
+                      "relative rounded-xl border px-3 py-2.5 text-left transition-all pressable",
+                      active
+                        ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600/30 shadow-sm"
+                        : "border-black/10 bg-white hover:border-black/20 hover:bg-gray-50"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full border text-[10px] transition-colors",
+                      active ? "border-emerald-600 bg-emerald-600 text-white" : "border-gray-300 bg-white text-transparent"
+                    )}>
+                      ✓
+                    </span>
+                    <p className={cn("text-xs font-semibold", active ? "text-emerald-800" : "text-gray-700")}>{label}</p>
+                    <p className={cn("text-[11px] mt-0.5 tabular-nums", active ? "text-emerald-700" : "text-gray-400")}>
+                      {count != null ? <>−{count} chunk</> : "—"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+            {(() => {
+              const total = dedupStats?.corpus_chunks ?? 0;
+              const removed = DEDUP_LAYERS
+                .filter((l) => excludeDedupLayers.has(l.key))
+                .reduce((s, l) => s + (dedupStats?.[l.field] ?? 0), 0);
+              const remaining = Math.max(total - removed, 0);
+              const filtering = excludeDedupLayers.size > 0;
+              return (
+                <div className={cn(
+                  "rounded-lg divide-y text-sm tabular-nums border",
+                  filtering ? "bg-emerald-50 border-emerald-200 divide-emerald-200/70" : "bg-gray-50 border-black/6 divide-black/6"
+                )}>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-xs text-gray-500">Retrieval trên</span>
+                    {dedupStats ? (
+                      filtering ? (
+                        <span className="text-gray-500">
+                          <span className="line-through">{total}</span>
+                          {" → "}
+                          <span className="font-semibold text-emerald-700">{remaining}</span>
+                          <span className="text-xs text-gray-500"> chunk (−{removed})</span>
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-700">{total} <span className="font-normal text-xs text-gray-500">chunk (toàn bộ)</span></span>
+                      )
+                    ) : (
+                      <span className="text-xs text-gray-400">chưa có dữ liệu dedup</span>
+                    )}
+                  </div>
+                  {affectedQ && (
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <span className="text-xs text-gray-500">Câu hỏi trong run</span>
+                      {filtering && affectedQ.affected > 0 ? (
+                        <span className="text-gray-500">
+                          <span className="line-through">{affectedQ.total}</span>
+                          {" → "}
+                          <span className="font-semibold text-emerald-700">{affectedQ.remaining}</span>
+                          <span className="text-xs text-gray-500"> câu (ẩn {affectedQ.affected} câu có ground-truth bị lọc)</span>
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-gray-700">{affectedQ.total} <span className="font-normal text-xs text-gray-500">câu</span></span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
           <button onClick={startRun} disabled={creating || !datasetId || !runName.trim()}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800 hover:shadow-lg hover:shadow-emerald-700/25 disabled:opacity-40 transition-all pressable">
             {creating

@@ -9,12 +9,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import {
-  BarChart3, Database, GitCompare, ListChecks, Play, Sparkles,
+  BarChart3, Database, GitCompare, ListChecks, Play, ShieldCheck, Sparkles,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
 const PAGES = [
+  { href: "/internal/dedup-review", label: "Dedup",        icon: ShieldCheck },
   { href: "/internal/autodata",     label: "Tạo câu hỏi",  icon: Sparkles },
   { href: "/internal/eval-review",  label: "Review",       icon: ListChecks },
   { href: "/internal/datasets",     label: "Datasets",     icon: Database },

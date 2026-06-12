@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Iterable, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict
@@ -14,6 +15,7 @@ from agentic_rag.model_runtime.config import resolve_embedding_config
 from agentic_rag.model_runtime.factory import get_embedding_client
 
 EmbeddingVectorMap = Mapping[str, Sequence[float]]
+DEFAULT_EMBEDDING_BATCH_SIZE = 64
 
 
 class _EmbeddingModel(BaseModel):
@@ -44,11 +46,21 @@ class EmbeddingVectorResult(_EmbeddingModel):
 def embedding_vectors_from_client(
     documents: Sequence[DedupDocument],
     client: EmbeddingClient,
+    *,
+    batch_size: int | None = None,
 ) -> dict[str, list[float]]:
     """Embed documents with the shared project embedding client contract."""
 
-    output = client.embed(EmbeddingInput(texts=[document.text for document in documents]))
-    return {document.document_id: output.vectors[index] for index, document in enumerate(documents)}
+    if not documents:
+        return {}
+    resolved_batch_size = _embedding_batch_size(batch_size)
+    vectors: dict[str, list[float]] = {}
+    for start in range(0, len(documents), resolved_batch_size):
+        batch = documents[start : start + resolved_batch_size]
+        output = client.embed(EmbeddingInput(texts=[document.text for document in batch]))
+        for document, vector in zip(batch, output.vectors, strict=True):
+            vectors[document.document_id] = vector
+    return vectors
 
 
 def embedding_vectors_from_first_available_client(
@@ -105,6 +117,19 @@ def configured_embedding_candidates() -> list[EmbeddingFallbackCandidate]:
     ]
 
 
+def _embedding_batch_size(batch_size: int | None) -> int:
+    if batch_size is not None:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be greater than zero.")
+        return batch_size
+    raw = os.getenv("DEDUP_EMBEDDING_BATCH_SIZE", str(DEFAULT_EMBEDDING_BATCH_SIZE))
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return DEFAULT_EMBEDDING_BATCH_SIZE
+    return max(parsed, 1)
+
+
 def find_embedding_duplicates(
     documents: Iterable[DedupDocument],
     *,
@@ -115,44 +140,73 @@ def find_embedding_duplicates(
     model: str | None = None,
     fallback_attempts: Sequence[Mapping[str, str]] = (),
     exclude_pairs: set[tuple[str, str]] | None = None,
+    exclude_chunk_ids: set[str] | None = None,
 ) -> list[DuplicateMatch]:
-    """Find semantically similar documents using cosine over supplied embeddings."""
+    """Find semantically similar documents using cosine over supplied embeddings.
+
+    ``exclude_chunk_ids`` skips documents already caught by earlier layers so
+    the three layers form a strict cascade: exact → simhash → embedding.
+    """
 
     if not 0.0 <= similarity_threshold <= 1.0:
         raise ValueError("similarity_threshold must be between 0 and 1.")
 
-    excluded = exclude_pairs or set()
-    indexed = [(document, vectors.get(document.document_id)) for document in documents]
+    excluded_pairs = exclude_pairs or set()
+    excluded_chunks = exclude_chunk_ids or set()
+    indexed = [
+        (document, vectors.get(document.document_id))
+        for document in documents
+        if document.document_id not in excluded_chunks
+    ]
+    meta = {
+        "similarity_threshold": similarity_threshold,
+        "method": method,
+        "provider": provider,
+        "model": model,
+        "fallback_attempts": [dict(attempt) for attempt in fallback_attempts],
+    }
     matches: list[DuplicateMatch] = []
     for left_index, (left, left_vector) in enumerate(indexed):
         if left_vector is None:
             continue
         for right, right_vector in indexed[left_index + 1 :]:
-            if right_vector is None:
-                continue
-            pair = _pair_key(left.document_id, right.document_id)
-            if pair in excluded:
-                continue
-            similarity = cosine_similarity(left_vector, right_vector)
-            if similarity < similarity_threshold:
-                continue
-            matches.append(
-                DuplicateMatch(
-                    layer="embedding_similarity",
-                    document_id=left.document_id,
-                    duplicate_document_id=right.document_id,
-                    score=round(similarity, 6),
-                    reason="embedding cosine similarity above threshold",
-                    metadata={
-                        "similarity_threshold": similarity_threshold,
-                        "method": method,
-                        "provider": provider,
-                        "model": model,
-                        "fallback_attempts": [dict(attempt) for attempt in fallback_attempts],
-                    },
-                )
+            match = _check_pair(
+                left, left_vector, right, right_vector,
+                excluded_pairs=excluded_pairs,
+                similarity_threshold=similarity_threshold,
+                meta=meta,
             )
+            if match is not None:
+                matches.append(match)
     return matches
+
+
+def _check_pair(
+    left: DedupDocument,
+    left_vector: Sequence[float] | None,
+    right: DedupDocument,
+    right_vector: Sequence[float] | None,
+    *,
+    excluded_pairs: set[tuple[str, str]],
+    similarity_threshold: float,
+    meta: Mapping[str, object],
+) -> DuplicateMatch | None:
+    if right_vector is None:
+        return None
+    pair = _pair_key(left.document_id, right.document_id)
+    if pair in excluded_pairs:
+        return None
+    similarity = cosine_similarity(left_vector, right_vector)  # type: ignore[arg-type]
+    if similarity < similarity_threshold:
+        return None
+    return DuplicateMatch(
+        layer="embedding_similarity",
+        document_id=left.document_id,
+        duplicate_document_id=right.document_id,
+        score=round(similarity, 6),
+        reason="embedding cosine similarity above threshold",
+        metadata=meta,
+    )
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
@@ -166,7 +220,7 @@ def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     dot = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
     left_norm = math.sqrt(sum(value * value for value in left))
     right_norm = math.sqrt(sum(value * value for value in right))
-    if left_norm == 0.0 or right_norm == 0.0:
+    if left_norm < 1e-10 or right_norm < 1e-10:
         return 0.0
     return dot / (left_norm * right_norm)
 

@@ -747,16 +747,24 @@ def _section_chunks_for_document(
     *,
     section_filters: list[str] | None,
     only_missing: bool,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> dict[str, list[Chunk]]:
     """Gom chunk theo section, áp dụng filter section + bỏ section đã có câu (only_missing).
 
     only_missing tính trên TOÀN BỘ dataset (global) — khớp định nghĩa "chưa sinh".
+    exclude_dedup_layers: bỏ chunk có primary_layer thuộc danh sách (e.g. ["exact_sha256"]).
     """
     provider = LocalPdfEvidenceProvider.from_env()
     chunks = provider.document_chunks(document_id=document_id).chunks
 
+    excluded_layers = set(exclude_dedup_layers) if exclude_dedup_layers else set()
+
     section_chunks: dict[str, list[Chunk]] = {}
     for chunk in chunks:
+        if excluded_layers:
+            dedup = chunk.metadata.get("deduplication") or {}
+            if dedup.get("primary_layer") in excluded_layers:
+                continue
         section = chunk.metadata.get("section") or chunk.metadata.get("title") or "General"
         if section_filters and section not in section_filters:
             continue
@@ -804,6 +812,7 @@ def _run_generate(job_id: str, body: GenerateRequest) -> None:
             body.document_id,
             section_filters=body.section_filters,
             only_missing=False,
+            exclude_dedup_layers=body.exclude_dedup_layers or None,
         )
         job["total_sections"] = len(section_chunks)
         _generate_for_document(
@@ -830,6 +839,7 @@ def _run_generate_bulk(job_id: str, body: GenerateBulkRequest) -> None:
                 document_id,
                 section_filters=None,
                 only_missing=body.only_missing,
+                exclude_dedup_layers=body.exclude_dedup_layers or None,
             )
             per_doc.append((document_id, section_chunks))
         job["total_sections"] = sum(len(sc) for _, sc in per_doc)
@@ -907,6 +917,59 @@ def list_runs(dataset_id: UUID | None = None) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def _dedup_affected_question_ids(question_ids: list[str], layers: list[str]) -> set[str]:
+    """Câu hỏi có ground-truth (source_chunk_ids) chứa chunk bị lọc bởi các dedup layer.
+
+    Dùng connection riêng để lỗi (vd. bảng dedup_candidates chưa tồn tại) không
+    làm hỏng transaction của caller — khi đó coi như không câu nào bị ảnh hưởng.
+    """
+    if not question_ids or not layers:
+        return set()
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT q.id
+                FROM eval_questions q
+                WHERE q.id = ANY(%s)
+                  AND EXISTS (
+                    SELECT 1 FROM dedup_candidates dc
+                    WHERE dc.layer = ANY(%s)
+                      AND dc.duplicate_chunk_id = ANY(q.source_chunk_ids)
+                  )
+                """,
+                (question_ids, layers),
+            )
+            return {str(r["id"]) for r in cur.fetchall()}
+    except Exception:
+        logger.exception("Failed to compute dedup-affected questions")
+        return set()
+
+
+@router.get("/datasets/{dataset_id}/dedup-affected")
+def dataset_dedup_affected(dataset_id: UUID, layers: str = "") -> dict[str, Any]:
+    """Preview: bao nhiêu câu trong dataset sẽ bị ẩn nếu lọc các dedup layer này."""
+    layer_list = [layer.strip() for layer in layers.split(",") if layer.strip()]
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT q.id
+            FROM eval_dataset_questions dq
+            JOIN eval_questions q ON q.id = dq.question_id
+            JOIN eval_questions_approved a ON a.question_id = q.id
+            WHERE dq.dataset_id = %s AND q.deleted_at IS NULL
+            """,
+            (str(dataset_id),),
+        )
+        question_ids = [str(r["id"]) for r in cur.fetchall()]
+    affected = _dedup_affected_question_ids(question_ids, layer_list)
+    return {
+        "total": len(question_ids),
+        "affected": len(affected),
+        "remaining": len(question_ids) - len(affected),
+    }
+
+
 @router.post("/runs", response_model=EvalRun)
 def create_run(body: RunCreate, background: BackgroundTasks) -> dict[str, Any]:
     with get_conn() as conn:
@@ -941,8 +1004,18 @@ def create_run(body: RunCreate, background: BackgroundTasks) -> dict[str, Any]:
                 )
                 question_ids = [str(r["id"]) for r in cur.fetchall()]
 
-            total = len(question_ids)
             config = {**snapshot_pipeline_config(), **(body.config or {})}
+
+            # Lọc dedup layer ⇒ ẩn luôn câu có ground-truth nằm trong chunk bị lọc,
+            # tránh recall@5/MRR giảm giả tạo do chunk_id mismatch với bản canonical.
+            exclude_layers = [str(layer) for layer in (config.get("exclude_dedup_layers") or [])]
+            if exclude_layers:
+                affected = _dedup_affected_question_ids(question_ids, exclude_layers)
+                if affected:
+                    question_ids = [qid for qid in question_ids if qid not in affected]
+                    config["dedup_hidden_questions"] = len(affected)
+
+            total = len(question_ids)
 
             cur.execute(
                 """

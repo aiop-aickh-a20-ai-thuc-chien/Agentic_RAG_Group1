@@ -27,6 +27,7 @@ def run_pipeline_for_question(
     question_id: str,
     question: str,
     source_chunk_ids: list[str],
+    exclude_dedup_layers: list[str] | None = None,
 ) -> dict[str, Any]:
     """Chạy RAG pipeline cho 1 câu hỏi, trả về kết quả + metrics."""
     try:
@@ -40,6 +41,7 @@ def run_pipeline_for_question(
             request=WorkflowRunInput(
                 question=question,
                 document_ids=None,  # search full corpus
+                exclude_dedup_layers=exclude_dedup_layers or [],
             ),
         )
 
@@ -380,6 +382,19 @@ def _get_run_status(run_id: str) -> str | None:
 
 
 @retry_on_operational_error
+def _get_run_config(run_id: str) -> dict[str, Any]:
+    import json
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT config FROM eval_runs WHERE id = %s", (run_id,))
+        row = cur.fetchone()
+        if not row or not row["config"]:
+            return {}
+        raw = row["config"]
+        return json.loads(raw) if isinstance(raw, str) else dict(raw)
+
+
+@retry_on_operational_error
 def _mark_run_done(run_id: str) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -412,6 +427,8 @@ def run_eval_worker(run_id: str) -> None:
     logger.info("Eval worker started for run %s", run_id)
     try:
         _mark_run_running(run_id)
+        run_config = _get_run_config(run_id)
+        exclude_dedup_layers: list[str] = run_config.get("exclude_dedup_layers") or []
 
         pipeline_done = threading.Event()
 
@@ -435,6 +452,7 @@ def run_eval_worker(run_id: str) -> None:
                 question_id=str(row["id"]),
                 question=row["question"],
                 source_chunk_ids=row.get("source_chunk_ids") or [],
+                exclude_dedup_layers=exclude_dedup_layers or None,
             )
             _write_result(run_id, str(row["id"]), payload)
 

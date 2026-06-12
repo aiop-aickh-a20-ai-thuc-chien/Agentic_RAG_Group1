@@ -24,6 +24,7 @@ class AgentState(TypedDict):
     step_count: int
     retrieval_exhausted: bool
     document_ids: NotRequired[list[str] | None]
+    exclude_dedup_layers: NotRequired[list[str]]
     answer: NotRequired[Answer]
     trace: Annotated[list[dict[str, Any]], operator.add]
     # Clarification node fields
