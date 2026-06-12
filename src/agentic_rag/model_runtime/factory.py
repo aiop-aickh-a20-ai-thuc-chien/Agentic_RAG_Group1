@@ -15,6 +15,7 @@ from agentic_rag.model_runtime.config import (
     LLMProfileConfig,
     RerankerConfig,
     resolve_embedding_config,
+    resolve_explicit_llm_profile,
     resolve_llm_profile,
     resolve_reranker_config,
 )
@@ -55,6 +56,16 @@ def get_llm_client(role: ModelRole) -> LLMClient | None:
     """Return the configured LLM client for a role, or None for provider=none."""
 
     profile = resolve_llm_profile(role)
+    if profile.provider == "none":
+        return None
+    return LiteLLMClient(config=profile)
+
+
+@lru_cache(maxsize=len(_MODEL_ROLES))
+def get_explicit_llm_client(role: ModelRole) -> LLMClient | None:
+    """Return a client configured only by role-prefixed environment variables."""
+
+    profile = resolve_explicit_llm_profile(role)
     if profile.provider == "none":
         return None
     return LiteLLMClient(config=profile)
@@ -118,6 +129,7 @@ def clear_model_runtime_caches() -> None:
     """Clear cached configured clients for tests and config reloads."""
 
     get_llm_client.cache_clear()
+    get_explicit_llm_client.cache_clear()
     get_embedding_client.cache_clear()
     get_reranker.cache_clear()
 

@@ -474,6 +474,255 @@ def test_local_pdf_provider_backfill_prefers_eval_referenced_canonical(
     assert canonical_policy["eval_reference_count"] == 1
 
 
+def test_local_pdf_provider_annotates_quality_against_existing_chunks(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    base_chunks = provider.document_chunks(document_id=base.document_id).chunks
+    update_chunks = provider.document_chunks(document_id=update.document_id).chunks
+    assert "knowledge_quality" in update_chunks[0].metadata
+    assert update_chunks[0].metadata["knowledge_quality"]["conflict_count"] == 1
+    assert update_chunks[0].metadata["knowledge_quality"]["fact_count"] == 1
+    assert base_chunks[0].metadata["knowledge_quality"]["conflict_count"] == 0
+
+
+def test_local_pdf_provider_reports_quality_for_selected_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    report = provider.knowledge_quality_report(document_ids=[base.document_id])
+
+    assert report.metadata["selected_document_ids"] == [base.document_id]
+    assert report.metadata["method"] == "deterministic_v1"
+    assert len(report.findings) == 1
+    assert report.findings[0].kind == "conflict"
+    assert set(report.findings[0].chunk_ids) == {
+        f"{base.document_id}_c0001",
+        f"{update.document_id}_c0001",
+    }
+    assert {fact.normalized_value for fact in report.facts} == {72.0, 96.0}
+
+
+def test_local_pdf_provider_rescans_and_persists_quality_metadata(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+
+    report = provider.rescan_knowledge_quality()
+
+    assert len(report.findings) == 1
+    for document_id in (base.document_id, update.document_id):
+        chunk = provider.document_chunks(document_id=document_id).chunks[0]
+        assert chunk.metadata["knowledge_quality"]["conflict_count"] == 1
+        assert chunk.metadata["knowledge_quality"]["finding_ids"]
+
+
+def test_local_pdf_provider_rejects_disabled_model_backed_method(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id=f"text_{kwargs['source'].removesuffix('.txt').lower()}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"]},
+            )
+        ],
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    provider.upload_text(
+        title="Causal",
+        text="VF 8 failures are caused by fast charging.",
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.get_explicit_llm_client",
+        lambda role: None,
+    )
+
+    with pytest.raises(ValueError, match="INGESTION_LLM"):
+        provider.knowledge_quality_report(methods=["semantic_verifier"])
+
+
+def test_local_pdf_provider_requires_explicit_ingestion_model_profile(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.model_runtime.factory import clear_model_runtime_caches
+
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "global-paid-model")
+    monkeypatch.delenv("INGESTION_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("INGESTION_LLM_MODEL", raising=False)
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.config.load_local_env",
+        lambda: None,
+    )
+    clear_model_runtime_caches()
+
+    with pytest.raises(ValueError, match="INGESTION_LLM"):
+        provider.knowledge_quality_report(methods=["semantic_verifier"])
+
+
+def test_local_pdf_provider_model_failure_does_not_persist_partial_annotations(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.core.contracts import LLMCompletionOutput
+    from agentic_rag.ingestion.knowledge_quality import KnowledgeQualityInvocationError
+
+    class InvalidClient:
+        def complete(self, request: object) -> LLMCompletionOutput:
+            return LLMCompletionOutput(
+                text="not-json",
+                provider="test",
+                model="small",
+            )
+
+        def stream(self, request: object) -> object:
+            raise AssertionError
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        lambda text, **kwargs: [
+            Chunk(
+                chunk_id=f"text_{kwargs['source'].removesuffix('.txt').lower()}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"]},
+            )
+        ],
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    provider.upload_text(
+        title="Causal A",
+        text="VF 8 battery failures are caused by frequent fast charging.",
+    )
+    provider.upload_text(
+        title="Causal B",
+        text="VF 8 battery failures are not caused by frequent fast charging.",
+    )
+    monkeypatch.setenv("INGESTION_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("INGESTION_LLM_MODEL", "small")
+    persisted = False
+
+    def record_persist(chunks: list[Chunk]) -> None:
+        nonlocal persisted
+        persisted = True
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.get_explicit_llm_client",
+        lambda role: InvalidClient(),
+    )
+    monkeypatch.setattr(provider, "_persist_quality_annotations", record_persist)
+
+    with pytest.raises(KnowledgeQualityInvocationError):
+        provider.rescan_knowledge_quality(methods=["semantic_verifier"])
+
+    assert persisted is False
+
+
+def test_local_pdf_provider_rolls_back_multi_document_persistence_failure(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    base = provider.upload_text(title="Base", text="VF8 duoc bao hanh 8 nam.")
+    update = provider.upload_text(title="Update", text="VF8 duoc bao hanh 6 nam.")
+    original_payloads = {
+        document_id: provider._chunk_path(document_id).read_bytes()
+        for document_id in (base.document_id, update.document_id)
+    }
+    original_write = provider._write_chunks
+    calls = 0
+
+    def fail_second_write(*, document_id: str, chunks: list[Chunk]) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated persistence failure")
+        original_write(document_id=document_id, chunks=chunks)
+
+    monkeypatch.setattr(provider, "_write_chunks", fail_second_write)
+
+    with pytest.raises(OSError, match="simulated persistence failure"):
+        provider.rescan_knowledge_quality()
+
+    assert {
+        document_id: provider._chunk_path(document_id).read_bytes()
+        for document_id in (base.document_id, update.document_id)
+    } == original_payloads
+
+
 def test_local_pdf_provider_can_persist_chunks_with_source_store(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -915,6 +1164,7 @@ def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
         *,
         document_ids: list[str] | None = None,
         top_k: int = 10,
+        exclude_dedup_layers: list[str] | None = None,
     ) -> list[SearchResult]:
         seen["question"] = question
         seen["document_ids"] = document_ids

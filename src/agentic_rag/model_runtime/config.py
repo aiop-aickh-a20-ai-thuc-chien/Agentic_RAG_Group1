@@ -77,16 +77,42 @@ class RerankerConfig(_RuntimeConfigModel):
 def resolve_llm_profile(role: ModelRole) -> LLMProfileConfig:
     """Resolve one role-aware LLM profile without importing provider libraries."""
 
+    return _resolve_llm_profile(role, allow_global_fallback=True)
+
+
+def resolve_explicit_llm_profile(role: ModelRole) -> LLMProfileConfig:
+    """Resolve one role using only its role-prefixed environment variables."""
+
+    return _resolve_llm_profile(role, allow_global_fallback=False)
+
+
+def _resolve_llm_profile(
+    role: ModelRole,
+    *,
+    allow_global_fallback: bool,
+) -> LLMProfileConfig:
     load_local_env()
     role_prefix = f"{role.upper()}_LLM"
-    provider = _env_value(f"{role_prefix}_PROVIDER", fallback_name="LLM_PROVIDER")
+    provider = _env_value(
+        f"{role_prefix}_PROVIDER",
+        fallback_name="LLM_PROVIDER" if allow_global_fallback else None,
+    )
     provider = (provider or "none").lower()
-    model = _env_value(f"{role_prefix}_MODEL", fallback_name="LLM_MODEL")
-    api_base = _env_value(f"{role_prefix}_API_BASE", fallback_name="LLM_API_BASE")
-    api_key = _env_value(f"{role_prefix}_API_KEY", fallback_name="LLM_API_KEY")
+    model = _env_value(
+        f"{role_prefix}_MODEL",
+        fallback_name="LLM_MODEL" if allow_global_fallback else None,
+    )
+    api_base = _env_value(
+        f"{role_prefix}_API_BASE",
+        fallback_name="LLM_API_BASE" if allow_global_fallback else None,
+    )
+    api_key = _env_value(
+        f"{role_prefix}_API_KEY",
+        fallback_name="LLM_API_KEY" if allow_global_fallback else None,
+    )
     timeout_seconds = _positive_float(
         f"{role_prefix}_TIMEOUT_SECONDS",
-        fallback_name="LLM_TIMEOUT_SECONDS",
+        fallback_name="LLM_TIMEOUT_SECONDS" if allow_global_fallback else None,
         default=DEFAULT_TIMEOUT_SECONDS,
     )
 

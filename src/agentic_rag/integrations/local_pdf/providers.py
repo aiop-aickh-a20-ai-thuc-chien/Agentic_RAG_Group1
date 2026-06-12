@@ -26,12 +26,14 @@ from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import (
     Chunk,
+    KnowledgeQualityReport,
     RetrievalInput,
     RetrievalOutput,
     SearchResult,
     SourceDocumentChunks,
     SourceDocumentUpload,
 )
+from agentic_rag.core.ports import LLMClient
 from agentic_rag.ingestion.chunking.splitters import short_hash
 from agentic_rag.ingestion.dedup_detect import (
     DEDUP_METADATA_KEY,
@@ -46,6 +48,13 @@ from agentic_rag.ingestion.dedup_detect import (
     sha256_fingerprint,
     simhash_fingerprint,
 )
+from agentic_rag.ingestion.knowledge_quality import (
+    MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS,
+    KnowledgeQualityConfigurationError,
+    analyze_chunks,
+    annotate_chunks_with_quality,
+    parse_knowledge_quality_methods,
+)
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
@@ -56,6 +65,8 @@ from agentic_rag.integrations.local_pdf.storage import (
     StoredRawSource,
     StoredSourceDocument,
 )
+from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
+from agentic_rag.model_runtime.factory import get_explicit_llm_client
 from agentic_rag.retrieval.fusion import (
     RRF_K,
     ThresholdConfig,
@@ -278,6 +289,10 @@ class LocalPdfEvidenceProvider:
             name=safe_filename,
             source_type="pdf",
         )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
+        )
         chunk_latency_ms = _latency_ms(chunk_started_at)
         dedup_started_at = time.perf_counter()
         chunks, dedup_trace, dedup_dense_vectors = self._apply_dedup_to_new_chunks(
@@ -401,6 +416,10 @@ class LocalPdfEvidenceProvider:
             source_type="url",
             source=url,
         )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
+        )
         url_trace = _url_ingestion_trace(requested_url=url, chunks=chunks)
         chunk_latency_ms = _latency_ms(chunk_started_at)
         dedup_started_at = time.perf_counter()
@@ -519,6 +538,10 @@ class LocalPdfEvidenceProvider:
             document_id=document_id,
             name=safe_name,
             source_type="text",
+        )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
         )
         chunk_latency_ms = _latency_ms(chunk_started_at)
         dedup_started_at = time.perf_counter()
@@ -772,6 +795,75 @@ class LocalPdfEvidenceProvider:
             source_type=source_type,
             q=q,
             limit=limit,
+        )
+
+    def knowledge_quality_report(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        methods: list[str] | None = None,
+    ) -> KnowledgeQualityReport:
+        """Return a fresh deterministic quality report for stored local chunks."""
+
+        selected_document_ids = _selected_document_ids(document_ids)
+        all_chunks = self._chunks_for_documents(None)
+        target_chunk_ids = _target_quality_chunk_ids(
+            chunks=all_chunks,
+            document_ids=selected_document_ids,
+        )
+        if selected_document_ids is not None and not target_chunk_ids:
+            raise ValueError(
+                "Document not found or has no chunks: " + ", ".join(selected_document_ids)
+            )
+
+        selected_methods, llm_client = _quality_method_runtime(methods)
+        report = analyze_chunks(
+            all_chunks,
+            methods=selected_methods,
+            llm_client=llm_client,
+        )
+        return _filter_quality_report(
+            report=report,
+            target_chunk_ids=target_chunk_ids,
+            selected_document_ids=selected_document_ids,
+            provider=self.dataset_id,
+        )
+
+    def rescan_knowledge_quality(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        methods: list[str] | None = None,
+    ) -> KnowledgeQualityReport:
+        """Recompute quality metadata and persist only after every method succeeds."""
+
+        selected_document_ids = _selected_document_ids(document_ids)
+        all_chunks = self._chunks_for_documents(None)
+        target_chunks = _target_quality_chunks(
+            chunks=all_chunks,
+            document_ids=selected_document_ids,
+        )
+        if selected_document_ids is not None and not target_chunks:
+            raise ValueError(
+                "Document not found or has no chunks: " + ", ".join(selected_document_ids)
+            )
+        selected_methods, llm_client = _quality_method_runtime(methods)
+        report = analyze_chunks(
+            all_chunks,
+            methods=selected_methods,
+            llm_client=llm_client,
+        )
+        annotated_chunks = annotate_chunks_with_quality(
+            target_chunks,
+            report=report,
+        )
+        self._persist_quality_annotations(annotated_chunks)
+        target_chunk_ids = {chunk.chunk_id for chunk in target_chunks}
+        return _filter_quality_report(
+            report=report,
+            target_chunk_ids=target_chunk_ids,
+            selected_document_ids=selected_document_ids,
+            provider=self.dataset_id,
         )
 
     def delete_all_documents(self) -> int:
@@ -1282,6 +1374,47 @@ class LocalPdfEvidenceProvider:
 
     def _invalidate_dedup_chunk_cache(self) -> None:
         _DEDUP_CHUNK_CACHE.pop(self._dedup_cache_key(), None)
+
+    def _quality_context_chunks(self, *, document_id: str) -> list[Chunk]:
+        try:
+            chunks = self._chunks_for_documents(None)
+        except AttributeError:
+            return []
+        return [chunk for chunk in chunks if _chunk_document_id(chunk) != document_id]
+
+    def _persist_quality_annotations(self, chunks: list[Chunk]) -> None:
+        if self._source_store is not None:
+            return
+
+        chunks_by_document: dict[str, list[Chunk]] = {}
+        for chunk in chunks:
+            document_id = _chunk_document_id(chunk)
+            if document_id is None:
+                continue
+            chunks_by_document.setdefault(document_id, []).append(chunk)
+
+        original_payloads = {
+            document_id: (
+                self._chunk_path(document_id).read_bytes()
+                if self._chunk_path(document_id).exists()
+                else None
+            )
+            for document_id in chunks_by_document
+        }
+        attempted_document_ids: list[str] = []
+        try:
+            for document_id, document_chunks in chunks_by_document.items():
+                attempted_document_ids.append(document_id)
+                self._write_chunks(document_id=document_id, chunks=document_chunks)
+        except Exception:
+            for document_id in attempted_document_ids:
+                chunk_path = self._chunk_path(document_id)
+                original_payload = original_payloads[document_id]
+                if original_payload is None:
+                    chunk_path.unlink(missing_ok=True)
+                else:
+                    chunk_path.write_bytes(original_payload)
+            raise
 
     def _chunk_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
@@ -2102,6 +2235,92 @@ def _delete_document_candidate_index(document_id: str) -> None:
         dedup_store.delete_document_candidates(document_id)
     except Exception:
         logger.exception("Failed to delete dedup candidate index for %s", document_id)
+
+
+def _selected_document_ids(document_ids: list[str] | None) -> list[str] | None:
+    if document_ids is None:
+        return None
+    return [document_id for document_id in dict.fromkeys(document_ids) if document_id]
+
+
+def _target_quality_chunks(
+    *,
+    chunks: list[Chunk],
+    document_ids: list[str] | None,
+) -> list[Chunk]:
+    if document_ids is None:
+        return chunks
+    selected = set(document_ids)
+    return [chunk for chunk in chunks if _chunk_document_id(chunk) in selected]
+
+
+def _target_quality_chunk_ids(
+    *,
+    chunks: list[Chunk],
+    document_ids: list[str] | None,
+) -> set[str]:
+    return {
+        chunk.chunk_id for chunk in _target_quality_chunks(chunks=chunks, document_ids=document_ids)
+    }
+
+
+def _quality_method_runtime(
+    methods: list[str] | None,
+) -> tuple[list[str], LLMClient | None]:
+    selected_methods = parse_knowledge_quality_methods(methods)
+    if not MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS.intersection(selected_methods):
+        return selected_methods, None
+    try:
+        client = get_explicit_llm_client("ingestion")
+    except ModelRuntimeConfigurationError as exc:
+        raise KnowledgeQualityConfigurationError(
+            f"Invalid INGESTION_LLM_* configuration: {exc}"
+        ) from exc
+    if client is None:
+        raise KnowledgeQualityConfigurationError(
+            "semantic_verifier and agentic_review require an enabled INGESTION_LLM_* profile."
+        )
+    return selected_methods, client
+
+
+def _filter_quality_report(
+    *,
+    report: KnowledgeQualityReport,
+    target_chunk_ids: set[str],
+    selected_document_ids: list[str] | None,
+    provider: str,
+) -> KnowledgeQualityReport:
+    facts = report.facts
+    findings = report.findings
+    if selected_document_ids is not None:
+        findings = [
+            finding
+            for finding in report.findings
+            if target_chunk_ids.intersection(finding.chunk_ids)
+        ]
+        related_fact_ids = {fact_id for finding in findings for fact_id in finding.fact_ids}
+        related_chunk_ids = {
+            chunk_id for finding in findings for chunk_id in finding.chunk_ids
+        } | target_chunk_ids
+        facts = [
+            fact
+            for fact in report.facts
+            if fact.chunk_id in related_chunk_ids or fact.fact_id in related_fact_ids
+        ]
+    return KnowledgeQualityReport(
+        facts=facts,
+        findings=findings,
+        metadata={
+            **report.metadata,
+            "provider": provider,
+            "selected_document_ids": selected_document_ids,
+        },
+    )
+
+
+def _chunk_document_id(chunk: Chunk) -> str | None:
+    value = chunk.metadata.get("document_id")
+    return str(value) if value else None
 
 
 def _source_store_from_env() -> LocalSourceStore | None:
