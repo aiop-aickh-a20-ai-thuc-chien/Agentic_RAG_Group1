@@ -91,6 +91,7 @@ def run_agent(
         "step_count": 0,
         "retrieval_exhausted": False,
         "document_ids": request.document_ids,
+        "exclude_dedup_layers": request.exclude_dedup_layers,
         "trace": [],
         # Clarification fields — reset every run; resolved from history if needed
         "needs_clarification": False,

@@ -206,7 +206,10 @@ def test_sentence_transformers_missing_extra_is_configuration_error(
     monkeypatch: MonkeyPatch,
 ) -> None:
     def fail_import(name: str) -> object:
-        if name == "sentence_transformers":
+        # sklearn được preimport trước (chống xung đột DLL) trong contextlib.suppress
+        # (ImportError) — cho nó raise ImportError để bị nuốt, rồi sentence_transformers
+        # raise ImportError mới là cái cần test.
+        if name in {"sentence_transformers", "sklearn"}:
             raise ImportError(name)
         raise AssertionError(name)
 

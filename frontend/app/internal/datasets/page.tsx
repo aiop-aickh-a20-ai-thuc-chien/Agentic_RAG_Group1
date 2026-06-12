@@ -1,10 +1,25 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, ChevronRight, Loader2, Plus, Search, Trash2, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Layers, Loader2, Plus, Search, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
+
+const DEDUP_LAYERS = [
+  { key: "exact_sha256",         label: "L1 Exact"     },
+  { key: "simhash",              label: "L2 SimHash"   },
+  { key: "embedding_similarity", label: "L3 Embedding" },
+] as const;
+type FlaggedMap = Record<string, string[]>;
+
+// Gom mọi chunk_id bị flag ở các layer đang chọn thành 1 Set
+function collectFlaggedChunkIds(layers: Set<string>, flaggedByLayer: FlaggedMap): Set<string> {
+  const out = new Set<string>();
+  for (const layer of layers)
+    for (const cid of flaggedByLayer[layer] ?? []) out.add(cid);
+  return out;
+}
 
 type Dataset  = { id: string; name: string; description: string | null; is_benchmark: boolean; created_at: string };
 type Question = {
@@ -33,6 +48,12 @@ export default function DatasetsPage() {
   const [srcSelected, setSrcSelected] = useState<Set<string>>(new Set());
   const [srcSearch,   setSrcSearch]   = useState("");
   const [importing,   setImporting]   = useState(false);
+  const [importSource, setImportSource] = useState<string>(""); // "" = tất cả câu đã duyệt; còn lại = id dataset nguồn
+  // Lọc dedup: ẩn câu có ground-truth nằm trong chunk bị flag ở layer được chọn
+  const [hideDedupLayers, setHideDedupLayers] = useState<Set<string>>(new Set());
+  const [flaggedByLayer,  setFlaggedByLayer]  = useState<FlaggedMap>({});
+  const toggleHideLayer = (key: string) =>
+    setHideDedupLayers((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   // Delete dataset confirm
   const [confirmDelete, setConfirmDelete] = useState<Dataset | null>(null);
@@ -42,6 +63,18 @@ export default function DatasetsPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => { loadDatasets(); }, []);
+
+  // Khi đổi layer ẩn: bỏ chọn những câu vừa bị ẩn để không import nhầm
+  useEffect(() => {
+    const hidden = collectFlaggedChunkIds(hideDedupLayers, flaggedByLayer);
+    if (hidden.size === 0) return;
+    setSrcSelected((prev) => {
+      const next = new Set(prev);
+      for (const q of pool)
+        if ((q.source_chunk_ids ?? []).some((cid) => hidden.has(cid))) next.delete(q.id);
+      return next;
+    });
+  }, [hideDedupLayers, flaggedByLayer, pool]);
 
   function loadDatasets() {
     fetch(`${API}/internal/datasets`)
@@ -98,13 +131,16 @@ export default function DatasetsPage() {
     setQuestions((prev) => prev.filter((q) => q.id !== qid));
   }
 
-  // Mở panel import — load tất cả câu approved từ global pool, bỏ qua những câu đã có trong dataset
-  function openImport() {
+  // Load pool theo nguồn: "" = toàn bộ kho approved, hoặc id 1 dataset nguồn.
+  // Luôn bỏ qua câu đã có trong dataset đang mở + chỉ lấy câu approved.
+  function loadPool(source: string) {
     if (!activeId) return;
-    setSrcSelected(new Set()); setSrcSearch("");
-    setShowImport(true);
+    setSrcSelected(new Set());
     setPoolLoading(true);
-    fetch(`${API}/internal/questions?include_deleted=false`)
+    const url = source
+      ? `${API}/internal/datasets/${source}/questions?include_deleted=false`
+      : `${API}/internal/questions?include_deleted=false`;
+    fetch(url)
       .then((r) => r.json())
       .then((all: Question[]) => {
         const alreadyIn = new Set(questions.map((q) => q.id));
@@ -112,6 +148,25 @@ export default function DatasetsPage() {
         setPoolLoading(false);
       })
       .catch(() => setPoolLoading(false));
+  }
+
+  // Mở panel import — mặc định lấy từ toàn bộ kho câu đã duyệt
+  function openImport() {
+    if (!activeId) return;
+    setSrcSearch("");
+    setImportSource("");
+    setHideDedupLayers(new Set());
+    setShowImport(true);
+    loadPool("");
+    fetch(`${API}/internal/dedup/flagged-chunk-ids`)
+      .then((r) => r.json())
+      .then((d: FlaggedMap) => setFlaggedByLayer(d && typeof d === "object" ? d : {}))
+      .catch(() => setFlaggedByLayer({}));
+  }
+
+  function changeSource(source: string) {
+    setImportSource(source);
+    loadPool(source);
   }
 
   async function doImport() {
@@ -131,9 +186,24 @@ export default function DatasetsPage() {
     ? questions.filter((q) => q.question.toLowerCase().includes(search.toLowerCase()) || q.ground_truth.toLowerCase().includes(search.toLowerCase()))
     : questions;
 
+  // Tập chunk_id bị flag ở các layer đang chọn để ẩn
+  const hiddenChunkIds = collectFlaggedChunkIds(hideDedupLayers, flaggedByLayer);
+  const isHiddenByDedup = (q: Question) =>
+    hiddenChunkIds.size > 0 && (q.source_chunk_ids ?? []).some((cid) => hiddenChunkIds.has(cid));
+
+  // pool sau khi ẩn câu trùng → rồi mới áp search
+  const poolAfterDedup = pool.filter((q) => !isHiddenByDedup(q));
+  const hiddenCount = pool.length - poolAfterDedup.length;
   const poolFiltered = srcSearch.trim()
-    ? pool.filter((q) => q.question.toLowerCase().includes(srcSearch.toLowerCase()) || q.ground_truth.toLowerCase().includes(srcSearch.toLowerCase()))
-    : pool;
+    ? poolAfterDedup.filter((q) => q.question.toLowerCase().includes(srcSearch.toLowerCase()) || q.ground_truth.toLowerCase().includes(srcSearch.toLowerCase()))
+    : poolAfterDedup;
+
+  const poolCountLabel = (() => {
+    if (poolLoading) return "Đang tải...";
+    if (hiddenCount > 0)
+      return `${poolAfterDedup.length} câu hiển thị · ẩn ${hiddenCount} câu trùng (tổng ${pool.length})`;
+    return `${pool.length} câu approved chưa có trong dataset này`;
+  })();
 
   return (
     <div className="space-y-5">
@@ -287,12 +357,56 @@ export default function DatasetsPage() {
               <div className="bg-white rounded-xl border border-black/8 px-5 py-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Thêm từ câu đã duyệt</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {poolLoading ? "Đang tải..." : `${pool.length} câu approved chưa có trong dataset này`}
-                    </p>
+                    <p className="text-sm font-medium text-gray-700">Thêm câu vào dataset</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{poolCountLabel}</p>
                   </div>
                   <button onClick={() => setShowImport(false)} className="text-gray-400 hover:text-gray-600"><X size={15} /></button>
+                </div>
+
+                {/* Chọn nguồn: toàn bộ kho hay kế thừa từ 1 dataset có sẵn */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">Lấy từ:</span>
+                  <select
+                    value={importSource}
+                    onChange={(e) => changeSource(e.target.value)}
+                    className="text-sm border border-black/12 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40 max-w-[280px]"
+                  >
+                    <option value="">Tất cả câu đã duyệt</option>
+                    {datasets.filter((d) => d.id !== activeId).map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Lọc dedup: ẩn câu có ground-truth nằm trong chunk bị flag */}
+                <div className="flex items-center gap-2 flex-wrap rounded-lg bg-gray-50 border border-black/6 px-3 py-2">
+                  <Layers size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-xs text-gray-500 shrink-0">Ẩn câu trùng:</span>
+                  {DEDUP_LAYERS.map(({ key, label }) => {
+                    const active = hideDedupLayers.has(key);
+                    const flaggedCount = (flaggedByLayer[key] ?? []).length;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => toggleHideLayer(key)}
+                        className={cn(
+                          "text-xs px-2.5 py-1 rounded-full border transition-all pressable",
+                          active
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-black/12 bg-white text-gray-600 hover:border-emerald-300 hover:bg-emerald-50"
+                        )}
+                        title={`${flaggedCount} chunk bị flag ở ${label}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {hiddenCount > 0 && (
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full ml-auto">
+                      đã ẩn {hiddenCount} câu
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

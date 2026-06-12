@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from agentic_rag.autodata_eval.config_snapshot import snapshot_pipeline_config
-from agentic_rag.autodata_eval.db import get_conn
+from agentic_rag.autodata_eval.db import get_conn, retry_on_operational_error
 from agentic_rag.autodata_eval.models import (
     ApproveRequest,
     Dataset,
@@ -123,7 +123,9 @@ def list_all_questions(include_deleted: bool = False) -> list[dict[str, Any]]:
                   a.reviewed_at,
                   EXISTS(
                     SELECT 1 FROM eval_results er WHERE er.question_id = q.id
-                  ) AS has_results
+                  ) AS has_results,
+                  (SELECT COUNT(*) FROM eval_results er
+                   WHERE er.question_id = q.id)::int AS eval_count
                 FROM eval_questions q
                 LEFT JOIN global_order go ON go.id = q.id
                 LEFT JOIN eval_questions_approved a ON a.question_id = q.id
@@ -153,11 +155,10 @@ def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict
                   a.reviewed_by,
                   a.reviewed_at,
                   EXISTS(
-                    SELECT 1 FROM eval_results er
-                    WHERE er.question_id = q.id AND er.run_id IN (
-                      SELECT id FROM eval_runs WHERE dataset_id = %s
-                    )
-                  ) AS has_results
+                    SELECT 1 FROM eval_results er WHERE er.question_id = q.id
+                  ) AS has_results,
+                  (SELECT COUNT(*) FROM eval_results er
+                   WHERE er.question_id = q.id)::int AS eval_count
                 FROM eval_dataset_questions dq
                 JOIN eval_questions q ON q.id = dq.question_id
                 LEFT JOIN global_order go ON go.id = q.id
@@ -165,7 +166,7 @@ def list_questions(dataset_id: UUID, include_deleted: bool = False) -> list[dict
                 WHERE dq.dataset_id = %s {deleted_filter}
                 ORDER BY q.created_at DESC
                 """,
-            (str(dataset_id), str(dataset_id)),
+            (str(dataset_id),),
         )
         return cur.fetchall()
 
@@ -188,6 +189,35 @@ def update_question(question_id: UUID, body: QuestionUpdate) -> dict[str, Any]:
     if not row:
         raise HTTPException(status_code=404, detail="Không tìm thấy câu hỏi")
     return row
+
+
+@router.get("/questions/{question_id}/history")
+def question_history(question_id: UUID) -> list[dict[str, Any]]:
+    """Lịch sử đánh giá của 1 câu — mọi run từng chấm câu này, mới nhất trước."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+              r.id          AS run_id,
+              r.name        AS run_name,
+              d.name        AS dataset_name,
+              r.created_at  AS ran_at,
+              er.recall_at_5,
+              er.mrr_at_5,
+              er.citation_chunk_match,
+              er.guardrail_pass,
+              er.ragas_faithfulness,
+              er.ragas_answer_relevancy,
+              er.eval_error
+            FROM eval_results er
+            JOIN eval_runs r ON r.id = er.run_id
+            LEFT JOIN eval_datasets d ON d.id = r.dataset_id
+            WHERE er.question_id = %s
+            ORDER BY er.ran_at DESC NULLS LAST
+            """,
+            (str(question_id),),
+        )
+        return cur.fetchall()
 
 
 def _parse_chunk_ids(raw: Any) -> list[str]:
@@ -717,16 +747,24 @@ def _section_chunks_for_document(
     *,
     section_filters: list[str] | None,
     only_missing: bool,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> dict[str, list[Chunk]]:
     """Gom chunk theo section, áp dụng filter section + bỏ section đã có câu (only_missing).
 
     only_missing tính trên TOÀN BỘ dataset (global) — khớp định nghĩa "chưa sinh".
+    exclude_dedup_layers: bỏ chunk có primary_layer thuộc danh sách (e.g. ["exact_sha256"]).
     """
     provider = LocalPdfEvidenceProvider.from_env()
     chunks = provider.document_chunks(document_id=document_id).chunks
 
+    excluded_layers = set(exclude_dedup_layers) if exclude_dedup_layers else set()
+
     section_chunks: dict[str, list[Chunk]] = {}
     for chunk in chunks:
+        if excluded_layers:
+            dedup = chunk.metadata.get("deduplication") or {}
+            if dedup.get("primary_layer") in excluded_layers:
+                continue
         section = chunk.metadata.get("section") or chunk.metadata.get("title") or "General"
         if section_filters and section not in section_filters:
             continue
@@ -774,6 +812,7 @@ def _run_generate(job_id: str, body: GenerateRequest) -> None:
             body.document_id,
             section_filters=body.section_filters,
             only_missing=False,
+            exclude_dedup_layers=body.exclude_dedup_layers or None,
         )
         job["total_sections"] = len(section_chunks)
         _generate_for_document(
@@ -800,6 +839,7 @@ def _run_generate_bulk(job_id: str, body: GenerateBulkRequest) -> None:
                 document_id,
                 section_filters=None,
                 only_missing=body.only_missing,
+                exclude_dedup_layers=body.exclude_dedup_layers or None,
             )
             per_doc.append((document_id, section_chunks))
         job["total_sections"] = sum(len(sc) for _, sc in per_doc)
@@ -877,6 +917,59 @@ def list_runs(dataset_id: UUID | None = None) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def _dedup_affected_question_ids(question_ids: list[str], layers: list[str]) -> set[str]:
+    """Câu hỏi có ground-truth (source_chunk_ids) chứa chunk bị lọc bởi các dedup layer.
+
+    Dùng connection riêng để lỗi (vd. bảng dedup_candidates chưa tồn tại) không
+    làm hỏng transaction của caller — khi đó coi như không câu nào bị ảnh hưởng.
+    """
+    if not question_ids or not layers:
+        return set()
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT q.id
+                FROM eval_questions q
+                WHERE q.id = ANY(%s)
+                  AND EXISTS (
+                    SELECT 1 FROM dedup_candidates dc
+                    WHERE dc.layer = ANY(%s)
+                      AND dc.duplicate_chunk_id = ANY(q.source_chunk_ids)
+                  )
+                """,
+                (question_ids, layers),
+            )
+            return {str(r["id"]) for r in cur.fetchall()}
+    except Exception:
+        logger.exception("Failed to compute dedup-affected questions")
+        return set()
+
+
+@router.get("/datasets/{dataset_id}/dedup-affected")
+def dataset_dedup_affected(dataset_id: UUID, layers: str = "") -> dict[str, Any]:
+    """Preview: bao nhiêu câu trong dataset sẽ bị ẩn nếu lọc các dedup layer này."""
+    layer_list = [layer.strip() for layer in layers.split(",") if layer.strip()]
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT q.id
+            FROM eval_dataset_questions dq
+            JOIN eval_questions q ON q.id = dq.question_id
+            JOIN eval_questions_approved a ON a.question_id = q.id
+            WHERE dq.dataset_id = %s AND q.deleted_at IS NULL
+            """,
+            (str(dataset_id),),
+        )
+        question_ids = [str(r["id"]) for r in cur.fetchall()]
+    affected = _dedup_affected_question_ids(question_ids, layer_list)
+    return {
+        "total": len(question_ids),
+        "affected": len(affected),
+        "remaining": len(question_ids) - len(affected),
+    }
+
+
 @router.post("/runs", response_model=EvalRun)
 def create_run(body: RunCreate, background: BackgroundTasks) -> dict[str, Any]:
     with get_conn() as conn:
@@ -911,8 +1004,18 @@ def create_run(body: RunCreate, background: BackgroundTasks) -> dict[str, Any]:
                 )
                 question_ids = [str(r["id"]) for r in cur.fetchall()]
 
-            total = len(question_ids)
             config = {**snapshot_pipeline_config(), **(body.config or {})}
+
+            # Lọc dedup layer ⇒ ẩn luôn câu có ground-truth nằm trong chunk bị lọc,
+            # tránh recall@5/MRR giảm giả tạo do chunk_id mismatch với bản canonical.
+            exclude_layers = [str(layer) for layer in (config.get("exclude_dedup_layers") or [])]
+            if exclude_layers:
+                affected = _dedup_affected_question_ids(question_ids, exclude_layers)
+                if affected:
+                    question_ids = [qid for qid in question_ids if qid not in affected]
+                    config["dedup_hidden_questions"] = len(affected)
+
+            total = len(question_ids)
 
             cur.execute(
                 """
@@ -1029,6 +1132,7 @@ def run_ragas(
 
 
 @router.get("/runs/{run_id}/metrics")
+@retry_on_operational_error
 def run_metrics(run_id: UUID) -> dict[str, Any]:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1054,10 +1158,27 @@ def run_metrics(run_id: UUID) -> dict[str, Any]:
 
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResult])
-def list_results(run_id: UUID, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+@retry_on_operational_error
+def list_results(
+    run_id: UUID, limit: int = 50, offset: int = 0, light: bool = False
+) -> list[dict[str, Any]]:
+    # light=True bỏ cột nặng (rag_context, bot_citations) — trang So sánh kéo cả nghìn
+    # dòng, rag_context (toàn bộ context retrieved) làm payload phình vài MB khiến Neon
+    # đóng kết nối giữa chừng. Các cột này trả NULL để vẫn khớp response_model.
+    if light:
+        columns = (
+            "id, question_id, run_id, NULL AS rag_context, bot_response, "
+            "NULL AS bot_citations, trace_url, retrieved_top5_ids, ground_truth_rank, "
+            "recall_at_5, mrr_at_5, citation_chunk_match, guardrail_pass, "
+            "ragas_faithfulness, ragas_answer_relevancy, ragas_context_precision, "
+            "ragas_context_recall, eval_error, ran_at"
+        )
+    else:
+        columns = "*"
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT * FROM eval_results WHERE run_id = %s ORDER BY ran_at LIMIT %s OFFSET %s",
+            f"SELECT {columns} FROM eval_results WHERE run_id = %s "
+            "ORDER BY ran_at LIMIT %s OFFSET %s",
             (str(run_id), limit, offset),
         )
         return cur.fetchall()
@@ -1126,22 +1247,32 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
 
 
 @router.get("/compare", response_model=list[RunSummary])
+@retry_on_operational_error
 def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
     with get_conn() as conn, conn.cursor() as cur:
+        # ── Run nội bộ của dataset ─────────────────────────────────────────────
         cur.execute(
             """
                 SELECT
                   r.id          AS run_id,
                   r.name,
                   r.config,
-                  COUNT(res.id)                                      AS total_questions,
-                  AVG(res.recall_at_5)                               AS avg_recall,
-                  AVG(res.mrr_at_5)                                  AS avg_mrr,
-                  AVG(res.citation_chunk_match)                      AS avg_citation,
+                  COUNT(res.id)                                           AS total_questions,
+                  AVG(res.recall_at_5)                                    AS avg_recall,
+                  AVG(res.mrr_at_5)                                       AS avg_mrr,
+                  AVG(res.citation_chunk_match)                           AS avg_citation,
                   AVG(CASE WHEN res.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,
-                  BOOL_OR(res.ragas_faithfulness IS NOT NULL)        AS has_ragas,
-                  AVG(res.ragas_faithfulness)                        AS avg_ragas_faithfulness,
-                  AVG(res.ragas_answer_relevancy)                    AS avg_ragas_relevancy
+                  BOOL_OR(res.ragas_faithfulness IS NOT NULL)             AS has_ragas,
+                  AVG(res.ragas_faithfulness)                             AS avg_ragas_faithfulness,
+                  AVG(res.ragas_answer_relevancy)                         AS avg_ragas_relevancy,
+                  AVG(res.ragas_context_precision)
+                    AS avg_ragas_context_precision,
+                  AVG(res.ragas_context_recall)
+                    AS avg_ragas_context_recall,
+                  FALSE                                                   AS external,
+                  NULL                                                    AS source_dataset_name,
+                  COUNT(res.id)                                           AS coverage,
+                  COUNT(res.id)                                           AS coverage_total
                 FROM eval_runs r
                 LEFT JOIN eval_results res ON res.run_id = r.id
                 WHERE r.dataset_id = %s
@@ -1150,7 +1281,60 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                 """,
             (str(dataset_id),),
         )
-        return cur.fetchall()
+        native = list(cur.fetchall())
+
+        # ── Lấy câu hỏi của dataset hiện tại ─────────────────────────────────
+        cur.execute(
+            "SELECT question_id FROM eval_dataset_questions WHERE dataset_id = %s",
+            (str(dataset_id),),
+        )
+        qb_ids = [str(r["question_id"]) for r in cur.fetchall()]
+        if not qb_ids:
+            return native
+
+        total_qb = len(qb_ids)
+
+        # ── Run kế thừa từ dataset khác phủ ≥ 50% câu của dataset hiện tại ──
+        cur.execute(
+            """
+                SELECT
+                  r.id          AS run_id,
+                  r.name,
+                  r.config,
+                  COUNT(er.id)                                            AS total_questions,
+                  AVG(er.recall_at_5)                                     AS avg_recall,
+                  AVG(er.mrr_at_5)                                        AS avg_mrr,
+                  AVG(er.citation_chunk_match)                            AS avg_citation,
+                  AVG(CASE WHEN er.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,
+                  BOOL_OR(er.ragas_faithfulness IS NOT NULL)              AS has_ragas,
+                  AVG(er.ragas_faithfulness)                              AS avg_ragas_faithfulness,
+                  AVG(er.ragas_answer_relevancy)                          AS avg_ragas_relevancy,
+                  AVG(er.ragas_context_precision)
+                    AS avg_ragas_context_precision,
+                  AVG(er.ragas_context_recall)
+                    AS avg_ragas_context_recall,
+                  TRUE                                                    AS external,
+                  d.name                                                  AS source_dataset_name,
+                  COUNT(er.id)                                            AS coverage
+                FROM eval_runs r
+                JOIN eval_datasets d ON d.id = r.dataset_id
+                JOIN eval_results er ON er.run_id = r.id
+                WHERE r.dataset_id IS NOT NULL
+                  AND r.dataset_id != %s
+                  AND er.question_id = ANY(%s)
+                GROUP BY r.id, d.name
+                HAVING COUNT(er.id) * 2 >= %s
+                ORDER BY r.created_at DESC
+                """,
+            (str(dataset_id), qb_ids, total_qb),
+        )
+        external = []
+        for row in cur.fetchall():
+            d = dict(row)
+            d["coverage_total"] = total_qb
+            external.append(d)
+
+        return native + external
 
 
 # ── Startup recovery ──────────────────────────────────────────────────────────

@@ -57,6 +57,7 @@ class QuestionWithStatus(Question):
     reviewed_at: datetime | None = None
     has_results: bool = False
     global_seq: int = 0
+    eval_count: int = 0
 
 
 class QuestionUpdate(BaseModel):
@@ -141,6 +142,9 @@ class GenerateRequest(BaseModel):
     section_filters: list[str] | None = None  # None = toàn bộ document
     questions_per_section: int = Field(default=3, ge=1, le=10)
     custom_prompt: str | None = None  # template với {n}/{section}/{context}; None = dùng mặc định
+    # Loại bỏ chunk bị đánh dấu trùng ở các layer chỉ định.
+    # Giá trị hợp lệ: "exact_sha256", "simhash", "embedding_similarity"
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
 
 
 class GenerateBulkRequest(BaseModel):
@@ -151,6 +155,7 @@ class GenerateBulkRequest(BaseModel):
     questions_per_section: int = Field(default=3, ge=1, le=10)
     only_missing: bool = True  # chỉ sinh cho section chưa có câu (resumable)
     custom_prompt: str | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
 
 
 class GenerateJob(BaseModel):
@@ -177,3 +182,10 @@ class RunSummary(BaseModel):
     has_ragas: bool
     avg_ragas_faithfulness: float | None
     avg_ragas_relevancy: float | None
+    avg_ragas_context_precision: float | None = None
+    avg_ragas_context_recall: float | None = None
+    # Run kế thừa — tính điểm trên subset câu của dataset hiện tại
+    external: bool = False
+    source_dataset_name: str | None = None
+    coverage: int = 0  # số câu của dataset hiện tại có kết quả trong run này
+    coverage_total: int = 0  # tổng số câu của dataset hiện tại

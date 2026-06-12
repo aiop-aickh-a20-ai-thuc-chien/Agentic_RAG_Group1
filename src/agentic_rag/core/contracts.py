@@ -75,6 +75,7 @@ class WorkflowRunInput(_ContractModel):
     question: str
     history: list[ConversationMessage] = Field(default_factory=list)
     document_ids: list[str] | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
 
 
 class WorkflowRunOutput(_ContractModel):
@@ -92,6 +93,7 @@ class RetrievalInput(_ContractModel):
     question: str
     document_ids: list[str] | None = None
     page_size: int | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
 
 
 class RetrievalOutput(_ContractModel):
@@ -108,6 +110,7 @@ class EvidenceResolutionInput(_ContractModel):
     evidence_chunks: list[SearchResult] | None = None
     provider: str | None = None
     document_ids: list[str] | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
     use_mock_evidence: bool = False
 
 

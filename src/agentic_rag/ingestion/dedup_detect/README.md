@@ -184,23 +184,32 @@ report = detect_duplicates(documents)
 enriched_chunks = add_duplicate_metadata_to_chunks(chunks, report)
 ```
 
-Each duplicate chunk gets `Chunk.metadata["deduplication"]`:
+Only duplicate candidates get `Chunk.metadata["deduplication"]`. The canonical
+chunk stays clean and is referenced from the candidate metadata:
 
 ```json
 {
+  "status": "duplicate_candidate",
+  "review_status": "pending",
   "has_duplicate": true,
   "match_count": 1,
   "detected_layers": ["exact_sha256"],
+  "canonical_chunk_id": "chunk-a",
+  "canonical_document_id": "doc-a",
+  "group_id": "chunk-a::chunk-b",
   "matches": [
     {
-      "other_document_id": "chunk-a",
+      "canonical_chunk_id": "chunk-a",
+      "canonical_document_id": "doc-a",
+      "duplicate_chunk_id": "chunk-b",
+      "duplicate_document_id": "doc-b",
       "role": "duplicate_candidate",
       "detected_layer": "exact_sha256",
       "score": 1.0,
       "distance": 0,
       "fingerprint": "sha256...",
       "reason": "same normalized text SHA-256",
-      "detection_summary": "duplicate-candidate side: exact normalized text duplicate detected.",
+      "detection_summary": "candidate side: exact normalized text duplicate detected.",
       "metadata": {}
     }
   ]
@@ -209,6 +218,42 @@ Each duplicate chunk gets `Chunk.metadata["deduplication"]`:
 
 This metadata is descriptive only. It records which layer detected the duplicate
 signal and enough match details for a later human review or a separate resolver.
+
+## Integration And Backfill
+
+`LocalPdfEvidenceProvider` runs dedup during PDF, URL, and text upload after
+source-specific chunks have local metadata and before chunks are written to the
+source store/vector index. Upload-time dedup compares new chunks with existing
+stored chunks. Exact, SimHash, and embedding layers are enabled by default.
+Only duplicate candidates get dedup metadata; canonical chunks stay unmarked.
+
+Canonical selection is order-based across all three layers. Upload-time dedup
+puts existing chunks before new chunks, so already-stored chunks stay canonical.
+Backfill sorts legacy chunks by this policy before detection:
+
+1. chunks/documents referenced by eval questions
+2. older `created_at`/ingestion timestamps when available
+3. stable fallback: `document_id`, chunk index, then `chunk_id`
+
+Embedding dedup is best-effort during upload. If the configured embedding runtime
+fails, ingestion keeps exact and SimHash results and records
+`embedding_status="fallback_without_embedding"` in the upload trace.
+Layer 3 embedding requests are batched with `DEDUP_EMBEDDING_BATCH_SIZE` to keep
+large backfills within provider request limits.
+
+To backfill metadata for sources that were uploaded before dedup existed:
+
+```bash
+uv run python scripts/backfill_dedup.py --dry-run
+uv run python scripts/backfill_dedup.py
+```
+
+Use `--strict-embedding` when Layer 3 failure should stop the job instead of
+falling back to exact/SimHash. Backfill rewrites stored chunk metadata and
+re-upserts dense payloads so Qdrant/pgvector retrieval sees the updated metadata.
+
+The internal review page is available at `/internal/dedup-review`; it reads
+duplicate candidates from `GET /internal/dedup`.
 
 ## Suggested Thresholds
 

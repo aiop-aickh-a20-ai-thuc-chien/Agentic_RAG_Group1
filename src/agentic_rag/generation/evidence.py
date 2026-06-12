@@ -61,6 +61,7 @@ def evidence_for_question(
                 RetrievalInput(
                     question=request.question,
                     document_ids=request.document_ids,
+                    exclude_dedup_layers=request.exclude_dedup_layers,
                 )
             )
             .results

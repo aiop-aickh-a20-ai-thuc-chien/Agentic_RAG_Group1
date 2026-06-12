@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronRight, FileText,
+  AlertCircle, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, FileText,
   Globe, Layers, Loader2, Pencil, RefreshCw, RotateCcw, Sparkles, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +45,19 @@ export default function AutodataPage() {
   const [bulkDocs, setBulkDocs] = useState<Set<string>>(new Set());
   const [onlyMissing, setOnlyMissing] = useState(true);
 
+  // Dedup layer filter
+  const DEDUP_LAYERS = [
+    { key: "exact_sha256",        label: "L1 Exact" },
+    { key: "simhash",             label: "L2 SimHash" },
+    { key: "embedding_similarity",label: "L3 Embedding" },
+  ] as const;
+  const [excludeDedupLayers, setExcludeDedupLayers] = useState<Set<string>>(new Set());
+  // Số chunk DISTINCT bị flag theo từng layer + tổng corpus, để hiển thị trên nút
+  const [dedupFlagged, setDedupFlagged] = useState<Record<string, number>>({});
+  const [corpusChunks, setCorpusChunks] = useState<number | null>(null);
+  const toggleDedupLayer = (key: string) =>
+    setExcludeDedupLayers((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
   // Prompt tùy chỉnh
   const [promptTemplate, setPromptTemplate] = useState("");
   const [customPrompt,   setCustomPrompt]   = useState("");
@@ -64,6 +77,21 @@ export default function AutodataPage() {
       .catch(() => {});
 
     refreshCounts();
+
+    fetch(`${API}/internal/dedup?limit=1`)
+      .then((r) => r.json())
+      .then((d) => {
+        const c = d?.counts;
+        if (c) {
+          setDedupFlagged({
+            exact_sha256:         c.exact_chunks     ?? 0,
+            simhash:              c.simhash_chunks   ?? 0,
+            embedding_similarity: c.embedding_chunks ?? 0,
+          });
+          setCorpusChunks(c.corpus_chunks ?? null);
+        }
+      })
+      .catch(() => {});
 
     fetch(`${API}/internal/autodata/prompt-template`)
       .then((r) => r.json())
@@ -157,6 +185,7 @@ export default function AutodataPage() {
           section_filters: selectedSections.size ? [...selectedSections] : null,
           questions_per_section: qps,
           custom_prompt: promptToSend,
+          exclude_dedup_layers: [...excludeDedupLayers],
         }),
       });
       const d = await r.json();
@@ -178,6 +207,7 @@ export default function AutodataPage() {
           questions_per_section: qps,
           only_missing: onlyMissing,
           custom_prompt: promptToSend,
+          exclude_dedup_layers: [...excludeDedupLayers],
         }),
       });
       const d = await r.json();
@@ -373,6 +403,90 @@ export default function AutodataPage() {
         <span className="text-gray-300">·</span>
         <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full tabular-nums">{globalTotals.total - globalTotals.approved} chờ</span>
         <span>chờ review</span>
+      </div>
+
+      {/* Dedup layer filter — global, áp dụng cho cả sinh câu lẫn eval */}
+      <div className="bg-white rounded-xl border border-black/8 px-5 py-3 flex items-center gap-3 flex-wrap">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Bỏ chunk trùng:</span>
+        {DEDUP_LAYERS.map(({ key, label }) => {
+          const active = excludeDedupLayers.has(key);
+          const count = dedupFlagged[key];
+          return (
+            <div
+              key={key}
+              className={cn(
+                "flex items-center rounded-full border text-sm transition-all overflow-hidden",
+                active
+                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                  : "border-black/12 bg-white text-gray-700 hover:border-emerald-300"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => toggleDedupLayer(key)}
+                className={cn(
+                  "flex items-center gap-2 pl-3 pr-2.5 py-1.5 transition-colors pressable",
+                  !active && "hover:bg-emerald-50"
+                )}
+              >
+                <span className={cn(
+                  "flex h-4 w-4 items-center justify-center rounded-full border text-[10px] leading-none transition-colors",
+                  active ? "border-white bg-white text-emerald-600" : "border-gray-300 text-transparent"
+                )}>
+                  ✓
+                </span>
+                {label}
+                {count != null && (
+                  <span className={cn(
+                    "text-xs tabular-nums px-1.5 py-0.5 rounded-full",
+                    active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </button>
+              {count != null && count > 0 && (
+                <a
+                  href={`/internal/dedup-review?layer=${key}`}
+                  title={`Xem ${count} chunk trùng ở ${label}`}
+                  className={cn(
+                    "flex items-center px-2 py-1.5 border-l transition-colors",
+                    active
+                      ? "border-white/30 text-white/90 hover:bg-white/15"
+                      : "border-black/10 text-gray-400 hover:bg-gray-50 hover:text-emerald-600"
+                  )}
+                >
+                  <ExternalLink size={13} />
+                </a>
+              )}
+            </div>
+          );
+        })}
+        {(() => {
+          const removed = DEDUP_LAYERS
+            .filter((l) => excludeDedupLayers.has(l.key))
+            .reduce((s, l) => s + (dedupFlagged[l.key] ?? 0), 0);
+          const filtering = excludeDedupLayers.size > 0;
+          return (
+            <span className={cn(
+              "ml-auto text-xs px-2.5 py-1 rounded-full tabular-nums border",
+              filtering ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-gray-500 bg-gray-50 border-black/6"
+            )}>
+              {corpusChunks == null ? (
+                "chưa có dữ liệu dedup"
+              ) : filtering ? (
+                <>
+                  <span className="line-through text-gray-400">{corpusChunks}</span>
+                  {" → "}
+                  <span className="font-semibold">{Math.max(corpusChunks - removed, 0)}</span>
+                  {" chunk dùng để sinh (bỏ "}{removed}{" trùng)"}
+                </>
+              ) : (
+                <>tổng <span className="font-semibold text-gray-700">{corpusChunks}</span> chunk · chưa lọc</>
+              )}
+            </span>
+          );
+        })()}
       </div>
 
       <div className="grid grid-cols-[300px_1fr] gap-5">
@@ -619,7 +733,8 @@ function PromptEditor({
 }
 
 function BulkPanel({
-  count, qps, setQps, onlyMissing, setOnlyMissing, jobStatus, jobProgress, onGenerate,
+  count, qps, setQps, onlyMissing, setOnlyMissing,
+  jobStatus, jobProgress, onGenerate,
 }: {
   count: number;
   qps: number; setQps: (n: number) => void;

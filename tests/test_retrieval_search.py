@@ -441,6 +441,9 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
         def create_collection(self, **kwargs: Any) -> None:
             seen["create_collection"] = kwargs
 
+        def create_payload_index(self, **kwargs: Any) -> None:
+            seen.setdefault("payload_indexes", []).append(kwargs)
+
         def upsert(self, **kwargs: Any) -> None:
             seen["upsert"] = kwargs
 
@@ -471,7 +474,102 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
 
     dense_config = seen["create_collection"]["vectors_config"]["dense"]
     assert dense_config.size == 3
+    assert [index["field_name"] for index in seen["payload_indexes"]] == [
+        "document_id",
+        "metadata.deduplication.primary_layer",
+    ]
     assert seen["upsert"]["collection_name"] == "agentic_chunks"
+
+
+def test_qdrant_hybrid_search_filters_out_excluded_dedup_layers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class FakeEmbedding:
+        def embed_query(self, text: str) -> list[float]:
+            seen["embedded_query"] = text
+            return [0.3, 0.4]
+
+    class FakeQdrantClient:
+        __module__ = "qdrant_client.fake"
+
+        def get_collection(self, collection_name: str) -> object:
+            seen["get_collection"] = collection_name
+            return SimpleNamespace(
+                config=SimpleNamespace(
+                    params=SimpleNamespace(
+                        vectors={"dense": SimpleNamespace(size=2)},
+                    )
+                )
+            )
+
+        def scroll(self, **kwargs: Any) -> tuple[list[object], None]:
+            return (
+                [
+                    SimpleNamespace(
+                        payload={
+                            "_embedding_profile": {
+                                "schema_version": 1,
+                                "provider": "local",
+                                "model": "local-model",
+                                "dimensions": 2,
+                            }
+                        }
+                    )
+                ],
+                None,
+            )
+
+        def create_payload_index(self, **kwargs: Any) -> None:
+            seen.setdefault("payload_indexes", []).append(kwargs)
+
+        def query_points(self, **kwargs: Any) -> object:
+            seen["query_points"] = kwargs
+            point = SimpleNamespace(
+                score=0.91,
+                payload={
+                    "chunk_id": "c1",
+                    "text": "Pin VF8 duoc bao hanh",
+                    "metadata": {
+                        "document_id": "doc-1",
+                        "storage_chunk_id": "doc-1:0001",
+                        "source": "warranty.pdf",
+                    },
+                },
+            )
+            return SimpleNamespace(points=[point])
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
+    )
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    results = qdrant_hybrid_search(
+        "pin vf8",
+        document_ids=["doc-1"],
+        top_k=3,
+        exclude_dedup_layers=["exact_sha256", "simhash", "embedding"],
+    )
+
+    assert [index["field_name"] for index in seen["payload_indexes"]] == [
+        "document_id",
+        "metadata.deduplication.primary_layer",
+    ]
+    query_filter = seen["query_points"]["prefetch"][0].filter
+    assert query_filter.must[0].key == "document_id"
+    assert query_filter.must[0].match.value == "doc-1"
+    assert query_filter.must_not[0].key == "metadata.deduplication.primary_layer"
+    assert query_filter.must_not[0].match.any == ["exact_sha256", "simhash", "embedding"]
+    assert results[0].chunk.chunk_id == "c1"
 
 
 def test_qdrant_upsert_does_not_fallback_after_openai_runtime_failure(

@@ -25,6 +25,12 @@ from agentic_rag.model_runtime.factory import get_embedding_client
 from agentic_rag.retrieval.config import VectorStoreConfig, resolve_vector_store_config
 
 EmbeddingProfile = EmbeddingOutput
+_QDRANT_DOCUMENT_ID_FIELD = "document_id"
+_QDRANT_DEDUP_PRIMARY_LAYER_FIELD = "metadata.deduplication.primary_layer"
+_QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS = (
+    _QDRANT_DOCUMENT_ID_FIELD,
+    _QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
+)
 
 REQUERY_ROUTER_PROMPT = """
 <task>
@@ -243,8 +249,17 @@ def upsert_dense_embeddings(
     chunks: list[Chunk],
     *,
     vector_config: VectorStoreConfig | None = None,
+    precomputed_dense_vectors: list[list[float]] | None = None,
 ) -> dict[str, object]:
-    """Upsert chunk embeddings into the configured persistent vector store."""
+    """Upsert chunk embeddings into the configured persistent vector store.
+
+    ``precomputed_dense_vectors`` (aligned 1-1 with ``chunks``) lets callers that
+    already embedded the chunks — e.g. upload-time dedup Layer 3 — reuse those
+    vectors instead of paying for a second embedding pass.
+    """
+
+    if precomputed_dense_vectors is not None and len(precomputed_dense_vectors) != len(chunks):
+        precomputed_dense_vectors = None
 
     has_validated_config = vector_config is not None
     config = vector_config or _vector_store_config()
@@ -254,6 +269,7 @@ def upsert_dense_embeddings(
             chunks,
             vector_config=config,
             use_validated_config=has_validated_config,
+            precomputed_dense_vectors=precomputed_dense_vectors,
         )
     if vector_store != "pgvector":
         return {
@@ -364,6 +380,7 @@ def qdrant_hybrid_search(
     *,
     document_ids: list[str] | None = None,
     top_k: int = 10,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> list[SearchResult]:
     """Run Qdrant-backed hybrid retrieval and return shared search results."""
 
@@ -392,6 +409,7 @@ def qdrant_hybrid_search(
         embedding_profile=embedding_profile,
         document_ids=document_ids,
         top_k=top_k,
+        exclude_dedup_layers=exclude_dedup_layers,
     )
     raw_points = getattr(response, "points", response)
     if not isinstance(raw_points, Iterable):
@@ -410,6 +428,93 @@ def qdrant_hybrid_search(
             )
         )
     return results
+
+
+def embed_chunk_texts(texts: list[str]) -> list[list[float]]:
+    """Embed texts once with the configured dense embedding runtime (batched).
+
+    Returned vectors can be passed back into ``upsert_dense_embeddings`` via
+    ``precomputed_dense_vectors`` so upload-time dedup and indexing share a
+    single embedding pass.
+    """
+    import os
+    import time
+
+    if not texts:
+        return []
+    batch_size = max(int(os.environ.get("DENSE_EMBED_BATCH_SIZE", "50")), 1)
+    batch_delay = float(os.environ.get("DENSE_EMBED_BATCH_DELAY_SECONDS", "0"))
+    embedding = _configured_embedding()
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        vectors.extend(_embed_documents(embedding, texts[start : start + batch_size]))
+        if batch_delay > 0 and start + batch_size < len(texts):
+            time.sleep(batch_delay)
+    return vectors
+
+
+def qdrant_similar_by_vectors(
+    vectors: list[list[float]],
+    *,
+    exclude_document_id: str | None = None,
+    score_threshold: float = 0.92,
+    top_k: int = 5,
+) -> list[list[dict[str, object]]]:
+    """Return indexed chunks similar to each supplied dense vector.
+
+    Dense-only HNSW query with raw cosine scores (the collection distance), so
+    callers can apply a similarity threshold — unlike ``qdrant_hybrid_search``
+    whose RRF-fused scores are rank-based.
+    """
+    if not vectors:
+        return []
+    config = _vector_store_config()
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
+
+    client = _qdrant_client(config)
+    query_filter = None
+    if exclude_document_id:
+        query_filter = models.Filter(
+            must_not=[
+                models.FieldCondition(
+                    key="document_id",
+                    match=models.MatchValue(value=exclude_document_id),
+                )
+            ]
+        )
+
+    hits_per_vector: list[list[dict[str, object]]] = []
+    for vector in vectors:
+        response = client.query_points(
+            collection_name=config.collection,
+            query=vector,
+            using="dense",
+            limit=top_k,
+            score_threshold=score_threshold,
+            query_filter=query_filter,
+            with_payload=True,
+        )
+        raw_points = getattr(response, "points", response)
+        hits: list[dict[str, object]] = []
+        if isinstance(raw_points, Iterable):
+            for point in raw_points:
+                payload = getattr(point, "payload", {})
+                if not isinstance(payload, dict):
+                    payload = {}
+                hits.append(
+                    {
+                        "chunk_id": str(payload.get("chunk_id") or ""),
+                        "document_id": str(payload.get("document_id") or ""),
+                        "score": float(getattr(point, "score", 0.0)),
+                    }
+                )
+        hits_per_vector.append(hits)
+    return hits_per_vector
 
 
 def delete_qdrant_document_points(document_id: str) -> dict[str, object]:
@@ -468,6 +573,7 @@ def _upsert_qdrant_embeddings(
     *,
     vector_config: VectorStoreConfig,
     use_validated_config: bool,
+    precomputed_dense_vectors: list[list[float]] | None = None,
 ) -> dict[str, object]:
     import os
     import time
@@ -484,7 +590,7 @@ def _upsert_qdrant_embeddings(
     batch_delay = float(os.environ.get("DENSE_EMBED_BATCH_DELAY_SECONDS", "0"))
 
     embedding_config = resolve_embedding_config()
-    embedding = _configured_embedding()
+    embedding = _configured_embedding() if precomputed_dense_vectors is None else None
 
     try:
         from qdrant_client import models
@@ -497,7 +603,10 @@ def _upsert_qdrant_embeddings(
 
     for batch_start in range(0, len(chunks), batch_size):
         batch = chunks[batch_start : batch_start + batch_size]
-        dense_vectors = _embed_documents(embedding, [c.text for c in batch])
+        if precomputed_dense_vectors is not None:
+            dense_vectors = precomputed_dense_vectors[batch_start : batch_start + batch_size]
+        else:
+            dense_vectors = _embed_documents(embedding, [c.text for c in batch])
 
         if client is None:
             client = (
@@ -537,7 +646,11 @@ def _upsert_qdrant_embeddings(
             )
         client.upsert(collection_name=collection, points=points)
 
-        if batch_delay > 0 and batch_start + batch_size < len(chunks):
+        if (
+            precomputed_dense_vectors is None
+            and batch_delay > 0
+            and batch_start + batch_size < len(chunks)
+        ):
             time.sleep(batch_delay)
 
     return {
@@ -639,17 +752,18 @@ def _validate_qdrant_collection(
 
 
 def _ensure_qdrant_payload_indexes(*, client: Any, collection: str, models: Any) -> None:
-    """Create keyword index on document_id if not already present (idempotent)."""
+    """Create keyword indexes required by retrieval filters (idempotent)."""
     create_payload_index = getattr(client, "create_payload_index", None)
     if not callable(create_payload_index):
         return
-    with contextlib.suppress(Exception):
-        create_payload_index(
-            collection_name=collection,
-            field_name="document_id",
-            field_schema=models.PayloadSchemaType.KEYWORD,
-            wait=True,
-        )
+    for field_name in _QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS:
+        with contextlib.suppress(Exception):
+            create_payload_index(
+                collection_name=collection,
+                field_name=field_name,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+                wait=True,
+            )
 
 
 def _validate_qdrant_collection_info(
@@ -750,6 +864,7 @@ def _query_qdrant_points(
     embedding_profile: EmbeddingProfile,
     document_ids: list[str] | None,
     top_k: int,
+    exclude_dedup_layers: list[str] | None = None,
 ) -> object:
     if type(client).__module__.startswith("qdrant_client"):
         try:
@@ -757,7 +872,9 @@ def _query_qdrant_points(
         except ImportError:
             pass
         else:
-            q_filter = _qdrant_document_filter(document_ids, models=models)
+            q_filter = _qdrant_combined_filter(
+                document_ids, exclude_dedup_layers=exclude_dedup_layers, models=models
+            )
             sparse_indices = sparse_vector["indices"]
             sparse_values = sparse_vector["values"]
             if not all(isinstance(index, int) for index in sparse_indices):
@@ -836,11 +953,46 @@ def _qdrant_document_filter(document_ids: list[str] | None, *, models: Any) -> A
     return models.Filter(
         must=[
             models.FieldCondition(
-                key="document_id",
+                key=_QDRANT_DOCUMENT_ID_FIELD,
                 match=match,
             )
         ]
     )
+
+
+def _qdrant_combined_filter(
+    document_ids: list[str] | None,
+    *,
+    exclude_dedup_layers: list[str] | None,
+    models: Any,
+) -> Any:
+    """Build a Qdrant filter that optionally restricts document_ids AND excludes
+    chunks whose dedup primary_layer matches the given list.
+
+    Chunks flagged by the selected layers have
+    ``metadata.deduplication.primary_layer`` set in their Qdrant payload;
+    non-duplicate chunks lack that field entirely and are unaffected.
+    """
+    must: list[Any] = []
+    must_not: list[Any] = []
+
+    if document_ids:
+        match = (
+            models.MatchValue(value=document_ids[0])
+            if len(document_ids) == 1
+            else models.MatchAny(any=document_ids)
+        )
+        must.append(models.FieldCondition(key=_QDRANT_DOCUMENT_ID_FIELD, match=match))
+
+    if exclude_dedup_layers:
+        must_not.append(
+            models.FieldCondition(
+                key=_QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
+                match=models.MatchAny(any=list(exclude_dedup_layers)),
+            )
+        )
+
+    return models.Filter(must=must, must_not=must_not)
 
 
 def _embed_documents(embedding: object, texts: list[str]) -> list[list[float]]:

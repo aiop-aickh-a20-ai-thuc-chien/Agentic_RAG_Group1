@@ -44,6 +44,21 @@ def _mock_openai_client(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
 
 
+@pytest.fixture(autouse=True)
+def _disable_dedup_embedding(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("DEDUP_ENABLE_EMBEDDING", "false")
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    monkeypatch.delenv("QDRANT_COLLECTION", raising=False)
+    # load_dotenv() từ module khác trong cùng pytest session có thể đã nạp
+    # NEON_CONNECTION — gỡ ra để upload trong test không ghi thật vào Neon.
+    monkeypatch.delenv("NEON_CONNECTION", raising=False)
+    monkeypatch.setattr("agentic_rag.autodata_eval.db._conninfo", None)
+    monkeypatch.setattr("agentic_rag.retrieval.config.load_local_env", lambda: None)
+
+
 def test_local_pdf_provider_models_are_pydantic_contracts() -> None:
     uploaded = LocalPdfUploadedDocument(
         document_id="doc-1",
@@ -315,6 +330,56 @@ def test_local_pdf_provider_uploads_text_chunks(
     assert chunk.metadata["document_id"] == uploaded.document_id
     assert chunk.metadata["source_type"] == "text"
     assert chunk.text == "Noi dung tu nguoi dung"
+
+
+def test_local_pdf_provider_marks_only_new_duplicate_candidate(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source = kwargs["source"]
+        source_key = "a" if source.startswith("Source-A") else "b"
+        return [
+            Chunk(
+                chunk_id=f"text_{source_key}_c0001",
+                text=text,
+                metadata={"source": source, "source_type": "text"},
+            )
+        ]
+
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+
+    first = provider.upload_text(title="Source A", text="Same duplicate body")
+    second = provider.upload_text(title="Source B", text="Same duplicate body")
+
+    first_chunk = provider.document_chunks(document_id=first.document_id).chunks[0]
+    second_chunk = provider.document_chunks(document_id=second.document_id).chunks[0]
+    second_trace = cast(dict[str, dict[str, Any]], second.trace)
+
+    assert "deduplication" not in first_chunk.metadata
+    dedup_metadata = cast(dict[str, Any], second_chunk.metadata["deduplication"])
+    assert dedup_metadata["status"] == "duplicate_candidate"
+    assert dedup_metadata["review_status"] == "pending"
+    assert dedup_metadata["canonical_chunk_id"] == first_chunk.chunk_id
+    assert dedup_metadata["canonical_document_id"] == first.document_id
+    assert dedup_metadata["detected_layers"] == ["exact_sha256"]
+    assert second_trace["deduplication"]["candidate_count"] == 1
+    assert second_trace["deduplication"]["exact_matches"] == 1
+
+    review_items = provider.dedup_review_items(layer="exact_sha256")
+    assert len(review_items) == 1
+    assert review_items[0]["canonical"] is not None
+    assert (
+        cast(dict[str, object], review_items[0]["duplicate"])["chunk_id"] == second_chunk.chunk_id
+    )
 
 
 def test_local_pdf_provider_annotates_quality_against_existing_chunks(
@@ -627,6 +692,9 @@ def test_local_pdf_provider_can_persist_chunks_with_source_store(
                 result.extend(self.documents.get(doc_id, []))
             return result
 
+        def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+            self.documents[document_id] = chunks
+
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
         lambda text, **kwargs: [
@@ -735,6 +803,9 @@ def test_local_pdf_provider_preserves_source_store_when_dense_index_fails(
         def write_document(self, **kwargs: Any) -> None:
             self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
 
+        def read_all_chunks(self) -> list[Chunk]:
+            return [chunk for chunks in self.documents.values() for chunk in chunks]
+
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
         lambda text, **kwargs: [
@@ -792,6 +863,9 @@ def test_local_pdf_provider_rolls_back_source_store_when_qdrant_index_fails(
 
         def write_document(self, **kwargs: Any) -> None:
             self.documents[str(kwargs["document_id"])] = cast(list[Chunk], kwargs["chunks"])
+
+        def read_all_chunks(self) -> list[Chunk]:
+            return [chunk for chunks in self.documents.values() for chunk in chunks]
 
         def delete_document(self, document_id: str) -> None:
             self.deleted.append(document_id)
@@ -998,6 +1072,7 @@ def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
         *,
         document_ids: list[str] | None = None,
         top_k: int = 10,
+        exclude_dedup_layers: list[str] | None = None,
     ) -> list[SearchResult]:
         seen["question"] = question
         seen["document_ids"] = document_ids
