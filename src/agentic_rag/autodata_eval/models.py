@@ -182,6 +182,8 @@ class RunSummary(BaseModel):
     has_ragas: bool
     avg_ragas_faithfulness: float | None
     avg_ragas_relevancy: float | None
+    avg_ragas_context_precision: float | None = None
+    avg_ragas_context_recall: float | None = None
     # Run kế thừa — tính điểm trên subset câu của dataset hiện tại
     external: bool = False
     source_dataset_name: str | None = None

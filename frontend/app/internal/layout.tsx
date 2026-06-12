@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import { CommandPalette } from "./_components/command-palette";
 
 const NAV = [
-  { href: "/internal/dedup-review", label: "Dedup" },
+  { href: "/internal/dedup-review",    label: "Dedup" },
+  { href: "/internal/conflict-review", label: "Conflict" },
   { href: "/internal/autodata",     label: "Tạo câu hỏi" },
   { href: "/internal/eval-review",  label: "Review" },
   { href: "/internal/datasets",     label: "Datasets" },

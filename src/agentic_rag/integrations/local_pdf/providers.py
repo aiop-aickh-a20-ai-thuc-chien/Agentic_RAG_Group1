@@ -728,6 +728,7 @@ class LocalPdfEvidenceProvider:
             dense_index_trace = _upsert_dense_embeddings_safely(enriched_chunks)
             index_trace = _replace_all_candidate_index(enriched_chunks)
             from agentic_rag.autodata_eval import dedup_store as _dedup_store
+
             _dedup_store.upsert_corpus_stats(
                 chunk_count=len(chunks),
                 document_count=len(grouped),
@@ -760,7 +761,9 @@ class LocalPdfEvidenceProvider:
 
         started_at = time.perf_counter()
         chunks = self._cached_all_chunks(refresh=refresh)
-        document_count = len({c.metadata.get("document_id") for c in chunks if c.metadata.get("document_id")})
+        document_count = len(
+            {c.metadata.get("document_id") for c in chunks if c.metadata.get("document_id")}
+        )
         rows = _dedup_candidate_rows(chunks)
         written = dedup_store.replace_all_candidates(rows)
         dedup_store.upsert_corpus_stats(chunk_count=len(chunks), document_count=document_count)

@@ -336,9 +336,12 @@ def query_candidates(
                 COUNT(*) FILTER (WHERE layer = 'exact_sha256') AS exact,
                 COUNT(*) FILTER (WHERE layer = 'simhash') AS simhash,
                 COUNT(*) FILTER (WHERE layer = 'embedding_similarity') AS embedding,
-                COUNT(DISTINCT duplicate_chunk_id) FILTER (WHERE layer = 'exact_sha256') AS exact_chunks,
-                COUNT(DISTINCT duplicate_chunk_id) FILTER (WHERE layer = 'simhash') AS simhash_chunks,
-                COUNT(DISTINCT duplicate_chunk_id) FILTER (WHERE layer = 'embedding_similarity') AS embedding_chunks
+                COUNT(DISTINCT duplicate_chunk_id)
+                    FILTER (WHERE layer = 'exact_sha256') AS exact_chunks,
+                COUNT(DISTINCT duplicate_chunk_id)
+                    FILTER (WHERE layer = 'simhash') AS simhash_chunks,
+                COUNT(DISTINCT duplicate_chunk_id)
+                    FILTER (WHERE layer = 'embedding_similarity') AS embedding_chunks
             FROM {_TABLE}
             """
         )

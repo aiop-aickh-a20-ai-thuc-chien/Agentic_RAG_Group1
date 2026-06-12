@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUpRight,
   Bot,
@@ -248,6 +249,7 @@ export default function CitationChatPage() {
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [excludeDedupLayers, setExcludeDedupLayers] = useState<Set<string>>(new Set());
   const [dedupStats, setDedupStats] = useState<DedupStats | null>(null);
+  const [conflictChunkIds, setConflictChunkIds] = useState<Set<string>>(new Set());
   const [sourceStatus, setSourceStatus] = useState<SourceProcessingStatus>("idle");
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [selectedCitationChunkId, setSelectedCitationChunkId] = useState<string | null>(null);
@@ -405,6 +407,21 @@ export default function CitationChatPage() {
       })
       .catch(() => {});
 
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Chunk có mâu thuẫn (knowledge_quality) — để cảnh báo khi câu trả lời trích từ chúng.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/internal/conflicts/flagged-chunk-ids`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (cancelled || !payload) return;
+        setConflictChunkIds(new Set<string>(payload.conflict ?? []));
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -940,6 +957,7 @@ export default function CitationChatPage() {
               <div className="max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-40 max-xl:grid max-xl:w-[88%] max-xl:max-w-sm max-xl:bg-paper max-xl:p-3 max-xl:shadow-2xl dark:max-xl:bg-slate-950 xl:contents">
                 <CitationPanel
                   answer={answer}
+                  conflictChunkIds={conflictChunkIds}
                   onSelectCitation={setSelectedCitationChunkId}
                   selectedCitationChunkId={selectedCitationChunkId}
                   sourceChunks={answer?.evidence_chunks ?? selectedSourceChunks}
@@ -2259,11 +2277,13 @@ function formatDebugValue(value: unknown): string {
 
 const CitationPanel = memo(function CitationPanel({
   answer,
+  conflictChunkIds,
   onSelectCitation,
   selectedCitationChunkId,
   sourceChunks,
 }: {
   answer: AnswerResponse | null;
+  conflictChunkIds: Set<string>;
   onSelectCitation: (chunkId: string) => void;
   selectedCitationChunkId: string | null;
   sourceChunks: SourceChunk[];
@@ -2276,8 +2296,29 @@ const CitationPanel = memo(function CitationPanel({
   });
   const evidenceItems = answer ? citedEvidenceItems : [];
 
+  // Cảnh báo nếu câu trả lời trích từ chunk có mâu thuẫn số liệu (knowledge_quality).
+  const conflictCount = answer && conflictChunkIds.size
+    ? new Set(
+        [
+          ...sourceChunks.map((item) => item.chunk.chunk_id),
+          ...(answer.citations ?? []).map((citation) => citation.chunk_id),
+        ].filter((id) => conflictChunkIds.has(id)),
+      ).size
+    : 0;
+
   return (
     <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden pr-1">
+      {conflictCount > 0 ? (
+        <Link
+          href="/internal/conflict-review"
+          className="flex items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-800 transition hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            {conflictCount} tài liệu trích dẫn có thông tin mâu thuẫn — bấm để rà soát.
+          </span>
+        </Link>
+      ) : null}
       <Panel className="flex min-h-0 basis-[38%] flex-col">
         <div className="mb-4 flex items-center justify-between">
           <div>

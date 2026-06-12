@@ -47,7 +47,7 @@ def duplicate_metadata_by_document(
     for candidate_chunk_id, matches in matches_by_candidate.items():
         detected_layers = sorted(
             layers_by_candidate[candidate_chunk_id],
-            key=lambda l: _LAYER_RANK.get(l, 99),
+            key=lambda layer: _LAYER_RANK.get(layer, 99),
         )
         primary_layer = detected_layers[0]
         primary_match = next(

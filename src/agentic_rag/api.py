@@ -273,6 +273,61 @@ class DedupRebuildResponse(BaseModel):
     latency_ms: int
 
 
+class ConflictChunkSide(BaseModel):
+    """One side (left/right) of a knowledge-quality conflict finding."""
+
+    chunk_id: str
+    document_id: str | None = None
+    document_name: str | None = None
+    source_type: str | None = None
+    source: str | None = None
+    page: object | None = None
+    section: object | None = None
+    text: str
+    value: str | None = None
+
+
+class ConflictItem(BaseModel):
+    """One conflict finding plus its two conflicting sides."""
+
+    id: str
+    conflict_type: str
+    attribute: str | None = None
+    entity: str | None = None
+    severity: str
+    confidence: float | None = None
+    summary: str | None = None
+    suggested_action: str | None = None
+    review_status: str
+    left: ConflictChunkSide | None = None
+    right: ConflictChunkSide | None = None
+
+
+class ConflictCounts(BaseModel):
+    """Global conflict totals, grouped by the numeric attribute that clashes."""
+
+    findings: int = 0
+    entities: int = 0
+    warranty_duration: int = 0
+    duration: int = 0
+    price: int = 0
+    distance_km: int = 0
+    date: int = 0
+    corpus_chunks: int = 0
+    corpus_documents: int = 0
+
+
+class ConflictListResponse(BaseModel):
+    """Internal conflict findings page, served from the Neon index."""
+
+    provider: str
+    total: int
+    limit: int = 0
+    offset: int = 0
+    counts: ConflictCounts = ConflictCounts()
+    items: list[ConflictItem]
+
+
 def _allowed_cors_origins() -> list[str]:
     origins = [
         "http://localhost:3000",
@@ -769,6 +824,62 @@ def internal_dedup_flagged_chunk_ids() -> dict[str, list[str]]:
     from agentic_rag.autodata_eval import dedup_store
 
     return dedup_store.flagged_chunk_ids_by_layer()
+
+
+@api.get("/internal/conflicts", response_model=ConflictListResponse)
+def internal_conflicts(
+    conflict_type: str | None = None,
+    attribute: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ConflictListResponse:
+    """Return one page of knowledge-quality conflict findings from the Neon index.
+
+    Tách bạch với dedup: chỉ liệt kê mâu thuẫn (kind=conflict). Resync index bằng
+    ``python scripts/scan_conflicts.py``.
+    """
+
+    from agentic_rag.autodata_eval import conflict_store
+
+    provider_label = _source_provider_label(configured_evidence_provider_name())
+    try:
+        page = conflict_store.query_findings(
+            conflict_type=conflict_type,
+            attribute=attribute,
+            status=status,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        LOGGER.exception("Conflict index query failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Không đọc được chỉ mục mâu thuẫn trên Neon: {exc}",
+        ) from exc
+
+    return ConflictListResponse(
+        provider=provider_label,
+        total=page["total"],
+        limit=page["limit"],
+        offset=page["offset"],
+        counts=ConflictCounts.model_validate(page["counts"]),
+        items=[ConflictItem.model_validate(item) for item in page["items"]],
+    )
+
+
+@api.get("/internal/conflicts/flagged-chunk-ids")
+def internal_conflict_flagged_chunk_ids() -> dict[str, list[str]]:
+    """Return chunk ids that appear in any conflict, for optional client filtering.
+
+    Lưu ý: ở eval KHÔNG nên ẩn các chunk này — mâu thuẫn là test case quý.
+    """
+
+    from agentic_rag.autodata_eval import conflict_store
+
+    return {"conflict": conflict_store.flagged_chunk_ids()}
 
 
 @api.post("/internal/dedup/rebuild", response_model=DedupRebuildResponse)

@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from agentic_rag.autodata_eval.config_snapshot import snapshot_pipeline_config
-from agentic_rag.autodata_eval.db import get_conn
+from agentic_rag.autodata_eval.db import get_conn, retry_on_operational_error
 from agentic_rag.autodata_eval.models import (
     ApproveRequest,
     Dataset,
@@ -1132,6 +1132,7 @@ def run_ragas(
 
 
 @router.get("/runs/{run_id}/metrics")
+@retry_on_operational_error
 def run_metrics(run_id: UUID) -> dict[str, Any]:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -1157,10 +1158,27 @@ def run_metrics(run_id: UUID) -> dict[str, Any]:
 
 
 @router.get("/runs/{run_id}/results", response_model=list[EvalResult])
-def list_results(run_id: UUID, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+@retry_on_operational_error
+def list_results(
+    run_id: UUID, limit: int = 50, offset: int = 0, light: bool = False
+) -> list[dict[str, Any]]:
+    # light=True bỏ cột nặng (rag_context, bot_citations) — trang So sánh kéo cả nghìn
+    # dòng, rag_context (toàn bộ context retrieved) làm payload phình vài MB khiến Neon
+    # đóng kết nối giữa chừng. Các cột này trả NULL để vẫn khớp response_model.
+    if light:
+        columns = (
+            "id, question_id, run_id, NULL AS rag_context, bot_response, "
+            "NULL AS bot_citations, trace_url, retrieved_top5_ids, ground_truth_rank, "
+            "recall_at_5, mrr_at_5, citation_chunk_match, guardrail_pass, "
+            "ragas_faithfulness, ragas_answer_relevancy, ragas_context_precision, "
+            "ragas_context_recall, eval_error, ran_at"
+        )
+    else:
+        columns = "*"
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT * FROM eval_results WHERE run_id = %s ORDER BY ran_at LIMIT %s OFFSET %s",
+            f"SELECT {columns} FROM eval_results WHERE run_id = %s "
+            "ORDER BY ran_at LIMIT %s OFFSET %s",
             (str(run_id), limit, offset),
         )
         return cur.fetchall()
@@ -1229,6 +1247,7 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
 
 
 @router.get("/compare", response_model=list[RunSummary])
+@retry_on_operational_error
 def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
     with get_conn() as conn, conn.cursor() as cur:
         # ── Run nội bộ của dataset ─────────────────────────────────────────────
@@ -1246,6 +1265,10 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                   BOOL_OR(res.ragas_faithfulness IS NOT NULL)             AS has_ragas,
                   AVG(res.ragas_faithfulness)                             AS avg_ragas_faithfulness,
                   AVG(res.ragas_answer_relevancy)                         AS avg_ragas_relevancy,
+                  AVG(res.ragas_context_precision)
+                    AS avg_ragas_context_precision,
+                  AVG(res.ragas_context_recall)
+                    AS avg_ragas_context_recall,
                   FALSE                                                   AS external,
                   NULL                                                    AS source_dataset_name,
                   COUNT(res.id)                                           AS coverage,
@@ -1286,6 +1309,10 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                   BOOL_OR(er.ragas_faithfulness IS NOT NULL)              AS has_ragas,
                   AVG(er.ragas_faithfulness)                              AS avg_ragas_faithfulness,
                   AVG(er.ragas_answer_relevancy)                          AS avg_ragas_relevancy,
+                  AVG(er.ragas_context_precision)
+                    AS avg_ragas_context_precision,
+                  AVG(er.ragas_context_recall)
+                    AS avg_ragas_context_recall,
                   TRUE                                                    AS external,
                   d.name                                                  AS source_dataset_name,
                   COUNT(er.id)                                            AS coverage

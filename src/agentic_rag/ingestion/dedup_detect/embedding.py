@@ -171,7 +171,10 @@ def find_embedding_duplicates(
             continue
         for right, right_vector in indexed[left_index + 1 :]:
             match = _check_pair(
-                left, left_vector, right, right_vector,
+                left,
+                left_vector,
+                right,
+                right_vector,
                 excluded_pairs=excluded_pairs,
                 similarity_threshold=similarity_threshold,
                 meta=meta,

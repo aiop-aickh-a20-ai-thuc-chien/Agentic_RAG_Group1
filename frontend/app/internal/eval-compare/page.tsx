@@ -18,6 +18,7 @@ type RunSummary = {
   avg_citation: number | null; guardrail_rate: number | null;
   has_ragas: boolean;
   avg_ragas_faithfulness: number | null; avg_ragas_relevancy: number | null;
+  avg_ragas_context_precision: number | null; avg_ragas_context_recall: number | null;
   external: boolean;
   source_dataset_name: string | null;
   coverage: number;
@@ -195,6 +196,8 @@ const TREND_LINES = [
   { key: "guardrail",    label: "Guardrail",    color: "#6b7280" },
   { key: "faithfulness", label: "Faithfulness", color: "#d97706" },
   { key: "relevancy",    label: "Relevancy",    color: "#e11d48" },
+  { key: "ctxPrecision", label: "Ctx Precision", color: "#0891b2" },
+  { key: "ctxRecall",    label: "Ctx Recall",    color: "#9333ea" },
 ] as const;
 
 function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
@@ -206,6 +209,8 @@ function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
     guardrail: r.guardrail_rate,
     faithfulness: r.has_ragas ? r.avg_ragas_faithfulness : null,
     relevancy: r.has_ragas ? r.avg_ragas_relevancy : null,
+    ctxPrecision: r.has_ragas ? r.avg_ragas_context_precision : null,
+    ctxRecall: r.has_ragas ? r.avg_ragas_context_recall : null,
   }));
   return (
     <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
@@ -285,7 +290,7 @@ export default function EvalComparePage() {
   // Load full results when run A selected
   useEffect(() => {
     if (!detailA) { setResA([]); return; }
-    fetch(`${API}/internal/runs/${detailA}/results?limit=5000&offset=0`)
+    fetch(`${API}/internal/runs/${detailA}/results?limit=5000&offset=0&light=true`)
       .then((r) => r.json()).then((d: Result[]) => setResA(d)).catch(() => setResA([]));
   }, [detailA]);
 
@@ -293,7 +298,7 @@ export default function EvalComparePage() {
   useEffect(() => {
     if (!detailB) { setResB([]); return; }
     setDetailLoading(true);
-    fetch(`${API}/internal/runs/${detailB}/results?limit=5000&offset=0`)
+    fetch(`${API}/internal/runs/${detailB}/results?limit=5000&offset=0&light=true`)
       .then((r) => r.json()).then((d: Result[]) => { setResB(d); setDetailLoading(false); })
       .catch(() => { setResB([]); setDetailLoading(false); });
   }, [detailB]);
@@ -376,6 +381,8 @@ export default function EvalComparePage() {
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Guardrail</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Faithfulness</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Relevancy</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Ctx Precision</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Ctx Recall</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
@@ -395,13 +402,15 @@ export default function EvalComparePage() {
                     <MetricCell v={run.guardrail_rate} prev={prev?.guardrail_rate} />
                     <MetricCell v={run.has_ragas ? run.avg_ragas_faithfulness : null} prev={prev?.has_ragas ? prev.avg_ragas_faithfulness : null} />
                     <MetricCell v={run.has_ragas ? run.avg_ragas_relevancy : null}    prev={prev?.has_ragas ? prev.avg_ragas_relevancy : null} />
+                    <MetricCell v={run.has_ragas ? run.avg_ragas_context_precision : null} prev={prev?.has_ragas ? prev.avg_ragas_context_precision : null} />
+                    <MetricCell v={run.has_ragas ? run.avg_ragas_context_recall : null}    prev={prev?.has_ragas ? prev.avg_ragas_context_recall : null} />
                   </tr>
                 );
               })}
               {/* Run kế thừa từ dataset khác — hiển thị phân cách + badge coverage */}
               {inheritedRuns.length > 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-2 bg-gray-50/80 border-t border-dashed border-black/10">
+                  <td colSpan={10} className="px-4 py-2 bg-gray-50/80 border-t border-dashed border-black/10">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                       Run kế thừa từ dataset khác — điểm tính trên {runs[0]?.coverage_total ?? "?"} câu chung
                     </span>
@@ -433,6 +442,8 @@ export default function EvalComparePage() {
                   <MetricCell v={run.guardrail_rate} />
                   <MetricCell v={run.has_ragas ? run.avg_ragas_faithfulness : null} />
                   <MetricCell v={run.has_ragas ? run.avg_ragas_relevancy : null} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_context_precision : null} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_context_recall : null} />
                 </tr>
               ))}
             </tbody>

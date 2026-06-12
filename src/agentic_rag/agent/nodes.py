@@ -641,7 +641,10 @@ def _retrieve_queries_parallel(
     if not queries:
         return []
     if worker_count <= 1 or len(queries) == 1:
-        return [_retrieve_query(provider, query, document_ids, exclude_dedup_layers) for query in queries]
+        return [
+            _retrieve_query(provider, query, document_ids, exclude_dedup_layers)
+            for query in queries
+        ]
 
     max_workers = min(worker_count, len(queries))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
