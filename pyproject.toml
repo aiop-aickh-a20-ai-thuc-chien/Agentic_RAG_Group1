@@ -52,6 +52,19 @@ local-models = [
     "torch>=2.5,<3",
 ]
 
+# Local SPLADE (neural sparse) + ColBERT late-interaction retrievers via BGE-M3.
+local-retrievers = [
+    "FlagEmbedding>=1.2,<2",
+    "scipy>=1.11,<2",
+]
+
+# Listwise LLM reranker (e.g. RankZephyr) loaded from HuggingFace. OFF by default
+# (RERANK_PROVIDER=score); only needed when RERANK_PROVIDER=listwise_llm.
+listwise-reranking = [
+    "transformers>=4.40,<5",
+    "torch>=2.5,<3",
+]
+
 [[tool.uv.index]]
 name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
@@ -130,4 +143,15 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["lingua", "lingua.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "FlagEmbedding",
+    "FlagEmbedding.*",
+    "scipy",
+    "scipy.*",
+    "transformers",
+    "transformers.*",
+]
 ignore_missing_imports = true
