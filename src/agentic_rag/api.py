@@ -11,7 +11,7 @@ import warnings
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from html.parser import HTMLParser
-from typing import Any
+from typing import Annotated, Any
 from urllib.error import HTTPError as UrlHTTPError
 from urllib.error import URLError
 from urllib.parse import quote, urlparse
@@ -19,7 +19,7 @@ from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
@@ -31,6 +31,7 @@ from agentic_rag.core.contracts import (
     Chunk,
     ConversationMessage,
     EvidenceResolutionInput,
+    KnowledgeQualityReport,
     SearchResult,
     SourceDocumentChunks,
     WorkflowRunInput,
@@ -49,6 +50,12 @@ from agentic_rag.generation.evidence import (
     evidence_for_question,
     ragflow_provider_from_env,
     source_provider_from_env,
+)
+from agentic_rag.ingestion.knowledge_quality import (
+    KnowledgeQualityConfigurationError,
+    KnowledgeQualityInvocationError,
+    UnknownKnowledgeQualityMethodError,
+    parse_knowledge_quality_methods,
 )
 from agentic_rag.integrations.local_pdf.providers import (
     LocalPdfEvidenceProvider,
@@ -119,6 +126,7 @@ class AnswerRequest(BaseModel):
     evidence_chunks: list[SearchResult] | None = None
     evidence_provider: EvidenceProviderName | None = None
     document_ids: list[str] | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
     use_mock_evidence: bool = Field(
         default=False,
         description=(
@@ -198,6 +206,126 @@ class SourceDebugResponse(BaseModel):
     chunk_input_type: str
     total_chunks: int
     chunks: list[SearchResult]
+
+
+class DedupChunkSummary(BaseModel):
+    """One chunk side in an internal dedup review item."""
+
+    chunk_id: str
+    document_id: str | None = None
+    document_name: str | None = None
+    source_type: str | None = None
+    source: str | None = None
+    page: object | None = None
+    section: object | None = None
+    text: str
+    metadata: dict[str, object] = {}
+
+
+class DedupReviewItem(BaseModel):
+    """One duplicate candidate plus its selected canonical chunk."""
+
+    id: str
+    status: str
+    review_status: str
+    layer: str
+    score: object | None = None
+    distance: object | None = None
+    reason: object | None = None
+    group_id: object | None = None
+    canonical: DedupChunkSummary | None = None
+    duplicate: DedupChunkSummary
+
+
+class DedupCounts(BaseModel):
+    """Global candidate totals per layer (independent of the current filter)."""
+
+    pairs: int = 0
+    unique_candidates: int = 0
+    exact: int = 0
+    simhash: int = 0
+    embedding: int = 0
+    exact_chunks: int = 0
+    simhash_chunks: int = 0
+    embedding_chunks: int = 0
+    corpus_chunks: int = 0
+    corpus_documents: int = 0
+
+
+class DedupListResponse(BaseModel):
+    """Internal duplicate candidate page, served from the Neon index."""
+
+    provider: str
+    total: int
+    limit: int = 0
+    offset: int = 0
+    indexed: bool = True
+    counts: DedupCounts = DedupCounts()
+    items: list[DedupReviewItem]
+
+
+class DedupRebuildResponse(BaseModel):
+    """Result of rebuilding the Neon candidate index from chunk metadata."""
+
+    provider: str
+    chunk_count: int
+    candidate_rows: int
+    latency_ms: int
+
+
+class ConflictChunkSide(BaseModel):
+    """One side (left/right) of a knowledge-quality conflict finding."""
+
+    chunk_id: str
+    document_id: str | None = None
+    document_name: str | None = None
+    source_type: str | None = None
+    source: str | None = None
+    page: object | None = None
+    section: object | None = None
+    text: str
+    value: str | None = None
+
+
+class ConflictItem(BaseModel):
+    """One conflict finding plus its two conflicting sides."""
+
+    id: str
+    conflict_type: str
+    attribute: str | None = None
+    entity: str | None = None
+    severity: str
+    confidence: float | None = None
+    summary: str | None = None
+    suggested_action: str | None = None
+    review_status: str
+    left: ConflictChunkSide | None = None
+    right: ConflictChunkSide | None = None
+
+
+class ConflictCounts(BaseModel):
+    """Global conflict totals, grouped by the numeric attribute that clashes."""
+
+    findings: int = 0
+    entities: int = 0
+    warranty_duration: int = 0
+    duration: int = 0
+    price: int = 0
+    distance_km: int = 0
+    date: int = 0
+    corpus_chunks: int = 0
+    corpus_documents: int = 0
+
+
+class ConflictListResponse(BaseModel):
+    """Internal conflict findings page, served from the Neon index."""
+
+    provider: str
+    total: int
+    limit: int = 0
+    offset: int = 0
+    counts: ConflictCounts = ConflictCounts()
+    items: list[ConflictItem]
 
 
 def _allowed_cors_origins() -> list[str]:
@@ -296,6 +424,7 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
             request=WorkflowRunInput(
                 question=request.question,
                 document_ids=request.document_ids,
+                exclude_dedup_layers=request.exclude_dedup_layers,
                 history=request.history or [],
                 single_turn=_single_turn_mode(),
             ),
@@ -532,6 +661,72 @@ def source_debug(document_id: str) -> SourceDebugResponse:
     )
 
 
+@api.get("/sources/{document_id}/quality", response_model=KnowledgeQualityReport)
+def source_quality(
+    document_id: str,
+    methods: Annotated[str | None, Query()] = None,
+) -> KnowledgeQualityReport:
+    """Return duplicate/conflict quality findings that involve one local source."""
+
+    selected_methods = _quality_methods_or_422(methods)
+    provider = _local_pdf_quality_provider()
+    try:
+        return provider.knowledge_quality_report(
+            document_ids=[document_id],
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@api.get("/knowledge-quality", response_model=KnowledgeQualityReport)
+def knowledge_quality_report(
+    document_ids: Annotated[list[str] | None, Query()] = None,
+    methods: Annotated[str | None, Query()] = None,
+) -> KnowledgeQualityReport:
+    """Return a fresh deterministic quality report for the local knowledge base."""
+
+    selected_methods = _quality_methods_or_422(methods)
+    provider = _local_pdf_quality_provider()
+    try:
+        return provider.knowledge_quality_report(
+            document_ids=document_ids,
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@api.post("/knowledge-quality/scan", response_model=KnowledgeQualityReport)
+def scan_knowledge_quality(
+    document_ids: Annotated[list[str] | None, Query()] = None,
+    methods: Annotated[str | None, Query()] = None,
+) -> KnowledgeQualityReport:
+    """Re-scan local chunks and refresh persisted quality annotations when possible."""
+
+    selected_methods = _quality_methods_or_422(methods)
+    provider = _local_pdf_quality_provider()
+    try:
+        return provider.rescan_knowledge_quality(
+            document_ids=document_ids,
+            methods=selected_methods,
+        )
+    except KnowledgeQualityConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KnowledgeQualityInvocationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @api.get("/sources/{document_id}/raw", response_model=None)
 def source_raw(document_id: str) -> Response:
     """Return the original uploaded PDF file for local debug previews."""
@@ -570,6 +765,154 @@ def source_raw(document_id: str) -> Response:
         raw_path,
         media_type="application/pdf",
         headers={"Cache-Control": "no-store", "Content-Disposition": "inline"},
+    )
+
+
+@api.get("/internal/dedup", response_model=DedupListResponse)
+def internal_dedup_candidates(
+    layer: str | None = None,
+    status: str | None = None,
+    source_type: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> DedupListResponse:
+    """Return one page of duplicate candidates from the Neon index.
+
+    Filtering and pagination happen in Postgres — no S3 access on this path.
+    Use ``POST /internal/dedup/rebuild`` to resync the index from chunk
+    metadata after changing thresholds or restoring data by hand.
+    """
+
+    from agentic_rag.autodata_eval import dedup_store
+
+    provider_label = _source_provider_label(configured_evidence_provider_name())
+    try:
+        page = dedup_store.query_candidates(
+            layer=layer,
+            status=status,
+            source_type=source_type,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        LOGGER.exception("Dedup candidate index query failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Không đọc được chỉ mục dedup trên Neon: {exc}",
+        ) from exc
+
+    return DedupListResponse(
+        provider=provider_label,
+        total=page["total"],
+        limit=page["limit"],
+        offset=page["offset"],
+        counts=DedupCounts.model_validate(page["counts"]),
+        items=[DedupReviewItem.model_validate(item) for item in page["items"]],
+    )
+
+
+@api.get("/internal/dedup/flagged-chunk-ids")
+def internal_dedup_flagged_chunk_ids() -> dict[str, list[str]]:
+    """Return duplicate chunk ids grouped by layer for client-side filtering.
+
+    The dataset import UI uses this to hide questions whose ground-truth chunk
+    was flagged at a selected dedup layer.
+    """
+
+    from agentic_rag.autodata_eval import dedup_store
+
+    return dedup_store.flagged_chunk_ids_by_layer()
+
+
+@api.get("/internal/conflicts", response_model=ConflictListResponse)
+def internal_conflicts(
+    conflict_type: str | None = None,
+    attribute: str | None = None,
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ConflictListResponse:
+    """Return one page of knowledge-quality conflict findings from the Neon index.
+
+    Tách bạch với dedup: chỉ liệt kê mâu thuẫn (kind=conflict). Resync index bằng
+    ``python scripts/scan_conflicts.py``.
+    """
+
+    from agentic_rag.autodata_eval import conflict_store
+
+    provider_label = _source_provider_label(configured_evidence_provider_name())
+    try:
+        page = conflict_store.query_findings(
+            conflict_type=conflict_type,
+            attribute=attribute,
+            status=status,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        LOGGER.exception("Conflict index query failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Không đọc được chỉ mục mâu thuẫn trên Neon: {exc}",
+        ) from exc
+
+    return ConflictListResponse(
+        provider=provider_label,
+        total=page["total"],
+        limit=page["limit"],
+        offset=page["offset"],
+        counts=ConflictCounts.model_validate(page["counts"]),
+        items=[ConflictItem.model_validate(item) for item in page["items"]],
+    )
+
+
+@api.get("/internal/conflicts/flagged-chunk-ids")
+def internal_conflict_flagged_chunk_ids() -> dict[str, list[str]]:
+    """Return chunk ids that appear in any conflict, for optional client filtering.
+
+    Lưu ý: ở eval KHÔNG nên ẩn các chunk này — mâu thuẫn là test case quý.
+    """
+
+    from agentic_rag.autodata_eval import conflict_store
+
+    return {"conflict": conflict_store.flagged_chunk_ids()}
+
+
+@api.post("/internal/dedup/rebuild", response_model=DedupRebuildResponse)
+def internal_dedup_rebuild(refresh: bool = True) -> DedupRebuildResponse:
+    """Rebuild the Neon candidate index from current chunk metadata.
+
+    Reads the whole corpus (S3 — slow, minutes) and replaces the index. Not
+    needed in normal operation: uploads and deletes keep the index in sync.
+    """
+
+    try:
+        provider_name = configured_evidence_provider_name()
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    provider_label = _source_provider_label(provider_name)
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Dedup index rebuild is only supported for local PDF sources.",
+        )
+
+    result = provider.rebuild_dedup_index(refresh=refresh)
+
+    def _as_int(value: object) -> int:
+        return value if isinstance(value, int) else 0
+
+    return DedupRebuildResponse(
+        provider=provider_label,
+        chunk_count=_as_int(result.get("chunk_count")),
+        candidate_rows=_as_int(result.get("candidate_rows")),
+        latency_ms=_as_int(result.get("latency_ms")),
     )
 
 
@@ -643,6 +986,27 @@ def _document_chunks(
     except RAGFlowClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _local_pdf_quality_provider() -> LocalPdfEvidenceProvider:
+    try:
+        provider = source_provider_from_env()
+    except RAGFlowConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if not isinstance(provider, LocalPdfEvidenceProvider):
+        raise HTTPException(
+            status_code=404,
+            detail="Knowledge quality is only supported for local PDF sources.",
+        )
+    return provider
+
+
+def _quality_methods_or_422(methods: str | None) -> list[str]:
+    try:
+        return parse_knowledge_quality_methods(methods)
+    except UnknownKnowledgeQualityMethodError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -768,6 +1132,7 @@ def _answer_for_request(request: AnswerRequest) -> Answer:
             request=WorkflowRunInput(
                 question=request.question,
                 document_ids=request.document_ids,
+                exclude_dedup_layers=request.exclude_dedup_layers,
                 history=request.history or [],
                 single_turn=_single_turn_mode(),
             ),
@@ -957,6 +1322,7 @@ def _evidence_for_request(request: AnswerRequest) -> tuple[list[SearchResult], s
             evidence_chunks=request.evidence_chunks,
             provider=request.evidence_provider,
             document_ids=request.document_ids,
+            exclude_dedup_layers=request.exclude_dedup_layers,
             use_mock_evidence=request.use_mock_evidence,
         )
     )

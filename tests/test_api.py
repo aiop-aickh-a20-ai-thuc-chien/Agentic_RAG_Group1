@@ -18,13 +18,22 @@ from agentic_rag.api import (
     delete_all_sources,
     delete_source,
     health,
+    internal_dedup_candidates,
+    knowledge_quality_report,
     list_sources,
+    scan_knowledge_quality,
     source_debug,
+    source_quality,
     source_raw,
     upload_text_source,
     upload_url_source,
 )
-from agentic_rag.core.contracts import Chunk
+from agentic_rag.core.contracts import (
+    Answer,
+    Chunk,
+    KnowledgeQualityReport,
+    WorkflowRunOutput,
+)
 from agentic_rag.generation.answering import format_evidence_context
 from agentic_rag.ingestion.url import LoadedUrlDocument
 from agentic_rag.integrations.local_pdf.providers import LocalPdfEvidenceProvider
@@ -38,7 +47,17 @@ def _disable_model_runtime_env(monkeypatch: MonkeyPatch) -> Iterator[None]:
 
     clear_model_runtime_caches()
     monkeypatch.setenv("LLM_PROVIDER", "none")
+    monkeypatch.delenv("VECTOR_STORE_PROVIDER", raising=False)
+    monkeypatch.delenv("DENSE_VECTOR_STORE", raising=False)
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    monkeypatch.delenv("QDRANT_COLLECTION", raising=False)
+    # api.py chạy load_dotenv() lúc import — phải gỡ NEON_CONNECTION kẻo upload
+    # trong test ghi thật vào bảng dedup_candidates trên Neon.
+    monkeypatch.delenv("NEON_CONNECTION", raising=False)
+    monkeypatch.setattr("agentic_rag.autodata_eval.db._conninfo", None)
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    monkeypatch.setattr("agentic_rag.retrieval.config.load_local_env", lambda: None)
     yield
     clear_model_runtime_caches()
 
@@ -129,6 +148,34 @@ def test_answer_endpoint_handles_small_talk_without_evidence(
     assert answer.status == "answered"
     assert answer.citations == []
     assert "tải tài liệu" in answer.answer
+
+
+def test_answer_endpoint_passes_excluded_dedup_layers_to_agent(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_run_agent(**kwargs: Any) -> WorkflowRunOutput:
+        seen.update(kwargs)
+        return WorkflowRunOutput(
+            answer=Answer(answer="ok", citations=[], status="answered"),
+        )
+
+    monkeypatch.setenv("AGENT_MODE", "true")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: object())
+    monkeypatch.setattr("agentic_rag.api.run_agent", fake_run_agent)
+
+    answer = answer_question(
+        AnswerRequest(
+            question="Pin bao hanh bao lau?",
+            document_ids=["doc-1"],
+            exclude_dedup_layers=["exact_sha256"],
+        )
+    )
+
+    assert answer.answer == "ok"
+    assert seen["request"].document_ids == ["doc-1"]
+    assert seen["request"].exclude_dedup_layers == ["exact_sha256"]
 
 
 def test_stream_answer_events_include_deltas_citations_and_done() -> None:
@@ -432,3 +479,268 @@ def test_list_sources_returns_local_documents(
 
     response_with_chunks = list_sources(include_chunks=True)
     assert response_with_chunks.sources[0].chunks[0].chunk.text == "Noi dung"
+
+
+def test_internal_dedup_candidates_returns_local_pairs(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from agentic_rag.autodata_eval import dedup_store
+
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source = kwargs["source"]
+        source_key = "a" if source.startswith("Doc-A") else "b"
+        return [
+            Chunk(
+                chunk_id=f"text_{source_key}_c0001",
+                text=text,
+                metadata={"source": source, "source_type": "text"},
+            )
+        ]
+
+    # In-memory thay cho bảng Neon: upload ghi vào đây, endpoint đọc từ đây.
+    stored_rows: dict[str, dict[str, object]] = {}
+
+    def fake_replace_document(document_id: str, rows: list[dict[str, object]]) -> int:
+        for key in [
+            k for k, v in stored_rows.items() if v.get("duplicate_document_id") == document_id
+        ]:
+            stored_rows.pop(key)
+        for row in rows:
+            stored_rows[str(row["id"])] = row
+        return len(rows)
+
+    def fake_query(
+        *,
+        layer: str | None = None,
+        status: str | None = None,
+        source_type: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        rows = [r for r in stored_rows.values() if not layer or r.get("layer") == layer]
+        page = rows[offset : offset + limit]
+        return {
+            "items": [dedup_store._row_to_item(row) for row in page],
+            "total": len(rows),
+            "limit": limit,
+            "offset": offset,
+            "counts": {
+                "pairs": len(stored_rows),
+                "unique_candidates": len(
+                    {r.get("duplicate_chunk_id") for r in stored_rows.values()}
+                ),
+                "exact": sum(1 for r in stored_rows.values() if r.get("layer") == "exact_sha256"),
+                "simhash": sum(1 for r in stored_rows.values() if r.get("layer") == "simhash"),
+                "embedding": sum(
+                    1 for r in stored_rows.values() if r.get("layer") == "embedding_similarity"
+                ),
+            },
+        }
+
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setenv("DEDUP_ENABLE_EMBEDDING", "false")
+    monkeypatch.setattr(dedup_store, "replace_document_candidates", fake_replace_document)
+    monkeypatch.setattr(dedup_store, "query_candidates", fake_query)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.upsert_dense_embeddings",
+        lambda chunks: {"enabled": False, "vector_store": "turbovec"},
+    )
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+
+    first = provider.upload_text(title="Doc A", text="Same body")
+    provider.upload_text(title="Doc B", text="Same body")
+    response = internal_dedup_candidates(layer="exact_sha256")
+
+    assert response.provider == "local_pdf"
+    assert response.total == 1
+    assert response.counts.exact == 1
+    assert response.items[0].layer == "exact_sha256"
+    assert response.items[0].canonical is not None
+    assert response.items[0].canonical.document_id == first.document_id
+    assert response.items[0].duplicate.document_id != first.document_id
+
+
+def test_source_quality_returns_local_conflict_report(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+
+    base = upload_text_source(SourceTextRequest(title="Base", text="VF8 duoc bao hanh 8 nam."))
+    update = upload_text_source(SourceTextRequest(title="Update", text="VF8 duoc bao hanh 6 nam."))
+
+    report = source_quality(base.document_id)
+
+    assert report.metadata["provider"] == "local_pdf"
+    assert report.metadata["selected_document_ids"] == [base.document_id]
+    assert len(report.findings) == 1
+    assert report.findings[0].kind == "conflict"
+    assert set(report.findings[0].chunk_ids) == {
+        f"{base.document_id}_c0001",
+        f"{update.document_id}_c0001",
+    }
+    assert len(report.facts) == 2
+
+
+def test_knowledge_quality_scan_can_filter_and_refresh_local_metadata(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_load_text_chunks(text: str, **kwargs: str) -> list[Chunk]:
+        source_stem = kwargs["source"].removesuffix(".txt").lower()
+        return [
+            Chunk(
+                chunk_id=f"text_{source_stem}_c0001",
+                text=text,
+                metadata={"source": kwargs["source"], "source_type": "text"},
+            )
+        ]
+
+    provider = LocalPdfEvidenceProvider(store_dir=tmp_path)
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "local_pdf")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: provider)
+    monkeypatch.setattr(
+        "agentic_rag.integrations.local_pdf.providers.load_text_chunks",
+        fake_load_text_chunks,
+    )
+    base = upload_text_source(SourceTextRequest(title="Base", text="VF8 duoc bao hanh 8 nam."))
+    update = upload_text_source(SourceTextRequest(title="Update", text="VF8 duoc bao hanh 6 nam."))
+
+    filtered = knowledge_quality_report(document_ids=[update.document_id])
+    rescanned = scan_knowledge_quality()
+
+    assert filtered.metadata["selected_document_ids"] == [update.document_id]
+    assert len(filtered.findings) == 1
+    assert rescanned.metadata["selected_document_ids"] is None
+    assert len(rescanned.findings) == 1
+    for document_id in (base.document_id, update.document_id):
+        chunk = provider.document_chunks(document_id=document_id).chunks[0]
+        assert chunk.metadata["knowledge_quality"]["conflict_count"] == 1
+
+
+def test_knowledge_quality_endpoints_reject_non_local_provider(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EVIDENCE_PROVIDER", "ragflow")
+    monkeypatch.setattr("agentic_rag.api.source_provider_from_env", lambda: object())
+
+    with pytest.raises(HTTPException) as source_raised:
+        source_quality("doc-1")
+    with pytest.raises(HTTPException) as aggregate_raised:
+        knowledge_quality_report()
+    with pytest.raises(HTTPException) as scan_raised:
+        scan_knowledge_quality()
+
+    assert source_raised.value.status_code == 404
+    assert aggregate_raised.value.status_code == 404
+    assert scan_raised.value.status_code == 404
+    assert "local PDF" in str(source_raised.value.detail)
+
+
+def test_knowledge_quality_endpoints_forward_selected_methods(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeProvider:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, list[str] | None, list[str] | None]] = []
+
+        def knowledge_quality_report(
+            self,
+            *,
+            document_ids: list[str] | None = None,
+            methods: list[str] | None = None,
+        ) -> KnowledgeQualityReport:
+            self.calls.append(("report", document_ids, methods))
+            return KnowledgeQualityReport(metadata={"methods": methods or []})
+
+        def rescan_knowledge_quality(
+            self,
+            *,
+            document_ids: list[str] | None = None,
+            methods: list[str] | None = None,
+        ) -> KnowledgeQualityReport:
+            self.calls.append(("scan", document_ids, methods))
+            return KnowledgeQualityReport(metadata={"methods": methods or []})
+
+    provider = FakeProvider()
+    monkeypatch.setattr("agentic_rag.api._local_pdf_quality_provider", lambda: provider)
+
+    source_quality("doc-1", methods="metadata_rules,semantic_rules")
+    knowledge_quality_report(methods="semantic_rules")
+    scan_knowledge_quality(methods="deterministic_v1,metadata_rules")
+
+    assert provider.calls == [
+        ("report", ["doc-1"], ["metadata_rules", "semantic_rules"]),
+        ("report", None, ["semantic_rules"]),
+        ("scan", None, ["deterministic_v1", "metadata_rules"]),
+    ]
+
+
+def test_knowledge_quality_endpoint_rejects_unknown_method(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("agentic_rag.api._local_pdf_quality_provider", lambda: object())
+
+    with pytest.raises(HTTPException) as raised:
+        knowledge_quality_report(methods="unknown")
+
+    assert raised.value.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code"),
+    [
+        (
+            "agentic_rag.ingestion.knowledge_quality.KnowledgeQualityConfigurationError",
+            422,
+        ),
+        (
+            "agentic_rag.ingestion.knowledge_quality.KnowledgeQualityInvocationError",
+            502,
+        ),
+    ],
+)
+def test_knowledge_quality_endpoint_maps_model_method_errors(
+    monkeypatch: MonkeyPatch,
+    error: str,
+    status_code: int,
+) -> None:
+    module_name, class_name = error.rsplit(".", 1)
+    error_type = getattr(__import__(module_name, fromlist=[class_name]), class_name)
+
+    class FakeProvider:
+        def knowledge_quality_report(self, **kwargs: object) -> KnowledgeQualityReport:
+            raise error_type("quality method failed")
+
+    monkeypatch.setattr(
+        "agentic_rag.api._local_pdf_quality_provider",
+        lambda: FakeProvider(),
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        knowledge_quality_report(methods="semantic_verifier")
+
+    assert raised.value.status_code == status_code

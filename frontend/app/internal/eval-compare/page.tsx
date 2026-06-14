@@ -18,6 +18,11 @@ type RunSummary = {
   avg_citation: number | null; guardrail_rate: number | null;
   has_ragas: boolean;
   avg_ragas_faithfulness: number | null; avg_ragas_relevancy: number | null;
+  avg_ragas_context_precision: number | null; avg_ragas_context_recall: number | null;
+  external: boolean;
+  source_dataset_name: string | null;
+  coverage: number;
+  coverage_total: number;
 };
 type Result = {
   id: string; question_id: string; run_id: string;
@@ -191,6 +196,8 @@ const TREND_LINES = [
   { key: "guardrail",    label: "Guardrail",    color: "#6b7280" },
   { key: "faithfulness", label: "Faithfulness", color: "#d97706" },
   { key: "relevancy",    label: "Relevancy",    color: "#e11d48" },
+  { key: "ctxPrecision", label: "Ctx Precision", color: "#0891b2" },
+  { key: "ctxRecall",    label: "Ctx Recall",    color: "#9333ea" },
 ] as const;
 
 function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
@@ -202,6 +209,8 @@ function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
     guardrail: r.guardrail_rate,
     faithfulness: r.has_ragas ? r.avg_ragas_faithfulness : null,
     relevancy: r.has_ragas ? r.avg_ragas_relevancy : null,
+    ctxPrecision: r.has_ragas ? r.avg_ragas_context_precision : null,
+    ctxRecall: r.has_ragas ? r.avg_ragas_context_recall : null,
   }));
   return (
     <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
@@ -281,7 +290,7 @@ export default function EvalComparePage() {
   // Load full results when run A selected
   useEffect(() => {
     if (!detailA) { setResA([]); return; }
-    fetch(`${API}/internal/runs/${detailA}/results?limit=5000&offset=0`)
+    fetch(`${API}/internal/runs/${detailA}/results?limit=5000&offset=0&light=true`)
       .then((r) => r.json()).then((d: Result[]) => setResA(d)).catch(() => setResA([]));
   }, [detailA]);
 
@@ -289,7 +298,7 @@ export default function EvalComparePage() {
   useEffect(() => {
     if (!detailB) { setResB([]); return; }
     setDetailLoading(true);
-    fetch(`${API}/internal/runs/${detailB}/results?limit=5000&offset=0`)
+    fetch(`${API}/internal/runs/${detailB}/results?limit=5000&offset=0&light=true`)
       .then((r) => r.json()).then((d: Result[]) => { setResB(d); setDetailLoading(false); })
       .catch(() => { setResB([]); setDetailLoading(false); });
   }, [detailB]);
@@ -299,18 +308,25 @@ export default function EvalComparePage() {
 
   const pairedRows = useMemo<PairedRow[]>(() => {
     if (!detailA || !detailB) return [];
-    const mapB = new Map(resB.map((r) => [r.question_id, r]));
+    // Filter về câu thuộc dataset hiện tại — khi run kế thừa có 1000 câu,
+    // chỉ giữ 100 câu trong dataset B để so sánh không bị nhiễu.
+    const qbIds = new Set(Object.keys(questions));
+    const filterByDataset = qbIds.size > 0;
+    const filteredA = filterByDataset ? resA.filter((r) => qbIds.has(r.question_id)) : resA;
+    const filteredB = filterByDataset ? resB.filter((r) => qbIds.has(r.question_id)) : resB;
+
+    const mapB = new Map(filteredB.map((r) => [r.question_id, r]));
     const seen = new Set<string>();
     const rows: PairedRow[] = [];
-    for (const r of resA) {
+    for (const r of filteredA) {
       seen.add(r.question_id);
       rows.push({ questionId: r.question_id, a: r, b: mapB.get(r.question_id) ?? null });
     }
-    for (const r of resB) {
+    for (const r of filteredB) {
       if (!seen.has(r.question_id)) rows.push({ questionId: r.question_id, a: null, b: r });
     }
     return rows;
-  }, [detailA, detailB, resA, resB]);
+  }, [detailA, detailB, resA, resB, questions]);
 
   const pageRows = pairedRows.slice(detailPage * DETAIL_PAGE_SIZE, (detailPage + 1) * DETAIL_PAGE_SIZE);
   const hasMore  = (detailPage + 1) * DETAIL_PAGE_SIZE < pairedRows.length;
@@ -319,7 +335,10 @@ export default function EvalComparePage() {
   const runB = runs.find((r) => r.run_id === detailB);
 
   // Sắp xếp cũ → mới để tính delta so với version trước
-  const ordered = [...runs].reverse();
+  // TrendChart chỉ dùng native run — inherited run không thuộc "tiến trình" dataset này
+  const nativeRuns  = runs.filter((r) => !r.external);
+  const ordered     = [...nativeRuns].reverse();
+  const inheritedRuns = runs.filter((r) => r.external);
 
   return (
     <div className="space-y-6">
@@ -362,6 +381,8 @@ export default function EvalComparePage() {
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Guardrail</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Faithfulness</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Relevancy</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Ctx Precision</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Ctx Recall</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
@@ -381,9 +402,50 @@ export default function EvalComparePage() {
                     <MetricCell v={run.guardrail_rate} prev={prev?.guardrail_rate} />
                     <MetricCell v={run.has_ragas ? run.avg_ragas_faithfulness : null} prev={prev?.has_ragas ? prev.avg_ragas_faithfulness : null} />
                     <MetricCell v={run.has_ragas ? run.avg_ragas_relevancy : null}    prev={prev?.has_ragas ? prev.avg_ragas_relevancy : null} />
+                    <MetricCell v={run.has_ragas ? run.avg_ragas_context_precision : null} prev={prev?.has_ragas ? prev.avg_ragas_context_precision : null} />
+                    <MetricCell v={run.has_ragas ? run.avg_ragas_context_recall : null}    prev={prev?.has_ragas ? prev.avg_ragas_context_recall : null} />
                   </tr>
                 );
               })}
+              {/* Run kế thừa từ dataset khác — hiển thị phân cách + badge coverage */}
+              {inheritedRuns.length > 0 && (
+                <tr>
+                  <td colSpan={10} className="px-4 py-2 bg-gray-50/80 border-t border-dashed border-black/10">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      Run kế thừa từ dataset khác — điểm tính trên {runs[0]?.coverage_total ?? "?"} câu chung
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {inheritedRuns.map((run) => (
+                <tr key={run.run_id} className="hover:bg-blue-50/20 transition-colors opacity-75">
+                  <td className="px-4 py-4">
+                    <p className="font-medium text-gray-600">{run.name}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                        kế thừa
+                      </span>
+                      {run.source_dataset_name && (
+                        <span className="text-[11px] text-gray-400">{run.source_dataset_name}</span>
+                      )}
+                      <span className="text-[11px] text-gray-400 tabular-nums">
+                        · {run.coverage}/{run.coverage_total} câu
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="text-gray-400 tabular-nums">{run.coverage.toLocaleString()}</span>
+                  </td>
+                  <MetricCell v={run.avg_recall} />
+                  <MetricCell v={run.avg_mrr} />
+                  <MetricCell v={run.avg_citation} />
+                  <MetricCell v={run.guardrail_rate} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_faithfulness : null} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_relevancy : null} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_context_precision : null} />
+                  <MetricCell v={run.has_ragas ? run.avg_ragas_context_recall : null} />
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -392,9 +454,9 @@ export default function EvalComparePage() {
       {/* Chart xu hướng — chỉ hiện khi có >= 2 run để so */}
       {!loading && runs.length > 1 && <TrendChart runs={ordered} />}
 
-      {/* Best version highlight */}
-      {runs.length > 1 && (() => {
-        const best = [...runs].sort((a, b) => (b.avg_recall ?? 0) - (a.avg_recall ?? 0))[0];
+      {/* Best version highlight — chỉ trong native run */}
+      {nativeRuns.length > 1 && (() => {
+        const best = [...nativeRuns].sort((a, b) => (b.avg_recall ?? 0) - (a.avg_recall ?? 0))[0];
         return (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 flex items-center gap-3">
             <TrendingUp size={18} className="text-emerald-600 shrink-0" />
@@ -411,7 +473,7 @@ export default function EvalComparePage() {
         <div className="space-y-4 pt-2">
           <div className="border-t border-black/8 pt-6">
             <h2 className="text-lg font-semibold text-gray-900">So sánh chi tiết theo câu</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Chọn 2 run trong cùng dataset để xem kết quả từng câu hỏi đặt cạnh nhau</p>
+            <p className="text-sm text-gray-500 mt-0.5">Chọn 2 run để xem kết quả từng câu — run kế thừa tự lọc về câu của dataset này</p>
           </div>
 
           {/* Run selectors */}
@@ -421,10 +483,14 @@ export default function EvalComparePage() {
               <select
                 value={detailA}
                 onChange={(e) => setDetailA(e.target.value)}
-                className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-blue-50/40 focus:outline-none focus:ring-2 focus:ring-blue-500/40 max-w-[220px]"
+                className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-blue-50/40 focus:outline-none focus:ring-2 focus:ring-blue-500/40 max-w-[240px]"
               >
                 <option value="">— Chọn Run A —</option>
-                {runs.filter((r) => r.run_id !== detailB).map((r) => <option key={r.run_id} value={r.run_id}>{r.name}</option>)}
+                {runs.filter((r) => r.run_id !== detailB).map((r) => (
+                  <option key={r.run_id} value={r.run_id}>
+                    {r.external ? `[kế thừa] ${r.name}` : r.name}
+                  </option>
+                ))}
               </select>
             </div>
             <span className="text-gray-300 font-light text-lg">vs</span>
@@ -433,10 +499,14 @@ export default function EvalComparePage() {
               <select
                 value={detailB}
                 onChange={(e) => setDetailB(e.target.value)}
-                className="text-sm border border-violet-300 rounded-lg px-3 py-1.5 bg-violet-50/40 focus:outline-none focus:ring-2 focus:ring-violet-500/40 max-w-[220px]"
+                className="text-sm border border-violet-300 rounded-lg px-3 py-1.5 bg-violet-50/40 focus:outline-none focus:ring-2 focus:ring-violet-500/40 max-w-[240px]"
               >
                 <option value="">— Chọn Run B —</option>
-                {runs.filter((r) => r.run_id !== detailA).map((r) => <option key={r.run_id} value={r.run_id}>{r.name}</option>)}
+                {runs.filter((r) => r.run_id !== detailA).map((r) => (
+                  <option key={r.run_id} value={r.run_id}>
+                    {r.external ? `[kế thừa] ${r.name}` : r.name}
+                  </option>
+                ))}
               </select>
             </div>
             {detailLoading && <Loader2 size={15} className="animate-spin text-violet-500" />}

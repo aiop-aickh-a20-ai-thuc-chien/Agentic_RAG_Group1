@@ -15,13 +15,11 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { KnowledgeScene } from "@/components/knowledge-scene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-type Theme = "light" | "dark";
+import { useTheme } from "@/lib/use-theme";
 
 const highlights = [
   "Trả lời bằng tiếng Việt",
@@ -30,8 +28,7 @@ const highlights = [
 ];
 
 export default function ToolLauncherPage() {
-  const [theme, setTheme] = useState<Theme>("light");
-  const isDark = theme === "dark";
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <main
@@ -62,7 +59,7 @@ export default function ToolLauncherPage() {
           <div className="flex items-center gap-2">
             <button
               className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-medium transition hover:bg-paper dark:border-white/14 dark:bg-white/10 dark:text-white dark:hover:bg-white/16"
-              onClick={() => setTheme(isDark ? "light" : "dark")}
+              onClick={toggleTheme}
               type="button"
             >
               {isDark ? (

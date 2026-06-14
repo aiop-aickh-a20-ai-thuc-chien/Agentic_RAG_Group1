@@ -14,12 +14,14 @@ class FakeSourceProvider:
     def __init__(self, results: list[SearchResult]) -> None:
         self.results = results
         self.seen_document_ids: list[str] | None = None
+        self.seen_exclude_dedup_layers: list[str] = []
 
     def retrieve(
         self,
         request: RetrievalInput,
     ) -> RetrievalOutput:
         self.seen_document_ids = request.document_ids
+        self.seen_exclude_dedup_layers = request.exclude_dedup_layers
         return RetrievalOutput(results=self.results)
 
 
@@ -32,10 +34,12 @@ def test_evidence_for_question_uses_local_pdf_provider(monkeypatch: MonkeyPatch)
             question="Pin bao hanh bao lau?",
             provider="local_pdf",
             document_ids=["doc-1"],
+            exclude_dedup_layers=["exact_sha256"],
             use_mock_evidence=False,
         )
     )
 
     assert resolved.chunks == provider.results
     assert provider.seen_document_ids == ["doc-1"]
+    assert provider.seen_exclude_dedup_layers == ["exact_sha256"]
     assert "chunk_id=" in resolved.context

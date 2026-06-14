@@ -12,8 +12,11 @@ from agentic_rag.ingestion.dedup_detect.embedding import (
 from agentic_rag.ingestion.dedup_detect.exact import find_exact_duplicates, sha256_fingerprint
 from agentic_rag.ingestion.dedup_detect.metadata import (
     DEDUP_METADATA_KEY,
+    DEDUP_REVIEW_PENDING,
+    DEDUP_STATUS_DUPLICATE_CANDIDATE,
     add_duplicate_metadata_to_chunks,
     duplicate_metadata_by_document,
+    remove_duplicate_metadata_from_chunks,
 )
 from agentic_rag.ingestion.dedup_detect.models import (
     DedupConfig,
@@ -32,6 +35,8 @@ from agentic_rag.ingestion.dedup_detect.simhash import (
 
 __all__ = [
     "DEDUP_METADATA_KEY",
+    "DEDUP_REVIEW_PENDING",
+    "DEDUP_STATUS_DUPLICATE_CANDIDATE",
     "DedupConfig",
     "DedupDocument",
     "DedupReport",
@@ -52,6 +57,7 @@ __all__ = [
     "find_simhash_duplicates",
     "hamming_distance",
     "normalize_text",
+    "remove_duplicate_metadata_from_chunks",
     "sha256_fingerprint",
     "simhash_fingerprint",
 ]

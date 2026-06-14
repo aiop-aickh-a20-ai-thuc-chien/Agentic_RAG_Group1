@@ -10,6 +10,8 @@ embeddings are unavailable.
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
 import tempfile
@@ -24,13 +26,35 @@ from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import (
     Chunk,
+    KnowledgeQualityReport,
     RetrievalInput,
     RetrievalOutput,
     SearchResult,
     SourceDocumentChunks,
     SourceDocumentUpload,
 )
+from agentic_rag.core.ports import LLMClient
 from agentic_rag.ingestion.chunking.splitters import short_hash
+from agentic_rag.ingestion.dedup_detect import (
+    DEDUP_METADATA_KEY,
+    DedupConfig,
+    DedupReport,
+    DuplicateMatch,
+    add_duplicate_metadata_to_chunks,
+    detect_duplicates,
+    documents_from_chunks,
+    hamming_distance,
+    remove_duplicate_metadata_from_chunks,
+    sha256_fingerprint,
+    simhash_fingerprint,
+)
+from agentic_rag.ingestion.knowledge_quality import (
+    MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS,
+    KnowledgeQualityConfigurationError,
+    analyze_chunks,
+    annotate_chunks_with_quality,
+    parse_knowledge_quality_methods,
+)
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
@@ -41,6 +65,8 @@ from agentic_rag.integrations.local_pdf.storage import (
     StoredRawSource,
     StoredSourceDocument,
 )
+from agentic_rag.model_runtime.errors import ModelRuntimeConfigurationError
+from agentic_rag.model_runtime.factory import get_explicit_llm_client
 from agentic_rag.retrieval.fusion import (
     RRF_K,
     ThresholdConfig,
@@ -55,9 +81,13 @@ from agentic_rag.retrieval.search import (
     delete_all_qdrant_points,
     delete_qdrant_document_points,
     dense_embedding_metadata,
+    embed_chunk_texts,
     qdrant_hybrid_search,
+    qdrant_similar_by_vectors,
     upsert_dense_embeddings,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
@@ -259,7 +289,17 @@ class LocalPdfEvidenceProvider:
             name=safe_filename,
             source_type="pdf",
         )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
+        )
         chunk_latency_ms = _latency_ms(chunk_started_at)
+        dedup_started_at = time.perf_counter()
+        chunks, dedup_trace, dedup_dense_vectors = self._apply_dedup_to_new_chunks(
+            document_id=document_id,
+            chunks=chunks,
+        )
+        dedup_trace["latency_ms"] = _latency_ms(dedup_started_at)
         write_started_at = time.perf_counter()
         if self._source_store is None:
             self._write_chunks(document_id=document_id, chunks=chunks)
@@ -278,6 +318,7 @@ class LocalPdfEvidenceProvider:
                     "fallback_reason": chunking_fallback_reason,
                 },
                 chunks=chunks,
+                precomputed_dense_vectors=dedup_dense_vectors,
             )
         finally:
             self._delete_temporary_path(pdf_path)
@@ -321,6 +362,7 @@ class LocalPdfEvidenceProvider:
                     "chunks": [_trace_chunk(chunk) for chunk in chunks],
                     "latency_ms": chunk_latency_ms,
                 },
+                "deduplication": dedup_trace,
                 "index_write": {
                     "type": "jsonl" if self._source_store is None else "source_store",
                     "path": str(self._chunk_path(document_id))
@@ -374,8 +416,18 @@ class LocalPdfEvidenceProvider:
             source_type="url",
             source=url,
         )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
+        )
         url_trace = _url_ingestion_trace(requested_url=url, chunks=chunks)
         chunk_latency_ms = _latency_ms(chunk_started_at)
+        dedup_started_at = time.perf_counter()
+        chunks, dedup_trace, dedup_dense_vectors = self._apply_dedup_to_new_chunks(
+            document_id=document_id,
+            chunks=chunks,
+        )
+        dedup_trace["latency_ms"] = _latency_ms(dedup_started_at)
         write_started_at = time.perf_counter()
         if self._source_store is None:
             self._write_chunks(document_id=document_id, chunks=chunks)
@@ -393,6 +445,7 @@ class LocalPdfEvidenceProvider:
                     "title": url_trace["title"],
                 },
                 chunks=chunks,
+                precomputed_dense_vectors=dedup_dense_vectors,
             )
         finally:
             self._delete_temporary_path(local_markdown_path)
@@ -445,6 +498,7 @@ class LocalPdfEvidenceProvider:
                     "chunks": [_trace_chunk(chunk) for chunk in chunks],
                     "latency_ms": chunk_latency_ms,
                 },
+                "deduplication": dedup_trace,
                 "index_write": {
                     "type": "jsonl" if self._source_store is None else "source_store",
                     "path": str(self._chunk_path(document_id))
@@ -485,7 +539,17 @@ class LocalPdfEvidenceProvider:
             name=safe_name,
             source_type="text",
         )
+        chunks = annotate_chunks_with_quality(
+            chunks,
+            existing_chunks=self._quality_context_chunks(document_id=document_id),
+        )
         chunk_latency_ms = _latency_ms(chunk_started_at)
+        dedup_started_at = time.perf_counter()
+        chunks, dedup_trace, dedup_dense_vectors = self._apply_dedup_to_new_chunks(
+            document_id=document_id,
+            chunks=chunks,
+        )
+        dedup_trace["latency_ms"] = _latency_ms(dedup_started_at)
         write_started_at = time.perf_counter()
         if self._source_store is None:
             self._write_chunks(document_id=document_id, chunks=chunks)
@@ -499,6 +563,7 @@ class LocalPdfEvidenceProvider:
                 markdown_path=markdown_path,
                 metadata={"title": title},
                 chunks=chunks,
+                precomputed_dense_vectors=dedup_dense_vectors,
             )
         finally:
             self._delete_temporary_path(markdown_path)
@@ -536,6 +601,7 @@ class LocalPdfEvidenceProvider:
                     "chunks": [_trace_chunk(chunk) for chunk in chunks],
                     "latency_ms": chunk_latency_ms,
                 },
+                "deduplication": dedup_trace,
                 "index_write": {
                     "type": "jsonl" if self._source_store is None else "source_store",
                     "path": str(self._chunk_path(document_id))
@@ -593,11 +659,223 @@ class LocalPdfEvidenceProvider:
                 documents.append(self._stored_document_from_chunks(chunk_path.stem, chunks))
         return documents
 
+    def backfill_dedup(
+        self,
+        *,
+        strict_embedding: bool = False,
+        dry_run: bool = False,
+    ) -> dict[str, object]:
+        """Backfill duplicate metadata across all already-stored chunks."""
+
+        started_at = time.perf_counter()
+        chunks = self._chunks_for_documents(None)
+        cleaned_chunks = remove_duplicate_metadata_from_chunks(chunks)
+        if not cleaned_chunks:
+            return {
+                "enabled": _dedup_enabled(),
+                "dry_run": dry_run,
+                "chunk_count": 0,
+                "updated_chunk_count": 0,
+                "updated_document_count": 0,
+                "deduplication": _empty_dedup_trace(reason="no_chunks"),
+                "dense_index": {"enabled": False, "reason": "no_chunks"},
+                "latency_ms": _latency_ms(started_at),
+            }
+
+        eval_reference_ids, eval_reference_error = _load_eval_reference_ids()
+        document_metadata = self._dedup_document_sort_metadata()
+        canonical_chunks = _canonical_sorted_chunks(
+            cleaned_chunks,
+            document_metadata=document_metadata,
+            eval_reference_ids=eval_reference_ids,
+        )
+        enriched_canonical_chunks, dedup_trace = _dedup_enrich_chunks(
+            corpus_chunks=canonical_chunks,
+            target_chunks=canonical_chunks,
+            strict_embedding=strict_embedding,
+        )
+        dedup_trace["canonical_policy"] = _dedup_canonical_policy_trace(
+            mode="backfill",
+            eval_reference_ids=eval_reference_ids,
+            eval_reference_error=eval_reference_error,
+            document_metadata_count=len(document_metadata),
+        )
+        enriched_by_chunk_id = {chunk.chunk_id: chunk for chunk in enriched_canonical_chunks}
+        enriched_chunks = [
+            enriched_by_chunk_id.get(chunk.chunk_id, chunk) for chunk in cleaned_chunks
+        ]
+        changed_chunks = [
+            enriched
+            for original, enriched in zip(cleaned_chunks, enriched_chunks, strict=True)
+            if original.metadata != enriched.metadata
+        ]
+        grouped = _chunks_by_document(enriched_chunks)
+        updated_document_ids = sorted(
+            {
+                str(chunk.metadata.get("document_id") or "")
+                for chunk in changed_chunks
+                if chunk.metadata.get("document_id")
+            }
+        )
+        dense_index_trace: dict[str, object]
+        index_trace: dict[str, object]
+        if dry_run:
+            dense_index_trace = {"enabled": False, "dry_run": True}
+            index_trace = {"enabled": False, "dry_run": True}
+        else:
+            for document_id, document_chunks in grouped.items():
+                self._replace_document_chunks(document_id=document_id, chunks=document_chunks)
+            dense_index_trace = _upsert_dense_embeddings_safely(enriched_chunks)
+            index_trace = _replace_all_candidate_index(enriched_chunks)
+            from agentic_rag.autodata_eval import dedup_store as _dedup_store
+
+            _dedup_store.upsert_corpus_stats(
+                chunk_count=len(chunks),
+                document_count=len(grouped),
+            )
+
+        return {
+            "enabled": _dedup_enabled(),
+            "dry_run": dry_run,
+            "chunk_count": len(chunks),
+            "updated_chunk_count": len(changed_chunks),
+            "document_count": len(grouped),
+            "updated_document_count": len(updated_document_ids),
+            "updated_document_ids": updated_document_ids,
+            "deduplication": dedup_trace,
+            "dense_index": dense_index_trace,
+            "candidate_index": index_trace,
+            "latency_ms": _latency_ms(started_at),
+        }
+
+    def rebuild_dedup_index(self, *, refresh: bool = True) -> dict[str, object]:
+        """Rebuild the Neon candidate index from current chunk metadata.
+
+        Reads chunks once (from the TTL cache, or S3 when ``refresh=True``) and
+        replaces the whole ``dedup_candidates`` table — no re-detection, no
+        re-embedding. This is the slow-but-occasional path; normal page loads
+        read straight from Neon.
+        """
+
+        from agentic_rag.autodata_eval import dedup_store
+
+        started_at = time.perf_counter()
+        chunks = self._cached_all_chunks(refresh=refresh)
+        document_count = len(
+            {c.metadata.get("document_id") for c in chunks if c.metadata.get("document_id")}
+        )
+        rows = _dedup_candidate_rows(chunks)
+        written = dedup_store.replace_all_candidates(rows)
+        dedup_store.upsert_corpus_stats(chunk_count=len(chunks), document_count=document_count)
+        return {
+            "chunk_count": len(chunks),
+            "document_count": document_count,
+            "candidate_rows": written,
+            "latency_ms": _latency_ms(started_at),
+        }
+
+    def dedup_review_items(
+        self,
+        *,
+        layer: str | None = None,
+        status: str | None = None,
+        source_type: str | None = None,
+        q: str | None = None,
+        limit: int = 500,
+        refresh: bool = False,
+    ) -> list[dict[str, object]]:
+        """Build duplicate candidates straight from chunk metadata (no Neon).
+
+        Used by the rebuild path and tests; the live review endpoint reads from
+        the Neon index instead. Chunks come from the in-memory TTL cache.
+        """
+
+        chunks = self._cached_all_chunks(refresh=refresh)
+        return _dedup_review_items(
+            chunks,
+            layer=layer,
+            status=status,
+            source_type=source_type,
+            q=q,
+            limit=limit,
+        )
+
+    def knowledge_quality_report(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        methods: list[str] | None = None,
+    ) -> KnowledgeQualityReport:
+        """Return a fresh deterministic quality report for stored local chunks."""
+
+        selected_document_ids = _selected_document_ids(document_ids)
+        all_chunks = self._chunks_for_documents(None)
+        target_chunk_ids = _target_quality_chunk_ids(
+            chunks=all_chunks,
+            document_ids=selected_document_ids,
+        )
+        if selected_document_ids is not None and not target_chunk_ids:
+            raise ValueError(
+                "Document not found or has no chunks: " + ", ".join(selected_document_ids)
+            )
+
+        selected_methods, llm_client = _quality_method_runtime(methods)
+        report = analyze_chunks(
+            all_chunks,
+            methods=selected_methods,
+            llm_client=llm_client,
+        )
+        return _filter_quality_report(
+            report=report,
+            target_chunk_ids=target_chunk_ids,
+            selected_document_ids=selected_document_ids,
+            provider=self.dataset_id,
+        )
+
+    def rescan_knowledge_quality(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        methods: list[str] | None = None,
+    ) -> KnowledgeQualityReport:
+        """Recompute quality metadata and persist only after every method succeeds."""
+
+        selected_document_ids = _selected_document_ids(document_ids)
+        all_chunks = self._chunks_for_documents(None)
+        target_chunks = _target_quality_chunks(
+            chunks=all_chunks,
+            document_ids=selected_document_ids,
+        )
+        if selected_document_ids is not None and not target_chunks:
+            raise ValueError(
+                "Document not found or has no chunks: " + ", ".join(selected_document_ids)
+            )
+        selected_methods, llm_client = _quality_method_runtime(methods)
+        report = analyze_chunks(
+            all_chunks,
+            methods=selected_methods,
+            llm_client=llm_client,
+        )
+        annotated_chunks = annotate_chunks_with_quality(
+            target_chunks,
+            report=report,
+        )
+        self._persist_quality_annotations(annotated_chunks)
+        target_chunk_ids = {chunk.chunk_id for chunk in target_chunks}
+        return _filter_quality_report(
+            report=report,
+            target_chunk_ids=target_chunk_ids,
+            selected_document_ids=selected_document_ids,
+            provider=self.dataset_id,
+        )
+
     def delete_all_documents(self) -> int:
         """Delete all source documents, chunks, files and vectors."""
         import shutil
 
         count = 0
+        self._invalidate_dedup_chunk_cache()
+        _replace_all_candidate_index([], rows=[])
         _delete_all_dense_embeddings()
         if self._source_store is not None:
             count = self._source_store.delete_all_documents()
@@ -619,6 +897,8 @@ class LocalPdfEvidenceProvider:
         """Delete one source document and all its chunks from store and disk."""
         import shutil
 
+        self._invalidate_dedup_chunk_cache()
+        _delete_document_candidate_index(document_id)
         _delete_dense_document(document_id)
         if self._source_store is not None:
             self._source_store.delete_document(document_id)
@@ -748,6 +1028,7 @@ class LocalPdfEvidenceProvider:
                     request.question,
                     document_ids=request.document_ids,
                     top_k=request.page_size or _default_page_size(),
+                    exclude_dedup_layers=request.exclude_dedup_layers or None,
                 )
             )
 
@@ -821,6 +1102,13 @@ class LocalPdfEvidenceProvider:
         payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
         chunk_path.write_text(f"{payload}\n" if payload else "", encoding="utf-8")
 
+    def _replace_document_chunks(self, *, document_id: str, chunks: list[Chunk]) -> None:
+        self._invalidate_dedup_chunk_cache()
+        if self._source_store is not None:
+            self._source_store.replace_document_chunks(document_id, chunks)
+            return
+        self._write_chunks(document_id=document_id, chunks=chunks)
+
     def _write_source_store(
         self,
         *,
@@ -864,6 +1152,7 @@ class LocalPdfEvidenceProvider:
         markdown_path: Path | None,
         metadata: dict[str, object],
         chunks: list[Chunk],
+        precomputed_dense_vectors: list[list[float]] | None = None,
     ) -> tuple[dict[str, object], dict[str, object]]:
         source_store_trace = self._write_source_store(
             document_id=document_id,
@@ -876,7 +1165,10 @@ class LocalPdfEvidenceProvider:
             chunks=chunks,
         )
         try:
-            dense_index_trace = _upsert_dense_embeddings_safely(chunks)
+            dense_index_trace = _upsert_dense_embeddings_safely(
+                chunks,
+                precomputed_dense_vectors=precomputed_dense_vectors,
+            )
         except Exception as exc:
             if _qdrant_vector_store_enabled() and self._source_store is not None:
                 try:
@@ -889,7 +1181,110 @@ class LocalPdfEvidenceProvider:
                     f"Qdrant upsert failed; source storage was rolled back: {exc}"
                 ) from exc
             raise
+        finally:
+            self._invalidate_dedup_chunk_cache()
         return source_store_trace, dense_index_trace
+
+    def _apply_dedup_to_new_chunks(
+        self,
+        *,
+        document_id: str,
+        chunks: list[Chunk],
+    ) -> tuple[list[Chunk], dict[str, object], list[list[float]] | None]:
+        """Mark duplicate candidates among the new chunks (new-vs-existing scope).
+
+        Layers 1+2 compare fingerprints of the new chunks against the existing
+        corpus only — never existing-vs-existing, which the backfill already
+        covered. Layer 3 embeds the new chunks once, queries Qdrant (HNSW) for
+        semantically similar indexed chunks, and returns those vectors so the
+        subsequent upsert skips its own embedding pass.
+        """
+        clean_chunks = remove_duplicate_metadata_from_chunks(chunks)
+        if not _dedup_enabled():
+            return clean_chunks, _empty_dedup_trace(reason="disabled"), None
+        if not clean_chunks:
+            return clean_chunks, _empty_dedup_trace(reason="no_chunks"), None
+
+        existing_chunks = [
+            chunk
+            for chunk in self._cached_all_chunks()
+            if str(chunk.metadata.get("document_id") or "") != document_id
+        ]
+        existing_clean_chunks = remove_duplicate_metadata_from_chunks(existing_chunks)
+        sorted_existing = _canonical_sorted_chunks(
+            existing_clean_chunks,
+            document_metadata={},
+            eval_reference_ids=set(),
+        )
+
+        config = _dedup_config()
+        exact_matches, simhash_matches, flagged_chunk_ids = _scoped_exact_and_simhash_matches(
+            new_chunks=clean_chunks,
+            existing_chunks=sorted_existing,
+            config=config,
+        )
+        matched_pairs = {
+            _dedup_pair_key(match.document_id, match.duplicate_document_id)
+            for match in [*exact_matches, *simhash_matches]
+        }
+        embedding_matches, dense_vectors, embedding_status, embedding_error = (
+            _scoped_embedding_matches(
+                new_chunks=clean_chunks,
+                document_id=document_id,
+                config=config,
+                has_existing_corpus=bool(sorted_existing),
+                exclude_pairs=matched_pairs,
+                exclude_chunk_ids=flagged_chunk_ids,
+            )
+        )
+        report = DedupReport(
+            document_count=len(sorted_existing) + len(clean_chunks),
+            exact_matches=exact_matches,
+            simhash_matches=simhash_matches,
+            embedding_matches=embedding_matches,
+        )
+        enriched_chunks = add_duplicate_metadata_to_chunks(
+            clean_chunks,
+            report,
+            reference_chunks=[*sorted_existing, *clean_chunks],
+        )
+        candidate_chunk_ids = [
+            chunk.chunk_id for chunk in enriched_chunks if DEDUP_METADATA_KEY in chunk.metadata
+        ]
+        _replace_document_candidate_index(
+            document_id,
+            new_chunks=enriched_chunks,
+            resolver_chunks=[*sorted_existing, *enriched_chunks],
+        )
+        dedup_trace: dict[str, object] = {
+            "enabled": True,
+            "comparison_scope": "new_vs_existing",
+            "target_chunk_count": len(clean_chunks),
+            "corpus_chunk_count": len(sorted_existing) + len(clean_chunks),
+            "match_count": len(report.matches),
+            "candidate_count": len(candidate_chunk_ids),
+            "candidate_chunk_ids": candidate_chunk_ids,
+            "exact_matches": len(exact_matches),
+            "simhash_matches": len(simhash_matches),
+            "embedding_matches": len(embedding_matches),
+            "embedding_enabled": config.enable_embedding,
+            "embedding_status": embedding_status,
+            "embedding_error": embedding_error,
+            "embedding_method": "qdrant_query",
+            "simhash_hamming_threshold": config.simhash_hamming_threshold,
+            "embedding_similarity_threshold": config.embedding_similarity_threshold,
+        }
+        dedup_trace["canonical_policy"] = _dedup_canonical_policy_trace(
+            mode="existing_before_new",
+            eval_reference_ids=set(),
+            eval_reference_error=None,
+            document_metadata_count=0,
+        )
+        return enriched_chunks, dedup_trace, dense_vectors
+
+    def _dedup_document_sort_metadata(self) -> dict[str, dict[str, object]]:
+        documents = self.list_documents(include_chunks=False)
+        return {document.document_id: document.metadata for document in documents}
 
     def _write_markdown(self, *, document_id: str, markdown: str) -> Path | None:
         if not markdown:
@@ -963,6 +1358,66 @@ class LocalPdfEvidenceProvider:
         for chunk_path in sorted(self._chunks_dir.glob("*.jsonl")):
             all_chunks.extend(self._read_chunks(chunk_path.stem))
         return all_chunks
+
+    def _dedup_cache_key(self) -> str:
+        store_label = type(self._source_store).__name__ if self._source_store else "jsonl"
+        return f"{store_label}|{self._store_dir}"
+
+    def _cached_all_chunks(self, *, refresh: bool = False) -> list[Chunk]:
+        key = self._dedup_cache_key()
+        ttl = _dedup_chunk_cache_ttl_seconds()
+        now = time.monotonic()
+        if not refresh and ttl > 0:
+            cached = _DEDUP_CHUNK_CACHE.get(key)
+            if cached is not None and now - cached[0] <= ttl:
+                return cached[1]
+        chunks = self._chunks_for_documents(None)
+        _DEDUP_CHUNK_CACHE[key] = (now, chunks)
+        return chunks
+
+    def _invalidate_dedup_chunk_cache(self) -> None:
+        _DEDUP_CHUNK_CACHE.pop(self._dedup_cache_key(), None)
+
+    def _quality_context_chunks(self, *, document_id: str) -> list[Chunk]:
+        try:
+            chunks = self._chunks_for_documents(None)
+        except AttributeError:
+            return []
+        return [chunk for chunk in chunks if _chunk_document_id(chunk) != document_id]
+
+    def _persist_quality_annotations(self, chunks: list[Chunk]) -> None:
+        if self._source_store is not None:
+            return
+
+        chunks_by_document: dict[str, list[Chunk]] = {}
+        for chunk in chunks:
+            document_id = _chunk_document_id(chunk)
+            if document_id is None:
+                continue
+            chunks_by_document.setdefault(document_id, []).append(chunk)
+
+        original_payloads = {
+            document_id: (
+                self._chunk_path(document_id).read_bytes()
+                if self._chunk_path(document_id).exists()
+                else None
+            )
+            for document_id in chunks_by_document
+        }
+        attempted_document_ids: list[str] = []
+        try:
+            for document_id, document_chunks in chunks_by_document.items():
+                attempted_document_ids.append(document_id)
+                self._write_chunks(document_id=document_id, chunks=document_chunks)
+        except Exception:
+            for document_id in attempted_document_ids:
+                chunk_path = self._chunk_path(document_id)
+                original_payload = original_payloads[document_id]
+                if original_payload is None:
+                    chunk_path.unlink(missing_ok=True)
+                else:
+                    chunk_path.write_bytes(original_payload)
+            raise
 
     def _chunk_path(self, document_id: str) -> Path:
         safe_document_id = _safe_document_id(document_id)
@@ -1079,6 +1534,798 @@ def _chunks_with_local_metadata(
     ]
 
 
+def _dedup_enrich_chunks(
+    *,
+    corpus_chunks: list[Chunk],
+    target_chunks: list[Chunk],
+    strict_embedding: bool,
+) -> tuple[list[Chunk], dict[str, object]]:
+    if not _dedup_enabled():
+        return target_chunks, _empty_dedup_trace(reason="disabled")
+    if not target_chunks or not corpus_chunks:
+        return target_chunks, _empty_dedup_trace(reason="no_chunks")
+
+    config = _dedup_config()
+    embedding_error = None
+    embedding_status = "disabled"
+    resolved_config = config
+    try:
+        report = detect_duplicates(
+            documents_from_chunks(corpus_chunks),
+            config=config,
+        )
+        embedding_status = "completed" if config.enable_embedding else "disabled"
+    except Exception as exc:
+        if strict_embedding or not config.enable_embedding:
+            raise
+        embedding_error = str(exc)
+        resolved_config = config.model_copy(update={"enable_embedding": False})
+        report = detect_duplicates(
+            documents_from_chunks(corpus_chunks),
+            config=resolved_config,
+        )
+        embedding_status = "fallback_without_embedding"
+
+    enriched = add_duplicate_metadata_to_chunks(
+        target_chunks,
+        report,
+        reference_chunks=corpus_chunks,
+    )
+    candidate_chunk_ids = [
+        chunk.chunk_id for chunk in enriched if DEDUP_METADATA_KEY in chunk.metadata
+    ]
+    trace = {
+        "enabled": True,
+        "target_chunk_count": len(target_chunks),
+        "corpus_chunk_count": len(corpus_chunks),
+        "match_count": len(report.matches),
+        "candidate_count": len(candidate_chunk_ids),
+        "candidate_chunk_ids": candidate_chunk_ids,
+        "exact_matches": len(report.exact_matches),
+        "simhash_matches": len(report.simhash_matches),
+        "embedding_matches": len(report.embedding_matches),
+        "embedding_enabled": resolved_config.enable_embedding,
+        "embedding_status": embedding_status,
+        "embedding_error": embedding_error,
+        "simhash_hamming_threshold": resolved_config.simhash_hamming_threshold,
+        "embedding_similarity_threshold": resolved_config.embedding_similarity_threshold,
+    }
+    return enriched, trace
+
+
+def _scoped_exact_and_simhash_matches(
+    *,
+    new_chunks: list[Chunk],
+    existing_chunks: list[Chunk],
+    config: DedupConfig,
+) -> tuple[list[DuplicateMatch], list[DuplicateMatch], set[str]]:
+    """Find Layer 1+2 matches comparing new chunks against existing (+ earlier new) only.
+
+    Returns ``(exact_matches, simhash_matches, flagged_new_chunk_ids)``.
+    ``flagged_new_chunk_ids`` contains every new-chunk id caught by L1 OR L2 so
+    that the caller can skip those chunks entirely in Layer 3 (chunk-level cascade).
+
+    O(new x corpus) instead of the O(corpus^2) full-pairwise scan in
+    ``detect_duplicates`` — existing-vs-existing pairs were already reported when
+    those chunks themselves were uploaded (or by the backfill).
+    """
+    exact_matches: list[DuplicateMatch] = []
+    simhash_matches: list[DuplicateMatch] = []
+    bits = config.simhash_bits
+    shingle_size = config.simhash_shingle_size
+
+    existing_by_hash: dict[str, str] = {}
+    existing_simhash: list[tuple[str, int]] = []
+    for chunk in existing_chunks:
+        if config.enable_exact:
+            existing_by_hash.setdefault(sha256_fingerprint(chunk.text), chunk.chunk_id)
+        if config.enable_simhash:
+            simhash_value = simhash_fingerprint(chunk.text, bits=bits, shingle_size=shingle_size)
+            existing_simhash.append((chunk.chunk_id, simhash_value))
+
+    matched_pairs: set[tuple[str, str]] = set()
+    flagged_new_chunk_ids: set[str] = set()
+    seen_new_by_hash: dict[str, str] = {}
+    new_simhash: list[tuple[str, int]] = []
+
+    for chunk in new_chunks:
+        if config.enable_exact:
+            fingerprint = sha256_fingerprint(chunk.text)
+            canonical_id = existing_by_hash.get(fingerprint) or seen_new_by_hash.get(fingerprint)
+            if canonical_id and canonical_id != chunk.chunk_id:
+                exact_matches.append(
+                    DuplicateMatch(
+                        layer="exact_sha256",
+                        document_id=canonical_id,
+                        duplicate_document_id=chunk.chunk_id,
+                        score=1.0,
+                        distance=0,
+                        fingerprint=fingerprint,
+                        reason="same normalized text SHA-256",
+                    )
+                )
+                matched_pairs.add(_dedup_pair_key(canonical_id, chunk.chunk_id))
+                flagged_new_chunk_ids.add(chunk.chunk_id)
+            seen_new_by_hash.setdefault(fingerprint, chunk.chunk_id)
+
+        # Chunk-level cascade: skip L2 if this chunk was already caught by L1.
+        if config.enable_simhash and chunk.chunk_id not in flagged_new_chunk_ids:
+            chunk_hash = simhash_fingerprint(chunk.text, bits=bits, shingle_size=shingle_size)
+            for canonical_id, canonical_hash in (*existing_simhash, *new_simhash):
+                pair = _dedup_pair_key(canonical_id, chunk.chunk_id)
+                if pair in matched_pairs:
+                    continue
+                distance = hamming_distance(canonical_hash, chunk_hash)
+                if distance > config.simhash_hamming_threshold:
+                    continue
+                simhash_matches.append(
+                    DuplicateMatch(
+                        layer="simhash",
+                        document_id=canonical_id,
+                        duplicate_document_id=chunk.chunk_id,
+                        score=round(1.0 - (distance / bits), 6),
+                        distance=distance,
+                        fingerprint=f"{canonical_hash:0{bits // 4}x}:{chunk_hash:0{bits // 4}x}",
+                        reason="SimHash Hamming distance within threshold",
+                        metadata={
+                            "bits": bits,
+                            "shingle_size": shingle_size,
+                            "hamming_threshold": config.simhash_hamming_threshold,
+                        },
+                    )
+                )
+                matched_pairs.add(pair)
+                flagged_new_chunk_ids.add(chunk.chunk_id)
+                break  # one match per chunk is enough; stop checking other canonicals
+            new_simhash.append((chunk.chunk_id, chunk_hash))
+
+    return exact_matches, simhash_matches, flagged_new_chunk_ids
+
+
+def _scoped_embedding_matches(
+    *,
+    new_chunks: list[Chunk],
+    document_id: str,
+    config: DedupConfig,
+    has_existing_corpus: bool,
+    exclude_pairs: set[tuple[str, str]],
+    exclude_chunk_ids: set[str] | None = None,
+) -> tuple[list[DuplicateMatch], list[list[float]] | None, str, str | None]:
+    """Layer 3 via Qdrant: embed new chunks once, HNSW-query indexed chunks.
+
+    Returns ``(matches, dense_vectors, status, error)``. Vectors come back even
+    when the query step fails so the caller can still reuse them for indexing.
+    The new chunks are not in Qdrant yet at this point, and re-uploaded versions
+    of the same document are excluded by document_id filter — no self matches.
+    Chunks in ``exclude_chunk_ids`` (already flagged by L1/L2) are skipped entirely.
+    """
+    if not config.enable_embedding:
+        return [], None, "disabled", None
+    if not _qdrant_vector_store_enabled():
+        return [], None, "skipped_no_qdrant", None
+
+    excluded_chunks = exclude_chunk_ids or set()
+    eligible_chunks = [c for c in new_chunks if c.chunk_id not in excluded_chunks]
+    if not eligible_chunks:
+        return [], None, "all_chunks_already_flagged", None
+
+    try:
+        vectors = embed_chunk_texts([chunk.text for chunk in eligible_chunks])
+    except Exception as exc:
+        return [], None, "embed_failed", str(exc)
+    if not has_existing_corpus:
+        return [], vectors, "no_existing_corpus", None
+
+    try:
+        hits_per_chunk = qdrant_similar_by_vectors(
+            vectors,
+            exclude_document_id=document_id,
+            score_threshold=config.embedding_similarity_threshold,
+            top_k=5,
+        )
+    except Exception as exc:
+        return [], vectors, "query_failed", str(exc)
+
+    matches: list[DuplicateMatch] = []
+    for chunk, hits in zip(eligible_chunks, hits_per_chunk, strict=True):
+        for hit in hits:
+            canonical_id = str(hit.get("chunk_id") or "")
+            if not canonical_id or canonical_id == chunk.chunk_id:
+                continue
+            pair = _dedup_pair_key(canonical_id, chunk.chunk_id)
+            if pair in exclude_pairs:
+                continue
+            raw_score = hit.get("score")
+            score_value = float(raw_score) if isinstance(raw_score, int | float) else 0.0
+            score = min(max(score_value, 0.0), 1.0)
+            if score < config.embedding_similarity_threshold:
+                continue
+            matches.append(
+                DuplicateMatch(
+                    layer="embedding_similarity",
+                    document_id=canonical_id,
+                    duplicate_document_id=chunk.chunk_id,
+                    score=round(score, 6),
+                    reason="embedding cosine similarity above threshold",
+                    metadata={
+                        "similarity_threshold": config.embedding_similarity_threshold,
+                        "method": "qdrant_query",
+                        "canonical_document_id": hit.get("document_id"),
+                    },
+                )
+            )
+            exclude_pairs.add(pair)
+    return matches, vectors, "completed", None
+
+
+def _dedup_pair_key(left: str, right: str) -> tuple[str, str]:
+    return (left, right) if left <= right else (right, left)
+
+
+def _canonical_sorted_chunks(
+    chunks: list[Chunk],
+    *,
+    document_metadata: dict[str, dict[str, object]],
+    eval_reference_ids: set[str],
+) -> list[Chunk]:
+    return sorted(
+        chunks,
+        key=lambda chunk: _canonical_chunk_sort_key(
+            chunk,
+            document_metadata=document_metadata,
+            eval_reference_ids=eval_reference_ids,
+        ),
+    )
+
+
+def _canonical_chunk_sort_key(
+    chunk: Chunk,
+    *,
+    document_metadata: dict[str, dict[str, object]],
+    eval_reference_ids: set[str],
+) -> tuple[int, int, str, str, int, str]:
+    metadata = chunk.metadata
+    document_id = str(metadata.get("document_id") or "")
+    doc_metadata = document_metadata.get(document_id, {})
+    created_at = _first_metadata_text(
+        metadata,
+        doc_metadata,
+        keys=("created_at", "ingested_at", "uploaded_at", "created", "timestamp"),
+    )
+    return (
+        0
+        if _chunk_has_eval_reference(
+            chunk,
+            doc_metadata=doc_metadata,
+            eval_reference_ids=eval_reference_ids,
+        )
+        else 1,
+        0 if created_at else 1,
+        created_at,
+        document_id,
+        _chunk_index_sort_value(metadata),
+        chunk.chunk_id,
+    )
+
+
+def _chunk_has_eval_reference(
+    chunk: Chunk,
+    *,
+    doc_metadata: dict[str, object],
+    eval_reference_ids: set[str],
+) -> bool:
+    document_id = str(chunk.metadata.get("document_id") or "")
+    if chunk.chunk_id in eval_reference_ids or document_id in eval_reference_ids:
+        return True
+
+    for metadata in (chunk.metadata, doc_metadata):
+        for key in (
+            "has_eval_reference",
+            "is_eval_reference",
+            "eval_reference_count",
+            "eval_question_count",
+            "source_question_count",
+            "approved_question_count",
+            "question_count",
+        ):
+            if _truthy_metadata_value(metadata.get(key)):
+                return True
+    return False
+
+
+def _truthy_metadata_value(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value > 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized not in {"", "0", "false", "no", "none", "null"}
+    return value is not None
+
+
+def _first_metadata_text(
+    *metadata_sources: dict[str, object],
+    keys: tuple[str, ...],
+) -> str:
+    for metadata in metadata_sources:
+        for key in keys:
+            value = metadata.get(key)
+            if value is None or value == "":
+                continue
+            return str(value)
+    return ""
+
+
+def _chunk_index_sort_value(metadata: dict[str, object]) -> int:
+    direct = _metadata_int(metadata, "chunk_index")
+    if direct is not None:
+        return direct
+    for key in ("storage_chunk_id", "chunk_id"):
+        raw = str(metadata.get(key) or "")
+        match = re.search(r"(?::|_c)(\d+)$", raw)
+        if match:
+            return int(match.group(1))
+    return 1_000_000
+
+
+def _load_eval_reference_ids() -> tuple[set[str], str | None]:
+    if not os.getenv("NEON_CONNECTION", "").strip():
+        return set(), None
+
+    queries = (
+        """
+        SELECT document_id, source_chunk_ids
+        FROM eval_questions
+        WHERE deleted_at IS NULL
+        """,
+        """
+        SELECT document_id, source_chunk_ids
+        FROM eval_questions
+        """,
+    )
+    last_error: str | None = None
+    for query in queries:
+        try:
+            from agentic_rag.autodata_eval.db import get_conn
+
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+        except Exception as exc:
+            last_error = str(exc)
+            continue
+
+        reference_ids: set[str] = set()
+        for row in rows:
+            _add_eval_reference_value(reference_ids, row.get("document_id"))
+            _add_eval_reference_value(reference_ids, row.get("source_chunk_ids"))
+        return reference_ids, None
+
+    return set(), last_error
+
+
+def _add_eval_reference_value(reference_ids: set[str], value: object) -> None:
+    if value is None:
+        return
+    if isinstance(value, dict):
+        for nested in value.values():
+            _add_eval_reference_value(reference_ids, nested)
+        return
+    if isinstance(value, list | tuple | set):
+        for nested in value:
+            _add_eval_reference_value(reference_ids, nested)
+        return
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return
+        if stripped.startswith("[") or stripped.startswith("{"):
+            with suppress(ValueError, TypeError):
+                parsed = json.loads(stripped)
+                if parsed != stripped:
+                    _add_eval_reference_value(reference_ids, parsed)
+                    return
+        parts = [
+            part.strip().strip("\"'")
+            for part in re.split(r",|\s+", stripped.strip("{}[]"))
+            if part.strip().strip("\"'")
+        ]
+        if len(parts) > 1:
+            for part in parts:
+                reference_ids.add(part)
+            return
+        reference_ids.add(stripped.strip("\"'"))
+        return
+    reference_ids.add(str(value))
+
+
+def _dedup_canonical_policy_trace(
+    *,
+    mode: str,
+    eval_reference_ids: set[str],
+    eval_reference_error: str | None,
+    document_metadata_count: int,
+) -> dict[str, object]:
+    trace: dict[str, object] = {
+        "mode": mode,
+        "priority": [
+            "eval_referenced_document_or_chunk",
+            "older_created_at",
+            "document_id",
+            "chunk_index",
+            "chunk_id",
+        ],
+        "eval_reference_count": len(eval_reference_ids),
+        "document_metadata_count": document_metadata_count,
+    }
+    if eval_reference_error:
+        trace["eval_reference_error"] = eval_reference_error
+    return trace
+
+
+# Module-level chunk cache for the dedup review endpoint + upload-time dedup.
+# Reading every chunk from S3 takes minutes; mutations invalidate the entry so
+# the cache never serves data older than the last write from this process.
+_DEDUP_CHUNK_CACHE: dict[str, tuple[float, list[Chunk]]] = {}
+
+
+def _dedup_chunk_cache_ttl_seconds() -> float:
+    raw = os.getenv("DEDUP_REVIEW_CACHE_TTL_SECONDS", "300")
+    try:
+        return max(float(raw), 0.0)
+    except ValueError:
+        return 300.0
+
+
+def _dedup_config() -> DedupConfig:
+    return DedupConfig(
+        enable_exact=_env_flag_default("DEDUP_ENABLE_EXACT", True),
+        enable_simhash=_env_flag_default("DEDUP_ENABLE_SIMHASH", True),
+        enable_embedding=_env_flag_default("DEDUP_ENABLE_EMBEDDING", True),
+        simhash_bits=_env_int("DEDUP_SIMHASH_BITS", 64),
+        simhash_shingle_size=_env_int("DEDUP_SIMHASH_SHINGLE_SIZE", 4),
+        simhash_hamming_threshold=_env_int("DEDUP_SIMHASH_HAMMING_THRESHOLD", 6),
+        embedding_similarity_threshold=_env_float("DEDUP_EMBEDDING_SIMILARITY_THRESHOLD", 0.92),
+        embedding_method=os.getenv("DEDUP_EMBEDDING_METHOD") or None,
+    )
+
+
+def _empty_dedup_trace(*, reason: str) -> dict[str, object]:
+    return {
+        "enabled": _dedup_enabled(),
+        "reason": reason,
+        "target_chunk_count": 0,
+        "corpus_chunk_count": 0,
+        "match_count": 0,
+        "candidate_count": 0,
+        "candidate_chunk_ids": [],
+        "exact_matches": 0,
+        "simhash_matches": 0,
+        "embedding_matches": 0,
+        "embedding_enabled": False,
+        "embedding_status": "skipped",
+        "embedding_error": None,
+    }
+
+
+def _chunks_by_document(chunks: list[Chunk]) -> dict[str, list[Chunk]]:
+    grouped: dict[str, list[Chunk]] = {}
+    for chunk in chunks:
+        document_id = str(chunk.metadata.get("document_id") or "")
+        if not document_id:
+            document_id = _document_id_from_chunks([chunk], fallback="document")
+        grouped.setdefault(document_id, []).append(chunk)
+    return grouped
+
+
+def _dedup_review_items(
+    chunks: list[Chunk],
+    *,
+    layer: str | None,
+    status: str | None,
+    source_type: str | None,
+    q: str | None,
+    limit: int,
+) -> list[dict[str, object]]:
+    resolved_limit = max(min(limit, 2000), 1)
+    normalized_layer = layer.strip().lower() if layer else None
+    normalized_status = status.strip().lower() if status else None
+    normalized_source_type = source_type.strip().lower() if source_type else None
+    normalized_query = _normalize_text(q) if q else ""
+    chunk_by_id = {chunk.chunk_id: chunk for chunk in chunks}
+    items: list[dict[str, object]] = []
+
+    for duplicate_chunk in chunks:
+        dedup_metadata = duplicate_chunk.metadata.get(DEDUP_METADATA_KEY)
+        if not isinstance(dedup_metadata, dict):
+            continue
+        review_status = str(dedup_metadata.get("review_status") or "pending")
+        duplicate_status = str(dedup_metadata.get("status") or "duplicate_candidate")
+        if normalized_status and normalized_status not in {
+            review_status.lower(),
+            duplicate_status.lower(),
+        }:
+            continue
+        if normalized_source_type:
+            duplicate_source_type = str(duplicate_chunk.metadata.get("source_type") or "").lower()
+            if duplicate_source_type != normalized_source_type:
+                continue
+
+        matches = dedup_metadata.get("matches")
+        if not isinstance(matches, list):
+            continue
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+            detected_layer = str(match.get("detected_layer") or "")
+            if normalized_layer and detected_layer.lower() != normalized_layer:
+                continue
+            canonical_chunk_id = str(match.get("canonical_chunk_id") or "")
+            canonical_chunk = chunk_by_id.get(canonical_chunk_id)
+            item = {
+                "id": "::".join(
+                    [
+                        canonical_chunk_id or "missing",
+                        duplicate_chunk.chunk_id,
+                        detected_layer or "unknown",
+                    ]
+                ),
+                "status": duplicate_status,
+                "review_status": review_status,
+                "layer": detected_layer,
+                "score": match.get("score"),
+                "distance": match.get("distance"),
+                "reason": match.get("reason"),
+                "group_id": dedup_metadata.get("group_id"),
+                "canonical": _dedup_chunk_summary(canonical_chunk),
+                "duplicate": _dedup_chunk_summary(duplicate_chunk),
+            }
+            if normalized_query and normalized_query not in _normalize_text(str(item)):
+                continue
+            items.append(item)
+            if len(items) >= resolved_limit:
+                return items
+    return items
+
+
+def _dedup_chunk_summary(chunk: Chunk | None) -> dict[str, object] | None:
+    if chunk is None:
+        return None
+    metadata = chunk.metadata
+    return {
+        "chunk_id": chunk.chunk_id,
+        "document_id": metadata.get("document_id"),
+        "document_name": metadata.get("document_name") or metadata.get("file_name"),
+        "source_type": metadata.get("source_type"),
+        "source": metadata.get("source") or metadata.get("url"),
+        "page": metadata.get("page"),
+        "section": metadata.get("section"),
+        "text": chunk.text,
+        "metadata": metadata,
+    }
+
+
+def _dedup_candidate_rows(
+    chunks: list[Chunk],
+    *,
+    resolver_chunks: list[Chunk] | None = None,
+) -> list[dict[str, object]]:
+    """Flatten duplicate-candidate chunk metadata into Neon-index rows.
+
+    Iterates the duplicate (flagged) chunks; ``resolver_chunks`` supplies the
+    wider set used to resolve each canonical chunk's text/source (the canonical
+    side may live outside ``chunks`` during an incremental upload).
+    """
+    chunk_by_id = {chunk.chunk_id: chunk for chunk in (resolver_chunks or chunks)}
+    rows: list[dict[str, object]] = []
+    for duplicate_chunk in chunks:
+        dedup_metadata = duplicate_chunk.metadata.get(DEDUP_METADATA_KEY)
+        if not isinstance(dedup_metadata, dict):
+            continue
+        matches = dedup_metadata.get("matches")
+        if not isinstance(matches, list):
+            continue
+        review_status = str(dedup_metadata.get("review_status") or "pending")
+        status = str(dedup_metadata.get("status") or "duplicate_candidate")
+        group_id = _coerce_text(dedup_metadata.get("group_id"))
+        duplicate = _dedup_chunk_summary(duplicate_chunk) or {}
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+            layer = str(match.get("detected_layer") or "")
+            canonical_chunk_id = str(match.get("canonical_chunk_id") or "")
+            canonical = _dedup_chunk_summary(chunk_by_id.get(canonical_chunk_id)) or {}
+            rows.append(
+                {
+                    "id": "::".join(
+                        [
+                            canonical_chunk_id or "missing",
+                            duplicate_chunk.chunk_id,
+                            layer or "unknown",
+                        ]
+                    ),
+                    "layer": layer,
+                    "score": _coerce_float(match.get("score")),
+                    "distance": _coerce_int(match.get("distance")),
+                    "reason": _coerce_text(match.get("reason")),
+                    "group_id": group_id,
+                    "status": status,
+                    "review_status": review_status,
+                    "duplicate_chunk_id": duplicate_chunk.chunk_id,
+                    "duplicate_document_id": _coerce_text(duplicate.get("document_id")),
+                    "duplicate_document_name": _coerce_text(duplicate.get("document_name")),
+                    "duplicate_source_type": _coerce_text(duplicate.get("source_type")),
+                    "duplicate_source": _coerce_text(duplicate.get("source")),
+                    "duplicate_section": _coerce_text(duplicate.get("section")),
+                    "duplicate_page": _coerce_text(duplicate.get("page")),
+                    "duplicate_text": str(duplicate.get("text") or ""),
+                    "canonical_chunk_id": _coerce_text(canonical.get("chunk_id")),
+                    "canonical_document_id": _coerce_text(canonical.get("document_id")),
+                    "canonical_document_name": _coerce_text(canonical.get("document_name")),
+                    "canonical_source_type": _coerce_text(canonical.get("source_type")),
+                    "canonical_source": _coerce_text(canonical.get("source")),
+                    "canonical_section": _coerce_text(canonical.get("section")),
+                    "canonical_page": _coerce_text(canonical.get("page")),
+                    "canonical_text": str(canonical.get("text") or ""),
+                }
+            )
+    return rows
+
+
+def _coerce_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _coerce_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return None
+
+
+def _coerce_text(value: object) -> str | None:
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
+def _replace_all_candidate_index(
+    chunks: list[Chunk],
+    *,
+    rows: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """Mirror every candidate into the Neon index (non-fatal on failure)."""
+    try:
+        from agentic_rag.autodata_eval import dedup_store
+
+        candidate_rows = rows if rows is not None else _dedup_candidate_rows(chunks)
+        written = dedup_store.replace_all_candidates(candidate_rows)
+        return {"enabled": True, "candidate_rows": written}
+    except Exception as exc:
+        logger.exception("Failed to rebuild dedup candidate index in Neon")
+        return {"enabled": False, "error": str(exc)}
+
+
+def _replace_document_candidate_index(
+    document_id: str,
+    *,
+    new_chunks: list[Chunk],
+    resolver_chunks: list[Chunk],
+) -> None:
+    """Sync one document's candidate rows in Neon (non-fatal on failure)."""
+    try:
+        from agentic_rag.autodata_eval import dedup_store
+
+        rows = _dedup_candidate_rows(new_chunks, resolver_chunks=resolver_chunks)
+        dedup_store.replace_document_candidates(document_id, rows)
+    except Exception:
+        logger.exception("Failed to sync dedup candidate index for %s", document_id)
+
+
+def _delete_document_candidate_index(document_id: str) -> None:
+    """Drop a deleted document's candidate rows from Neon (non-fatal)."""
+    try:
+        from agentic_rag.autodata_eval import dedup_store
+
+        dedup_store.delete_document_candidates(document_id)
+    except Exception:
+        logger.exception("Failed to delete dedup candidate index for %s", document_id)
+
+
+def _selected_document_ids(document_ids: list[str] | None) -> list[str] | None:
+    if document_ids is None:
+        return None
+    return [document_id for document_id in dict.fromkeys(document_ids) if document_id]
+
+
+def _target_quality_chunks(
+    *,
+    chunks: list[Chunk],
+    document_ids: list[str] | None,
+) -> list[Chunk]:
+    if document_ids is None:
+        return chunks
+    selected = set(document_ids)
+    return [chunk for chunk in chunks if _chunk_document_id(chunk) in selected]
+
+
+def _target_quality_chunk_ids(
+    *,
+    chunks: list[Chunk],
+    document_ids: list[str] | None,
+) -> set[str]:
+    return {
+        chunk.chunk_id for chunk in _target_quality_chunks(chunks=chunks, document_ids=document_ids)
+    }
+
+
+def _quality_method_runtime(
+    methods: list[str] | None,
+) -> tuple[list[str], LLMClient | None]:
+    selected_methods = parse_knowledge_quality_methods(methods)
+    if not MODEL_BACKED_KNOWLEDGE_QUALITY_METHODS.intersection(selected_methods):
+        return selected_methods, None
+    try:
+        client = get_explicit_llm_client("ingestion")
+    except ModelRuntimeConfigurationError as exc:
+        raise KnowledgeQualityConfigurationError(
+            f"Invalid INGESTION_LLM_* configuration: {exc}"
+        ) from exc
+    if client is None:
+        raise KnowledgeQualityConfigurationError(
+            "semantic_verifier and agentic_review require an enabled INGESTION_LLM_* profile."
+        )
+    return selected_methods, client
+
+
+def _filter_quality_report(
+    *,
+    report: KnowledgeQualityReport,
+    target_chunk_ids: set[str],
+    selected_document_ids: list[str] | None,
+    provider: str,
+) -> KnowledgeQualityReport:
+    facts = report.facts
+    findings = report.findings
+    if selected_document_ids is not None:
+        findings = [
+            finding
+            for finding in report.findings
+            if target_chunk_ids.intersection(finding.chunk_ids)
+        ]
+        related_fact_ids = {fact_id for finding in findings for fact_id in finding.fact_ids}
+        related_chunk_ids = {
+            chunk_id for finding in findings for chunk_id in finding.chunk_ids
+        } | target_chunk_ids
+        facts = [
+            fact
+            for fact in report.facts
+            if fact.chunk_id in related_chunk_ids or fact.fact_id in related_fact_ids
+        ]
+    return KnowledgeQualityReport(
+        facts=facts,
+        findings=findings,
+        metadata={
+            **report.metadata,
+            "provider": provider,
+            "selected_document_ids": selected_document_ids,
+        },
+    )
+
+
+def _chunk_document_id(chunk: Chunk) -> str | None:
+    value = chunk.metadata.get("document_id")
+    return str(value) if value else None
+
+
 def _source_store_from_env() -> LocalSourceStore | None:
     raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
     if raw_store == "s3":
@@ -1107,15 +2354,32 @@ def _source_store_trace_type(source_store: LocalSourceStore) -> str:
     return source_store.__class__.__name__
 
 
-def _upsert_dense_embeddings_safely(chunks: list[Chunk]) -> dict[str, object]:
+def _upsert_dense_embeddings_safely(
+    chunks: list[Chunk],
+    *,
+    precomputed_dense_vectors: list[list[float]] | None = None,
+) -> dict[str, object]:
     started_at = time.perf_counter()
+
+    def _upsert(target_chunks: list[Chunk]) -> dict[str, object]:
+        # Only pass the kwarg when vectors are actually supplied — keeps the
+        # single-positional-argument signature for callers and test doubles.
+        if precomputed_dense_vectors is not None and len(precomputed_dense_vectors) == len(
+            target_chunks
+        ):
+            return upsert_dense_embeddings(
+                target_chunks,
+                precomputed_dense_vectors=precomputed_dense_vectors,
+            )
+        return upsert_dense_embeddings(target_chunks)
+
     if _qdrant_vector_store_enabled():
-        trace = upsert_dense_embeddings(chunks)
+        trace = _upsert(chunks)
         return {**trace, "latency_ms": _latency_ms(started_at)}
 
     embedding_metadata = dense_embedding_metadata()
     try:
-        trace = upsert_dense_embeddings(chunks)
+        trace = _upsert(chunks)
     except Exception as exc:
         return {
             "enabled": True,
@@ -1603,6 +2867,17 @@ def _full_trace_content(key: str, value: str) -> dict[str, str]:
 
 def _env_flag(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_flag_default(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _dedup_enabled() -> bool:
+    return _env_flag_default("INGESTION_DEDUP_ENABLED", True)
 
 
 def _latency_ms(started_at: float) -> int:

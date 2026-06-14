@@ -36,6 +36,56 @@ def sample_chunks() -> list[Chunk]:
     ]
 
 
+def sample_knowledge_quality_chunks() -> list[Chunk]:
+    """Return a compact KB with duplicates and factual conflicts for demos."""
+
+    return [
+        Chunk(
+            chunk_id="quality_warranty_a_c0001",
+            text="Pin VF8 duoc bao hanh 8 nam hoac 160.000 km.",
+            metadata={"source": "warranty-a.txt", "document_id": "quality_warranty_a"},
+        ),
+        Chunk(
+            chunk_id="quality_warranty_copy_c0001",
+            text="Pin VF8 duoc bao hanh 8 nam hoac 160.000 km.",
+            metadata={"source": "warranty-copy.txt", "document_id": "quality_warranty_copy"},
+        ),
+        Chunk(
+            chunk_id="quality_warranty_near_c0001",
+            text="Pin VF8 bao hanh trong 8 nam va gioi han 160000 km.",
+            metadata={"source": "warranty-near.txt", "document_id": "quality_warranty_near"},
+        ),
+        Chunk(
+            chunk_id="quality_warranty_conflict_c0001",
+            text="Pin VF8 duoc bao hanh 6 nam hoac 160.000 km.",
+            metadata={
+                "source": "warranty-conflict.txt",
+                "document_id": "quality_warranty_conflict",
+            },
+        ),
+        Chunk(
+            chunk_id="quality_price_a_c0001",
+            text="VF9 co gia niem yet 1,2 ty dong.",
+            metadata={"source": "price-a.txt", "document_id": "quality_price_a"},
+        ),
+        Chunk(
+            chunk_id="quality_price_b_c0001",
+            text="VF9 co gia niem yet 1,5 ty dong.",
+            metadata={"source": "price-b.txt", "document_id": "quality_price_b"},
+        ),
+        Chunk(
+            chunk_id="quality_range_a_c0001",
+            text="VF7 Plus di duoc 450 km sau mot lan sac.",
+            metadata={"source": "range-a.txt", "document_id": "quality_range_a"},
+        ),
+        Chunk(
+            chunk_id="quality_range_b_c0001",
+            text="VF7 Plus di duoc 500 km sau mot lan sac.",
+            metadata={"source": "range-b.txt", "document_id": "quality_range_b"},
+        ),
+    ]
+
+
 def sample_search_results() -> list[SearchResult]:
     """Return ranked hybrid results built from sample chunks."""
 

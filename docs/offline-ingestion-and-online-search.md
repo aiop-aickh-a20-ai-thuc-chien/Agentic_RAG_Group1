@@ -180,6 +180,70 @@ Inspect parser/chunker debug data:
 curl http://127.0.0.1:8000/sources/{document_id}/debug
 ```
 
+### Dedup New And Existing Sources
+
+Upload-time dedup runs in the `local_pdf` provider after chunks receive local
+metadata and before chunks are persisted/indexed. It marks only
+`duplicate_candidate` chunks; canonical chunks are left unmarked and referenced
+from the candidate metadata.
+
+Canonical selection is deterministic. New uploads keep existing chunks as
+canonical. Legacy backfill prefers chunks/documents already referenced by eval
+questions, then older `created_at` timestamps when available, then
+`document_id`, chunk index, and `chunk_id`.
+
+Dedup uses three layers by default:
+
+- exact SHA-256 over normalized text
+- SimHash near-duplicate detection
+- embedding cosine similarity using the shared `EMBEDDING_*` runtime
+
+Relevant environment variables:
+
+```env
+INGESTION_DEDUP_ENABLED=true
+DEDUP_ENABLE_EXACT=true
+DEDUP_ENABLE_SIMHASH=true
+DEDUP_ENABLE_EMBEDDING=true
+DEDUP_SIMHASH_HAMMING_THRESHOLD=6
+DEDUP_EMBEDDING_SIMILARITY_THRESHOLD=0.92
+DEDUP_EMBEDDING_BATCH_SIZE=64
+```
+
+For documents uploaded before dedup existed, run a backfill:
+
+```bash
+uv run python scripts/backfill_dedup.py --dry-run
+uv run python scripts/backfill_dedup.py
+```
+
+`--dry-run` reports the candidate count without writing. The real run rewrites
+stored chunk metadata and re-upserts dense payloads so the vector store also has
+the updated dedup metadata. Use `--strict-embedding` if Layer 3 embedding failure
+should stop the job instead of falling back to exact/SimHash.
+
+Review candidates in the internal UI:
+
+```text
+/internal/dedup-review
+```
+
+### Knowledge-Quality Conflicts
+
+Inspect knowledge-quality conflicts and duplicates:
+
+```bash
+curl http://127.0.0.1:8000/sources/{document_id}/quality
+curl http://127.0.0.1:8000/knowledge-quality
+curl -X POST http://127.0.0.1:8000/knowledge-quality/scan
+```
+
+The knowledge-quality scan is offline-first and only supports
+`EVIDENCE_PROVIDER=local_pdf`. It writes compact summaries to
+`Chunk.metadata["knowledge_quality"]` and returns detailed facts/findings for
+review. See [knowledge-quality-conflict-detection.md](knowledge-quality-conflict-detection.md)
+for the research framing, demo fixture, and evaluation template.
+
 ## 4. Online Search Pipeline
 
 Online search answers questions using the currently configured evidence provider.
