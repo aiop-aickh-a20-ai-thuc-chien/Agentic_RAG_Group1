@@ -15,11 +15,13 @@ from agentic_rag.retrieval.fusion import (
     apply_rerank_threshold,
     build_evidence_context,
     normalized_score_fusion,
+    normalized_score_fusion_n,
     preload_reranker,
     rerank,
     rerank_with_metadata,
     rrf_fusion,
     weighted_rrf_fusion,
+    weighted_rrf_fusion_n,
 )
 
 
@@ -213,6 +215,106 @@ def test_normalized_score_fusion_handles_equal_scores_and_empty_retriever() -> N
     )
 
     assert [result.score for result in fused] == [0.55, 0.55]
+
+
+def test_weighted_rrf_fusion_n_matches_two_way_weighted() -> None:
+    shared = _chunk("chunk-shared", "Shared.")
+    bm25_only = _chunk("chunk-bm25", "BM25.")
+    bm25_results = [
+        _result(shared, score=5.0, rank=2, retriever="bm25"),
+        _result(bm25_only, score=6.0, rank=1, retriever="bm25"),
+    ]
+    dense_results = [_result(shared, score=0.9, rank=1, retriever="dense")]
+
+    two_way = weighted_rrf_fusion(
+        bm25_results=bm25_results,
+        dense_results=dense_results,
+        bm25_weight=0.55,
+        dense_weight=0.45,
+    )
+    n_way = weighted_rrf_fusion_n(
+        {"bm25": bm25_results, "dense": dense_results},
+        weights={"bm25": 0.55, "dense": 0.45},
+    )
+
+    assert [r.chunk.chunk_id for r in n_way] == [r.chunk.chunk_id for r in two_way]
+    assert [r.score for r in n_way] == [pytest.approx(r.score) for r in two_way]
+
+
+def test_weighted_rrf_fusion_n_defaults_to_unit_weights_equivalent_to_rrf() -> None:
+    chunk_a = _chunk("chunk-a", "A")
+    chunk_b = _chunk("chunk-b", "B")
+    bm25_results = [
+        _result(chunk_a, score=1.0, rank=1, retriever="bm25"),
+        _result(chunk_b, score=0.5, rank=2, retriever="bm25"),
+    ]
+    dense_results = [_result(chunk_b, score=0.9, rank=1, retriever="dense")]
+
+    plain = rrf_fusion(bm25_results=bm25_results, dense_results=dense_results)
+    n_way = weighted_rrf_fusion_n({"bm25": bm25_results, "dense": dense_results})
+
+    assert [r.chunk.chunk_id for r in n_way] == [r.chunk.chunk_id for r in plain]
+    assert [r.score for r in n_way] == [pytest.approx(r.score) for r in plain]
+
+
+def test_weighted_rrf_fusion_n_boosts_chunk_seen_by_three_retrievers() -> None:
+    shared = _chunk("chunk-shared", "Seen by all three.")
+    bm25_only = _chunk("chunk-bm25", "BM25 only.")
+    splade_only = _chunk("chunk-splade", "SPLADE only.")
+    colbert_only = _chunk("chunk-colbert", "ColBERT only.")
+
+    fused = weighted_rrf_fusion_n(
+        {
+            "bm25": [
+                _result(shared, score=5.0, rank=1, retriever="bm25"),
+                _result(bm25_only, score=4.0, rank=2, retriever="bm25"),
+            ],
+            "splade": [
+                _result(shared, score=3.0, rank=1, retriever="splade"),
+                _result(splade_only, score=2.0, rank=2, retriever="splade"),
+            ],
+            "colbert": [
+                _result(shared, score=0.9, rank=1, retriever="colbert"),
+                _result(colbert_only, score=0.8, rank=2, retriever="colbert"),
+            ],
+        },
+    )
+
+    assert fused[0].chunk.chunk_id == "chunk-shared"
+    assert fused[0].retriever == "hybrid"
+    assert fused[0].score == pytest.approx(3.0 / 61.0)
+    assert {r.chunk.chunk_id for r in fused} == {
+        "chunk-shared",
+        "chunk-bm25",
+        "chunk-splade",
+        "chunk-colbert",
+    }
+
+
+def test_normalized_score_fusion_n_combines_three_retrievers() -> None:
+    chunk_a = _chunk("chunk-a", "A")
+    chunk_b = _chunk("chunk-b", "B")
+
+    fused = normalized_score_fusion_n(
+        {
+            "bm25": [
+                _result(chunk_a, score=10.0, rank=1, retriever="bm25"),
+                _result(chunk_b, score=0.0, rank=2, retriever="bm25"),
+            ],
+            "splade": [
+                _result(chunk_a, score=4.0, rank=1, retriever="splade"),
+                _result(chunk_b, score=0.0, rank=2, retriever="splade"),
+            ],
+            "colbert": [
+                _result(chunk_a, score=1.0, rank=1, retriever="colbert"),
+                _result(chunk_b, score=0.0, rank=2, retriever="colbert"),
+            ],
+        },
+    )
+
+    assert [r.chunk.chunk_id for r in fused] == ["chunk-a", "chunk-b"]
+    assert fused[0].score == pytest.approx(1.0)
+    assert fused[1].score == pytest.approx(0.0)
 
 
 def test_apply_pre_fusion_thresholds_filters_noisy_retriever_results() -> None:

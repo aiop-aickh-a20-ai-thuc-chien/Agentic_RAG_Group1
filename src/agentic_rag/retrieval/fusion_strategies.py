@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from pydantic import BaseModel, ConfigDict
 
@@ -121,6 +121,99 @@ def normalized_score_fusion(
         )
 
     return rank_fused_candidates(fused_candidates, top_k=top_k)
+
+
+def weighted_rrf_fusion_n(
+    results_by_retriever: Mapping[str, list[SearchResult]],
+    *,
+    weights: Mapping[str, float] | None = None,
+    top_k: int = 10,
+    rrf_k: int = RRF_K,
+) -> list[SearchResult]:
+    """Fuse an arbitrary number of retrievers' results with weighted RRF.
+
+    ``weights`` maps retriever name -> weight; any retriever missing from the
+    mapping (or an empty/``None`` mapping) defaults to weight ``1.0``, which is
+    equivalent to unweighted RRF. With exactly two retrievers this reproduces
+    ``weighted_rrf_fusion``/``rrf_fusion`` numerically, so the two-way default
+    path is unaffected.
+    """
+
+    if top_k < 0:
+        raise ValueError("top_k must be >= 0 for weighted_rrf_fusion_n.")
+    if rrf_k < 0:
+        raise ValueError("rrf_k must be >= 0 for weighted_rrf_fusion_n.")
+    if top_k == 0:
+        return []
+
+    fused_by_chunk_id: dict[str, FusedCandidate] = {}
+    for retriever, results in results_by_retriever.items():
+        weight = 1.0 if weights is None else weights.get(retriever, 1.0)
+        accumulate_weighted_rrf_scores(
+            fused_by_chunk_id,
+            results,
+            weight=weight,
+            rrf_k=rrf_k,
+        )
+    return rank_fused_candidates(fused_by_chunk_id.values(), top_k=top_k)
+
+
+def normalized_score_fusion_n(
+    results_by_retriever: Mapping[str, list[SearchResult]],
+    *,
+    weights: Mapping[str, float] | None = None,
+    top_k: int = 10,
+) -> list[SearchResult]:
+    """Fuse an arbitrary number of retrievers by weighted min-max normalized scores.
+
+    ``weights`` are normalized to sum to 1.0 across the supplied retrievers
+    (defaulting to equal weights), so the fused score stays within ``[0, 1]``.
+    """
+
+    if top_k < 0:
+        raise ValueError("top_k must be >= 0 for normalized_score_fusion_n.")
+    if top_k == 0:
+        return []
+
+    retrievers = list(results_by_retriever)
+    resolved_weights = _normalized_retriever_weights(retrievers, weights)
+    normalized_by_retriever = {
+        retriever: normalized_scores_by_chunk_id(results)
+        for retriever, results in results_by_retriever.items()
+    }
+    best_results: dict[str, SearchResult] = {}
+    for retriever in retrievers:
+        best_results.update(deduplicate_by_best_rank(results_by_retriever[retriever]))
+
+    fused_candidates: list[FusedCandidate] = []
+    for chunk_id, representative in best_results.items():
+        fused_score = sum(
+            resolved_weights[retriever] * normalized_by_retriever[retriever].get(chunk_id, 0.0)
+            for retriever in retrievers
+        )
+        fused_candidates.append(
+            FusedCandidate(
+                representative=representative,
+                score=fused_score,
+                best_rank=representative.rank,
+            )
+        )
+    return rank_fused_candidates(fused_candidates, top_k=top_k)
+
+
+def _normalized_retriever_weights(
+    retrievers: list[str],
+    weights: Mapping[str, float] | None,
+) -> dict[str, float]:
+    raw = {
+        retriever: (1.0 if weights is None else max(weights.get(retriever, 1.0), 0.0))
+        for retriever in retrievers
+    }
+    total = sum(raw.values())
+    if total <= 0:
+        equal = 1.0 / len(retrievers) if retrievers else 0.0
+        return {retriever: equal for retriever in retrievers}
+    return {retriever: value / total for retriever, value in raw.items()}
 
 
 def accumulate_rrf_scores(

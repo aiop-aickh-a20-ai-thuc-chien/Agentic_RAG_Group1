@@ -16,8 +16,10 @@ from agentic_rag.retrieval.fusion_strategies import (
     DEFAULT_NORMALIZED_SCORE_ALPHA,
     RRF_K,
     normalized_score_fusion,
+    normalized_score_fusion_n,
     rrf_fusion,
     weighted_rrf_fusion,
+    weighted_rrf_fusion_n,
 )
 from agentic_rag.retrieval.thresholds import (
     ThresholdConfig,
@@ -153,10 +155,12 @@ __all__ = [
     "apply_rerank_threshold",
     "build_evidence_context",
     "normalized_score_fusion",
+    "normalized_score_fusion_n",
     "preload_reranker",
     "rerank",
     "rerank_metadata",
     "rerank_with_metadata",
     "rrf_fusion",
     "weighted_rrf_fusion",
+    "weighted_rrf_fusion_n",
 ]
