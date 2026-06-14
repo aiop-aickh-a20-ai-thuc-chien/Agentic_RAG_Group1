@@ -13,7 +13,10 @@ from agentic_rag.retrieval.search import (
     _qdrant_client_from_env,
     delete_all_qdrant_points,
     delete_qdrant_document_points,
+    is_sparse_retriever,
     qdrant_hybrid_search,
+    resolve_active_retrievers,
+    retriever_tag,
     upsert_dense_embeddings,
 )
 
@@ -81,6 +84,70 @@ def test_bm25_search_returns_matching_chunk_not_loop_index() -> None:
     assert results[0].chunk.chunk_id == "c2"
     assert results[0].retriever == "bm25"
     assert results[0].rank == 1
+
+
+def test_retriever_tag_and_sparse_classification() -> None:
+    assert retriever_tag("bm25") == "bm25"
+    assert retriever_tag("neural") == "splade"
+    assert retriever_tag("vector_store") == "dense"
+    assert retriever_tag("colbert") == "colbert"
+    assert is_sparse_retriever("bm25") is True
+    assert is_sparse_retriever("neural") is True
+    assert is_sparse_retriever("colbert") is False
+    assert is_sparse_retriever("vector_store") is False
+
+
+def test_resolve_active_retrievers_defaults_to_legacy_sparse_dense(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    for name in ("RETRIEVERS", "SPARSE_PROVIDER", "DENSE_PROVIDER"):
+        monkeypatch.delenv(name, raising=False)
+
+    assert resolve_active_retrievers() == ["bm25", "vector_store"]
+
+
+def test_resolve_active_retrievers_parses_explicit_list_and_dedupes(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RETRIEVERS", " bm25 , colbert ,neural, bm25 ")
+
+    assert resolve_active_retrievers() == ["bm25", "colbert", "neural"]
+
+
+def test_resolve_active_retrievers_rejects_unknown_retriever(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVERS", "bm25,sparkle")
+
+    with pytest.raises(ValueError, match="Unknown retriever 'sparkle'"):
+        resolve_active_retrievers()
+
+
+def test_search_multi_with_bm25_only_tags_results(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVERS", "bm25")
+    chunks = [
+        Chunk(chunk_id="c1", text="lich bao duong lop xe", metadata={}),
+        Chunk(chunk_id="c2", text="pin vf8 duoc bao hanh 8 nam", metadata={}),
+    ]
+    store = Store(chunks)
+
+    results = store.search_multi("pin bao hanh", top_k=2)
+
+    assert set(results) == {"bm25"}
+    assert results["bm25"][0].chunk.chunk_id == "c2"
+    assert results["bm25"][0].retriever == "bm25"
+
+
+def test_retriever_search_bm25_matches_legacy_bm25_search() -> None:
+    chunks = [
+        Chunk(chunk_id="c1", text="lich bao duong lop xe", metadata={}),
+        Chunk(chunk_id="c2", text="pin vf8 duoc bao hanh 8 nam", metadata={}),
+    ]
+    store = Store(chunks)
+
+    multi = store.retriever_search("bm25", "pin bao hanh", top_k=2)
+    legacy = store.bm25_search("pin bao hanh", top_k=2)
+
+    assert [r.chunk.chunk_id for r in multi] == [r.chunk.chunk_id for r in legacy]
+    assert [r.retriever for r in multi] == ["bm25", "bm25"]
 
 
 def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
@@ -1021,28 +1088,36 @@ def test_neural_sparse_search_beats_bm25_on_synonyms(
     monkeypatch: MonkeyPatch,
 ) -> None:
     chunks = [
-        Chunk(chunk_id="c_target", text="Chi phí lăn bánh dòng xe hạng sang cỡ lớn năm 2024", metadata={}),
-        Chunk(chunk_id="c_noise", text="Hướng dẫn kết nối bluetooth trên màn hình trung tâm", metadata={}),
+        Chunk(
+            chunk_id="c_target",
+            text="Chi phí lăn bánh dòng xe hạng sang cỡ lớn năm 2024",
+            metadata={},
+        ),
+        Chunk(
+            chunk_id="c_noise",
+            text="Hướng dẫn kết nối bluetooth trên màn hình trung tâm",
+            metadata={},
+        ),
     ]
     query = "giá xe điện VF9"
-    
+
     # 1. BM25 Baseline
     monkeypatch.setenv("SPARSE_PROVIDER", "bm25")
     store_bm25 = Store(chunks)
     bm25_results = store_bm25.bm25_search(query, top_k=1)
-    
+
     # 2. Neural Sparse (BGE-M3) Integration
     monkeypatch.setenv("SPARSE_PROVIDER", "neural")
     monkeypatch.setenv("SPARSE_MODEL", "BAAI/bge-m3")
-    
+
     try:
         import FlagEmbedding  # noqa: F401
     except ImportError:
         pytest.skip("FlagEmbedding is required for BGE-M3 Neural Sparse tests")
-        
+
     store_neural = Store(chunks)
     neural_results = store_neural.bm25_search(query, top_k=1)
-    
+
     assert len(bm25_results) > 0
     assert len(neural_results) > 0
 
@@ -1051,23 +1126,31 @@ def test_dense_colbert_search(
     monkeypatch: MonkeyPatch,
 ) -> None:
     chunks = [
-        Chunk(chunk_id="c_colbert", text="Màn hình trung tâm của VinFast VF9 kích thước 15.6 inch", metadata={}),
-        Chunk(chunk_id="c_noise", text="VinFast VF8 sử dụng màn hình cảm ứng 15.6 inch", metadata={}),
+        Chunk(
+            chunk_id="c_colbert",
+            text="Màn hình trung tâm của VinFast VF9 kích thước 15.6 inch",
+            metadata={},
+        ),
+        Chunk(
+            chunk_id="c_noise",
+            text="VinFast VF8 sử dụng màn hình cảm ứng 15.6 inch",
+            metadata={},
+        ),
     ]
     query = "kích thước màn hình giải trí VF9"
-    
+
     # ColBERT integration
     monkeypatch.setenv("DENSE_PROVIDER", "colbert")
     monkeypatch.setenv("DENSE_MODEL", "BAAI/bge-m3")
-    
+
     try:
         import FlagEmbedding  # noqa: F401
     except ImportError:
         pytest.skip("FlagEmbedding is required for BGE-M3 ColBERT tests")
-        
+
     store_colbert = Store(chunks)
     colbert_results = store_colbert.dense_search(query, top_k=1)
-    
+
     assert len(colbert_results) > 0
     assert colbert_results[0].chunk.chunk_id == "c_colbert"
 

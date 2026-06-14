@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 AnswerStatus = Literal["answered", "not_found", "clarification_needed"]
-RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
+RetrieverName = Literal["bm25", "splade", "dense", "colbert", "hybrid", "rerank"]
 KnowledgeQualityFindingKind = Literal["exact_duplicate", "near_duplicate", "conflict"]
 KnowledgeQualitySeverity = Literal["info", "warning", "critical"]
 KnowledgeQualityStatus = Literal["open", "resolved", "ignored"]

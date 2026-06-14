@@ -18,9 +18,9 @@ from turbovec.langchain import TurboQuantVectorStore
 from agentic_rag.core.contracts import Chunk, EmbeddingOutput, SearchResult
 from agentic_rag.model_runtime.config import (
     EmbeddingConfig,
+    resolve_dense_config,
     resolve_embedding_config,
     resolve_sparse_config,
-    resolve_dense_config,
 )
 from agentic_rag.model_runtime.embeddings import (
     EmbeddingCompatibilityAdapter,
@@ -36,6 +36,58 @@ _QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS = (
     _QDRANT_DOCUMENT_ID_FIELD,
     _QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
 )
+
+# Retriever providers selectable for the in-memory N-way hybrid, mapped to the
+# SearchResult.retriever tag they emit. "neural" is SPLADE; "vector_store" is the
+# embedding-backed dense store.
+_SPARSE_RETRIEVER_PROVIDERS = ("bm25", "neural")
+_DENSE_RETRIEVER_PROVIDERS = ("vector_store", "colbert")
+_RETRIEVER_TAGS: dict[str, str] = {
+    "bm25": "bm25",
+    "neural": "splade",
+    "vector_store": "dense",
+    "colbert": "colbert",
+}
+
+
+def retriever_tag(provider: str) -> str:
+    """Map a retriever provider to the SearchResult.retriever tag it emits."""
+
+    return _RETRIEVER_TAGS.get(provider, provider)
+
+
+def is_sparse_retriever(provider: str) -> bool:
+    """Return True for lexical retrievers (which consume the normalized query)."""
+
+    return provider in _SPARSE_RETRIEVER_PROVIDERS
+
+
+def resolve_active_retrievers() -> list[str]:
+    """Return the ordered retriever providers to run for the in-memory path.
+
+    ``RETRIEVERS`` (comma-separated, e.g. ``bm25,neural,colbert``) enables the
+    N-way hybrid. When unset, falls back to the legacy single-sparse +
+    single-dense pair (``SPARSE_PROVIDER`` + ``DENSE_PROVIDER``), so the default
+    two-way behaviour is preserved.
+    """
+
+    raw = os.getenv("RETRIEVERS", "").strip()
+    if raw:
+        providers: list[str] = []
+        for name in raw.split(","):
+            provider = name.strip().lower()
+            if not provider or provider in providers:
+                continue
+            if provider not in _RETRIEVER_TAGS:
+                raise ValueError(
+                    f"Unknown retriever {provider!r} in RETRIEVERS; "
+                    f"valid options: {', '.join(_RETRIEVER_TAGS)}."
+                )
+            providers.append(provider)
+        if providers:
+            return providers
+    return [resolve_sparse_config().provider, resolve_dense_config().provider]
+
 
 REQUERY_ROUTER_PROMPT = """
 <task>
@@ -62,6 +114,9 @@ class Store:
         self._chunks = chunks
         self._bm25_index = self._build_bm25_index(chunks)
         self._vector_index: Any = None
+        # Lazily-built per-provider indexes for the N-way hybrid (search_multi /
+        # retriever_search). Keyed by retriever provider name.
+        self._provider_indexes: dict[str, Any] = {}
 
     def preprocess_query(self, query: str, llm_client: object = None) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
@@ -96,6 +151,7 @@ class Store:
         config = resolve_sparse_config()
         if config.provider == "neural":
             from agentic_rag.retrieval.sparse_neural import NeuralSparseIndex
+
             return NeuralSparseIndex(chunks, model_name=config.model or "BAAI/bge-m3")
 
         corpus = [_tokenize(chunk.text) for chunk in chunks]
@@ -111,7 +167,7 @@ class Store:
         if not query_tokens:
             return []
 
-        scores = self._bm25_index.get_scores(query_tokens)  # type: ignore[no-untyped-call]
+        scores = self._bm25_index.get_scores(query_tokens)
         top_indexes = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)[
             :top_k
         ]
@@ -135,8 +191,12 @@ class Store:
         dense_config = resolve_dense_config()
         if dense_config.provider == "colbert":
             from agentic_rag.retrieval.dense_colbert import ColbertIndex
-            return ColbertIndex(chunks, model_name=dense_config.model or "BAAI/bge-m3")
 
+            return ColbertIndex(chunks, model_name=dense_config.model or "BAAI/bge-m3")
+        return self._build_dense_store_index(chunks)
+
+    def _build_dense_store_index(self, chunks: list[Chunk]) -> Any:
+        """Build the embedding-backed dense store (pgvector or in-memory TurboQuant)."""
         embedding = _configured_embedding()
         if _configured_vector_store() == "pgvector":
             # Search-only: connect to existing pgvector index, do NOT re-embed stored texts.
@@ -220,6 +280,153 @@ class Store:
                     seen.add(result.chunk.chunk_id)
                     all_dense.append(result)
         return all_bm25, all_dense
+
+    def search_multi(
+        self,
+        query: str,
+        top_k: int = 10,
+        llm_client: object = None,
+    ) -> dict[str, list[SearchResult]]:
+        """Return per-retriever results keyed by retriever tag for N-way fusion.
+
+        Honors the same Decompose/Expand query routing as ``search`` and runs
+        every provider from ``resolve_active_retrievers()``.
+        """
+        nquery = self.preprocess_query(query=query, llm_client=llm_client)
+        method = nquery["requery"].get("method", "Expand")
+        answer = nquery["requery"].get("answer", query)
+        providers = resolve_active_retrievers()
+        self.prime_retrievers(providers)
+        if method == "Decompose" and isinstance(answer, list):
+            return self._search_multi_decomposed(providers, answer, top_k=top_k)
+        expanded = answer if isinstance(answer, str) else " ".join(str(a) for a in answer)
+        return {
+            retriever_tag(provider): self.retriever_search(provider, expanded, top_k=top_k)
+            for provider in providers
+        }
+
+    def _search_multi_decomposed(
+        self,
+        providers: list[str],
+        sub_queries: list[str],
+        top_k: int,
+    ) -> dict[str, list[SearchResult]]:
+        results: dict[str, list[SearchResult]] = {}
+        for provider in providers:
+            seen: set[str] = set()
+            merged: list[SearchResult] = []
+            for sub_query in sub_queries:
+                for result in self.retriever_search(provider, sub_query, top_k=top_k):
+                    if result.chunk.chunk_id not in seen:
+                        seen.add(result.chunk.chunk_id)
+                        merged.append(result)
+            results[retriever_tag(provider)] = merged
+        return results
+
+    def retriever_search(self, provider: str, query: str, top_k: int = 10) -> list[SearchResult]:
+        """Run one retriever provider and return results tagged with its retriever name."""
+        if provider in _SPARSE_RETRIEVER_PROVIDERS:
+            return self._sparse_provider_search(provider, query, top_k=top_k)
+        if provider in _DENSE_RETRIEVER_PROVIDERS:
+            return self._dense_provider_search(provider, query, top_k=top_k)
+        raise ValueError(f"Unknown retriever provider: {provider!r}")
+
+    def _provider_index(self, provider: str) -> Any:
+        index = self._provider_indexes.get(provider)
+        if index is None:
+            index = self._build_provider_index(provider)
+            self._provider_indexes[provider] = index
+        return index
+
+    def _build_provider_index(self, provider: str) -> Any:
+        if provider == "bm25":
+            corpus = [_tokenize(chunk.text) for chunk in self._chunks]
+            return BM25Okapi(corpus=corpus)  # type: ignore[no-untyped-call]
+        if provider == "neural":
+            from agentic_rag.retrieval.sparse_neural import NeuralSparseIndex
+
+            return NeuralSparseIndex(
+                self._chunks, model_name=resolve_sparse_config().model or "BAAI/bge-m3"
+            )
+        if provider == "colbert":
+            from agentic_rag.retrieval.dense_colbert import ColbertIndex
+
+            return ColbertIndex(
+                self._chunks, model_name=resolve_dense_config().model or "BAAI/bge-m3"
+            )
+        if provider == "vector_store":
+            return self._build_dense_store_index(self._chunks)
+        raise ValueError(f"Unknown retriever provider: {provider!r}")
+
+    def _sparse_provider_search(self, provider: str, query: str, top_k: int) -> list[SearchResult]:
+        if top_k <= 0 or not self._chunks:
+            return []
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return []
+        index = self._provider_index(provider)
+        scores = index.get_scores(query_tokens)
+        tag = retriever_tag(provider)
+        top_indexes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        return [
+            SearchResult(
+                chunk=self._chunks[chunk_index],
+                score=float(scores[chunk_index]),
+                rank=rank,
+                retriever=tag,
+            )
+            for rank, chunk_index in enumerate(top_indexes, start=1)
+        ]
+
+    def _dense_provider_search(self, provider: str, query: str, top_k: int) -> list[SearchResult]:
+        if top_k <= 0 or not self._chunks:
+            return []
+        index = self._provider_index(provider)
+        filter_value = (
+            _dense_filter_for_chunks(self._chunks) if provider == "vector_store" else None
+        )
+        if filter_value is None:
+            search_result = index.similarity_search_with_score(query=query, k=top_k)
+        else:
+            search_result = index.similarity_search_with_score(
+                query=query, k=top_k, filter=filter_value
+            )
+        tag = retriever_tag(provider)
+        results: list[SearchResult] = []
+        for i, (doc, score) in enumerate(search_result):
+            results.append(
+                SearchResult(
+                    chunk=_chunk_from_dense_document(
+                        doc=doc, vector_index=index, chunks=self._chunks
+                    ),
+                    score=score,
+                    rank=i + 1,
+                    retriever=tag,
+                )
+            )
+        return results
+
+    def prime_retrievers(self, providers: list[str]) -> None:
+        """Encode the corpus once for both SPLADE and ColBERT when both are active.
+
+        BGE-M3 yields sparse + ColBERT vectors from a single forward pass, so
+        priming avoids a redundant full-corpus encode when both retrievers run
+        over the same chunk-set and model.
+        """
+        if not self._chunks or "neural" not in providers or "colbert" not in providers:
+            return
+        sparse_model = resolve_sparse_config().model or "BAAI/bge-m3"
+        colbert_model = resolve_dense_config().model or "BAAI/bge-m3"
+        if sparse_model != colbert_model:
+            return
+        from agentic_rag.retrieval.bgem3 import encode_corpus
+
+        encode_corpus(
+            sparse_model,
+            [chunk.text for chunk in self._chunks],
+            want_sparse=True,
+            want_colbert=True,
+        )
 
 
 def dense_embedding_metadata() -> dict[str, object]:
@@ -1189,6 +1396,11 @@ def _chunk_from_dense_document(
     chunks: list[Chunk],
 ) -> Chunk:
     metadata = getattr(doc, "metadata", {})
+    if isinstance(metadata, dict):
+        # ColBERT pseudo-documents carry the originating chunk index directly.
+        chunk_index = metadata.get("chunk_index")
+        if isinstance(chunk_index, int) and 0 <= chunk_index < len(chunks):
+            return chunks[chunk_index]
     if isinstance(metadata, dict) and "chunk_id" in metadata:
         nested_metadata = metadata.get("metadata")
         chunk_id = str(metadata["chunk_id"])
