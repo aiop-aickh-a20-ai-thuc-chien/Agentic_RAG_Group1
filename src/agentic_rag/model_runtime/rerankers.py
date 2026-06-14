@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import re
 from collections.abc import Iterable
 from functools import lru_cache
 from typing import Any, Protocol, cast
@@ -156,6 +157,101 @@ class LiteLLMReranker(BaseModel):
         }
 
 
+_LISTWISE_SYSTEM_PROMPT = (
+    "You are RankLLM, an intelligent assistant that ranks passages based on their "
+    "relevance to a search query."
+)
+_LISTWISE_MAX_PASSAGE_CHARS = 400
+
+
+class ListwiseLLMReranker(BaseModel):
+    """Listwise reranker backed by a HuggingFace ranking LLM (e.g. RankZephyr).
+
+    Loads a causal LM locally via ``transformers`` and reorders candidates with a
+    RankLLM/RankGPT-style sliding-window listwise prompt. This provider is heavy
+    (a multi-billion-parameter model) and is OFF by default — opt in explicitly
+    with ``RERANK_PROVIDER=listwise_llm``. On any load/invocation failure it raises
+    ``ModelInvocationError`` so callers fall back to the deterministic reranker.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    config: RerankerConfig
+    device: str | None = None
+    window_size: int = 20
+    step: int = 10
+
+    def rerank(self, request: RerankInput) -> RerankOutput:
+        """Reorder candidates by listwise relevance and reassign rerank ranks."""
+
+        if request.top_k == 0 or not request.candidates:
+            return RerankOutput(results=[], metadata=self._metadata())
+        try:
+            model = _load_listwise_model(self.config.model_name, self.device)
+        except (ModelRuntimeConfigurationError, ModelInvocationError):
+            raise
+        except Exception as exc:
+            raise ModelInvocationError(f"Listwise reranker load failed: {exc}") from exc
+
+        candidates = list(request.candidates)
+        try:
+            order = self._sliding_window_order(model, request.query, candidates)
+        except Exception as exc:
+            raise ModelInvocationError(f"Listwise reranker invocation failed: {exc}") from exc
+
+        ranked = [candidates[index] for index in order]
+        total = len(ranked)
+        results = [
+            SearchResult(
+                chunk=candidate.chunk,
+                score=float(total - position),
+                rank=position + 1,
+                retriever="rerank",
+            )
+            for position, candidate in enumerate(ranked[: request.top_k])
+        ]
+        return RerankOutput(results=results, metadata=self._metadata())
+
+    def _sliding_window_order(
+        self,
+        model: _ListwiseModel,
+        query: str,
+        candidates: list[SearchResult],
+    ) -> list[int]:
+        """Return candidate indices best-first using a back-to-front sliding window."""
+
+        order = list(range(len(candidates)))
+        if not order:
+            return order
+        window = max(self.window_size, 1)
+        step = max(self.step, 1)
+        end = len(order)
+        while end > 0:
+            start = max(0, end - window)
+            window_indices = order[start:end]
+            passages = [candidates[index].chunk.text for index in window_indices]
+            permutation = _parse_listwise_permutation(
+                model.generate(_build_listwise_prompt(query, passages)),
+                len(window_indices),
+            )
+            order[start:end] = [window_indices[position] for position in permutation]
+            if start == 0:
+                break
+            end -= step
+        return order
+
+    def _metadata(self) -> dict[str, object]:
+        return {
+            "configured_provider": self.config.provider,
+            "used_provider": "listwise_llm",
+            "model": self.config.model_name,
+            "device": self.device or "auto",
+            "library": "transformers",
+            "window_size": self.window_size,
+            "step": self.step,
+        }
+
+
 def preload_local_reranker(config: RerankerConfig) -> dict[str, object]:
     """Preload a local sentence-transformers reranker when configured."""
 
@@ -258,6 +354,94 @@ def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderMod
         return cast(_CrossEncoderModel, cross_encoder(model_name, device=device))
     except Exception as exc:
         raise ModelInvocationError(f"Local reranker load failed: {exc}") from exc
+
+
+class _ListwiseModel(Protocol):
+    def generate(self, prompt: str) -> str:
+        """Return the model's raw completion for a listwise ranking prompt."""
+
+
+class _TransformersListwiseModel:
+    """Wrap a HuggingFace causal LM for listwise permutation generation."""
+
+    def __init__(self, *, transformers: Any, model_name: str, device: str | None) -> None:
+        self._tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
+        self._model = transformers.AutoModelForCausalLM.from_pretrained(model_name)
+        if device:
+            self._model = self._model.to(device)
+        self._device = device
+
+    def generate(self, prompt: str) -> str:
+        messages = [
+            {"role": "system", "content": _LISTWISE_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        input_ids = self._tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, return_tensors="pt"
+        )
+        if self._device:
+            input_ids = input_ids.to(self._device)
+        output_ids = self._model.generate(input_ids, max_new_tokens=256, do_sample=False)
+        generated = output_ids[0][input_ids.shape[-1] :]
+        return str(self._tokenizer.decode(generated, skip_special_tokens=True))
+
+
+@lru_cache(maxsize=2)
+def _load_listwise_model(model_name: str, device: str | None) -> _ListwiseModel:
+    _preimport_sklearn_before_torch()
+    try:
+        transformers = importlib.import_module("transformers")
+    except ImportError as exc:
+        raise ModelRuntimeConfigurationError(
+            "Listwise rerankers require transformers + torch. "
+            "Run `uv sync --extra listwise-reranking`."
+        ) from exc
+    try:
+        return _TransformersListwiseModel(
+            transformers=transformers, model_name=model_name, device=device
+        )
+    except Exception as exc:
+        raise ModelInvocationError(f"Listwise reranker load failed: {exc}") from exc
+
+
+def _build_listwise_prompt(query: str, passages: list[str]) -> str:
+    """Render a RankLLM/RankGPT-style listwise ranking prompt for one window."""
+
+    count = len(passages)
+    lines = [
+        f"I will provide you with {count} passages, each indicated by a numerical "
+        f"identifier []. Rank the passages based on their relevance to the search "
+        f"query: {query}.",
+        "",
+    ]
+    for position, text in enumerate(passages, start=1):
+        snippet = " ".join(text.split())[:_LISTWISE_MAX_PASSAGE_CHARS]
+        lines.append(f"[{position}] {snippet}")
+    lines.extend(
+        [
+            "",
+            f"Search Query: {query}.",
+            f"Rank the {count} passages above based on their relevance to the search "
+            "query in descending order. All passages should be included and listed "
+            "using identifiers in the format [] > [] > ..., e.g., [2] > [1]. Only "
+            "respond with the ranking results, do not say any word or explain.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _parse_listwise_permutation(raw: str, count: int) -> list[int]:
+    """Parse ``[2] > [1] > [3]`` into 0-based indices; append any missing in order."""
+
+    order: list[int] = []
+    seen: set[int] = set()
+    for match in re.findall(r"\[(\d+)\]", raw):
+        index = int(match) - 1
+        if 0 <= index < count and index not in seen:
+            seen.add(index)
+            order.append(index)
+    order.extend(index for index in range(count) if index not in seen)
+    return order
 
 
 def _coerce_scores(raw_scores: object) -> list[float]:

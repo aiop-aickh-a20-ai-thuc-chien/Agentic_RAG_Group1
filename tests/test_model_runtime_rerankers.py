@@ -14,6 +14,7 @@ from agentic_rag.model_runtime.errors import (
     ModelRuntimeConfigurationError,
 )
 from agentic_rag.model_runtime.rerankers import (
+    ListwiseLLMReranker,
     LiteLLMReranker,
     ScoreReranker,
     SentenceTransformersReranker,
@@ -272,3 +273,114 @@ def test_preload_local_reranker_statuses(monkeypatch: MonkeyPatch) -> None:
         RerankerConfig(provider="sentence_transformers", model="other", preload=True)
     )
     assert failed["status"] == "failed"
+
+
+class _FakeListwiseModel:
+    def __init__(self, response: str) -> None:
+        self._response = response
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return self._response
+
+
+def _listwise_config(model: str = "castorini/rankzephyr-7b-v1-full") -> RerankerConfig:
+    return _config(provider="listwise_llm", model=model)
+
+
+def test_listwise_llm_reranker_reorders_by_model_permutation(monkeypatch: MonkeyPatch) -> None:
+    fake = _FakeListwiseModel("[2] > [3] > [1]")
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_listwise_model",
+        lambda model_name, device: fake,
+    )
+    candidates = [
+        _result("chunk-a", 0.9, 1, text="alpha passage"),
+        _result("chunk-b", 0.2, 2, text="bravo passage"),
+        _result("chunk-c", 0.4, 3, text="charlie passage"),
+    ]
+
+    output = ListwiseLLMReranker(config=_listwise_config()).rerank(_request(candidates, top_k=3))
+
+    assert [result.chunk.chunk_id for result in output.results] == ["chunk-b", "chunk-c", "chunk-a"]
+    assert [result.rank for result in output.results] == [1, 2, 3]
+    assert [result.score for result in output.results] == [3.0, 2.0, 1.0]
+    assert [result.retriever for result in output.results] == ["rerank", "rerank", "rerank"]
+    assert output.metadata["used_provider"] == "listwise_llm"
+    assert output.metadata["model"] == "castorini/rankzephyr-7b-v1-full"
+    assert "alpha passage" in fake.prompts[0]
+
+
+def test_listwise_llm_reranker_keeps_all_candidates_on_unparseable_output(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_listwise_model",
+        lambda model_name, device: _FakeListwiseModel("I cannot rank these passages."),
+    )
+    candidates = [
+        _result("chunk-a", 0.9, 1),
+        _result("chunk-b", 0.2, 2),
+        _result("chunk-c", 0.4, 3),
+    ]
+
+    output = ListwiseLLMReranker(config=_listwise_config()).rerank(_request(candidates, top_k=3))
+
+    assert [result.chunk.chunk_id for result in output.results] == [
+        "chunk-a",
+        "chunk-b",
+        "chunk-c",
+    ]
+
+
+def test_listwise_llm_reranker_sliding_window_covers_all_candidates(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_listwise_model",
+        lambda model_name, device: _FakeListwiseModel("[2] > [1]"),
+    )
+    candidates = [_result(name, 0.5, index + 1, text=name) for index, name in enumerate("abcd")]
+
+    output = ListwiseLLMReranker(config=_listwise_config(), window_size=2, step=1).rerank(
+        _request(candidates, top_k=4)
+    )
+
+    assert [result.chunk.chunk_id for result in output.results] == ["d", "a", "b", "c"]
+    assert {result.chunk.chunk_id for result in output.results} == {"a", "b", "c", "d"}
+
+
+def test_listwise_llm_reranker_runtime_errors_are_normalized(monkeypatch: MonkeyPatch) -> None:
+    class _BoomModel:
+        def generate(self, prompt: str) -> str:
+            raise RuntimeError("model exploded")
+
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers._load_listwise_model",
+        lambda model_name, device: _BoomModel(),
+    )
+
+    with pytest.raises(ModelInvocationError, match="model exploded"):
+        ListwiseLLMReranker(config=_listwise_config()).rerank(
+            _request([_result("chunk-a", 0.2, 1)], top_k=1)
+        )
+
+
+def test_listwise_llm_reranker_missing_extra_is_configuration_error(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fail_import(name: str) -> object:
+        if name in {"transformers", "sklearn"}:
+            raise ImportError(name)
+        raise AssertionError(name)
+
+    monkeypatch.setattr(
+        "agentic_rag.model_runtime.rerankers.importlib.import_module",
+        fail_import,
+    )
+
+    with pytest.raises(ModelRuntimeConfigurationError, match="uv sync --extra listwise-reranking"):
+        ListwiseLLMReranker(config=_listwise_config()).rerank(
+            _request([_result("chunk-a", 0.2, 1)], top_k=1)
+        )

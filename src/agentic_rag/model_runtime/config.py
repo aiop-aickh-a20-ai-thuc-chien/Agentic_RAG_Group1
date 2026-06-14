@@ -229,7 +229,7 @@ def resolve_reranker_config() -> RerankerConfig:
         ),
         device=(
             _optional_device("RERANK_DEVICE")
-            if provider == SENTENCE_TRANSFORMERS_PROVIDER
+            if provider in (SENTENCE_TRANSFORMERS_PROVIDER, "listwise_llm")
             else None
         ),
         preload=(
