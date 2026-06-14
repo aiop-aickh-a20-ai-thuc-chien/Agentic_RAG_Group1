@@ -73,8 +73,10 @@ from agentic_rag.retrieval.fusion import (
     apply_fusion_threshold,
     apply_pre_fusion_thresholds,
     normalized_score_fusion,
+    normalized_score_fusion_n,
     rrf_fusion,
     weighted_rrf_fusion,
+    weighted_rrf_fusion_n,
 )
 from agentic_rag.retrieval.search import (
     Store,
@@ -82,10 +84,14 @@ from agentic_rag.retrieval.search import (
     delete_qdrant_document_points,
     dense_embedding_metadata,
     embed_chunk_texts,
+    is_sparse_retriever,
     qdrant_hybrid_search,
     qdrant_similar_by_vectors,
+    resolve_active_retrievers,
+    retriever_tag,
     upsert_dense_embeddings,
 )
+from agentic_rag.retrieval.thresholds import filter_by_thresholds
 
 logger = logging.getLogger(__name__)
 
@@ -1046,6 +1052,20 @@ class LocalPdfEvidenceProvider:
 
         top_k = request.page_size or _default_page_size()
         candidate_k = max(_default_candidate_count(), top_k)
+
+        # Opt-in N-way hybrid: run every retriever in RETRIEVERS and fuse them.
+        # When RETRIEVERS is unset, fall through to the legacy bm25 + dense path.
+        if os.getenv("RETRIEVERS", "").strip():
+            return _retrieve_multi_hybrid(
+                store=store,
+                request=request,
+                preprocessed_query=preprocessed_query,
+                normalized_query=normalized_query,
+                top_k=top_k,
+                candidate_k=candidate_k,
+                preprocess_latency_ms=preprocess_latency_ms,
+            )
+
         bm25_started_at = time.perf_counter()
         bm25_results = _traced_bm25(store, normalized_query, candidate_k)
         bm25_latency_ms = _latency_ms(bm25_started_at)
@@ -2526,6 +2546,242 @@ def _fuse_results(
         "method": "reciprocal_rank_fusion",
         "rrf_k": rrf_k,
     }
+
+
+_RETRIEVER_MIN_SCORE_ENV: dict[str, str] = {
+    "bm25": "BM25_MIN_SCORE",
+    "splade": "SPLADE_MIN_SCORE",
+    "dense": "DENSE_MIN_SCORE",
+    "colbert": "COLBERT_MIN_SCORE",
+}
+_FUSION_WEIGHT_ENV: dict[str, str] = {
+    "bm25": "FUSION_BM25_WEIGHT",
+    "splade": "FUSION_SPLADE_WEIGHT",
+    "dense": "FUSION_DENSE_WEIGHT",
+    "colbert": "FUSION_COLBERT_WEIGHT",
+}
+# Defaults down-weight the correlated lexical pair (bm25 + splade) so they do not
+# out-vote the semantic ColBERT/dense signal in weighted fusion.
+_FUSION_WEIGHT_DEFAULTS: dict[str, float] = {
+    "bm25": 0.4,
+    "splade": 0.4,
+    "dense": 0.5,
+    "colbert": 0.5,
+}
+
+
+def _retriever_min_score(tag: str) -> float | None:
+    name = _RETRIEVER_MIN_SCORE_ENV.get(tag)
+    return _env_optional_float(name) if name else None
+
+
+def _multi_fusion_weights(retriever_tags: list[str]) -> dict[str, float]:
+    weights: dict[str, float] = {}
+    for tag in retriever_tags:
+        env_name = _FUSION_WEIGHT_ENV.get(tag)
+        default = _FUSION_WEIGHT_DEFAULTS.get(tag, 1.0)
+        weights[tag] = _env_float(env_name, default) if env_name else default
+    return weights
+
+
+def _fuse_results_multi(
+    results_by_retriever: dict[str, list[SearchResult]],
+    *,
+    candidate_k: int,
+) -> tuple[list[SearchResult], dict[str, object]]:
+    """Route N retriever result lists to the configured N-way fusion strategy."""
+
+    method = os.getenv("FUSION_METHOD", "rrf").strip().lower()
+    retriever_tags = list(results_by_retriever)
+    if method == "normalized_score":
+        weights = _multi_fusion_weights(retriever_tags)
+        fused = normalized_score_fusion_n(results_by_retriever, weights=weights, top_k=candidate_k)
+        return fused, {
+            "method": "normalized_score_fusion",
+            "retrievers": retriever_tags,
+            "weights": weights,
+        }
+    if method == "weighted_rrf":
+        rrf_k = _env_int("FUSION_RRF_K", RRF_K)
+        weights = _multi_fusion_weights(retriever_tags)
+        fused = weighted_rrf_fusion_n(
+            results_by_retriever, weights=weights, top_k=candidate_k, rrf_k=rrf_k
+        )
+        return fused, {
+            "method": "weighted_rrf",
+            "rrf_k": rrf_k,
+            "retrievers": retriever_tags,
+            "weights": weights,
+        }
+    rrf_k = _env_int("FUSION_RRF_K", RRF_K)
+    fused = weighted_rrf_fusion_n(
+        results_by_retriever, weights=None, top_k=candidate_k, rrf_k=rrf_k
+    )
+    return fused, {
+        "method": "reciprocal_rank_fusion",
+        "rrf_k": rrf_k,
+        "retrievers": retriever_tags,
+    }
+
+
+@_ls_traceable(name="nway-hybrid-retrieve", run_type="retriever")
+def _retrieve_multi_hybrid(
+    *,
+    store: Store,
+    request: RetrievalInput,
+    preprocessed_query: dict[str, Any],
+    normalized_query: str,
+    top_k: int,
+    candidate_k: int,
+    preprocess_latency_ms: int,
+) -> RetrievalOutput:
+    """Run every retriever in RETRIEVERS and fuse them N-way (in-memory path)."""
+
+    providers = resolve_active_retrievers()
+    store.prime_retrievers(providers)
+
+    raw_by_retriever: dict[str, list[SearchResult]] = {}
+    latency_by_retriever: dict[str, int] = {}
+    errors_by_retriever: dict[str, str] = {}
+    for provider in providers:
+        tag = retriever_tag(provider)
+        # Lexical retrievers consume the normalized query; dense/ColBERT keep
+        # the original question (diacritics) for better embedding quality.
+        query = normalized_query if is_sparse_retriever(provider) else request.question
+        started_at = time.perf_counter()
+        try:
+            raw_by_retriever[tag] = store.retriever_search(provider, query, top_k=candidate_k)
+        except Exception as exc:
+            # Degrade one retriever without failing the whole hybrid.
+            raw_by_retriever[tag] = []
+            errors_by_retriever[tag] = str(exc)
+        latency_by_retriever[tag] = _latency_ms(started_at)
+
+    filtered_by_retriever: dict[str, list[SearchResult]] = {}
+    pre_fusion_removed: dict[str, list[dict[str, object]]] = {}
+    for tag, retriever_results in raw_by_retriever.items():
+        filtered, removed = filter_by_thresholds(
+            retriever_results,
+            min_score=_retriever_min_score(tag),
+            min_norm_score=None,
+            norm_scores={},
+        )
+        filtered_by_retriever[tag] = filtered
+        if removed:
+            pre_fusion_removed[tag] = removed
+
+    fusion_started_at = time.perf_counter()
+    fused_results, fusion_method_trace = _fuse_results_multi(
+        filtered_by_retriever, candidate_k=candidate_k
+    )
+    fused_results, fusion_threshold_trace = _traced_post_fusion_threshold(
+        fused_results, _threshold_config_from_env()
+    )
+    fusion_latency_ms = _latency_ms(fusion_started_at)
+    final_results = fused_results[:top_k]
+
+    return RetrievalOutput(
+        results=_with_multi_pipeline_metadata(
+            results=final_results,
+            question=request.question,
+            preprocessed_query=preprocessed_query,
+            raw_by_retriever=raw_by_retriever,
+            filtered_by_retriever=filtered_by_retriever,
+            fused_results=fused_results,
+            fusion_method_trace=fusion_method_trace,
+            fusion_threshold_trace=fusion_threshold_trace,
+            pre_fusion_removed=pre_fusion_removed,
+            latency_by_retriever=latency_by_retriever,
+            errors_by_retriever=errors_by_retriever,
+            preprocess_latency_ms=preprocess_latency_ms,
+            fusion_latency_ms=fusion_latency_ms,
+            candidate_k=candidate_k,
+        )
+    )
+
+
+def _with_multi_pipeline_metadata(
+    *,
+    results: list[SearchResult],
+    question: str,
+    preprocessed_query: dict[str, Any],
+    raw_by_retriever: dict[str, list[SearchResult]],
+    filtered_by_retriever: dict[str, list[SearchResult]],
+    fused_results: list[SearchResult],
+    fusion_method_trace: dict[str, object],
+    fusion_threshold_trace: dict[str, object],
+    pre_fusion_removed: dict[str, list[dict[str, object]]],
+    latency_by_retriever: dict[str, int],
+    errors_by_retriever: dict[str, str],
+    preprocess_latency_ms: int,
+    fusion_latency_ms: int,
+    candidate_k: int,
+) -> list[SearchResult]:
+    raw_indexed = {
+        tag: _results_by_chunk_id(retriever_results)
+        for tag, retriever_results in raw_by_retriever.items()
+    }
+    fused_by_chunk_id = _results_by_chunk_id(fused_results)
+    pipeline_trace: dict[str, object] = {
+        "preprocess_query": {
+            "latency_ms": preprocess_latency_ms,
+            "input": {"query": question},
+            "output": preprocessed_query,
+        },
+        "retrievers": {
+            tag: {
+                "candidate_k": candidate_k,
+                "latency_ms": latency_by_retriever.get(tag, 0),
+                "error": errors_by_retriever.get(tag),
+                "raw_count": len(raw_by_retriever.get(tag, [])),
+                "after_threshold_count": len(filtered_by_retriever.get(tag, [])),
+                "output": [
+                    _trace_search_result(result) for result in raw_by_retriever.get(tag, [])
+                ],
+                "removed": pre_fusion_removed.get(tag, []),
+            }
+            for tag in raw_by_retriever
+        },
+        "fusion": {
+            "tech": {"candidate_k": candidate_k, **fusion_method_trace},
+            "latency_ms": fusion_latency_ms,
+            "output": [_trace_search_result(result) for result in fused_results],
+        },
+        "thresholds": {"fusion": fusion_threshold_trace},
+    }
+
+    retrieval_pipeline = "source_ingestion -> " + " + ".join(raw_by_retriever) + " -> nway_fusion"
+    annotated_results: list[SearchResult] = []
+    for result in results:
+        chunk_id = result.chunk.chunk_id
+        per_retriever = {tag: _stage_debug(raw_indexed[tag].get(chunk_id)) for tag in raw_indexed}
+        metadata = {
+            **result.chunk.metadata,
+            "retrieval_pipeline": retrieval_pipeline,
+            "pipeline_trace": pipeline_trace,
+            "preprocessed_query": preprocessed_query,
+            "retrievers": per_retriever,
+            "retriever_errors": errors_by_retriever,
+            "fusion": _stage_debug(fused_by_chunk_id.get(chunk_id)),
+            "final": {
+                "rank": result.rank,
+                "score": result.score,
+                "retriever": result.retriever,
+            },
+        }
+        annotated_results.append(
+            SearchResult(
+                chunk=Chunk(
+                    chunk_id=result.chunk.chunk_id,
+                    text=result.chunk.text,
+                    metadata=metadata,
+                ),
+                score=result.score,
+                rank=result.rank,
+                retriever=result.retriever,
+            )
+        )
+    return annotated_results
 
 
 def _threshold_config_from_env() -> ThresholdConfig:
