@@ -22,7 +22,9 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+import networkx as nx
 from pydantic import BaseModel, ConfigDict
+from underthesea import word_tokenize
 
 from agentic_rag.core.contracts import (
     Chunk,
@@ -1488,6 +1490,7 @@ def _chunk_with_local_metadata(
         "file_name": name,
         "source_type": source_type,
         "provider": "local_pdf",
+        "keyword": _extract_keyword(chunk.text),
     }
     if source_type == "url":
         metadata["url"] = source or chunk.metadata.get("url")
@@ -2912,3 +2915,93 @@ def _record_failed_url(*, url: str, reason: str) -> None:
     failed_path.parent.mkdir(parents=True, exist_ok=True)
     with failed_path.open("a", encoding="utf-8") as handle:
         handle.write(f"{url}\t{reason}\n")
+
+
+def _extract_keyword(text: str, top_k: int = 10) -> list[str]:
+    words = _tokenize_for_keyword(text)
+    if not words:
+        return []
+    graph = _build_keyword_graph(words)
+    scores = nx.pagerank(graph, weight="weight")
+    ranked_vocab = {word: score for word, score in scores.items()}
+
+    original_tokens = word_tokenize(text)
+    phrases = []
+    current_phrase = []
+    for token in original_tokens:
+        normalized = token.lower()
+        if normalized in ranked_vocab:
+            current_phrase.append(normalized)
+        else:
+            if current_phrase:
+                phrase = " ".join(current_phrase)
+                score = sum(ranked_vocab[w] for w in current_phrase) / len(current_phrase)
+                phrases.append((phrase, score))
+                current_phrase = []
+
+    if current_phrase:
+        phrase = " ".join(current_phrase)
+        score = sum(ranked_vocab[w] for w in current_phrase) / len(current_phrase)
+        phrases.append((phrase, score))
+
+    unique_phrases = {}
+    for phrase, score in phrases:
+        if phrase not in unique_phrases:
+            unique_phrases[phrase] = score
+    ranked_phrases = sorted(unique_phrases.items(), key=lambda x: x[1], reverse=True)
+    return [r[0] for r in ranked_phrases[:top_k]]
+
+
+def _tokenize_for_keyword(text: str) -> list[str]:
+
+    stopwords = {
+        "và",
+        "là",
+        "của",
+        "có",
+        "trong",
+        "một",
+        "những",
+        "được",
+        "với",
+        "khi",
+        "đó",
+        "này",
+        "cho",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "and",
+    }
+
+    tokens = word_tokenize(text)
+    # tagged = pos_tag(text)
+    candidates = []
+    for word in tokens:
+        word = word.lower()
+        if word not in stopwords and re.match(r"^[\w_]+(?:\d{1,3}(?:\.\d{3})*)?$", word):
+            candidates.append(word)
+    return candidates
+
+
+def _build_keyword_graph(words: list[str], window_size: int = 4):  # type: ignore[no-untyped-def]
+    graph = nx.Graph()
+    for i in range(len(words)):
+        for j in range(i + 1, min(i + window_size, len(words))):
+            w1 = words[i]
+            w2 = words[j]
+            if w1 != w2:
+                if graph.has_edge(w1, w2):
+                    graph[w1][w2]["weight"] += 1
+                else:
+                    graph.add_edge(w1, w2, weight=1)
+    return graph
