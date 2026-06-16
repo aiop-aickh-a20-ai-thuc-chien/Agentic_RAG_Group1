@@ -229,8 +229,7 @@ def _chunks_from_chunking_input(
         for key, value in markdown_chunk.metadata.items():
             is_page_override = key == "page" and value is not None
             is_override_field = (
-                key in ("section_path", "section_level", "title")
-                and value is not None
+                key in ("section_path", "section_level", "title") and value is not None
             )
             if is_page_override or is_override_field or key not in metadata:
                 metadata[key] = value
