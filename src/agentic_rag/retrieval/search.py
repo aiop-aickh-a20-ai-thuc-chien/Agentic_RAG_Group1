@@ -568,6 +568,49 @@ def delete_all_qdrant_points() -> dict[str, object]:
     }
 
 
+def update_qdrant_payload(chunks: list[Chunk]) -> dict[str, object]:
+    """Update only the payload metadata of existing Qdrant points (no re-embed).
+
+    Backfilling LLM ``[L]`` metadata changes the payload but not the chunk text,
+    so the stored dense vector is already correct. ``set_payload`` merges the new
+    ``metadata`` dict into each existing point — keeping the vector and the
+    ``_embedding_profile`` untouched — instead of paying for a redundant
+    embedding pass via :func:`upsert_dense_embeddings`.
+
+    Point ids are derived deterministically (``_qdrant_point_id``) from each
+    chunk's storage id, so they match the points written at ingest time.
+    """
+
+    config = _vector_store_config()
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    if not chunks:
+        return {
+            "enabled": True,
+            "vector_store": "qdrant",
+            "updated_points": 0,
+            "collection": config.collection,
+        }
+
+    client = _qdrant_client(config)
+    updated = 0
+    for index, chunk in enumerate(chunks, start=1):
+        point_id = _qdrant_point_id(chunk=chunk, fallback_index=index)
+        client.set_payload(
+            collection_name=config.collection,
+            payload={"metadata": dict(chunk.metadata)},
+            points=[point_id],
+            wait=True,
+        )
+        updated += 1
+    return {
+        "enabled": True,
+        "vector_store": "qdrant",
+        "updated_points": updated,
+        "collection": config.collection,
+    }
+
+
 def _upsert_qdrant_embeddings(
     chunks: list[Chunk],
     *,
