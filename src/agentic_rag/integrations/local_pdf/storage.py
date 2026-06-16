@@ -378,12 +378,24 @@ class PostgresLocalSourceStore:
         self._chunks_table = _safe_table_name(f"{table_prefix}_chunks")
         from psycopg_pool import ConnectionPool
 
+        # Neon (serverless) closes idle connections aggressively, which surfaces
+        # as "server closed the connection unexpectedly" mid-transaction on long
+        # runs. ``check`` validates (and recycles) a connection before handing it
+        # out, and TCP keepalives keep idle ones alive — mirroring the eval pool
+        # in autodata_eval/db.py.
         self._pool = ConnectionPool(
             self._psycopg_connection,
             min_size=1,
-            max_size=4,
+            max_size=10,
             open=True,
-            kwargs={"prepare_threshold": None},
+            check=ConnectionPool.check_connection,
+            kwargs={
+                "prepare_threshold": None,
+                "keepalives": 1,
+                "keepalives_idle": 10,
+                "keepalives_interval": 2,
+                "keepalives_count": 5,
+            },
         )
         self._ensure_schema()
 
@@ -654,7 +666,10 @@ class PostgresLocalSourceStore:
                 chunk.chunk_id,
                 _chunk_index(chunk=chunk, fallback_index=index),
                 chunk.text,
-                Jsonb(chunk.metadata),
+                # ChunkMetadata is a Pydantic model, not a plain dict; psycopg's
+                # Jsonb cannot serialize it directly. Coerce via its mapping
+                # protocol (declared fields + extras) before writing.
+                Jsonb(dict(chunk.metadata)),
             )
             for index, chunk in enumerate(chunks, start=1)
         ]
@@ -711,8 +726,8 @@ class HybridLocalSourceStore:
         metadata: dict[str, object],
         chunks: list[Chunk],
     ) -> None:
-        # Upload raw file + markdown to S3 (chunks=[] — S3 is blob-only in hybrid mode)
-        self._s3.write_document(
+        # Postgres is the source of truth for chunks; write it first.
+        self._pg.write_document(
             document_id=document_id,
             dataset_id=dataset_id,
             name=name,
@@ -721,10 +736,12 @@ class HybridLocalSourceStore:
             raw_path=raw_path,
             markdown_path=markdown_path,
             metadata=metadata,
-            chunks=[],
+            chunks=chunks,
         )
-        # Write metadata + chunks to Postgres
-        self._pg.write_document(
+        # Upload raw file + markdown to S3, and mirror the chunks there too so a
+        # fallback to LOCAL_SOURCE_STORE=s3 (or direct S3 inspection) sees the same
+        # [P]+[L] metadata as Neon. S3 stays a full mirror rather than blob-only.
+        self._s3.write_document(
             document_id=document_id,
             dataset_id=dataset_id,
             name=name,
@@ -746,7 +763,12 @@ class HybridLocalSourceStore:
         return self._pg.read_chunks_for_documents(document_ids)
 
     def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        # Neon is authoritative — update it first. Then mirror to S3 best-effort
+        # (same pattern as delete_document) so the LLM-enriched [L] chunks reach
+        # S3 too without letting a transient S3 error break the primary write.
         self._pg.replace_document_chunks(document_id, chunks)
+        with contextlib.suppress(Exception):
+            self._s3.replace_document_chunks(document_id, chunks)
 
     def list_documents(self) -> list[StoredSourceDocument]:
         return self._pg.list_documents()
