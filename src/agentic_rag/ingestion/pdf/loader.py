@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -215,6 +216,8 @@ def _chunks_from_chunking_input(
     safe_file_stem = _safe_chunk_id_part(path.stem)
     source = str(path)
     source_type = infer_source_type(source)
+    title = _extract_title(chunking_input.markdown)
+    ingestion_at = datetime.now(UTC).isoformat()
 
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
@@ -224,10 +227,14 @@ def _chunks_from_chunking_input(
             "chunk_id": chunk_id,
             "source": source,
             "source_type": source_type,
+            "document_type": "manual",
+            "title": title,
             "file_name": path.name,
             "page": None,
             "page_number": None,
             "section": section,
+            "section_level": markdown_chunk.section_level or None,
+            "section_path": list(markdown_chunk.section_path),
             "heading": section,
             "breadcrumb": _breadcrumb_for_chunk(markdown_chunk),
             "parser": chunking_input.parser,
@@ -236,9 +243,15 @@ def _chunks_from_chunking_input(
             "token_count": _token_count_for_chunk(markdown_chunk),
             "updated_date": updated_date,
             "updated_date_source": "ingestion_start",
+            "ingestion_at": ingestion_at,
+            "content_hash": _short_hash(markdown_chunk.text),
         }
         for key, value in markdown_chunk.metadata.items():
-            if (key == "page" and value is not None) or key not in metadata:
+            is_page_override = key == "page" and value is not None
+            is_override_field = (
+                key in ("section_path", "section_level", "title") and value is not None
+            )
+            if is_page_override or is_override_field or key not in metadata:
                 metadata[key] = value
         page = metadata.get("page")
         metadata["page_number"] = page if isinstance(page, int) else None
@@ -330,3 +343,17 @@ def _single_line(value: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return f"{compact[: max_chars - 3]}..."
+
+
+def _extract_title(markdown: str) -> str | None:
+    """Extract document title from the first H1 heading in markdown."""
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            return stripped[2:].strip() or None
+    return None
+
+
+def _short_hash(value: str) -> str:
+    """Return a stable short SHA-256 digest."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]

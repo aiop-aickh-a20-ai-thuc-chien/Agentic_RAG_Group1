@@ -735,28 +735,28 @@ def _citations_from_evidence(evidence_chunks: list[SearchResult]) -> list[Citati
     return citations
 
 
-def _matches_metadata(value: object, metadata: Mapping[str, object], key: str) -> bool:
+def _matches_metadata(value: object, metadata: Any, key: str) -> bool:
     metadata_value = _metadata_value(metadata, key)
     if metadata_value is None:
         return False
     return str(value) == str(metadata_value)
 
 
-def _metadata_value(metadata: Mapping[str, object], key: str) -> object | None:
+def _metadata_value(metadata: Any, key: str) -> Any:
     value = metadata.get(key)
     if value is None:
         return None
     return value
 
 
-def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:
+def _metadata_text(metadata: Any, key: str) -> str | None:
     value = _metadata_value(metadata, key)
     if value is None:
         return None
     return str(value)
 
 
-def _metadata_int(metadata: Mapping[str, object], key: str) -> int | None:
+def _metadata_int(metadata: Any, key: str) -> int | None:
     value = _metadata_value(metadata, key)
     if isinstance(value, bool) or value is None:
         return None

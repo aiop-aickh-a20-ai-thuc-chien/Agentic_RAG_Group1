@@ -1,3 +1,19 @@
+from agentic_rag.ingestion.metadata.extract import (
+    EXTRACTION_SYSTEM_MESSAGE,
+    LLMExtractedMetadata,
+    MetadataExtractionInput,
+    apply_extracted_metadata,
+    build_extraction_input,
+    build_extraction_prompt,
+    extract_chunk_metadata,
+    parse_extraction_response,
+)
+from agentic_rag.ingestion.metadata.normalize import (
+    KNOWN_MODELS,
+    build_response_format,
+    normalize_metadata,
+    normalize_product_models,
+)
 from agentic_rag.ingestion.metadata.schema import (
     DOCUMENT_TYPE_VALUES,
     LANGUAGE_VALUES,
@@ -14,14 +30,26 @@ from agentic_rag.ingestion.metadata.schema import (
 
 __all__ = [
     "DOCUMENT_TYPE_VALUES",
+    "EXTRACTION_SYSTEM_MESSAGE",
+    "KNOWN_MODELS",
     "LANGUAGE_VALUES",
+    "LLMExtractedMetadata",
+    "MetadataExtractionInput",
     "QDRANT_INDEX_FIELDS",
     "REQUIRED_METADATA_FIELDS",
     "SOURCE_CATEGORY_VALUES",
     "SOURCE_TYPE_VALUES",
     "ChunkMetadata",
+    "apply_extracted_metadata",
+    "build_extraction_input",
+    "build_extraction_prompt",
+    "build_response_format",
+    "extract_chunk_metadata",
     "has_required_metadata",
     "infer_source_type",
     "missing_required_metadata",
+    "normalize_metadata",
+    "normalize_product_models",
+    "parse_extraction_response",
     "require_metadata",
 ]

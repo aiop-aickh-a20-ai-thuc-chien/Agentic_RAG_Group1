@@ -132,10 +132,14 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
         "chunk_id": "pdf_vinfast_warranty_c0001",
         "source": str(pdf_path),
         "source_type": "internal",
+        "document_type": "manual",
+        "title": "Warranty",
         "file_name": "VinFast Warranty.pdf",
         "page": None,
         "page_number": None,
         "section": "Warranty",
+        "section_level": None,
+        "section_path": [],
         "heading": "Warranty",
         "breadcrumb": ["Warranty"],
         "parser": "fake-parser",
@@ -144,9 +148,12 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
         "token_count": 6,
         "updated_date_source": "ingestion_start",
     }
-    assert {k: v for k, v in chunks[0].metadata.items() if k != "updated_date"} == (
-        expected_metadata
-    )
+    for key, value in expected_metadata.items():
+        actual = chunks[0].metadata.get(key)
+        assert chunks[0].metadata[key] == value, f"metadata[{key!r}]: {actual!r} != {value!r}"
+    assert "ingestion_at" in chunks[0].metadata
+    assert isinstance(chunks[0].metadata["content_hash"], str)
+    assert len(chunks[0].metadata["content_hash"]) == 12
     assert chunks[1].metadata["section"] == "Battery"
     assert parser.seen_path == pdf_path
     assert parser.parse_calls == 1
