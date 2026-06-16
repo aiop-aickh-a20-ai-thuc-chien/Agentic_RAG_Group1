@@ -209,10 +209,7 @@ def _cleaned_html_document(
             '  <meta charset="utf-8">',
             f"  <title>{html_escape(title)}</title>",
             f'  <meta name="source" content="{html_escape(source, quote=True)}">',
-            (
-                '  <meta name="source-url" '
-                f'content="{html_escape(source_url or "", quote=True)}">'
-            ),
+            (f'  <meta name="source-url" content="{html_escape(source_url or "", quote=True)}">'),
             "</head>",
             '<body data-artifact-stage="cleaned_html">',
             "<main>",
@@ -317,9 +314,7 @@ def _is_table_line(line: str) -> bool:
 
 def _is_table_separator(line: str) -> bool:
     cells = _table_cells(line)
-    return bool(cells) and all(
-        set(cell.replace(":", "").strip()) <= {"-"} for cell in cells
-    )
+    return bool(cells) and all(set(cell.replace(":", "").strip()) <= {"-"} for cell in cells)
 
 
 def _table_cells(line: str) -> list[str]:
@@ -362,9 +357,7 @@ def _quality_payload(chunks: list[Chunk]) -> dict[str, Any] | None:
         "chunk_count": len(chunks),
         "page_type": metadata.get("page_type"),
         "render_required": metadata.get("render_required"),
-        "parser": (
-            url_quality_gate.get("parser") if isinstance(url_quality_gate, dict) else None
-        ),
+        "parser": (url_quality_gate.get("parser") if isinstance(url_quality_gate, dict) else None),
         "url_quality": url_quality if isinstance(url_quality, dict) else None,
         "url_quality_gate": url_quality_gate if isinstance(url_quality_gate, dict) else None,
     }
