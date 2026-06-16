@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from typing import Any
 
 _MODEL_RE = re.compile(r"\bVF[\s-]?(3|5|6|7|8|9)\b", re.IGNORECASE)
 _GREEN_MODEL_RE = re.compile(
@@ -18,25 +18,32 @@ _VEHICLE_PAGE_PATTERNS = (
     "dat-coc-o-to-dien-vinfast",
     "dat-coc-bo-sung-o-to-dien",
     "vinfast-cars-deposit",
-    "ev-deposit",
-    "car-vf",
-    "bang-gia-xe",
-    "gia-xe-vinfast",
-    "oto-dien-vinfast",
 )
+
 _ACCESSORY_PAGE_PATTERNS = (
-    "/phu-kien",
-    "/parts",
-    "parts-car",
-    "parts-escooter",
-    "acs",
-    "bin",
-    "chg",
-    "chs",
-    "eep",
-    "floormats",
-    "insulationfilm",
-    "roofrack",
+    "phu-kien",
+    "bo-sac",
+    "op-lung",
+    "tham-lot",
+    "o-to-dien/phu-kien",
+    "vinfast-accessories",
+    "charge-accessories",
+    "green-accessories",
+    "greenaccessories",
+    "green-charge",
+    "greencharge",
+    "thanh-pho-xanh",
+    "v-green",
+    "vgreen",
+    "mua-phu-kien",
+    "accessory",
+    "accessories",
+    "lifestyle",
+    "quat-tang",
+    "gift",
+    "merchandise",
+    "clutch",
+    "backpack",
     "thermos",
     "embroideredcap",
     "embroideredpolo",
@@ -47,7 +54,7 @@ _ACCESSORY_PAGE_PATTERNS = (
 _ACCESSORY_CATEGORY_RE = re.compile(r"/(?:500[1-9]|5010|6001)(?:$|[\s/?#])")
 
 
-def format_prompt_metadata(metadata: Mapping[str, object]) -> str:
+def format_prompt_metadata(metadata: Any) -> str:
     """Return compact source metadata for evidence prompt lines."""
 
     fields = _prompt_metadata_fields(metadata)
@@ -56,7 +63,7 @@ def format_prompt_metadata(metadata: Mapping[str, object]) -> str:
     return "; metadata=" + ", ".join(f"{key}={value}" for key, value in fields)
 
 
-def _prompt_metadata_fields(metadata: Mapping[str, object]) -> list[tuple[str, str]]:
+def _prompt_metadata_fields(metadata: Any) -> list[tuple[str, str]]:
     fields: list[tuple[str, str]] = []
 
     page_type = infer_page_type(metadata)
@@ -69,7 +76,7 @@ def _prompt_metadata_fields(metadata: Mapping[str, object]) -> list[tuple[str, s
     return fields
 
 
-def infer_page_type(metadata: Mapping[str, object]) -> str:
+def infer_page_type(metadata: Any) -> str:
     """Infer a coarse source type from URL/title metadata."""
 
     source_type = (_metadata_text(metadata, "source_type") or "").strip().lower()
@@ -92,7 +99,7 @@ def infer_page_type(metadata: Mapping[str, object]) -> str:
     return source_type or "unknown"
 
 
-def infer_price_type(metadata: Mapping[str, object], *, page_type: str | None = None) -> str:
+def infer_price_type(metadata: Any, *, page_type: str | None = None) -> str:
     """Infer whether prices in the source likely refer to a vehicle or accessory."""
 
     resolved_page_type = page_type or infer_page_type(metadata)
@@ -103,7 +110,7 @@ def infer_price_type(metadata: Mapping[str, object], *, page_type: str | None = 
     return "unknown"
 
 
-def infer_vehicle_model(metadata: Mapping[str, object]) -> str | None:
+def infer_vehicle_model(metadata: Any) -> str | None:
     """Infer VinFast vehicle model labels from URL/title-like metadata."""
 
     haystack = _source_haystack(metadata)
@@ -126,7 +133,7 @@ def _looks_like_accessory_page(haystack: str) -> bool:
     )
 
 
-def _source_haystack(metadata: Mapping[str, object]) -> str:
+def _source_haystack(metadata: Any) -> str:
     values = [
         _metadata_text(metadata, key)
         for key in (
@@ -156,7 +163,7 @@ def _append_metadata_field(
     fields.append((key, _sanitize_metadata_value(text)))
 
 
-def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:
+def _metadata_text(metadata: Any, key: str) -> str | None:
     value = metadata.get(key)
     if value is None:
         return None

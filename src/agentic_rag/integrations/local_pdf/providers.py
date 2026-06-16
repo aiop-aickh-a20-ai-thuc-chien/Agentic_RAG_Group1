@@ -20,7 +20,7 @@ import unicodedata
 import uuid
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -1438,7 +1438,7 @@ class LocalPdfEvidenceProvider:
         normalized_source_type = source_type.lower()
         if normalized_source_type == "url":
             first_chunk = chunks[0] if chunks else None
-            if first_chunk and "section_path" in first_chunk.metadata:
+            if first_chunk and first_chunk.metadata.get("section_path"):
                 from agentic_rag.ingestion.url.loader import _clean_markdown_noise
 
                 cleaned = _clean_markdown_noise(markdown) if markdown else ""
@@ -1845,7 +1845,7 @@ def _truthy_metadata_value(value: object) -> bool:
 
 
 def _first_metadata_text(
-    *metadata_sources: dict[str, object],
+    *metadata_sources: Any,
     keys: tuple[str, ...],
 ) -> str:
     for metadata in metadata_sources:
@@ -1857,7 +1857,7 @@ def _first_metadata_text(
     return ""
 
 
-def _chunk_index_sort_value(metadata: dict[str, object]) -> int:
+def _chunk_index_sort_value(metadata: Any) -> int:
     direct = _metadata_int(metadata, "chunk_index")
     if direct is not None:
         return direct
@@ -2829,7 +2829,7 @@ def _first_metadata_value(chunks: list[Chunk], key: str) -> object | None:
     for chunk in chunks:
         value = chunk.metadata.get(key)
         if value not in {None, ""}:
-            return value
+            return cast(object, value)
     return None
 
 

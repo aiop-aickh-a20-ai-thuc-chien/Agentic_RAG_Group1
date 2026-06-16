@@ -52,7 +52,7 @@ def build_chunks(
     section: str,
     url: str | None,
     title: str | None,
-    fetched_at: str,
+    ingestion_at: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[Chunk]:
@@ -84,7 +84,8 @@ def build_chunks(
                     "url": url,
                     "section": section,
                     "title": title,
-                    "fetched_at": fetched_at,
+                    "ingestion_at": ingestion_at,
+                    "chunk_index": index,
                     "content_hash": content_hash,
                     "chunk_part_index": index,
                     "chunk_part_total": chunk_part_total,

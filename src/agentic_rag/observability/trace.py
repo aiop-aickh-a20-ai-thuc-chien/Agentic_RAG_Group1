@@ -721,7 +721,9 @@ def _trace_search_result(result: SearchResult) -> dict[str, Any]:
         "retriever": result.retriever,
         "chunk_id": chunk.chunk_id,
         "text": chunk.text,
-        "metadata": chunk.metadata,
+        "metadata": (
+            chunk.metadata.model_dump() if hasattr(chunk.metadata, "model_dump") else chunk.metadata
+        ),
     }
 
 

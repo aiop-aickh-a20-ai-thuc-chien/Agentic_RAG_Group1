@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from hashlib import sha1
+from typing import Any
 
 from agentic_rag.core.contracts import Answer, Chunk, Citation, SearchResult
 
@@ -230,7 +231,7 @@ def _page_from_positions(payload: Mapping[str, object]) -> int | None:
     return None
 
 
-def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:
+def _metadata_text(metadata: Any, key: str) -> str | None:
     value = metadata.get(key)
     if value is None:
         return None
@@ -239,7 +240,7 @@ def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:
     return str(value)
 
 
-def _metadata_int(metadata: Mapping[str, object], key: str) -> int | None:
+def _metadata_int(metadata: Any, key: str) -> int | None:
     value = metadata.get(key)
     if isinstance(value, bool) or value is None:
         return None

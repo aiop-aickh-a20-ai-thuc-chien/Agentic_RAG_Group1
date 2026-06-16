@@ -1,12 +1,12 @@
 from pytest import MonkeyPatch
 
+import agentic_rag.generation.evidence as evidence
 from agentic_rag.core.contracts import (
     EvidenceResolutionInput,
     RetrievalInput,
     RetrievalOutput,
     SearchResult,
 )
-from agentic_rag.generation import evidence
 from agentic_rag.testing.fixtures import sample_search_results
 
 

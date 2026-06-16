@@ -11,6 +11,7 @@ from typing import Any, Literal, cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import ChunkMetadata
 
 from .chunkers import DoclingPageAwareChunker
 from .loader import (
@@ -545,7 +546,7 @@ def _map_elements_to_chunks_by_page(
     return mapped_elements
 
 
-def _metadata_pages(metadata: dict[str, Any]) -> list[int]:
+def _metadata_pages(metadata: ChunkMetadata | dict[str, Any]) -> list[int]:
     pages = metadata.get("pages")
     if isinstance(pages, list):
         resolved_pages = [page for page in pages if isinstance(page, int)]

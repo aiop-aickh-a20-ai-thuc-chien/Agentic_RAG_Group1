@@ -1,4 +1,6 @@
-from agentic_rag.ingestion import chunking
+import agentic_rag.ingestion.chunking as chunking
+import agentic_rag.ingestion.pdf.chunking as pdf_chunking
+import agentic_rag.ingestion.url.chunking as url_chunking
 from agentic_rag.ingestion.chunking.chunkers import DeterministicMarkdownChunker
 from agentic_rag.ingestion.chunking.models import ChunkCandidate, ChunkingInput
 from agentic_rag.ingestion.chunking.splitters import (
@@ -9,8 +11,6 @@ from agentic_rag.ingestion.chunking.splitters import (
     split_markdown_paragraphs,
     split_sentences,
 )
-from agentic_rag.ingestion.pdf import chunking as pdf_chunking
-from agentic_rag.ingestion.url import chunking as url_chunking
 
 
 def test_shared_markdown_chunking_is_pdf_compatibility_source() -> None:

@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agentic_rag.ingestion.metadata import ChunkMetadata
+
 AnswerStatus = Literal["answered", "not_found", "clarification_needed"]
 RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
 KnowledgeQualityFindingKind = Literal["exact_duplicate", "near_duplicate", "conflict"]
@@ -31,7 +33,7 @@ class Chunk(_ContractModel):
 
     chunk_id: str
     text: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: ChunkMetadata = Field(default_factory=ChunkMetadata)
 
 
 class SearchResult(_ContractModel):

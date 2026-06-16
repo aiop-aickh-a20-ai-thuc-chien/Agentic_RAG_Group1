@@ -100,7 +100,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
         section="Overview",
         url="https://example.edu",
         title="Example",
-        fetched_at="2026-06-01T00:00:00+00:00",
+        ingestion_at="2026-06-01T00:00:00+00:00",
     )
 
     assert len(chunks) == 1
@@ -108,7 +108,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].chunk_id == build_chunk_id("url", "https://example.edu", "Overview", 1)
     assert chunks[0].metadata["chunk_id"] == chunks[0].chunk_id
     assert chunks[0].metadata["content_hash"] == short_hash("Overview content")
-    assert chunks[0].metadata["fetched_at"] == "2026-06-01T00:00:00+00:00"
+    assert chunks[0].metadata["ingestion_at"] == "2026-06-01T00:00:00+00:00"
 
 
 def test_build_chunks_validates_chunk_settings() -> None:
@@ -120,7 +120,7 @@ def test_build_chunks_validates_chunk_settings() -> None:
             section="main",
             url=None,
             title=None,
-            fetched_at="now",
+            ingestion_at="now",
             chunk_size=0,
         )
 
@@ -132,7 +132,7 @@ def test_build_chunks_validates_chunk_settings() -> None:
             section="main",
             url=None,
             title=None,
-            fetched_at="now",
+            ingestion_at="now",
             chunk_size=10,
             chunk_overlap=10,
         )

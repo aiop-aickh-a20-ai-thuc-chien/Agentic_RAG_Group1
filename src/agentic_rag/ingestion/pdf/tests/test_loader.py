@@ -125,17 +125,27 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
         "pdf_vinfast_warranty_c0002",
     ]
     assert chunks[0].text == "Pin duoc bao hanh 8 nam."
-    assert chunks[0].metadata == {
+    expected_metadata = {
         "chunk_id": "pdf_vinfast_warranty_c0001",
         "source": str(pdf_path),
         "source_type": "pdf",
+        "title": "Warranty",
+        "section": "Warranty",
+        "section_level": None,
+        "section_path": [],
+        "chunk_index": 1,
+        "content_hash": chunks[0].metadata["content_hash"],
         "file_name": "VinFast Warranty.pdf",
         "page": None,
-        "section": "Warranty",
         "parser": "fake-parser",
         "chunking_method": "deterministic",
-        "chunk_index": 1,
     }
+    for key, value in expected_metadata.items():
+        actual = chunks[0].metadata.get(key)
+        assert chunks[0].metadata[key] == value, f"metadata[{key!r}]: {actual!r} != {value!r}"
+    assert "ingestion_at" in chunks[0].metadata
+    assert isinstance(chunks[0].metadata["content_hash"], str)
+    assert len(chunks[0].metadata["content_hash"]) == 12
     assert chunks[1].metadata["section"] == "Battery"
     assert parser.seen_path == pdf_path
     assert parser.parse_calls == 1
