@@ -252,7 +252,7 @@ def _setup_ragas() -> dict[str, Any]:
     _emb = LangchainEmbeddingsWrapper(
         OpenAIEmbeddings(
             model=os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small"),
-            api_key=os.environ.get("OPENAI_API_KEY"),
+            api_key=os.environ.get("OPENAI_API_KEY"),  # type: ignore[call-arg]
         )
     )
     for _m in (faithfulness, answer_relevancy, context_precision, context_recall):
