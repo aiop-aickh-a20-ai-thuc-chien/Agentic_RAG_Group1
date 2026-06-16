@@ -600,6 +600,24 @@ class PostgresLocalSourceStore:
                     on {self._chunks_table} using gin (metadata)
                     """
                 )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._chunks_table}_chunk_id_idx
+                    on {self._chunks_table} (chunk_id)
+                    """
+                )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._chunks_table}_text_fts_idx
+                    on {self._chunks_table} using gin (to_tsvector('english', text))
+                    """
+                )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._documents_table}_source_type_idx
+                    on {self._documents_table} (source_type)
+                    """
+                )
             conn.commit()
 
     def _read_chunks(self, *, where_sql: str, params: tuple[object, ...]) -> list[Chunk]:
@@ -650,6 +668,105 @@ class PostgresLocalSourceStore:
             """,
             flat_values,
         )
+
+
+class HybridLocalSourceStore:
+    """Raw source files go to S3; document metadata and chunks go to Postgres."""
+
+    def __init__(
+        self,
+        *,
+        s3_store: S3LocalSourceStore,
+        pg_store: PostgresLocalSourceStore,
+    ) -> None:
+        self._s3 = s3_store
+        self._pg = pg_store
+
+    @classmethod
+    def from_env(cls) -> HybridLocalSourceStore:
+        import os
+
+        connection = os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "").strip()
+        if not connection:
+            raise ValueError("LOCAL_SOURCE_STORE=hybrid requires LOCAL_SOURCE_POSTGRES_CONNECTION.")
+        table_prefix = os.getenv("LOCAL_SOURCE_POSTGRES_TABLE_PREFIX", "local_rag").strip()
+        return cls(
+            s3_store=S3LocalSourceStore.from_env(),
+            pg_store=PostgresLocalSourceStore(
+                connection=connection,
+                table_prefix=table_prefix,
+            ),
+        )
+
+    def write_document(
+        self,
+        *,
+        document_id: str,
+        dataset_id: str,
+        name: str,
+        source_type: str,
+        source: str,
+        raw_path: Path | None,
+        markdown_path: Path | None,
+        metadata: dict[str, object],
+        chunks: list[Chunk],
+    ) -> None:
+        # Upload raw file + markdown to S3 (chunks=[] — S3 is blob-only in hybrid mode)
+        self._s3.write_document(
+            document_id=document_id,
+            dataset_id=dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=[],
+        )
+        # Write metadata + chunks to Postgres
+        self._pg.write_document(
+            document_id=document_id,
+            dataset_id=dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=chunks,
+        )
+
+    def read_chunks(self, document_id: str) -> list[Chunk]:
+        return self._pg.read_chunks(document_id)
+
+    def read_all_chunks(self) -> list[Chunk]:
+        return self._pg.read_all_chunks()
+
+    def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+        return self._pg.read_chunks_for_documents(document_ids)
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        self._pg.replace_document_chunks(document_id, chunks)
+
+    def list_documents(self) -> list[StoredSourceDocument]:
+        return self._pg.list_documents()
+
+    def delete_document(self, document_id: str) -> None:
+        self._pg.delete_document(document_id)
+        with contextlib.suppress(Exception):
+            self._s3.delete_document(document_id)
+
+    def delete_all_documents(self) -> int:
+        count = self._pg.delete_all_documents()
+        with contextlib.suppress(Exception):
+            self._s3.delete_all_documents()
+        return count
+
+    def read_markdown(self, document_id: str) -> str:
+        return self._s3.read_markdown(document_id)
+
+    def read_raw(self, document_id: str) -> StoredRawSource:
+        return self._s3.read_raw(document_id)
 
 
 def _safe_table_name(value: str) -> str:
