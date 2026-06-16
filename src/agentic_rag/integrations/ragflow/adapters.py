@@ -9,8 +9,8 @@ main pipeline.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any
 from hashlib import sha1
+from typing import Any
 
 from agentic_rag.core.contracts import Answer, Chunk, Citation, SearchResult
 

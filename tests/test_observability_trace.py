@@ -195,6 +195,7 @@ def test_write_rag_trace_langsmith_exporter(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("LANGSMITH_PROJECT", "agentic-rag-test")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+    monkeypatch.delenv("GENERATION_LLM_MODEL", raising=False)
     monkeypatch.setattr(
         "agentic_rag.observability.trace.importlib.import_module",
         fake_import_module,

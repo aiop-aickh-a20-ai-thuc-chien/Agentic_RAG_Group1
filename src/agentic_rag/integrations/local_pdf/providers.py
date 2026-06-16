@@ -1438,7 +1438,7 @@ class LocalPdfEvidenceProvider:
         normalized_source_type = source_type.lower()
         if normalized_source_type == "url":
             first_chunk = chunks[0] if chunks else None
-            if first_chunk and "section_path" in first_chunk.metadata:
+            if first_chunk and first_chunk.metadata.get("section_path"):
                 from agentic_rag.ingestion.url.loader import _clean_markdown_noise
 
                 cleaned = _clean_markdown_noise(markdown) if markdown else ""
