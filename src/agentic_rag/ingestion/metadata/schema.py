@@ -1,5 +1,8 @@
 from __future__ import annotations
-from typing import TypedDict
+
+from collections.abc import Mapping
+from typing import Any, NotRequired, Required, TypedDict
+
 
 class ChunkMetadata(TypedDict, total=False):
     """
@@ -15,32 +18,34 @@ class ChunkMetadata(TypedDict, total=False):
     """
 
     # Identity [P]
-    chunk_id: str       
+    chunk_id: str
     document_id: str
     chunk_index: int
     token_count: int
 
     # Source [P]
-    source: str
-    source_type: str
-    url: str | None
-    file_name: str | None
+    source_type: Required[str]
+    source: NotRequired[str]
+    url: NotRequired[str | None]
+    file_name: NotRequired[str | None]
 
     # Document [P]
-    document_type: str
-    product_model: list[str]
-    language: str
+    document_type: NotRequired[str | None]
+    product_model: NotRequired[list[str] | str | None]
+    language: NotRequired[str | None]
 
     # Structural [P]
-    page_numer: int | None
+    page_number: int | None
     section: str | None
     heading: str | None
     breadcrumb: list[str]
 
     # Temporal
-    created_data: str | None # [P]
-    update_date: str | None # [P]
-    ingested_at: str # [S]
+    created_date: NotRequired[str | None]  # [P]
+    created_date_source: NotRequired[str | None]  # [P]
+    updated_date: Required[str]  # [P]
+    updated_date_source: NotRequired[str | None]  # [P]
+    ingested_at: str  # [S]
 
     # Semantic [L]
     summary: str | None
@@ -49,6 +54,7 @@ class ChunkMetadata(TypedDict, total=False):
     entities: list[str]
     quality_score: float | None
 
+
 QDRANT_INDEX_FIELDS: tuple[str, ...] = (
     "document_id",
     "source_type",
@@ -56,16 +62,81 @@ QDRANT_INDEX_FIELDS: tuple[str, ...] = (
     "product_model",
     "language",
     "topic_tags",
-    "metadata.deduplication.primary_layer"
+    "metadata.deduplication.primary_layer",
 )
 
-SOURCE_TYPE_VALUES = frozenset({
-    "official", "internal", "partner", "news", "community", "unknown",
-})
+REQUIRED_METADATA_FIELDS: tuple[str, ...] = ("source_type", "updated_date")
 
-DOCUMENT_TYPE_VALUES = frozenset({
-    "manual", "faq", "spec_sheet", "policy", "article", "unknown",
-})
+SOURCE_TYPE_VALUES = frozenset(
+    {
+        "html",
+        "pdf",
+        "ragflow",
+        "text",
+        "unknown",
+        "url",
+    }
+)
+
+SOURCE_CATEGORY_VALUES = frozenset(
+    {
+        "community",
+        "internal",
+        "news",
+        "unknown",
+        "official",
+        "partner",
+    }
+)
+
+DOCUMENT_TYPE_VALUES = frozenset(
+    {
+        "article",
+        "booking_flow",
+        "comparison_table_page",
+        "dynamic_application",
+        "faq",
+        "faq_page",
+        "generic",
+        "homepage_product_listing",
+        "interactive_application",
+        "manual",
+        "policy",
+        "policy_page",
+        "product_detail",
+        "product_listing",
+        "product_page",
+        "spec_sheet",
+        "unknown",
+        "vehicle_configurator",
+        "vehicle_or_product_page",
+    }
+)
 
 LANGUAGE_VALUES = frozenset({"vi", "en", "unknown"})
 
+
+def missing_required_metadata(metadata: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return required shared metadata keys that are absent or blank."""
+
+    missing: list[str] = []
+    for field in REQUIRED_METADATA_FIELDS:
+        value = metadata.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            missing.append(field)
+    return tuple(missing)
+
+
+def has_required_metadata(metadata: Mapping[str, Any]) -> bool:
+    """Return whether metadata satisfies the shared ingestion minimum."""
+
+    return not missing_required_metadata(metadata)
+
+
+def require_metadata(metadata: Mapping[str, Any]) -> None:
+    """Raise when metadata does not satisfy the shared ingestion minimum."""
+
+    missing = missing_required_metadata(metadata)
+    if missing:
+        joined = ", ".join(missing)
+        raise ValueError(f"Chunk metadata missing required field(s): {joined}")

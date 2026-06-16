@@ -8,10 +8,52 @@ from typing import Any
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.dedup_detect.models import DedupReport, DuplicateMatch
+from agentic_rag.ingestion.metadata import REQUIRED_METADATA_FIELDS, missing_required_metadata
 
 DEDUP_METADATA_KEY = "deduplication"
 DEDUP_STATUS_DUPLICATE_CANDIDATE = "duplicate_candidate"
 DEDUP_REVIEW_PENDING = "pending"
+
+
+def chunk_metadata_contract_issues(chunks: Sequence[Chunk]) -> list[dict[str, Any]]:
+    """Return chunks that miss required shared ingestion metadata."""
+
+    issues: list[dict[str, Any]] = []
+    for chunk in chunks:
+        missing = missing_required_metadata(chunk.metadata)
+        if not missing:
+            continue
+        issues.append(
+            {
+                "chunk_id": chunk.chunk_id,
+                "missing_required": list(missing),
+                "source": chunk.metadata.get("source"),
+                "source_type": chunk.metadata.get("source_type"),
+            }
+        )
+    return issues
+
+
+def chunk_metadata_contract_summary(chunks: Sequence[Chunk]) -> dict[str, Any]:
+    """Summarize source metadata readiness before dedup review."""
+
+    source_type_counts: dict[str, int] = defaultdict(int)
+    document_type_counts: dict[str, int] = defaultdict(int)
+    for chunk in chunks:
+        source_type = str(chunk.metadata.get("source_type") or "missing")
+        document_type = str(chunk.metadata.get("document_type") or "missing")
+        source_type_counts[source_type] += 1
+        document_type_counts[document_type] += 1
+    issues = chunk_metadata_contract_issues(chunks)
+    return {
+        "required_fields": list(REQUIRED_METADATA_FIELDS),
+        "chunk_count": len(chunks),
+        "valid_chunk_count": len(chunks) - len(issues),
+        "missing_required_count": len(issues),
+        "source_type_counts": dict(sorted(source_type_counts.items())),
+        "document_type_counts": dict(sorted(document_type_counts.items())),
+        "issues": issues,
+    }
 
 
 def duplicate_metadata_by_document(

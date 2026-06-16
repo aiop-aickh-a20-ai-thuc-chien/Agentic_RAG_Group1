@@ -15,6 +15,8 @@ from agentic_rag.ingestion.dedup_detect.metadata import (
     DEDUP_REVIEW_PENDING,
     DEDUP_STATUS_DUPLICATE_CANDIDATE,
     add_duplicate_metadata_to_chunks,
+    chunk_metadata_contract_issues,
+    chunk_metadata_contract_summary,
     duplicate_metadata_by_document,
     remove_duplicate_metadata_from_chunks,
 )
@@ -45,6 +47,8 @@ __all__ = [
     "EmbeddingFallbackCandidate",
     "EmbeddingVectorResult",
     "add_duplicate_metadata_to_chunks",
+    "chunk_metadata_contract_issues",
+    "chunk_metadata_contract_summary",
     "configured_embedding_candidates",
     "cosine_similarity",
     "detect_duplicates",

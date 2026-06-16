@@ -22,6 +22,16 @@ _PUBLISHED_META_NAMES = {
     "dc.date.issued",
     "publish_date",
 }
+_UPDATED_META_NAMES = {
+    "article:modified_time",
+    "dc.date.modified",
+    "last-modified",
+    "modified",
+    "og:updated_time",
+    "revised",
+    "updated",
+    "updated_time",
+}
 _AUTHOR_META_NAMES = {"author", "article:author", "dc.creator"}
 
 
@@ -59,6 +69,7 @@ class PageMetadata(_UrlParserModel):
     og_description: str | None = None
     description: str | None = None
     published_at: str | None = None
+    modified_at: str | None = None
     author: str | None = None
     language: str | None = None
 
@@ -113,6 +124,7 @@ class MainContentParser(HTMLParser):
         self._og_description: str | None = None
         self._description: str | None = None
         self._published_at: str | None = None
+        self._modified_at: str | None = None
         self._author: str | None = None
         self._language: str | None = None
         self._assets: list[Asset] = []
@@ -237,6 +249,7 @@ class MainContentParser(HTMLParser):
             og_description=self._og_description,
             description=self._description,
             published_at=self._published_at,
+            modified_at=self._modified_at,
             author=self._author,
             language=self._language,
         )
@@ -271,6 +284,8 @@ class MainContentParser(HTMLParser):
             self._description = _first_non_empty(content, self._description)
         elif normalized_name in _PUBLISHED_META_NAMES:
             self._published_at = _first_non_empty(content, self._published_at)
+        elif normalized_name in _UPDATED_META_NAMES:
+            self._modified_at = _first_non_empty(content, self._modified_at)
         elif normalized_name in _AUTHOR_META_NAMES:
             self._author = _first_non_empty(content, self._author)
 

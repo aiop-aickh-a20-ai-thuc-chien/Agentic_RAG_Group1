@@ -85,7 +85,8 @@ def test_parse_html_extracts_canonical_open_graph_and_article_metadata() -> None
             <meta property="og:description" content="OG description." />
             <meta name="description" content="Meta description." />
             <meta name="author" content="Editorial Team" />
-            <meta property="article:published_time" content="2026-06-01T00:00:00+07:00" />
+        <meta property="article:published_time" content="2026-06-01T00:00:00+07:00" />
+        <meta property="article:modified_time" content="2026-06-15T00:00:00+07:00" />
           </head>
           <body><h1>Article</h1><p>Content.</p></body>
         </html>
@@ -101,6 +102,7 @@ def test_parse_html_extracts_canonical_open_graph_and_article_metadata() -> None
     assert parsed.metadata.description == "Meta description."
     assert parsed.metadata.author == "Editorial Team"
     assert parsed.metadata.published_at == "2026-06-01T00:00:00+07:00"
+    assert parsed.metadata.modified_at == "2026-06-15T00:00:00+07:00"
 
 
 def test_parse_html_discovers_related_assets() -> None:

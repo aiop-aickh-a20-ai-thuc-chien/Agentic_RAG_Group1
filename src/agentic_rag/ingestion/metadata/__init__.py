@@ -2,25 +2,24 @@ from agentic_rag.ingestion.metadata.schema import (
     DOCUMENT_TYPE_VALUES,
     LANGUAGE_VALUES,
     QDRANT_INDEX_FIELDS,
+    REQUIRED_METADATA_FIELDS,
+    SOURCE_CATEGORY_VALUES,
     SOURCE_TYPE_VALUES,
     ChunkMetadata,
-)
-
-from agentic_rag.ingestion.metadata.normalize import (
-    KNOWN_MODELS,
-    normalize_metadata,
-    normalize_product_models,
-    build_response_format,
+    has_required_metadata,
+    missing_required_metadata,
+    require_metadata,
 )
 
 __all__ = [
-    "ChunkMetadata",
-    "QDRANT_INDEX_FIELDS",
-    "SOURCE_TYPE_VALUES",
     "DOCUMENT_TYPE_VALUES",
     "LANGUAGE_VALUES",
-    "KNOWN_MODELS",
-    "normalize_metadata",
-    "normalize_product_models",
-    "build_response_format",
+    "QDRANT_INDEX_FIELDS",
+    "REQUIRED_METADATA_FIELDS",
+    "SOURCE_CATEGORY_VALUES",
+    "SOURCE_TYPE_VALUES",
+    "ChunkMetadata",
+    "has_required_metadata",
+    "missing_required_metadata",
+    "require_metadata",
 ]

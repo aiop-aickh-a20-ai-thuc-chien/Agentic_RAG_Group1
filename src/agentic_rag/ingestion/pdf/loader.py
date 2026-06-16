@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import require_metadata
 
 from .chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
@@ -101,6 +103,7 @@ def _load_pdf_with_markdown(
     chunker: MarkdownChunker | None = None,
 ) -> LoadedPdfDocument:
     _validate_pdf_path(path)
+    loaded_at = _utc_now()
     resolved_chunker = chunker if chunker is not None else resolve_markdown_chunker()
     parse_result, native_document = _parse_for_chunker(path, parser, resolved_chunker)
     chunking_input = PdfChunkingInput(
@@ -116,6 +119,7 @@ def _load_pdf_with_markdown(
             path,
             chunking_input,
             chunker=resolved_chunker,
+            updated_date=loaded_at,
         )
     except Exception as exc:
         if not _should_fallback_pdf_chunking(resolved_chunker, exc):
@@ -125,6 +129,7 @@ def _load_pdf_with_markdown(
             path,
             chunking_input,
             chunker=fallback_chunker,
+            updated_date=loaded_at,
         )
         chunker_name = fallback_chunker.chunker_name
         fallback_reason = _fallback_reason(
@@ -191,7 +196,12 @@ def _chunks_from_markdown(
         parser=parser_name,
         source_path=str(path),
     )
-    return _chunks_from_chunking_input(path, chunking_input, chunker=resolved_chunker)
+    return _chunks_from_chunking_input(
+        path,
+        chunking_input,
+        chunker=resolved_chunker,
+        updated_date=_utc_now(),
+    )
 
 
 def _chunks_from_chunking_input(
@@ -199,6 +209,7 @@ def _chunks_from_chunking_input(
     chunking_input: PdfChunkingInput,
     *,
     chunker: MarkdownChunker,
+    updated_date: str,
 ) -> list[Chunk]:
     markdown_chunks = chunker.chunk(chunking_input)
     safe_file_stem = _safe_chunk_id_part(path.stem)
@@ -206,20 +217,34 @@ def _chunks_from_chunking_input(
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
         chunk_id = f"pdf_{safe_file_stem}_c{index:04d}"
+        section = markdown_chunk.section
         metadata = {
             "chunk_id": chunk_id,
             "source": str(path),
             "source_type": "pdf",
             "file_name": path.name,
             "page": None,
-            "section": markdown_chunk.section,
+            "page_number": None,
+            "section": section,
+            "heading": section,
+            "breadcrumb": _breadcrumb_for_chunk(markdown_chunk),
             "parser": chunking_input.parser,
             "chunking_method": chunker.chunker_name,
             "chunk_index": index,
+            "token_count": _token_count_for_chunk(markdown_chunk),
+            "updated_date": updated_date,
+            "updated_date_source": "ingestion_start",
         }
         for key, value in markdown_chunk.metadata.items():
             if (key == "page" and value is not None) or key not in metadata:
                 metadata[key] = value
+        page = metadata.get("page")
+        metadata["page_number"] = page if isinstance(page, int) else None
+        if "heading" not in metadata or metadata["heading"] is None:
+            metadata["heading"] = metadata.get("section")
+        if "breadcrumb" not in metadata or not metadata["breadcrumb"]:
+            metadata["breadcrumb"] = _breadcrumb_from_metadata(metadata)
+        require_metadata(metadata)
         chunks.append(
             Chunk(
                 chunk_id=chunk_id,
@@ -228,6 +253,39 @@ def _chunks_from_chunking_input(
             )
         )
     return chunks
+
+
+def _breadcrumb_for_chunk(markdown_chunk: object) -> list[str]:
+    section_path = getattr(markdown_chunk, "section_path", ())
+    if section_path:
+        return [str(item) for item in section_path if str(item)]
+    metadata = getattr(markdown_chunk, "metadata", {})
+    if isinstance(metadata, dict):
+        raw_path = metadata.get("section_path")
+        if isinstance(raw_path, list | tuple):
+            return [str(item) for item in raw_path if str(item)]
+    section = getattr(markdown_chunk, "section", None)
+    return [str(section)] if section else []
+
+
+def _breadcrumb_from_metadata(metadata: dict[str, object]) -> list[str]:
+    raw_path = metadata.get("section_path")
+    if isinstance(raw_path, list | tuple):
+        return [str(item) for item in raw_path if str(item)]
+    section = metadata.get("section")
+    return [str(section)] if section else []
+
+
+def _token_count_for_chunk(markdown_chunk: object) -> int:
+    token_count = getattr(markdown_chunk, "chunk_token_count", None)
+    if isinstance(token_count, int):
+        return token_count
+    text = getattr(markdown_chunk, "text", "")
+    return len(str(text).split())
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_chunk_id_part(value: str) -> str:

@@ -40,7 +40,12 @@ MarkdownChunk = ChunkCandidate
 
 
 class ChunkingInput(_IngestionChunkingModel):
-    """Normalized parser output passed into ingestion chunkers."""
+    """Normalized parser output passed into ingestion chunkers.
+
+    ``source_type`` may be unknown while splitting text, but loaders must stamp
+    it into emitted ``Chunk.metadata`` because shared ingestion metadata requires
+    it.
+    """
 
     markdown: str
     source_type: str | None = None

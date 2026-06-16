@@ -195,6 +195,25 @@ Mỗi `Chunk` trả về có metadata chính:
 - `parser`: parser được chọn, mặc định là `docling`.
 - `chunking_method`: chunker được chọn, mặc định là `deterministic`.
 - `chunk_index`: thứ tự chunk bắt đầu từ 1.
+- `page_number`: shared-schema alias for `page`; `None` when no page provenance.
+- `heading`: shared-schema alias for `section`.
+- `breadcrumb`: shared-schema alias for `section_path` or `[section]`.
+- `token_count`: approximate token/word count for the chunk.
+- `updated_date`: required shared-schema timestamp from the PDF load start time.
+- `updated_date_source`: currently `ingestion_start`.
+
+Shared metadata rule:
+
+- `source_type` is required and must be `pdf` for PDF ingestion.
+- `updated_date` is required and must be non-empty. In this project it means the
+  time this system started loading the PDF.
+- `created_date` is optional. Add it only when a PDF parser extracts trusted
+  source modified metadata from inside the PDF. Do not derive it from filesystem
+  ctime/mtime.
+- `language` is optional. Add it only when the parser or enrichment step can
+  identify it.
+- `document_type` is optional. PDF ingestion should only add it when a parser or
+  enrichment step can prove the document type.
 
 ## Lưu artifact để debug và đánh giá
 

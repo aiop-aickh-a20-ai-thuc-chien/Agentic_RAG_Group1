@@ -125,17 +125,28 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
         "pdf_vinfast_warranty_c0002",
     ]
     assert chunks[0].text == "Pin duoc bao hanh 8 nam."
-    assert chunks[0].metadata == {
+    updated_date = chunks[0].metadata.get("updated_date")
+    assert isinstance(updated_date, str)
+    assert updated_date
+    expected_metadata = {
         "chunk_id": "pdf_vinfast_warranty_c0001",
         "source": str(pdf_path),
         "source_type": "pdf",
         "file_name": "VinFast Warranty.pdf",
         "page": None,
+        "page_number": None,
         "section": "Warranty",
+        "heading": "Warranty",
+        "breadcrumb": ["Warranty"],
         "parser": "fake-parser",
         "chunking_method": "deterministic",
         "chunk_index": 1,
+        "token_count": 6,
+        "updated_date_source": "ingestion_start",
     }
+    assert {k: v for k, v in chunks[0].metadata.items() if k != "updated_date"} == (
+        expected_metadata
+    )
     assert chunks[1].metadata["section"] == "Battery"
     assert parser.seen_path == pdf_path
     assert parser.parse_calls == 1
@@ -153,6 +164,8 @@ def test_load_pdf_with_markdown_uses_supplied_chunker(tmp_path: Path) -> None:
     assert loaded.markdown == "# Intro\nOriginal markdown."
     assert loaded.chunks[0].text == "Forced chunk text."
     assert loaded.chunks[0].metadata["section"] == "Forced"
+    assert loaded.chunks[0].metadata["heading"] == "Forced"
+    assert loaded.chunks[0].metadata["breadcrumb"] == ["Forced"]
     assert loaded.chunks[0].metadata["section_path"] == ["Forced"]
     assert loaded.chunks[0].metadata["raw_text"] == "Raw forced chunk text."
     assert loaded.chunks[0].metadata["chunking_method"] == "fake-chunker"

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.chunking import (
     DEFAULT_PARAGRAPH_MAX_TOKENS as SHARED_PARAGRAPH_MAX_TOKENS,
@@ -34,6 +37,9 @@ __all__ = [
     "build_chunk_id",
     "build_chunks",
     "detect_lang",
+    "is_usable_chunk_text",
+    "normalize_for_content_hash",
+    "normalize_for_dedupe_hash",
     "normalize_space",
     "paragraph_chunk",
     "short_hash",
@@ -64,7 +70,8 @@ def build_chunks(
         raise ValueError("chunk_overlap must be non-negative and smaller than chunk_size.")
 
     chunks: list[Chunk] = []
-    content_hash = short_hash(text)
+    normalized_full_text = normalize_for_content_hash(text)
+    page_hash = short_hash(normalized_full_text)
     text_chunks = split_markdown_paragraphs(
         text,
         max_tokens=chunk_size,
@@ -73,6 +80,7 @@ def build_chunks(
     chunk_part_total = len(text_chunks)
     for index, chunk_text in enumerate(text_chunks, start=1):
         chunk_id = build_chunk_id(source_type, source, section, index)
+        normalized_chunk_text = normalize_for_content_hash(chunk_text)
         chunks.append(
             Chunk(
                 chunk_id=chunk_id,
@@ -85,10 +93,43 @@ def build_chunks(
                     "section": section,
                     "title": title,
                     "fetched_at": fetched_at,
-                    "content_hash": content_hash,
+                    "updated_date": fetched_at,
+                    "updated_date_source": "ingestion_start",
+                    "page_hash": page_hash,
+                    "content_hash": short_hash(normalized_chunk_text),
+                    "dedupe_hash": short_hash(normalize_for_dedupe_hash(chunk_text)),
+                    "normalized_text": normalized_chunk_text,
                     "chunk_part_index": index,
                     "chunk_part_total": chunk_part_total,
                 },
             )
         )
     return chunks
+
+
+def normalize_for_content_hash(value: str) -> str:
+    """Normalize text for stable per-chunk content hashing."""
+
+    return normalize_space(unicodedata.normalize("NFKC", value)).casefold()
+
+
+def normalize_for_dedupe_hash(value: str) -> str:
+    """Normalize text more aggressively for duplicate-detection blocking."""
+
+    text = normalize_for_content_hash(value)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[\u200b\u200c\u200d]", "", text)
+    return normalize_space(text)
+
+
+def is_usable_chunk_text(text: str) -> bool:
+    """Return whether chunk text has enough signal for review/retrieval."""
+
+    normalized = normalize_space(text)
+    if not normalized:
+        return False
+    words = re.findall(r"\w+", normalized, flags=re.UNICODE)
+    if len(words) < 8:
+        return False
+    alpha_chars = sum(1 for char in normalized if char.isalpha())
+    return alpha_chars >= 20

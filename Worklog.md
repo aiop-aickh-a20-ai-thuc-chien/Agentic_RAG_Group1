@@ -1,5 +1,39 @@
 # Worklog
 
+## 2026-06-16 - Shared Date Metadata Clarification
+
+### Completed
+
+- Clarified the shared metadata contract for URL/PDF/rule-based consumers:
+  - `source_type` is required.
+  - `updated_date` is required and means ingestion start time.
+  - `created_date` is optional and means source modified date extracted from
+    URL/PDF data when available.
+  - `language` is optional.
+  - `document_type` is optional.
+- Updated URL ingestion so `updated_date` stays tied to the URL ingestion start
+  timestamp and `updated_date_source` is `ingestion_start`.
+- Updated URL metadata enrichment so HTML source modified metadata
+  (`article:modified_time` and similar parser output) maps to optional
+  `created_date`, not `updated_date`.
+- Updated PDF ingestion so `updated_date` is the PDF load start timestamp, not
+  filesystem modification time.
+- Added `Explain.md` as a short repo-level explanation for teammates integrating
+  rule-based metadata checks.
+- Updated URL/PDF/dedup/demo documentation to reflect the corrected field
+  meanings.
+
+### Current Rule
+
+```text
+source_type: required
+updated_date: required, ingestion start time
+created_date: optional, source modified date if URL/PDF can find it
+language: optional
+document_type: optional
+fetched_at: URL-local debug field, not shared schema
+```
+
 ## 2026-06-16 - Shared Metadata, PDF Alignment, And Dedup Check Demo
 
 ### Added / Updated

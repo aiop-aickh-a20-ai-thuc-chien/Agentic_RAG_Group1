@@ -219,6 +219,36 @@ chunk stays clean and is referenced from the candidate metadata:
 This metadata is descriptive only. It records which layer detected the duplicate
 signal and enough match details for a later human review or a separate resolver.
 
+## Shared Metadata Contract Check
+
+Dedup expects ingestion chunks to follow the shared metadata contract. The
+minimum required fields are:
+
+- `source_type`: required for every chunk, for example `pdf`, `url`, `html`, or
+  `text`.
+- `updated_date`: required for every chunk. In this project it means the time
+  ingestion started for that source, not the source's own modified time.
+
+`created_date`, `language`, and `document_type` are optional. `created_date`
+should only be present when URL/PDF ingestion can extract trusted source modified
+metadata from the source data. URL ingestion may add `document_type` when it can
+infer page type. PDF ingestion should leave `document_type` absent unless a
+parser or enrichment step can prove it.
+
+Before reviewing duplicate candidates, you can summarize metadata readiness:
+
+```python
+from agentic_rag.ingestion.dedup_detect import chunk_metadata_contract_summary
+
+summary = chunk_metadata_contract_summary(chunks)
+print(summary["missing_required_count"])
+print(summary["source_type_counts"])
+print(summary["document_type_counts"])
+```
+
+The helper reports missing required fields but does not repair chunks or change
+dedup decisions.
+
 ## Integration And Backfill
 
 `LocalPdfEvidenceProvider` runs dedup during PDF, URL, and text upload after

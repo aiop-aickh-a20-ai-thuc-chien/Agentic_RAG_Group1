@@ -235,8 +235,20 @@ def extract_markdown_from_html(
     )
 
 
-def extract_markdown_with_playwright(url: str) -> ExtractedMarkdown:
+def extract_markdown_with_playwright(
+    url: str,
+    *,
+    timeout_seconds: int = 60,
+    wait_until: str = "load",
+    settle_after_scroll_ms: int = 800,
+    settle_after_expand_ms: int = 400,
+) -> ExtractedMarkdown:
     """Render a URL and extract Markdown using the Crawl link Playwright DOM walker."""
+
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be greater than 0.")
+    if settle_after_scroll_ms < 0 or settle_after_expand_ms < 0:
+        raise ValueError("settle wait times must be non-negative.")
 
     try:
         sync_playwright = cast(Any, import_module("playwright.sync_api")).sync_playwright
@@ -259,14 +271,14 @@ def extract_markdown_with_playwright(url: str) -> ExtractedMarkdown:
         context.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         page = context.new_page()
         try:
-            page.goto(url, wait_until="load", timeout=60_000)
+            page.goto(url, wait_until=wait_until, timeout=timeout_seconds * 1000)
             fetched_ok = _wait_cloudflare(page)
             try:
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(800)
+                page.wait_for_timeout(settle_after_scroll_ms)
                 page.evaluate("window.scrollTo(0, 0)")
                 page.evaluate(EXPAND_JS)
-                page.wait_for_timeout(400)
+                page.wait_for_timeout(settle_after_expand_ms)
             except Exception:
                 pass
             data = cast(dict[str, object], page.evaluate(DOM_WALKER_JS))
