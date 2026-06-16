@@ -33,7 +33,7 @@ class ChunkMetadata(BaseModel):
     url: str | None = None
     file_name: str | None = None
 
-    # Document [P]
+    # Document [P] (document_type & language are refined by LLM Extract [L])
     title: str | None = None
     document_type: str | None = None
     product_model: list[str] = Field(default_factory=list)
@@ -53,11 +53,15 @@ class ChunkMetadata(BaseModel):
     ingested_at: str | None = None  # [S]
     ingestion_at: str | None = None  # [S]
 
-    # Semantic [L]
+    # Derived [P] (deterministic hash, not LLM)
     content_hash: str | None = None
+
+    # Semantic [L] — produced by the LLM Extract stage; see
+    # LLMExtractedMetadata in agentic_rag.ingestion.metadata.extract
     summary: str | None = None
     topic_tags: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
     entities: list[str] = Field(default_factory=list)
     quality_score: float | None = None
 
