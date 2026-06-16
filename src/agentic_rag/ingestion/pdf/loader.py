@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -202,6 +204,8 @@ def _chunks_from_chunking_input(
 ) -> list[Chunk]:
     markdown_chunks = chunker.chunk(chunking_input)
     safe_file_stem = _safe_chunk_id_part(path.stem)
+    title = _extract_title(chunking_input.markdown)
+    ingestion_at = datetime.now(UTC).isoformat()
 
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
@@ -210,15 +214,25 @@ def _chunks_from_chunking_input(
             "chunk_id": chunk_id,
             "source": str(path),
             "source_type": "pdf",
+            "title": title,
+            "section": markdown_chunk.section,
+            "section_level": markdown_chunk.section_level or None,
+            "section_path": list(markdown_chunk.section_path),
+            "chunk_index": index,
+            "ingestion_at": ingestion_at,
+            "content_hash": _short_hash(markdown_chunk.text),
             "file_name": path.name,
             "page": None,
-            "section": markdown_chunk.section,
             "parser": chunking_input.parser,
             "chunking_method": chunker.chunker_name,
-            "chunk_index": index,
         }
         for key, value in markdown_chunk.metadata.items():
-            if (key == "page" and value is not None) or key not in metadata:
+            is_page_override = key == "page" and value is not None
+            is_override_field = (
+                key in ("section_path", "section_level", "title")
+                and value is not None
+            )
+            if is_page_override or is_override_field or key not in metadata:
                 metadata[key] = value
         chunks.append(
             Chunk(
@@ -270,3 +284,17 @@ def _single_line(value: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return f"{compact[: max_chars - 3]}..."
+
+
+def _extract_title(markdown: str) -> str | None:
+    """Extract document title from the first H1 heading in markdown."""
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            return stripped[2:].strip() or None
+    return None
+
+
+def _short_hash(value: str) -> str:
+    """Return a stable short SHA-256 digest."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
