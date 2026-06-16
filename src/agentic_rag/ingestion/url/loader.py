@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import infer_source_type
 from agentic_rag.ingestion.url.acquisition import (
     DEFAULT_REQUEST_HEADERS,
     fetch_url,
@@ -347,11 +348,12 @@ def load_text_chunks(
     chunks = build_chunks(
         text=cleaned_text,
         source=source,
-        source_type="text",
+        source_type=infer_source_type(source),
         section="main",
         url=None,
         title=None,
         fetched_at=fetched_at,
+        chunk_id_prefix="text",
     )
     persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
@@ -519,13 +521,15 @@ def _load_extracted_markdown_candidate(
 ) -> _LoadedUrlCandidate:
     fetched_at = _utc_now()
     canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
-    source_type = "url" if source_url else "html"
+    source_type = infer_source_type(source_url or source)
+    chunk_id_prefix = "url" if source_url else "html"
     title = extracted.title or parsed.title
     cleaned_markdown = _clean_markdown_noise(extracted.markdown)
     chunks = _build_markdown_aware_chunks(
         markdown=cleaned_markdown,
         source=source,
         source_type=source_type,
+        chunk_id_prefix=chunk_id_prefix,
         title=title,
         fetched_at=fetched_at,
     )
@@ -648,6 +652,7 @@ def _build_markdown_aware_chunks(
     markdown: str,
     source: str,
     source_type: str,
+    chunk_id_prefix: str,
     title: str | None,
     fetched_at: str,
 ) -> list[Chunk]:
@@ -658,7 +663,7 @@ def _build_markdown_aware_chunks(
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
-        chunk_id = build_chunk_id(source_type, source, section, chunk_index)
+        chunk_id = build_chunk_id(chunk_id_prefix, source, section, chunk_index)
         normalized_chunk_text = normalize_for_content_hash(markdown_chunk.text)
         chunks.append(
             Chunk(

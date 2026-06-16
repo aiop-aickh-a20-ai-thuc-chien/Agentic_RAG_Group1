@@ -61,6 +61,7 @@ def build_chunks(
     fetched_at: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    chunk_id_prefix: str | None = None,
 ) -> list[Chunk]:
     """Build shared Chunk objects from normalized Markdown/text."""
 
@@ -78,8 +79,9 @@ def build_chunks(
         overlap_paragraphs=chunk_overlap,
     )
     chunk_part_total = len(text_chunks)
+    id_prefix = chunk_id_prefix or source_type
     for index, chunk_text in enumerate(text_chunks, start=1):
-        chunk_id = build_chunk_id(source_type, source, section, index)
+        chunk_id = build_chunk_id(id_prefix, source, section, index)
         normalized_chunk_text = normalize_for_content_hash(chunk_text)
         chunks.append(
             Chunk(

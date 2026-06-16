@@ -224,8 +224,10 @@ signal and enough match details for a later human review or a separate resolver.
 Dedup expects ingestion chunks to follow the shared metadata contract. The
 minimum required fields are:
 
-- `source_type`: required for every chunk, for example `pdf`, `url`, `html`, or
-  `text`.
+- `source_type`: required for every chunk. It is the shared source category:
+  `official`, `internal`, `partner`, `news`, `community`, or `unknown`.
+- `source`: concrete source URL/path/source name, used for citations and
+  grouping.
 - `updated_date`: required for every chunk. In this project it means the time
   ingestion started for that source, not the source's own modified time.
 

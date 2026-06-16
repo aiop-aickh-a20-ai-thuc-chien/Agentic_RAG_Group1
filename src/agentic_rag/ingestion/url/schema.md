@@ -12,8 +12,8 @@ owns them.
 
 | Field | URL status | URL source | Process owner | Notes |
 | --- | --- | --- | --- | --- |
-| `source` | Required | Final source URL or HTML/text source | URL loader | Used for citations and grouping. |
-| `source_type` | Required | `url`, `html`, or `text` | URL loader | Required by shared ingestion metadata. PDF uses `pdf`. |
+| `source` | Required | Final source URL or HTML/text source | URL loader | Used for citations and grouping. This is the concrete URL/path/source string. |
+| `source_type` | Required | Shared source category: `official`, `internal`, `partner`, `news`, `community`, or `unknown` | URL loader | Required by shared ingestion metadata. VinFast official domains map to `official`; local/manual HTML or text maps to `internal`. |
 | `url` | Required for URL/HTML URL input | Canonical URL, final URL, source URL, then original URL | URL metadata | Must be exact. Do not rewrite with LLM. |
 | `file_name` | Not needed for normal URL | None | PDF/file ingestion | Only add for downloaded files or file ingestion. |
 | `document_type` | Optional, added when inferred | URL `page_type` / quality gate page type | URL metadata + quality gate | General alias for `page_type`. Examples: `product_detail`, `policy`, `faq`, `vehicle_or_product_page`. Do not require this for all chunks. |
@@ -71,7 +71,7 @@ debugging already use them.
 
 | Process | Should add | Should not add |
 | --- | --- | --- |
-| URL acquisition | `source`, `source_type`, `updated_date`, `url`, `original_url`, `final_url`, fetch/render trace | `summary`, `topic_tags`, `document_id` |
+| URL acquisition | `source`, category `source_type`, `updated_date`, `url`, `original_url`, `final_url`, fetch/render trace | `summary`, `topic_tags`, `document_id` |
 | URL parser | `title`, `language`, `published_at`, source-derived `created_date`, `author`, `canonical_url`, assets | Guessed dates, PDF page numbers |
 | URL chunker | `chunk_id`, `section`, `section_path`, `chunk_token_count`, hashes | LLM semantic tags |
 | URL metadata/entities | `heading`, `breadcrumb`, `document_type`, `entities`, `product_model`, `product_specs` | Conflict decisions or duplicate merge results |
@@ -126,6 +126,8 @@ def product_fact_records(chunk):
 
 - Do not add `page_number` for normal web pages.
 - Do not add `file_name` unless the URL is converted into a file ingestion job.
+- Do not put transport labels such as `url`, `html`, `text`, or `pdf` into
+  `source_type`. Use the shared source category enum instead.
 - Do not leave `updated_date` empty. It is the ingestion start timestamp.
 - Do not use `fetched_at` as a shared metadata field. It may stay URL-local for
   debug/artifact review only.

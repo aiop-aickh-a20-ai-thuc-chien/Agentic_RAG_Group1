@@ -50,7 +50,7 @@ class PdfChunkingInput(ChunkingInput):
     markdown: str
     parser: str
     source_path: str
-    source_type: str | None = "pdf"
+    source_type: str | None = "internal"
     native_document: Any | None = None
 
 

@@ -14,7 +14,7 @@ def test_chunk_metadata_contract_summary_tracks_required_source_type() -> None:
             text="A",
             metadata={
                 "source": "https://example.com/a",
-                "source_type": "url",
+                "source_type": "unknown",
                 "updated_date": "2026-06-16T00:00:00+00:00",
             },
         ),
@@ -23,7 +23,7 @@ def test_chunk_metadata_contract_summary_tracks_required_source_type() -> None:
             text="B",
             metadata={
                 "source": "guide.pdf",
-                "source_type": "pdf",
+                "source_type": "internal",
                 "document_type": "policy",
                 "updated_date": "2026-06-16T00:00:00+00:00",
             },
@@ -45,5 +45,5 @@ def test_chunk_metadata_contract_summary_tracks_required_source_type() -> None:
     assert summary["required_fields"] == ["source_type", "updated_date"]
     assert summary["valid_chunk_count"] == 2
     assert summary["missing_required_count"] == 1
-    assert summary["source_type_counts"] == {"missing": 1, "pdf": 1, "url": 1}
+    assert summary["source_type_counts"] == {"internal": 1, "missing": 1, "unknown": 1}
     assert summary["document_type_counts"] == {"missing": 2, "policy": 1}

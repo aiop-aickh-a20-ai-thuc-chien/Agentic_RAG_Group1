@@ -262,6 +262,7 @@ def _save_pdf_multimodal_artifacts_from_document(
             native_document=doc,
         ),
         chunker=DoclingPageAwareChunker(),
+        updated_date=datetime.now(UTC).isoformat(),
     )
     elements = _extract_multimodal_elements(
         doc,

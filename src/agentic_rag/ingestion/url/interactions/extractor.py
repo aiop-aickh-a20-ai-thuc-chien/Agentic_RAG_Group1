@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import infer_source_type
 from agentic_rag.ingestion.url.chunking import (
     normalize_for_content_hash,
     normalize_for_dedupe_hash,
@@ -132,6 +133,7 @@ def build_interaction_chunks(
     """Convert captured interaction states into shared RAG chunks."""
 
     chunk_source = source or result.profile.final_url or result.profile.requested_url
+    source_type = infer_source_type(chunk_source)
     captured_at = fetched_at or _utc_now()
     page_text = "\n".join(state.to_chunk_text() for state in result.states)
     page_hash = short_hash(normalize_for_content_hash(page_text))
@@ -151,7 +153,7 @@ def build_interaction_chunks(
                 metadata={
                     "chunk_id": chunk_id,
                     "source": chunk_source,
-                    "source_type": "url",
+                    "source_type": source_type,
                     "url": result.profile.final_url or result.profile.requested_url,
                     "requested_url": result.profile.requested_url,
                     "url_query_params": result.profile.url_query_params,

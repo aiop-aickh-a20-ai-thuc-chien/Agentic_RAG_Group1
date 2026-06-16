@@ -116,7 +116,7 @@ def test_save_loaded_pdf_ingestion_artifacts_reuses_loaded_output(tmp_path: Path
                 text="Noi dung da parse.",
                 metadata={
                     "source": str(pdf_path),
-                    "source_type": "pdf",
+                    "source_type": "internal",
                     "file_name": "Pipeline Test.pdf",
                     "section": "Loaded",
                 },

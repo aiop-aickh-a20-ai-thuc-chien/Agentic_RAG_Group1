@@ -44,7 +44,7 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
     assert all(isinstance(chunk, Chunk) for chunk in chunks)
     assert [chunk.metadata["section"] for chunk in chunks] == ["Admissions"]
     assert chunks[0].metadata["chunk_id"] == chunks[0].chunk_id
-    assert chunks[0].metadata["source_type"] == "url"
+    assert chunks[0].metadata["source_type"] == "unknown"
     assert chunks[0].metadata["url"] == "https://example.edu/admissions"
     assert chunks[0].metadata["domain"] == "example.edu"
     assert chunks[0].metadata["title"] == "Admissions Page"
@@ -89,6 +89,7 @@ def test_load_html_chunks_adds_dom_entity_metadata() -> None:
 
     assert chunks
     metadata = chunks[0].metadata
+    assert metadata["source_type"] == "official"
     assert metadata["canonical_url"] == "https://shop.vinfastauto.com/vn_vi/vf8"
     assert metadata["captured_at"]
     assert metadata["published_at"] == "2026-06-01"
@@ -474,7 +475,7 @@ def test_load_text_chunks_returns_text_source_metadata() -> None:
     assert len(chunks) == 1
     assert chunks[0].text == "Plain text content for ingestion."
     assert chunks[0].metadata["source"] == "manual-note"
-    assert chunks[0].metadata["source_type"] == "text"
+    assert chunks[0].metadata["source_type"] == "internal"
     assert chunks[0].metadata["url"] is None
     assert chunks[0].metadata["section"] == "main"
 
@@ -507,6 +508,7 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert len(chunks) == 1
     assert chunks[0].text == "# Overview\n\nFetched content with enough detail for chunk review."
     assert chunks[0].metadata["source"] == "https://example.edu/final"
+    assert chunks[0].metadata["source_type"] == "unknown"
     assert chunks[0].metadata["url"] == "https://example.edu/final"
     assert chunks[0].metadata["domain"] == "example.edu"
     assert chunks[0].metadata["original_url"] == "https://example.edu"
@@ -568,6 +570,7 @@ def test_load_url_chunks_prefers_rendered_output_for_dynamic_product_page(
     assert metadata["url_quality_gate"]["status"] == "accepted"
     assert metadata["url_quality_gate"]["latency_budget_seconds"] == 20
     assert metadata["page_type"] == "product_detail"
+    assert metadata["source_type"] == "official"
     assert metadata["document_type"] == "product_detail"
     assert metadata["url_status"] == "accepted"
     assert metadata["render_required"] is True

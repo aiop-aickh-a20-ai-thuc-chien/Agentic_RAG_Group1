@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any, NotRequired, Required, TypedDict
+from urllib.parse import urlparse
 
 
 class ChunkMetadata(TypedDict, total=False):
@@ -69,25 +70,16 @@ REQUIRED_METADATA_FIELDS: tuple[str, ...] = ("source_type", "updated_date")
 
 SOURCE_TYPE_VALUES = frozenset(
     {
-        "html",
-        "pdf",
-        "ragflow",
-        "text",
-        "unknown",
-        "url",
-    }
-)
-
-SOURCE_CATEGORY_VALUES = frozenset(
-    {
         "community",
         "internal",
         "news",
-        "unknown",
         "official",
         "partner",
+        "unknown",
     }
 )
+
+SOURCE_CATEGORY_VALUES = SOURCE_TYPE_VALUES
 
 DOCUMENT_TYPE_VALUES = frozenset(
     {
@@ -114,6 +106,35 @@ DOCUMENT_TYPE_VALUES = frozenset(
 )
 
 LANGUAGE_VALUES = frozenset({"vi", "en", "unknown"})
+
+OFFICIAL_SOURCE_DOMAINS = frozenset(
+    {
+        "shop.vinfastauto.com",
+        "vinfastauto.com",
+        "vinfast.vn",
+        "www.vinfastauto.com",
+        "www.vinfast.vn",
+    }
+)
+
+NEWS_SOURCE_MARKERS = frozenset({"news", "tin-tuc", "blog"})
+
+
+def infer_source_type(source: str | None) -> str:
+    """Infer shared source category from a URL/path without guessing too much."""
+
+    if not source:
+        return "unknown"
+    parsed = urlparse(source)
+    if parsed.scheme in {"http", "https"}:
+        domain = parsed.netloc.casefold()
+        if domain in OFFICIAL_SOURCE_DOMAINS:
+            return "official"
+        source_text = f"{domain}/{parsed.path}".casefold()
+        if any(marker in source_text for marker in NEWS_SOURCE_MARKERS):
+            return "news"
+        return "unknown"
+    return "internal"
 
 
 def missing_required_metadata(metadata: Mapping[str, Any]) -> tuple[str, ...]:

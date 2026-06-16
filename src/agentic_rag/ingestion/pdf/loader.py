@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from agentic_rag.core.contracts import Chunk
-from agentic_rag.ingestion.metadata import require_metadata
+from agentic_rag.ingestion.metadata import infer_source_type, require_metadata
 
 from .chunkers import (
     DEFAULT_MARKDOWN_CHUNKER,
@@ -213,6 +213,8 @@ def _chunks_from_chunking_input(
 ) -> list[Chunk]:
     markdown_chunks = chunker.chunk(chunking_input)
     safe_file_stem = _safe_chunk_id_part(path.stem)
+    source = str(path)
+    source_type = infer_source_type(source)
 
     chunks: list[Chunk] = []
     for index, markdown_chunk in enumerate(markdown_chunks, start=1):
@@ -220,8 +222,8 @@ def _chunks_from_chunking_input(
         section = markdown_chunk.section
         metadata = {
             "chunk_id": chunk_id,
-            "source": str(path),
-            "source_type": "pdf",
+            "source": source,
+            "source_type": source_type,
             "file_name": path.name,
             "page": None,
             "page_number": None,

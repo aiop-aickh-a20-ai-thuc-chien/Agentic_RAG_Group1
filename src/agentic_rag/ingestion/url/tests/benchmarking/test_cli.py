@@ -30,7 +30,7 @@ def test_parse_html_cli_emits_parser_output(
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["parser"] == "builtin-html-parser"
-    assert payload["source_type"] == "html"
+    assert payload["source_type"] == "internal"
     assert payload["sections"] == ["URL Ingestion"]
     assert "Clean content should remain." in payload["text"]
     assert "Navigation noise" not in payload["text"]

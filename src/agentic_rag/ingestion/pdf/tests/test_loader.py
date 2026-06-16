@@ -131,7 +131,7 @@ def test_load_pdf_chunks_maps_markdown_to_shared_chunks(tmp_path: Path) -> None:
     expected_metadata = {
         "chunk_id": "pdf_vinfast_warranty_c0001",
         "source": str(pdf_path),
-        "source_type": "pdf",
+        "source_type": "internal",
         "file_name": "VinFast Warranty.pdf",
         "page": None,
         "page_number": None,

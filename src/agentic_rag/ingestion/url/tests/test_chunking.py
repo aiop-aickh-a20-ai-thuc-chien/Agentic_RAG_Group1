@@ -98,11 +98,12 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     chunks = build_chunks(
         text="Overview content",
         source="https://example.edu",
-        source_type="url",
+        source_type="unknown",
         section="Overview",
         url="https://example.edu",
         title="Example",
         fetched_at="2026-06-01T00:00:00+00:00",
+        chunk_id_prefix="url",
     )
 
     assert len(chunks) == 1
@@ -127,7 +128,7 @@ def test_build_chunks_validates_chunk_settings() -> None:
         build_chunks(
             text="bad",
             source="source",
-            source_type="text",
+            source_type="internal",
             section="main",
             url=None,
             title=None,
@@ -139,7 +140,7 @@ def test_build_chunks_validates_chunk_settings() -> None:
         build_chunks(
             text="bad",
             source="source",
-            source_type="text",
+            source_type="internal",
             section="main",
             url=None,
             title=None,

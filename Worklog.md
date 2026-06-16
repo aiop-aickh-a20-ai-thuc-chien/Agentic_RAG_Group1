@@ -1,5 +1,25 @@
 # Worklog
 
+## 2026-06-16 - Source Category Metadata And PDF Review Demo
+
+### Completed
+
+- Corrected shared `source_type` semantics to match the PDF/general schema:
+  `official`, `internal`, `partner`, `news`, `community`, or `unknown`.
+- Kept `source` as the exact source value: URL for URL ingestion, local PDF path
+  for PDF ingestion, and source name/path for HTML/text ingestion.
+- Updated URL ingestion so VinFast official domains map to `official`, unknown
+  external URLs map to `unknown`, and local/manual text or HTML maps to
+  `internal`.
+- Preserved readable URL/text chunk ID prefixes (`url_`, `html_`, `text_`) while
+  storing category values in `metadata["source_type"]`.
+- Updated PDF ingestion so local PDF chunks use `source_type = internal` and
+  keep PDF identity in `source`, `file_name`, and `pdf_...` chunk IDs.
+- Added `guide/demo/pdf-review/`, a local PDF review demo that writes parsed
+  Markdown, chunks, manifest, metadata-contract summary, and a readable report.
+- Updated URL/PDF/dedup metadata docs and focused tests for the corrected
+  source-category contract.
+
 ## 2026-06-16 - Shared Date Metadata Clarification
 
 ### Completed
@@ -52,7 +72,7 @@ fetched_at: URL-local debug field, not shared schema
   metadata constants and helper functions.
 - Updated PDF ingestion in `src/agentic_rag/ingestion/pdf/loader.py` so PDF
   chunks now satisfy the same shared metadata contract:
-  - `source_type` is always `pdf`.
+  - `source_type` is the shared category; local PDF files use `internal`.
   - `page_number` mirrors `page` when page provenance exists.
   - `heading` mirrors the chunk section.
   - `breadcrumb` mirrors `section_path` or falls back to `[section]`.

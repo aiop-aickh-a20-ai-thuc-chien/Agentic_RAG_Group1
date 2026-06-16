@@ -181,7 +181,7 @@ Nếu cần lưu output để kiểm tra parser hoặc đánh giá chunking, dù
 Mỗi `Chunk` trả về có metadata chính:
 
 - `source`: đường dẫn PDF đầu vào.
-- `source_type`: luôn là `pdf`.
+- `source_type`: shared source category. Local PDF files default to `internal`.
 - `file_name`: tên file PDF.
 - `page`: hiện là `None` trong baseline Markdown chunking.
 - `pages`: có khi dùng `docling-page-aware`; lưu danh sách trang provenance đầy
@@ -201,10 +201,16 @@ Mỗi `Chunk` trả về có metadata chính:
 - `token_count`: approximate token/word count for the chunk.
 - `updated_date`: required shared-schema timestamp from the PDF load start time.
 - `updated_date_source`: currently `ingestion_start`.
+- Note: `source_type` follows the shared source category enum
+  (`internal`, `official`, `partner`, `news`, `community`, `unknown`). Local PDF
+  files default to `internal`; use `source` for the actual file path.
 
 Shared metadata rule:
 
-- `source_type` is required and must be `pdf` for PDF ingestion.
+- `source` is the concrete PDF path. Do not use `source_type` for the file path.
+- `source_type` is required and follows the shared source category enum:
+  `official`, `internal`, `partner`, `news`, `community`, or `unknown`.
+  Local PDF files default to `internal`.
 - `updated_date` is required and must be non-empty. In this project it means the
   time this system started loading the PDF.
 - `created_date` is optional. Add it only when a PDF parser extracts trusted

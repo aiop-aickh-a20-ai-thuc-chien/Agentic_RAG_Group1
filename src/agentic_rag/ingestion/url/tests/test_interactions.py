@@ -169,6 +169,8 @@ def test_build_interaction_chunks_adds_variant_metadata() -> None:
     assert chunks[0].text == "VF 9 - trim: Eco - price: 1.499.000.000 VND - availability: available"
     metadata = chunks[0].metadata
     assert metadata["requested_url"] == VINFAST_BOOKING_URL
+    assert metadata["source"] == VINFAST_BOOKING_URL
+    assert metadata["source_type"] == "official"
     assert metadata["url_query_params"]["modelId"] == "Products-Car-VF9"
     assert metadata["interaction_required"] is True
     assert metadata["interaction_state"]["option_label"] == "Eco"

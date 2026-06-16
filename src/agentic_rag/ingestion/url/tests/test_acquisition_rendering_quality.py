@@ -141,7 +141,7 @@ def test_quality_report_and_metadata_attachment() -> None:
     chunk = Chunk(
         chunk_id="url_example_c0001",
         text="# Title\n\nUseful content with enough words for a meaningful URL chunk.",
-        metadata={"source": "https://example.com", "source_type": "url"},
+        metadata={"source": "https://example.com", "source_type": "unknown"},
     )
 
     report = analyze_url_quality(

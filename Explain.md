@@ -7,7 +7,8 @@ dedup detection, and rule-based metadata checks.
 
 | Field | Required? | Meaning | Owner |
 | --- | --- | --- | --- |
-| `source_type` | Required | Source family such as `url`, `html`, `text`, or `pdf`. | Ingestion loader |
+| `source` | Usually required | Concrete URL, PDF path, HTML source, or text source name. | Ingestion loader |
+| `source_type` | Required | Source category: `official`, `internal`, `partner`, `news`, `community`, or `unknown`. | Ingestion loader |
 | `updated_date` | Required | Time this system starts ingesting/crawling/loading the source. | URL/PDF ingestion |
 | `created_date` | Optional | Source modified date found inside the URL/PDF data. | URL/PDF parser |
 | `language` | Optional | Language found from source data. | URL/PDF parser or enrichment |
@@ -63,5 +64,7 @@ When comparing freshness or conflicts:
 
 - Use `created_date` only when it exists, because it comes from source data.
 - Use `updated_date` to know when this system ingested the source.
+- Use `source` for the exact URL/path. Use `source_type` only for source
+  category filtering.
 - Do not treat `updated_date` as proof that the source content changed on that
   date.

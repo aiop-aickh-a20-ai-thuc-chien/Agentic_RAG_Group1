@@ -7,6 +7,7 @@ from agentic_rag.ingestion.metadata.schema import (
     SOURCE_TYPE_VALUES,
     ChunkMetadata,
     has_required_metadata,
+    infer_source_type,
     missing_required_metadata,
     require_metadata,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "SOURCE_TYPE_VALUES",
     "ChunkMetadata",
     "has_required_metadata",
+    "infer_source_type",
     "missing_required_metadata",
     "require_metadata",
 ]

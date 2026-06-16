@@ -54,7 +54,7 @@ def test_parse_cli_emits_json_and_forwards_arguments(
                     text="Noi dung parser.",
                     metadata={
                         "source": str(pdf_path),
-                        "source_type": "pdf",
+                        "source_type": "internal",
                         "file_name": "source.pdf",
                         "section": "Intro",
                     },
@@ -205,7 +205,7 @@ def test_parse_cli_artifact_only_output_does_not_build_json_payload(
             Chunk(
                 chunk_id="pdf_source_c0001",
                 text="Noi dung.",
-                metadata={"source": str(pdf_path), "source_type": "pdf"},
+                metadata={"source": str(pdf_path), "source_type": "internal"},
             )
         ],
         parser="docling",

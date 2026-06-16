@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from agentic_rag.ingestion.metadata import infer_source_type
 from agentic_rag.ingestion.url.benchmarking.custom_benchmark import (
     parse_html_builtin,
     report_to_dict,
@@ -53,7 +54,7 @@ def _parse_html_file(path: Path, source_url: str | None) -> dict[str, Any]:
     return {
         "parser": output.parser,
         "source": source_url or str(path),
-        "source_type": "html",
+        "source_type": infer_source_type(source_url or str(path)),
         "extracted_chars": len(output.text),
         "sections": list(output.sections),
         "text": output.text,
