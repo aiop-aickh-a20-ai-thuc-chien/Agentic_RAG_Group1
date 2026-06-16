@@ -55,10 +55,15 @@ from agentic_rag.ingestion.knowledge_quality import (
     annotate_chunks_with_quality,
     parse_knowledge_quality_methods,
 )
+from agentic_rag.ingestion.metadata import (
+    apply_extracted_metadata,
+    extract_chunk_metadata,
+)
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
 from agentic_rag.integrations.local_pdf.storage import (
+    HybridLocalSourceStore,
     LocalSourceStore,
     PostgresLocalSourceStore,
     S3LocalSourceStore,
@@ -323,6 +328,7 @@ class LocalPdfEvidenceProvider:
         finally:
             self._delete_temporary_path(pdf_path)
             self._delete_temporary_path(markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
         return LocalPdfUploadedDocument(
             document_id=document_id,
@@ -449,6 +455,7 @@ class LocalPdfEvidenceProvider:
             )
         finally:
             self._delete_temporary_path(local_markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
 
         return LocalPdfUploadedDocument(
@@ -567,6 +574,7 @@ class LocalPdfEvidenceProvider:
             )
         finally:
             self._delete_temporary_path(markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
 
         return LocalPdfUploadedDocument(
@@ -1108,6 +1116,18 @@ class LocalPdfEvidenceProvider:
             self._source_store.replace_document_chunks(document_id, chunks)
             return
         self._write_chunks(document_id=document_id, chunks=chunks)
+
+    def _enrich_chunks_with_llm(self, *, document_id: str, chunks: list[Chunk]) -> list[Chunk]:
+        any_enriched = False
+        for chunk in chunks:
+            extracted = extract_chunk_metadata(chunk)
+            if extracted is not None:
+                apply_extracted_metadata(chunk.metadata, extracted)
+                any_enriched = True
+        if any_enriched:
+            self._replace_document_chunks(document_id=document_id, chunks=chunks)
+            _upsert_dense_embeddings_safely(chunks)
+        return chunks
 
     def _write_source_store(
         self,
@@ -2330,6 +2350,8 @@ def _source_store_from_env() -> LocalSourceStore | None:
     raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
     if raw_store == "s3":
         return S3LocalSourceStore.from_env()
+    if raw_store == "hybrid":
+        return HybridLocalSourceStore.from_env()
     if raw_store not in {"postgres", "postgresql", "pg"}:
         return None
 
@@ -2347,6 +2369,8 @@ def _source_store_from_env() -> LocalSourceStore | None:
 
 
 def _source_store_trace_type(source_store: LocalSourceStore) -> str:
+    if isinstance(source_store, HybridLocalSourceStore):
+        return "hybrid"
     if isinstance(source_store, S3LocalSourceStore):
         return "s3"
     if isinstance(source_store, PostgresLocalSourceStore):
