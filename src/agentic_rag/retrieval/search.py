@@ -96,11 +96,36 @@ def _bm25_index_text(chunk: Chunk) -> str:
     return f"{chunk.text}\n{appended}" if appended else chunk.text
 
 
+MAX_QUESTIONS_PER_CHUNK = 4
+
+
+def _question_index_enabled() -> bool:
+    """Master toggle for the question-index retriever (default OFF → baseline)."""
+    return os.getenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false").lower() == "true"
+
+
+def _question_min_score() -> float | None:
+    """Min cosine similarity to keep a question match; empty env disables filtering.
+
+    Defaults to 0.5 — a sensible floor for the multilingual MiniLM embedder so a
+    question match must be genuinely similar (the question index always returns
+    nearest neighbours, so an absolute cutoff is what drops irrelevant noise).
+    """
+    raw = os.getenv("QUESTION_MIN_SCORE", "0.5").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
         self._bm25_index = self._build_bm25_index(chunks)
         self._vector_index: Any = None
+        self._question_index: Any = None
 
     def preprocess_query(self, query: str, llm_client: object = None) -> dict[str, Any]:
         """Normalize a raw user query before retrieval."""
@@ -215,6 +240,72 @@ class Store:
             )
 
         return result
+
+    def _build_question_index(self, chunks: list[Chunk]) -> Any:
+        """Build an in-memory dense index over each chunk's LLM-extracted questions.
+
+        Each indexed point is one question, tagged with the parent chunk's index
+        so a question hit maps back to its chunk. Returns ``None`` when no chunk
+        has questions.
+        """
+        texts: list[str] = []
+        metadatas: list[dict[str, Any]] = []
+        for index, chunk in enumerate(chunks):
+            questions = chunk.metadata.get("questions")
+            if not isinstance(questions, (list, tuple)):
+                continue
+            for question in list(questions)[:MAX_QUESTIONS_PER_CHUNK]:
+                text = str(question).strip()
+                if text:
+                    texts.append(text)
+                    metadatas.append({"parent_index": index})
+        if not texts:
+            return None
+        return TurboQuantVectorStore.from_texts(
+            texts=texts, embedding=_configured_embedding(), metadatas=metadatas
+        )
+
+    def question_search(self, query: str, top_k: int = 10) -> list[SearchResult]:
+        """Match the query against chunk questions; return the parent chunks.
+
+        A second dense search whose index is the chunks' questions instead of
+        their text — exploits question↔question similarity. Disabled by default;
+        applies ``QUESTION_MIN_SCORE`` and dedups multiple question hits to the
+        best score per parent chunk.
+        """
+        if not _question_index_enabled() or top_k <= 0 or not self._chunks:
+            return []
+
+        if self._question_index is None:
+            self._question_index = self._build_question_index(self._chunks)
+        if self._question_index is None:
+            return []
+
+        min_score = _question_min_score()
+        # Over-fetch: several questions can map to the same chunk before dedup.
+        raw = self._question_index.similarity_search_with_score(
+            query=query, k=top_k * MAX_QUESTIONS_PER_CHUNK
+        )
+        best_by_parent: dict[int, float] = {}
+        for doc, score in raw:
+            parent_index = doc.metadata.get("parent_index")
+            if not isinstance(parent_index, int) or not 0 <= parent_index < len(self._chunks):
+                continue
+            if min_score is not None and score < min_score:
+                continue
+            if parent_index not in best_by_parent or score > best_by_parent[parent_index]:
+                best_by_parent[parent_index] = score
+
+        ranked = sorted(best_by_parent.items(), key=lambda item: item[1], reverse=True)[:top_k]
+        return [
+            SearchResult(
+                chunk=self._chunks[parent_index],
+                score=float(score),
+                rank=rank,
+                retriever="question",
+            )
+            for rank, (parent_index, score) in enumerate(ranked, start=1)
+        ]
 
     def search(
         self,

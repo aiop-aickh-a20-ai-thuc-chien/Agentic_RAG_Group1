@@ -121,6 +121,63 @@ def test_bm25_augments_with_keywords_when_enabled(monkeypatch: MonkeyPatch) -> N
     assert results[0].score > 0.0
 
 
+def test_question_search_disabled_by_default(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_QUESTION_INDEX_ENABLED", raising=False)
+    store = Store([Chunk(chunk_id="c1", text="noi dung", metadata={"questions": ["cau hoi"]})])
+
+    assert store.question_search("bat ky", top_k=5) == []
+
+
+def test_question_search_maps_to_parent_and_dedups(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "true")
+    monkeypatch.delenv("QUESTION_MIN_SCORE", raising=False)
+    chunks = [
+        Chunk(chunk_id="c1", text="a", metadata={"questions": ["q0"]}),
+        Chunk(chunk_id="c2", text="b", metadata={"questions": ["q1a", "q1b"]}),
+    ]
+    store = Store(chunks)
+
+    class FakeQuestionIndex:
+        def similarity_search_with_score(self, *, query: str, k: int) -> list[tuple[Any, float]]:
+            return [
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.9),
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.8),  # dup → keep best 0.9
+                (SimpleNamespace(metadata={"parent_index": 0}), 0.6),
+            ]
+
+    monkeypatch.setattr(store, "_build_question_index", lambda chunks: FakeQuestionIndex())
+
+    results = store.question_search("q", top_k=5)
+
+    assert [r.chunk.chunk_id for r in results] == ["c2", "c1"]
+    assert results[0].score == 0.9
+    assert results[0].retriever == "question"
+    assert results[0].rank == 1
+
+
+def test_question_search_applies_min_score(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "true")
+    monkeypatch.setenv("QUESTION_MIN_SCORE", "0.5")
+    chunks = [
+        Chunk(chunk_id="c1", text="a", metadata={"questions": ["q0"]}),
+        Chunk(chunk_id="c2", text="b", metadata={"questions": ["q1"]}),
+    ]
+    store = Store(chunks)
+
+    class FakeQuestionIndex:
+        def similarity_search_with_score(self, *, query: str, k: int) -> list[tuple[Any, float]]:
+            return [
+                (SimpleNamespace(metadata={"parent_index": 0}), 0.9),
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.3),  # below 0.5 → dropped
+            ]
+
+    monkeypatch.setattr(store, "_build_question_index", lambda chunks: FakeQuestionIndex())
+
+    results = store.question_search("q", top_k=5)
+
+    assert [r.chunk.chunk_id for r in results] == ["c1"]
+
+
 def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
     monkeypatch: MonkeyPatch,
 ) -> None:

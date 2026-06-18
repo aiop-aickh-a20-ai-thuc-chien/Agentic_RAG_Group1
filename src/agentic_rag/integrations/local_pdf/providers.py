@@ -78,7 +78,7 @@ from agentic_rag.retrieval.fusion import (
     apply_fusion_threshold,
     apply_pre_fusion_thresholds,
     normalized_score_fusion,
-    rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 from agentic_rag.retrieval.search import (
@@ -1062,6 +1062,9 @@ class LocalPdfEvidenceProvider:
         # Dense uses original question (with diacritics) for better embedding quality
         dense_results, dense_error = _traced_dense(store, request.question, candidate_k)
         dense_latency_ms = _latency_ms(dense_started_at)
+        # Question-index retriever (experiment, off by default; uses the original
+        # question for question↔question matching). Empty when the toggle is off.
+        question_results = store.question_search(request.question, candidate_k)
         threshold_config = _threshold_config_from_env()
         bm25_results, dense_results, pre_fusion_threshold_trace = _traced_pre_fusion_threshold(
             bm25_results, dense_results, threshold_config
@@ -1070,6 +1073,7 @@ class LocalPdfEvidenceProvider:
         fused_results, fusion_method_trace = _fuse_results(
             bm25_results=bm25_results,
             dense_results=dense_results,
+            question_results=question_results,
             candidate_k=candidate_k,
         )
         fused_results, fusion_threshold_trace = _traced_post_fusion_threshold(
@@ -2511,6 +2515,7 @@ def _fuse_results(
     bm25_results: list[SearchResult],
     dense_results: list[SearchResult],
     candidate_k: int,
+    question_results: list[SearchResult] | None = None,
 ) -> tuple[list[SearchResult], dict[str, object]]:
     method = os.getenv("FUSION_METHOD", "rrf").strip().lower()
     if method == "weighted_rrf":
@@ -2542,14 +2547,15 @@ def _fuse_results(
             "alpha": alpha,
         }
     rrf_k = _env_int("FUSION_RRF_K", RRF_K)
-    return rrf_fusion(
-        bm25_results=bm25_results,
-        dense_results=dense_results,
-        top_k=candidate_k,
-        rrf_k=rrf_k,
-    ), {
+    # Question-index results (when enabled) fuse as a 3rd RRF retriever; the
+    # weighted/normalized methods above stay 2-way (bm25/dense) by design.
+    result_lists = [bm25_results, dense_results]
+    if question_results:
+        result_lists.append(question_results)
+    return rrf_fusion_nway(result_lists, top_k=candidate_k, rrf_k=rrf_k), {
         "method": "reciprocal_rank_fusion",
         "rrf_k": rrf_k,
+        "question_count": len(question_results or []),
     }
 
 
