@@ -45,8 +45,8 @@ Pipeline Ingestion
 
 | Ký hiệu | Nguồn | Các trường |
 |---------|-------|-----------|
-| `[P]` | Rule-based (parser) | `title`, `section`, `section_path`, `chunk_index`, `quality_score`, v.v. |
-| `[L]` | LLM extraction | `summary`, `keywords`, `questions`, `entities`, `document_type`, `language` |
+| `[P]` | Rule-based (parser) | `title`, `section`, `section_path`, `chunk_index`, v.v. |
+| `[L]` | LLM extraction | `summary`, `keywords`, `questions`, `entities`, `document_type`, `language`, `quality_score` |
 | `[S]` | Storage layer | `document_id`, `chunk_id`, `ingested_at` |
 
 ---
