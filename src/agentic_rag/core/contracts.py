@@ -96,6 +96,9 @@ class RetrievalInput(_ContractModel):
     document_ids: list[str] | None = None
     page_size: int | None = None
     exclude_dedup_layers: list[str] = Field(default_factory=list)
+    # Canonical entities detected from the query (preprocess stage). Providers
+    # that support it pre-filter retrieval to chunks carrying any of them.
+    entity_filter: list[str] = Field(default_factory=list)
 
 
 class RetrievalOutput(_ContractModel):

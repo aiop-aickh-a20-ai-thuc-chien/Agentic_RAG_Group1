@@ -31,7 +31,8 @@ except ImportError:
 
 _PREPROCESS_PROMPT = """\
 <task>
-Choose the best preprocessing action for the current user question.
+Choose the best preprocessing action for the current user question, \
+then identify which entities from the menu below are relevant.
 </task>
 
 <actions>
@@ -52,6 +53,10 @@ all compared entities.
 4. If the question is already clear and standalone, keep it exactly as-is.
 </actions>
 
+<entity_menu>
+{entity_menu}
+</entity_menu>
+
 <context>
 <conversation_history>
 {history}
@@ -64,8 +69,11 @@ all compared entities.
 
 <output>
 Return JSON only. Keep rewritten questions in the same language as the original question.
-  Single question: {{"type": "single", "question": "..."}}
-  Multiple:        {{"type": "multi",  "questions": ["q1", "q2"]}}
+"entities" must only contain names EXACTLY as written in the entity_menu. Use [] if none apply.
+Examples: 'Vinfast 8' → 'VF 8', 'xe 7 chỗ điện' → 'VF 9', 'VF9' → 'VF 9'.
+  Single question: {{"type": "single", "question": "...", "entities": ["canonical1"]}}
+  Multiple:        {{"type": "multi",  "questions": ["q1", "q2"], "entities": [["VF 8"], ["VF 9"]]}}
+For multi, "entities" is a list of lists — one list per question, same order.
 </output>"""
 
 _GRADE_HALLUCINATION_PROMPT = """\
@@ -192,9 +200,10 @@ def preprocess_query(
 ) -> dict[str, Any]:
     """Rewrite with history context and/or decompose multi-intent queries.
 
-    Returns {"type": "single", "question": "..."} or
-            {"type": "multi",  "questions": [...]}
-    Falls back to single passthrough when no LLM or simple query.
+    Returns {"type": "single", "question": "...", "entities": [...]} or
+            {"type": "multi",  "questions": [...], "entities": [[...], [...]]}
+    "entities" contains validated canonical names from the allowlist.
+    Falls back to single passthrough (no entities key) when no LLM or simple query.
     """
     q_lower = question.lower()
     has_history = bool(history)
@@ -212,12 +221,29 @@ def preprocess_query(
         or "none"
     )
 
-    prompt = _PREPROCESS_PROMPT.format(history=history_text, question=question)
+    from agentic_rag.ingestion.metadata import allowlisted_canonicals, build_entity_menu
+
+    prompt = _PREPROCESS_PROMPT.format(
+        entity_menu=build_entity_menu(),
+        history=history_text,
+        question=question,
+    )
     try:
         raw = _traced_preprocess_llm(prompt, llm_client)
         result: dict[str, Any] = json.loads(raw)
         if result.get("type") not in {"single", "multi"}:
             return {"type": "single", "question": question}
+        allow = allowlisted_canonicals()
+        if result["type"] == "single":
+            raw_ents = result.get("entities") or []
+            result["entities"] = [e for e in raw_ents if e in allow]
+        else:
+            questions = result.get("questions") or []
+            raw_ents_list = result.get("entities") or []
+            result["entities"] = [
+                [e for e in (raw_ents_list[i] if i < len(raw_ents_list) else []) if e in allow]
+                for i in range(len(questions))
+            ]
         return result
     except Exception:
         return {"type": "single", "question": question}

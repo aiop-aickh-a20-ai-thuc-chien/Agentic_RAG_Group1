@@ -477,6 +477,7 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
     assert [index["field_name"] for index in seen["payload_indexes"]] == [
         "document_id",
         "metadata.deduplication.primary_layer",
+        "metadata.entities_canonical",
     ]
     assert seen["upsert"]["collection_name"] == "agentic_chunks"
 
@@ -563,6 +564,7 @@ def test_qdrant_hybrid_search_filters_out_excluded_dedup_layers(
     assert [index["field_name"] for index in seen["payload_indexes"]] == [
         "document_id",
         "metadata.deduplication.primary_layer",
+        "metadata.entities_canonical",
     ]
     query_filter = seen["query_points"]["prefetch"][0].filter
     assert query_filter.must[0].key == "document_id"

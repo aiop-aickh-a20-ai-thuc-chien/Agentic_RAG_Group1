@@ -1,0 +1,4159 @@
+{
+  "version": "entity-map-v3",
+  "source": "lexical-cluster + llm-canonicalization",
+  "stats": {
+    "raw_strings": 1036,
+    "canonical_entities": 762,
+    "filterable_types": [
+      "car_model",
+      "ebike_model",
+      "location"
+    ]
+  },
+  "map": {
+    "1 năm": {
+      "canonical": "1 năm",
+      "type": "other"
+    },
+    "1 triệu IDR": {
+      "canonical": "1 triệu IDR",
+      "type": "generic"
+    },
+    "1 triệu đồng": {
+      "canonical": "1 triệu đồng",
+      "type": "other"
+    },
+    "1 đổi 1": {
+      "canonical": "1 đổi 1",
+      "type": "other"
+    },
+    "1,6 triệu IDR": {
+      "canonical": "1,6 triệu IDR",
+      "type": "generic"
+    },
+    "1.309.000.000 VNĐ": {
+      "canonical": "1.309.000.000 VNĐ",
+      "type": "generic"
+    },
+    "1.492.000.000 VNĐ": {
+      "canonical": "1.492.000.000 VNĐ",
+      "type": "generic"
+    },
+    "10 năm": {
+      "canonical": "10 năm",
+      "type": "other"
+    },
+    "106 tuyến quốc lộ": {
+      "canonical": "106 tuyến quốc lộ",
+      "type": "other"
+    },
+    "13.900.000 VNĐ": {
+      "canonical": "13.900.000 VNĐ",
+      "type": "generic"
+    },
+    "150.000 cổng sạc": {
+      "canonical": "150.000 cổng sạc",
+      "type": "generic"
+    },
+    "160.000 km": {
+      "canonical": "160.000 km",
+      "type": "other"
+    },
+    "1800 W": {
+      "canonical": "1800 W",
+      "type": "generic"
+    },
+    "19.900.000 đồng/pin": {
+      "canonical": "19.900.000 đồng/pin",
+      "type": "other"
+    },
+    "1900 23 23 89": {
+      "canonical": "1900 23 23 89",
+      "type": "contact"
+    },
+    "199.000 đồng/tháng": {
+      "canonical": "199.000 đồng/tháng",
+      "type": "other"
+    },
+    "2.2kW": {
+      "canonical": "2.2kW",
+      "type": "other"
+    },
+    "200.000 km": {
+      "canonical": "200.000 km",
+      "type": "generic"
+    },
+    "200.000km": {
+      "canonical": "200.000 km",
+      "type": "generic"
+    },
+    "2025": {
+      "canonical": "2025",
+      "type": "other"
+    },
+    "21.912 xe": {
+      "canonical": "21.912 xe",
+      "type": "other"
+    },
+    "24 tháng": {
+      "canonical": "24 tháng",
+      "type": "other"
+    },
+    "250 triệu đồng": {
+      "canonical": "250 triệu đồng",
+      "type": "other"
+    },
+    "27/5/2026": {
+      "canonical": "27/5/2026",
+      "type": "other"
+    },
+    "3 ngày": {
+      "canonical": "3 ngày",
+      "type": "generic"
+    },
+    "3 năm": {
+      "canonical": "3 năm",
+      "type": "other"
+    },
+    "3 tháng": {
+      "canonical": "3 tháng",
+      "type": "other"
+    },
+    "3 tháng bảo hành": {
+      "canonical": "3 tháng bảo hành",
+      "type": "other"
+    },
+    "3.5kW": {
+      "canonical": "3.5kW",
+      "type": "other"
+    },
+    "3/6/2026": {
+      "canonical": "3/6/2026",
+      "type": "other"
+    },
+    "30/06/2025": {
+      "canonical": "30/06/2025",
+      "type": "other"
+    },
+    "300.000 đồng": {
+      "canonical": "300.000 đồng",
+      "type": "generic"
+    },
+    "3000 W": {
+      "canonical": "3000 W",
+      "type": "generic"
+    },
+    "31/05/2026": {
+      "canonical": "31/05/2026",
+      "type": "generic"
+    },
+    "31/12/2025": {
+      "canonical": "31/12/2025",
+      "type": "other"
+    },
+    "34 Tỉnh và Thành phố": {
+      "canonical": "34 tỉnh thành",
+      "type": "generic"
+    },
+    "34 tỉnh thành": {
+      "canonical": "34 tỉnh thành",
+      "type": "generic"
+    },
+    "350.000 đồng/tháng": {
+      "canonical": "350.000 đồng/tháng",
+      "type": "generic"
+    },
+    "39.900.000 VNĐ": {
+      "canonical": "39.900.000 VNĐ",
+      "type": "generic"
+    },
+    "3M": {
+      "canonical": "3M",
+      "type": "generic"
+    },
+    "4.950.000 VNĐ": {
+      "canonical": "4.950.000 VNĐ",
+      "type": "generic"
+    },
+    "45.500.000 VNĐ": {
+      "canonical": "45.500.000 VNĐ",
+      "type": "other"
+    },
+    "48 tỉnh, thành phố": {
+      "canonical": "48 tỉnh, thành phố",
+      "type": "other"
+    },
+    "5 stack": {
+      "canonical": "5 stack",
+      "type": "generic"
+    },
+    "500 km/tháng": {
+      "canonical": "500 km/tháng",
+      "type": "other"
+    },
+    "51 triệu đồng": {
+      "canonical": "51 triệu đồng",
+      "type": "other"
+    },
+    "51.2V": {
+      "canonical": "51.2V",
+      "type": "generic"
+    },
+    "511,6 triệu USD": {
+      "canonical": "511,6 triệu USD",
+      "type": "other"
+    },
+    "63 tỉnh thành": {
+      "canonical": "63 tỉnh thành",
+      "type": "generic"
+    },
+    "7 năm": {
+      "canonical": "7 năm",
+      "type": "other"
+    },
+    "7,4 kW": {
+      "canonical": "7,4 kW",
+      "type": "generic"
+    },
+    "7,4kW": {
+      "canonical": "7,4kW",
+      "type": "generic"
+    },
+    "8/3": {
+      "canonical": "8/3",
+      "type": "other"
+    },
+    "9,4 triệu đồng": {
+      "canonical": "9,4 triệu đồng",
+      "type": "other"
+    },
+    "999 triệu đồng": {
+      "canonical": "999 triệu đồng",
+      "type": "generic"
+    },
+    "A-SUV": {
+      "canonical": "A-SUV",
+      "type": "generic"
+    },
+    "AC11kW": {
+      "canonical": "AC11kW",
+      "type": "generic"
+    },
+    "ADAS": {
+      "canonical": "ADAS",
+      "type": "generic"
+    },
+    "AGENTIC AI": {
+      "canonical": "Agentic AI",
+      "type": "generic"
+    },
+    "AI": {
+      "canonical": "AI",
+      "type": "generic"
+    },
+    "ANSI/CAN/UL2849": {
+      "canonical": "ANSI/CAN/UL2849",
+      "type": "generic"
+    },
+    "ANSI/UL 2271": {
+      "canonical": "ANSI/UL 2271",
+      "type": "generic"
+    },
+    "ASEAN NCAP": {
+      "canonical": "ASEAN NCAP",
+      "type": "brand"
+    },
+    "ATM": {
+      "canonical": "ATM",
+      "type": "contact"
+    },
+    "AUTOBRAINS": {
+      "canonical": "Autobrains",
+      "type": "brand"
+    },
+    "Agentic AI": {
+      "canonical": "Agentic AI",
+      "type": "generic"
+    },
+    "Amio": {
+      "canonical": "Amio",
+      "type": "ebike_model"
+    },
+    "An Giang": {
+      "canonical": "An Giang",
+      "type": "location"
+    },
+    "An Hải": {
+      "canonical": "An Hải",
+      "type": "location"
+    },
+    "Android Auto": {
+      "canonical": "Android Auto",
+      "type": "generic"
+    },
+    "App Store": {
+      "canonical": "App Store",
+      "type": "other"
+    },
+    "App VF Escooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "Apple CarPlay": {
+      "canonical": "Apple CarPlay",
+      "type": "generic"
+    },
+    "Argus Cyber Security": {
+      "canonical": "Argus Cyber Security",
+      "type": "other"
+    },
+    "Autobrains": {
+      "canonical": "Autobrains",
+      "type": "brand"
+    },
+    "B-SUV": {
+      "canonical": "B-SUV",
+      "type": "generic"
+    },
+    "B1": {
+      "canonical": "B1",
+      "type": "generic"
+    },
+    "BESS": {
+      "canonical": "BESS",
+      "type": "generic"
+    },
+    "BESTWOMAN": {
+      "canonical": "BESTWOMAN",
+      "type": "other"
+    },
+    "BIDV": {
+      "canonical": "BIDV",
+      "type": "brand"
+    },
+    "BSI": {
+      "canonical": "BSI",
+      "type": "other"
+    },
+    "Ba Vì": {
+      "canonical": "Ba Vì",
+      "type": "location"
+    },
+    "Ba Đình": {
+      "canonical": "Ba Đình",
+      "type": "location"
+    },
+    "Bao Da Giấy Tờ Xe": {
+      "canonical": "Bao Da Giấy Tờ Xe",
+      "type": "accessory"
+    },
+    "Big C Thăng Long": {
+      "canonical": "Thăng Long",
+      "type": "location"
+    },
+    "Bluetooth": {
+      "canonical": "Bluetooth",
+      "type": "generic"
+    },
+    "Brahminy White": {
+      "canonical": "Brahminy White",
+      "type": "generic"
+    },
+    "Bà Lê Thị Thu Thủy": {
+      "canonical": "Lê Thị Thu Thủy",
+      "type": "contact"
+    },
+    "Báo cáo ESHIA": {
+      "canonical": "Báo cáo ESHIA",
+      "type": "other"
+    },
+    "Bãi đỗ xe Mễ Trì": {
+      "canonical": "Bãi đỗ xe Mễ Trì",
+      "type": "location"
+    },
+    "Bãi đỗ xe Trạm đăng kiểm 29.15D": {
+      "canonical": "Bãi đỗ xe Trạm đăng kiểm 29.15D",
+      "type": "location"
+    },
+    "Bên Bán": {
+      "canonical": "Bên Bán",
+      "type": "contact"
+    },
+    "Bình Giữ Nhiệt Classic": {
+      "canonical": "Bình Giữ Nhiệt Classic",
+      "type": "accessory"
+    },
+    "Bình Giữ Nhiệt VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Bình Vượng Tower": {
+      "canonical": "Bình Vượng Tower",
+      "type": "location"
+    },
+    "Bảo Minh": {
+      "canonical": "Bảo Minh",
+      "type": "generic"
+    },
+    "Bảo Việt": {
+      "canonical": "Bảo Việt",
+      "type": "generic"
+    },
+    "Bắc Giang": {
+      "canonical": "Bắc Giang",
+      "type": "location"
+    },
+    "Bắc Mỹ": {
+      "canonical": "Bắc Mỹ",
+      "type": "location"
+    },
+    "Bắc Từ Liêm": {
+      "canonical": "Bắc Từ Liêm",
+      "type": "location"
+    },
+    "Bọc Ghế Da VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Bọc Vô Lăng VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Bộ Công thương": {
+      "canonical": "Bộ Công thương",
+      "type": "generic"
+    },
+    "Bộ Giao thông Vận tải": {
+      "canonical": "Bộ Giao thông Vận tải",
+      "type": "other"
+    },
+    "Bộ Giao thông vận tải": {
+      "canonical": "Bộ Giao thông vận tải",
+      "type": "other"
+    },
+    "Bộ Nông nghiệp và Môi trường": {
+      "canonical": "Bộ Nông nghiệp và Môi trường",
+      "type": "generic"
+    },
+    "Bộ Sạc Di Động Ô Tô Điện": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "Bộ Sạc Di Động Ô Tô Điện 2.2 kW": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "Bộ Sạc Treo Tường AC 11 kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 11 kW",
+      "type": "accessory"
+    },
+    "Bộ Sạc Treo Tường AC 7,4 kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "Bộ Thanh Ngang Giá Nóc VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Bộ Tài chính": {
+      "canonical": "Bộ Tài chính",
+      "type": "brand"
+    },
+    "Bộ sạc treo tường AC 7,4 kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "CAN Protocol": {
+      "canonical": "CAN Protocol",
+      "type": "generic"
+    },
+    "CATL": {
+      "canonical": "CATL",
+      "type": "generic"
+    },
+    "CCS 2": {
+      "canonical": "CCS 2",
+      "type": "generic"
+    },
+    "CES 2022": {
+      "canonical": "CES 2022",
+      "type": "other"
+    },
+    "CH Play": {
+      "canonical": "CH Play",
+      "type": "other"
+    },
+    "CSGT": {
+      "canonical": "CSGT",
+      "type": "generic"
+    },
+    "Camera Lùi VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Camera lùi VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Car Awards 2021": {
+      "canonical": "Car Awards 2021",
+      "type": "generic"
+    },
+    "Car India Awards": {
+      "canonical": "Car India Awards",
+      "type": "other"
+    },
+    "Car&Bike Awards": {
+      "canonical": "Car&Bike Awards",
+      "type": "other"
+    },
+    "Chung cư A15 Bộ Công An": {
+      "canonical": "Chung cư A15 Bộ Công An",
+      "type": "location"
+    },
+    "Chung cư CT2-3 Dream Town": {
+      "canonical": "Chung cư CT2-3 Dream Town",
+      "type": "location"
+    },
+    "Chung cư Golden West Complex": {
+      "canonical": "Golden West Complex",
+      "type": "location"
+    },
+    "Chung cư Hồ Hà Eco City": {
+      "canonical": "Chung cư Hồ Hà Eco City",
+      "type": "location"
+    },
+    "Chung cư Intracom 1": {
+      "canonical": "Chung cư Intracom 1",
+      "type": "location"
+    },
+    "Chung cư King Palace": {
+      "canonical": "King Palace",
+      "type": "location"
+    },
+    "Chung cư Quân đội K33 BQP": {
+      "canonical": "Chung cư Quân đội K33 BQP",
+      "type": "other"
+    },
+    "Chung cư Ruby City 3": {
+      "canonical": "Chung cư Ruby City 3",
+      "type": "location"
+    },
+    "Chung cư Splendora": {
+      "canonical": "Chung cư Splendora",
+      "type": "location"
+    },
+    "Chung cư Stellar Garden": {
+      "canonical": "Stellar Garden",
+      "type": "location"
+    },
+    "Chung cư Tecco Garden": {
+      "canonical": "Chung cư Tecco Garden",
+      "type": "location"
+    },
+    "Chung cư Tecco Skyville": {
+      "canonical": "Chung cư Tecco Skyville",
+      "type": "location"
+    },
+    "Chung cư Valencia Garden": {
+      "canonical": "Chung cư Valencia Garden",
+      "type": "other"
+    },
+    "Chung cư Vinaconex 1": {
+      "canonical": "Vinaconex 1",
+      "type": "other"
+    },
+    "Chung cư Việt Đức Complex": {
+      "canonical": "Việt Đức Complex",
+      "type": "location"
+    },
+    "Chuyển đổi xanh": {
+      "canonical": "chuyển đổi xanh",
+      "type": "generic"
+    },
+    "Châu Âu": {
+      "canonical": "Châu Âu",
+      "type": "location"
+    },
+    "Chí Tuyến Bắc": {
+      "canonical": "Chí Tuyến Bắc",
+      "type": "location"
+    },
+    "Chính Phủ": {
+      "canonical": "Chính Phủ",
+      "type": "generic"
+    },
+    "Chính phủ": {
+      "canonical": "Chính Phủ",
+      "type": "generic"
+    },
+    "Chính sách bảo vệ dữ liệu cá nhân": {
+      "canonical": "Chính sách bảo vệ dữ liệu cá nhân",
+      "type": "other"
+    },
+    "Chương trình khuyến mại": {
+      "canonical": "chương trình khuyến mãi",
+      "type": "other"
+    },
+    "Chỉ thị 20/CT-TTg": {
+      "canonical": "Chỉ thị 20/CT-TTg",
+      "type": "generic"
+    },
+    "Chị Vàng": {
+      "canonical": "Chị Vàng",
+      "type": "other"
+    },
+    "Coninco Tower": {
+      "canonical": "Coninco Tower",
+      "type": "location"
+    },
+    "Continental": {
+      "canonical": "Continental",
+      "type": "generic"
+    },
+    "Cookies": {
+      "canonical": "Cookies",
+      "type": "generic"
+    },
+    "Covid-19": {
+      "canonical": "Covid-19",
+      "type": "generic"
+    },
+    "Crimson Red": {
+      "canonical": "Crimson Red",
+      "type": "generic"
+    },
+    "Cát Bà": {
+      "canonical": "Cát Bà",
+      "type": "location"
+    },
+    "Cát Hải": {
+      "canonical": "Cát Hải",
+      "type": "location"
+    },
+    "Công Ty TNHH Kinh Doanh Thương Mại và Dịch Vụ VinFast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "Công ty Cổ phần đầu tư KCN Vinhomes Hải Phòng": {
+      "canonical": "Công ty Cổ phần đầu tư KCN Vinhomes Hải Phòng",
+      "type": "contact"
+    },
+    "Công ty TNHH Kinh Doanh Thương Mại và Dịch Vụ VinFast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "Công ty TNHH Kinh doanh Thương mại và Dịch vụ VinFast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "Công ty TNHH Sản xuất và Kinh doanh VinFast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "Công ty TNHH Thương mại ACS Việt Nam": {
+      "canonical": "Công ty TNHH Thương mại ACS Việt Nam",
+      "type": "contact"
+    },
+    "Công ty tài chính ACS": {
+      "canonical": "Công ty tài chính ACS",
+      "type": "generic"
+    },
+    "Công viên Bờ sông Sài Gòn": {
+      "canonical": "Công viên Bờ sông Sài Gòn",
+      "type": "other"
+    },
+    "Cần Giờ": {
+      "canonical": "Cần Giờ",
+      "type": "location"
+    },
+    "Cần Thơ": {
+      "canonical": "Cần Thơ",
+      "type": "location"
+    },
+    "Cầu Giấy": {
+      "canonical": "Cầu Giấy",
+      "type": "location"
+    },
+    "Cốc Giữ Nhiệt Summit": {
+      "canonical": "Cốc Giữ Nhiệt Summit",
+      "type": "accessory"
+    },
+    "Cốp Nóc Phi Thuyền": {
+      "canonical": "Cốp Nóc Phi Thuyền",
+      "type": "accessory"
+    },
+    "Cốp Nóc Phi Thuyền ô tô VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Cốp nóc": {
+      "canonical": "Cốp nóc",
+      "type": "accessory"
+    },
+    "Cục Đăng kiểm Việt Nam": {
+      "canonical": "Cục Đăng kiểm Việt Nam",
+      "type": "other"
+    },
+    "Cửa hàng xăng dầu Hòa Khánh": {
+      "canonical": "Hòa Khánh",
+      "type": "location"
+    },
+    "Cửa hàng xăng dầu Quang Minh": {
+      "canonical": "Quang Minh",
+      "type": "location"
+    },
+    "D-SUV": {
+      "canonical": "D-SUV",
+      "type": "generic"
+    },
+    "DC30kW": {
+      "canonical": "DC30kW",
+      "type": "generic"
+    },
+    "DC60kW": {
+      "canonical": "DC60kW",
+      "type": "generic"
+    },
+    "Deloitte": {
+      "canonical": "Deloitte",
+      "type": "generic"
+    },
+    "Desat Silver": {
+      "canonical": "Desat Silver",
+      "type": "generic"
+    },
+    "Diamond": {
+      "canonical": "Diamond",
+      "type": "generic"
+    },
+    "Diesel 0,001S-V": {
+      "canonical": "Diesel 0,001S-V",
+      "type": "generic"
+    },
+    "Discovery Complex": {
+      "canonical": "Discovery Complex",
+      "type": "other"
+    },
+    "Dreamland Bonanza": {
+      "canonical": "Dreamland Bonanza",
+      "type": "other"
+    },
+    "DrgnFly": {
+      "canonical": "DrgnFly",
+      "type": "ebike_model"
+    },
+    "Dubai": {
+      "canonical": "Dubai",
+      "type": "location"
+    },
+    "Dịch vụ Hậu mãi chuẩn 5 sao": {
+      "canonical": "Dịch vụ Hậu mãi chuẩn 5 sao",
+      "type": "other"
+    },
+    "Dữ Liệu Cá Nhân": {
+      "canonical": "dữ liệu cá nhân",
+      "type": "other"
+    },
+    "Dự án Tổ hợp sản xuất ô tô": {
+      "canonical": "Dự án Tổ hợp sản xuất ô tô",
+      "type": "other"
+    },
+    "Dự án Tổ hợp sản xuất ô tô - xe máy điện": {
+      "canonical": "Dự án Tổ hợp sản xuất ô tô - xe máy điện",
+      "type": "other"
+    },
+    "D’ EL Dorado 1": {
+      "canonical": "D’ EL Dorado 1",
+      "type": "location"
+    },
+    "D’ Le Roi Soleil": {
+      "canonical": "D’ Le Roi Soleil",
+      "type": "location"
+    },
+    "E-SUV": {
+      "canonical": "E-SUV",
+      "type": "generic"
+    },
+    "E-Scooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "E-scooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "E-voucher": {
+      "canonical": "E-voucher",
+      "type": "generic"
+    },
+    "E1000": {
+      "canonical": "E1000",
+      "type": "other"
+    },
+    "EB 6": {
+      "canonical": "EB 6",
+      "type": "ebike_model"
+    },
+    "EBus": {
+      "canonical": "EBus",
+      "type": "generic"
+    },
+    "EC Van": {
+      "canonical": "EC Van",
+      "type": "car_model"
+    },
+    "ECM": {
+      "canonical": "ECM",
+      "type": "generic"
+    },
+    "ECU": {
+      "canonical": "ECU",
+      "type": "generic"
+    },
+    "ERM": {
+      "canonical": "ERM",
+      "type": "other"
+    },
+    "ESHIA": {
+      "canonical": "ESHIA",
+      "type": "generic"
+    },
+    "EURO NCAP": {
+      "canonical": "EURO NCAP",
+      "type": "other"
+    },
+    "EVN Finance": {
+      "canonical": "EVN Finance",
+      "type": "other"
+    },
+    "EVO GRAND": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "EVO Grand": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "EVO Grand Lite": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "EVO LITE NEO": {
+      "canonical": "Evo Lite Neo",
+      "type": "ebike_model"
+    },
+    "Eagle Ottawa": {
+      "canonical": "Eagle Ottawa",
+      "type": "generic"
+    },
+    "Eco Lake View": {
+      "canonical": "Eco Lake View",
+      "type": "other"
+    },
+    "Evo": {
+      "canonical": "Evo",
+      "type": "ebike_model"
+    },
+    "Evo 200": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "Evo 200 Lite": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "Evo 200 lite": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "Evo Grand": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "Evo Grand Lite": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "Evo Lite": {
+      "canonical": "Evo Lite",
+      "type": "ebike_model"
+    },
+    "Evo Lite Neo": {
+      "canonical": "Evo Lite Neo",
+      "type": "ebike_model"
+    },
+    "Evo200": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "Evo200 Lite": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "FELIZ 2025": {
+      "canonical": "Feliz 2025",
+      "type": "ebike_model"
+    },
+    "FLAZZ": {
+      "canonical": "Flazz",
+      "type": "ebike_model"
+    },
+    "FLazz": {
+      "canonical": "Flazz",
+      "type": "ebike_model"
+    },
+    "FPT": {
+      "canonical": "FPT",
+      "type": "brand"
+    },
+    "FRS 8A.1.13.1": {
+      "canonical": "FRS 8A.1.13.1",
+      "type": "other"
+    },
+    "FRS 8B.1.13.0": {
+      "canonical": "FRS 8B.1.13.0",
+      "type": "other"
+    },
+    "FRS 9A.5.12.0": {
+      "canonical": "FRS 9A.5.12.0",
+      "type": "other"
+    },
+    "Face ID": {
+      "canonical": "Face ID",
+      "type": "generic"
+    },
+    "Fadil": {
+      "canonical": "Fadil",
+      "type": "car_model"
+    },
+    "Feliz": {
+      "canonical": "Feliz",
+      "type": "ebike_model"
+    },
+    "Feliz 2025": {
+      "canonical": "Feliz 2025",
+      "type": "ebike_model"
+    },
+    "Feliz II": {
+      "canonical": "Feliz II",
+      "type": "ebike_model"
+    },
+    "Feliz Lite": {
+      "canonical": "Feliz Lite",
+      "type": "ebike_model"
+    },
+    "Feliz S": {
+      "canonical": "Feliz S",
+      "type": "ebike_model"
+    },
+    "Feliz S 2022": {
+      "canonical": "Feliz S",
+      "type": "ebike_model"
+    },
+    "Film Cách Nhiệt": {
+      "canonical": "Film Cách Nhiệt",
+      "type": "generic"
+    },
+    "Flazz": {
+      "canonical": "Flazz",
+      "type": "ebike_model"
+    },
+    "GPS": {
+      "canonical": "GPS",
+      "type": "generic"
+    },
+    "GSM": {
+      "canonical": "GSM",
+      "type": "generic"
+    },
+    "Gamuda Garden": {
+      "canonical": "Gamuda Garden",
+      "type": "other"
+    },
+    "Geleximco": {
+      "canonical": "Geleximco",
+      "type": "brand"
+    },
+    "Gia Lâm": {
+      "canonical": "Gia Lâm",
+      "type": "location"
+    },
+    "Giờ Trái Đất": {
+      "canonical": "Giờ Trái Đất",
+      "type": "other"
+    },
+    "Gold": {
+      "canonical": "Gold",
+      "type": "generic"
+    },
+    "Golden West Complex": {
+      "canonical": "Golden West Complex",
+      "type": "location"
+    },
+    "Google Analytics": {
+      "canonical": "Google Analytics",
+      "type": "generic"
+    },
+    "Gotion": {
+      "canonical": "Gotion",
+      "type": "generic"
+    },
+    "Gotion High - Tech": {
+      "canonical": "Gotion High-Tech",
+      "type": "brand"
+    },
+    "Gotion High-Tech": {
+      "canonical": "Gotion High-Tech",
+      "type": "brand"
+    },
+    "Gymkhana Otofun Championship 2022": {
+      "canonical": "Gymkhana Otofun Championship 2022",
+      "type": "other"
+    },
+    "Gói 1": {
+      "canonical": "gói 1",
+      "type": "other"
+    },
+    "Gói 2": {
+      "canonical": "gói 2",
+      "type": "other"
+    },
+    "Gói Dán Film Cách Nhiệt": {
+      "canonical": "Gói Dán Film Cách Nhiệt",
+      "type": "accessory"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast": {
+      "canonical": "Gói Dán Film Cách Nhiệt VinFast",
+      "type": "brand"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast Lux A2.0": {
+      "canonical": "Lux A2.0",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Gói Dán Film Cách Nhiệt VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Gói Film Cách Nhiệt Dán Trần": {
+      "canonical": "Gói Film Cách Nhiệt Dán Trần",
+      "type": "accessory"
+    },
+    "Gói Film Cách Nhiệt Dán Trần VinFast VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Gói Film Cách Nhiệt Dán Trần VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Gói Film Cách Nhiệt Dán Trần VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Gói dán film cách nhiệt": {
+      "canonical": "Gói dán film cách nhiệt",
+      "type": "accessory"
+    },
+    "Gối Cổ Chữ U": {
+      "canonical": "Gối Cổ Chữ U",
+      "type": "accessory"
+    },
+    "Gối Da Tựa Đầu": {
+      "canonical": "Gối Da Tựa Đầu",
+      "type": "accessory"
+    },
+    "HDF": {
+      "canonical": "HDF",
+      "type": "other"
+    },
+    "HPC Landmark 105": {
+      "canonical": "HPC Landmark 105",
+      "type": "location"
+    },
+    "Hai Bà Trưng": {
+      "canonical": "Hai Bà Trưng",
+      "type": "location"
+    },
+    "Herio Green": {
+      "canonical": "Herio Green",
+      "type": "other"
+    },
+    "Hotline": {
+      "canonical": "Hotline",
+      "type": "generic"
+    },
+    "Hotline 1900 23 23 89": {
+      "canonical": "1900 23 23 89",
+      "type": "contact"
+    },
+    "Hotline 1900232389": {
+      "canonical": "Hotline 1900232389",
+      "type": "contact"
+    },
+    "Hoài Đức": {
+      "canonical": "Hoài Đức",
+      "type": "location"
+    },
+    "Hoàng Hà": {
+      "canonical": "Hoàng Hà",
+      "type": "location"
+    },
+    "Hoàng Mai": {
+      "canonical": "Hoàng Mai",
+      "type": "location"
+    },
+    "Hà Nội": {
+      "canonical": "Hà Nội",
+      "type": "location"
+    },
+    "Hà Thành": {
+      "canonical": "Hà Thành",
+      "type": "location"
+    },
+    "Hà Tĩnh": {
+      "canonical": "Hà Tĩnh",
+      "type": "location"
+    },
+    "Hà Đông": {
+      "canonical": "Hà Đông",
+      "type": "location"
+    },
+    "Hòa Vang": {
+      "canonical": "Hòa Vang",
+      "type": "location"
+    },
+    "Hòn Tre": {
+      "canonical": "Hòn Tre",
+      "type": "location"
+    },
+    "HĐTP": {
+      "canonical": "HĐTP",
+      "type": "other"
+    },
+    "Hải Châu": {
+      "canonical": "Hải Châu",
+      "type": "location"
+    },
+    "Hải Phòng": {
+      "canonical": "Hải Phòng",
+      "type": "location"
+    },
+    "Hồ Chí Minh": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "Hội Tự động hóa Việt Nam": {
+      "canonical": "Hội Tự động hóa Việt Nam",
+      "type": "generic"
+    },
+    "Hợp Đồng": {
+      "canonical": "Hợp Đồng",
+      "type": "other"
+    },
+    "Hợp đồng cho thuê pin ô tô": {
+      "canonical": "Hợp đồng cho thuê pin ô tô",
+      "type": "other"
+    },
+    "Hợp đồng thuê pin": {
+      "canonical": "hợp đồng thuê pin",
+      "type": "other"
+    },
+    "ICM": {
+      "canonical": "ICM",
+      "type": "generic"
+    },
+    "IEC 61851": {
+      "canonical": "IEC 61851",
+      "type": "generic"
+    },
+    "IEC 63056": {
+      "canonical": "IEC 63056",
+      "type": "generic"
+    },
+    "IEC61140": {
+      "canonical": "IEC61140",
+      "type": "generic"
+    },
+    "IEC62040": {
+      "canonical": "IEC62040",
+      "type": "generic"
+    },
+    "IEC62196-2": {
+      "canonical": "IEC62196-2",
+      "type": "other"
+    },
+    "IFC": {
+      "canonical": "IFC",
+      "type": "brand"
+    },
+    "IP67": {
+      "canonical": "IP67",
+      "type": "generic"
+    },
+    "ISO 14001": {
+      "canonical": "ISO 14001",
+      "type": "generic"
+    },
+    "ISO 45001": {
+      "canonical": "ISO 45001",
+      "type": "other"
+    },
+    "ISO 6469-3": {
+      "canonical": "ISO 6469-3",
+      "type": "generic"
+    },
+    "ISO-15118": {
+      "canonical": "ISO-15118",
+      "type": "generic"
+    },
+    "Immobilizer": {
+      "canonical": "Immobilizer",
+      "type": "generic"
+    },
+    "Impes": {
+      "canonical": "Impes",
+      "type": "other"
+    },
+    "Indonesia": {
+      "canonical": "Indonesia",
+      "type": "location"
+    },
+    "Innovation Technology and Imaging Awards": {
+      "canonical": "Innovation Technology and Imaging Awards",
+      "type": "other"
+    },
+    "Intracom Riverside": {
+      "canonical": "Intracom Riverside",
+      "type": "other"
+    },
+    "Israel": {
+      "canonical": "Israel",
+      "type": "location"
+    },
+    "Italy": {
+      "canonical": "Italy",
+      "type": "location"
+    },
+    "Jet Black": {
+      "canonical": "Jet Black",
+      "type": "generic"
+    },
+    "Karamba Security": {
+      "canonical": "Karamba Security",
+      "type": "generic"
+    },
+    "Kazakhstan": {
+      "canonical": "Kazakhstan",
+      "type": "location"
+    },
+    "Khu Kinh tế Đình Vũ – Cát Hải": {
+      "canonical": "Đình Vũ – Cát Hải",
+      "type": "location"
+    },
+    "Khu bảo tồn chim và đa dạng sinh học An Hải": {
+      "canonical": "Khu bảo tồn chim và đa dạng sinh học An Hải",
+      "type": "other"
+    },
+    "Khu kinh tế Đình Vũ – Cát Hải": {
+      "canonical": "Đình Vũ – Cát Hải",
+      "type": "location"
+    },
+    "Khu đô thị Thanh Hà": {
+      "canonical": "Khu đô thị Thanh Hà",
+      "type": "location"
+    },
+    "Khách Hàng": {
+      "canonical": "Khách Hàng",
+      "type": "contact"
+    },
+    "Khách sạn La Thành": {
+      "canonical": "Khách sạn La Thành",
+      "type": "other"
+    },
+    "Khánh Hoà": {
+      "canonical": "Khánh Hoà",
+      "type": "location"
+    },
+    "Khăn Lụa Cao Cấp VinFast": {
+      "canonical": "Khăn Lụa Cao Cấp VinFast",
+      "type": "accessory"
+    },
+    "Khăn lụa cao cấp VinFast": {
+      "canonical": "Khăn lụa cao cấp VinFast",
+      "type": "accessory"
+    },
+    "King Palace": {
+      "canonical": "King Palace",
+      "type": "location"
+    },
+    "Klara": {
+      "canonical": "Klara",
+      "type": "ebike_model"
+    },
+    "Klara A2": {
+      "canonical": "Klara A2",
+      "type": "ebike_model"
+    },
+    "Klara S": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "Klara S (2022)": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "Klara S 2022": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "Klara S2": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "KlaraS": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "Kênh VinFast O2O": {
+      "canonical": "VinFast O2O",
+      "type": "brand"
+    },
+    "LFP": {
+      "canonical": "LFP",
+      "type": "generic"
+    },
+    "LUX A2.0": {
+      "canonical": "Lux A2.0",
+      "type": "car_model"
+    },
+    "LUX SA2.0": {
+      "canonical": "Lux SA2.0",
+      "type": "car_model"
+    },
+    "Landmark 81": {
+      "canonical": "Landmark 81",
+      "type": "other"
+    },
+    "Lazada": {
+      "canonical": "Lazada",
+      "type": "generic"
+    },
+    "Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Lithium-ion": {
+      "canonical": "Lithium-ion",
+      "type": "generic"
+    },
+    "Liên Chiểu": {
+      "canonical": "Liên Chiểu",
+      "type": "location"
+    },
+    "Liên Hợp Quốc": {
+      "canonical": "Liên Hợp Quốc",
+      "type": "other"
+    },
+    "Liên minh châu Âu": {
+      "canonical": "Châu Âu",
+      "type": "location"
+    },
+    "Long Biên": {
+      "canonical": "Long Biên",
+      "type": "location"
+    },
+    "Los Angeles Auto Show": {
+      "canonical": "Los Angeles Auto Show",
+      "type": "other"
+    },
+    "Lotte Finance": {
+      "canonical": "Lotte Finance",
+      "type": "other"
+    },
+    "Ludo": {
+      "canonical": "Ludo",
+      "type": "other"
+    },
+    "Lux": {
+      "canonical": "Lux",
+      "type": "car_model"
+    },
+    "Lux A 2.0": {
+      "canonical": "Lux A2.0",
+      "type": "car_model"
+    },
+    "Lux A2.0": {
+      "canonical": "Lux A2.0",
+      "type": "car_model"
+    },
+    "Lux SA 2.0": {
+      "canonical": "Lux SA2.0",
+      "type": "car_model"
+    },
+    "Lux SA2.0": {
+      "canonical": "Lux SA2.0",
+      "type": "car_model"
+    },
+    "Lê Anh Dũng": {
+      "canonical": "Lê Anh Dũng",
+      "type": "contact"
+    },
+    "Lê Thị Thu Thủy": {
+      "canonical": "Lê Thị Thu Thủy",
+      "type": "contact"
+    },
+    "Lê Đoàn Thanh": {
+      "canonical": "Lê Đoàn Thanh",
+      "type": "contact"
+    },
+    "Lót Cốc Sơn Mài VinFast": {
+      "canonical": "Lót Cốc Sơn Mài VinFast",
+      "type": "accessory"
+    },
+    "Lạc Hồng 800S": {
+      "canonical": "Lạc Hồng 800S",
+      "type": "ebike_model"
+    },
+    "Lạc Hồng 900 LX": {
+      "canonical": "Lạc Hồng 900 LX",
+      "type": "ebike_model"
+    },
+    "Lạc Hồng 900S": {
+      "canonical": "Lạc Hồng 900S",
+      "type": "ebike_model"
+    },
+    "Lạc Hồng chống đạn": {
+      "canonical": "Lạc Hồng chống đạn",
+      "type": "other"
+    },
+    "MCredit": {
+      "canonical": "MCredit",
+      "type": "generic"
+    },
+    "MICU": {
+      "canonical": "MICU",
+      "type": "generic"
+    },
+    "MPV": {
+      "canonical": "MPV",
+      "type": "generic"
+    },
+    "Machine Learning": {
+      "canonical": "Machine Learning",
+      "type": "generic"
+    },
+    "Malaysia": {
+      "canonical": "Malaysia",
+      "type": "location"
+    },
+    "Market & Market": {
+      "canonical": "Market & Market",
+      "type": "generic"
+    },
+    "Marriott Resort & Spa Đà Nẵng": {
+      "canonical": "Marriott Resort & Spa Đà Nẵng",
+      "type": "other"
+    },
+    "Mastercard": {
+      "canonical": "Mastercard",
+      "type": "other"
+    },
+    "Maverick Racing Factory Inc.": {
+      "canonical": "Maverick Racing Factory Inc.",
+      "type": "generic"
+    },
+    "MiniCar": {
+      "canonical": "MiniCar",
+      "type": "generic"
+    },
+    "Minio": {
+      "canonical": "Minio",
+      "type": "ebike_model"
+    },
+    "Minio Green": {
+      "canonical": "Minio Green",
+      "type": "ebike_model"
+    },
+    "Mobile Service": {
+      "canonical": "Mobile Service",
+      "type": "generic"
+    },
+    "Mobile charger": {
+      "canonical": "Mobile charger",
+      "type": "accessory"
+    },
+    "Momo": {
+      "canonical": "Momo",
+      "type": "generic"
+    },
+    "MotorCentral": {
+      "canonical": "MotorCentral",
+      "type": "generic"
+    },
+    "Motoring World Awards": {
+      "canonical": "Motoring World Awards",
+      "type": "other"
+    },
+    "My Viettel": {
+      "canonical": "My Viettel",
+      "type": "generic"
+    },
+    "Mãnh liệt tinh thần Việt Nam – Vì tương lai xanh": {
+      "canonical": "Mãnh liệt tinh thần Việt Nam – Vì tương lai xanh",
+      "type": "other"
+    },
+    "Mãnh liệt vì tương lai Xanh": {
+      "canonical": "Mãnh liệt vì tương lai xanh",
+      "type": "other"
+    },
+    "Mãnh liệt vì tương lai xanh": {
+      "canonical": "Mãnh liệt vì tương lai xanh",
+      "type": "other"
+    },
+    "Mê Linh": {
+      "canonical": "Mê Linh",
+      "type": "location"
+    },
+    "Mô Hình Xe VinFast VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Mô Hình Xe VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Mô Hình Xe VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Mũ Bảo Hiểm Siêu Nhẹ An Toàn": {
+      "canonical": "Mũ Bảo Hiểm Siêu Nhẹ An Toàn",
+      "type": "accessory"
+    },
+    "Mũ Lưỡi Trai Thêu Hoa VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Mũ Lưỡi Trai VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Mũ lưỡi trai VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Mũi Cà Mau": {
+      "canonical": "Mũi Cà Mau",
+      "type": "location"
+    },
+    "Mỹ": {
+      "canonical": "Mỹ",
+      "type": "location"
+    },
+    "NHTSA": {
+      "canonical": "NHTSA",
+      "type": "brand"
+    },
+    "NPP ủy quyền": {
+      "canonical": "NPP ủy quyền",
+      "type": "generic"
+    },
+    "NVIDIA": {
+      "canonical": "NVIDIA",
+      "type": "brand"
+    },
+    "NVIDIA DRIVE Hyperion": {
+      "canonical": "NVIDIA DRIVE Hyperion",
+      "type": "generic"
+    },
+    "NXP Semiconductor": {
+      "canonical": "NXP Semiconductor",
+      "type": "other"
+    },
+    "Nam Từ Liêm": {
+      "canonical": "Nam Từ Liêm",
+      "type": "location"
+    },
+    "Neptune Grey": {
+      "canonical": "Neptune Grey",
+      "type": "generic"
+    },
+    "Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Netzero": {
+      "canonical": "Netzero",
+      "type": "brand"
+    },
+    "New Nemar Development Corp.": {
+      "canonical": "New Nemar Development Corp.",
+      "type": "generic"
+    },
+    "Nghị định 03/2021/NĐ-CP": {
+      "canonical": "Nghị định 03/2021/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định 10/2022/NĐ-CP": {
+      "canonical": "Nghị định 10/2022/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định 100/2019": {
+      "canonical": "Nghị định 100/2019",
+      "type": "generic"
+    },
+    "Nghị định 123/2021/NĐ-CP": {
+      "canonical": "Nghị định 123/2021/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định 51/2025/NĐ-CP": {
+      "canonical": "Nghị định 51/2025/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định số 03/2021/NĐ-CP": {
+      "canonical": "Nghị định 03/2021/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định số 10/2022/NĐ-CP": {
+      "canonical": "Nghị định số 10/2022/NĐ-CP",
+      "type": "other"
+    },
+    "Nghị định số 51/2025/NĐ - CP": {
+      "canonical": "Nghị định 51/2025/NĐ-CP",
+      "type": "other"
+    },
+    "Nguyễn Mạnh Thắng": {
+      "canonical": "Nguyễn Mạnh Thắng",
+      "type": "contact"
+    },
+    "Nguyễn Thị Bích Hậu": {
+      "canonical": "Nguyễn Thị Bích Hậu",
+      "type": "contact"
+    },
+    "Nguyễn Văn Phong": {
+      "canonical": "Nguyễn Văn Phong",
+      "type": "contact"
+    },
+    "Ngân hàng nhà nước Việt Nam": {
+      "canonical": "Ngân hàng nhà nước Việt Nam",
+      "type": "brand"
+    },
+    "Ngũ Hành Sơn": {
+      "canonical": "Ngũ Hành Sơn",
+      "type": "location"
+    },
+    "Nha Trang": {
+      "canonical": "Nha Trang",
+      "type": "location"
+    },
+    "Nhà nước": {
+      "canonical": "Nhà nước",
+      "type": "generic"
+    },
+    "Nhật Bản": {
+      "canonical": "Nhật Bản",
+      "type": "location"
+    },
+    "Năm 2026": {
+      "canonical": "Năm 2026",
+      "type": "other"
+    },
+    "Nội": {
+      "canonical": "Nội",
+      "type": "other"
+    },
+    "O2O": {
+      "canonical": "O2O",
+      "type": "generic"
+    },
+    "OEM": {
+      "canonical": "OEM",
+      "type": "generic"
+    },
+    "Online": {
+      "canonical": "Online",
+      "type": "generic"
+    },
+    "P1": {
+      "canonical": "P1",
+      "type": "generic"
+    },
+    "PAAK": {
+      "canonical": "PAAK",
+      "type": "brand"
+    },
+    "PCCC": {
+      "canonical": "PCCC",
+      "type": "other"
+    },
+    "PCI DSS": {
+      "canonical": "PCI DSS",
+      "type": "generic"
+    },
+    "PCM": {
+      "canonical": "PCM",
+      "type": "generic"
+    },
+    "PVI": {
+      "canonical": "PVI",
+      "type": "generic"
+    },
+    "Pearl Club": {
+      "canonical": "Pearl Club",
+      "type": "other"
+    },
+    "Phenikaa": {
+      "canonical": "Phenikaa",
+      "type": "brand"
+    },
+    "Philippines": {
+      "canonical": "Philippines",
+      "type": "location"
+    },
+    "Phone as a key": {
+      "canonical": "Phone as a key",
+      "type": "generic"
+    },
+    "Pháp Luật Bảo Vệ Dữ Liệu Cá Nhân": {
+      "canonical": "Pháp Luật Bảo Vệ Dữ Liệu Cá Nhân",
+      "type": "generic"
+    },
+    "Phú Quốc": {
+      "canonical": "Phú Quốc",
+      "type": "location"
+    },
+    "Phú Quốc United Center": {
+      "canonical": "Phú Quốc United Center",
+      "type": "location"
+    },
+    "Phú Sơn": {
+      "canonical": "Phú Sơn",
+      "type": "location"
+    },
+    "Phúc Thọ": {
+      "canonical": "Phúc Thọ",
+      "type": "location"
+    },
+    "Phạm Nhật Quân": {
+      "canonical": "Phạm Nhật Quân",
+      "type": "contact"
+    },
+    "Phạm Nhật Quân Anh": {
+      "canonical": "Phạm Nhật Quân Anh",
+      "type": "contact"
+    },
+    "Phạm Nhật Vượng": {
+      "canonical": "Phạm Nhật Vượng",
+      "type": "contact"
+    },
+    "Pin": {
+      "canonical": "Pin",
+      "type": "generic"
+    },
+    "Pin B1": {
+      "canonical": "B1",
+      "type": "generic"
+    },
+    "Pin B2": {
+      "canonical": "Pin B2",
+      "type": "generic"
+    },
+    "Pin LFP": {
+      "canonical": "pin LFP",
+      "type": "generic"
+    },
+    "Pin Lithium": {
+      "canonical": "Pin Lithium",
+      "type": "generic"
+    },
+    "Pin SDI": {
+      "canonical": "Pin SDI",
+      "type": "generic"
+    },
+    "Pininfarina": {
+      "canonical": "Pininfarina",
+      "type": "generic"
+    },
+    "Platinum": {
+      "canonical": "Platinum",
+      "type": "generic"
+    },
+    "President": {
+      "canonical": "President",
+      "type": "generic"
+    },
+    "ProLogium": {
+      "canonical": "Prologium",
+      "type": "brand"
+    },
+    "Prologium": {
+      "canonical": "Prologium",
+      "type": "brand"
+    },
+    "QR code": {
+      "canonical": "QR code",
+      "type": "generic"
+    },
+    "QUATEST 3": {
+      "canonical": "QUATEST 3",
+      "type": "generic"
+    },
+    "Quý 3": {
+      "canonical": "Quý 3",
+      "type": "other"
+    },
+    "Quảng Ninh": {
+      "canonical": "Quảng Ninh",
+      "type": "location"
+    },
+    "Quốc Oai": {
+      "canonical": "Quốc Oai",
+      "type": "location"
+    },
+    "Quỹ CEP": {
+      "canonical": "Quỹ CEP",
+      "type": "generic"
+    },
+    "RON 95-III": {
+      "canonical": "RON 95-III",
+      "type": "generic"
+    },
+    "Rainbow Văn Quán": {
+      "canonical": "Rainbow Văn Quán",
+      "type": "location"
+    },
+    "Renesas R-Car M3": {
+      "canonical": "Renesas R-Car M3",
+      "type": "generic"
+    },
+    "RoHS": {
+      "canonical": "RoHS",
+      "type": "generic"
+    },
+    "Robotaxi": {
+      "canonical": "Robotaxi",
+      "type": "generic"
+    },
+    "Rèm che nắng": {
+      "canonical": "Rèm che nắng",
+      "type": "generic"
+    },
+    "SDI cell": {
+      "canonical": "SDI cell",
+      "type": "generic"
+    },
+    "SOS": {
+      "canonical": "SOS",
+      "type": "other"
+    },
+    "SUV điện": {
+      "canonical": "SUV điện",
+      "type": "generic"
+    },
+    "Shinhan Finance": {
+      "canonical": "Shinhan Finance",
+      "type": "other"
+    },
+    "Showroom": {
+      "canonical": "showroom",
+      "type": "generic"
+    },
+    "Showroom 3S": {
+      "canonical": "showroom 3S",
+      "type": "generic"
+    },
+    "Singapore": {
+      "canonical": "Singapore",
+      "type": "location"
+    },
+    "Smart Key": {
+      "canonical": "Smart Key",
+      "type": "accessory"
+    },
+    "Smart Service": {
+      "canonical": "Smart Service",
+      "type": "generic"
+    },
+    "Smartkey": {
+      "canonical": "Smart Key",
+      "type": "accessory"
+    },
+    "Somerset West Lake Hanoi": {
+      "canonical": "Somerset West Lake Hanoi",
+      "type": "location"
+    },
+    "Somerset West Point": {
+      "canonical": "Somerset West Point",
+      "type": "location"
+    },
+    "Stellar Garden": {
+      "canonical": "Stellar Garden",
+      "type": "location"
+    },
+    "StoreDot": {
+      "canonical": "Storedot",
+      "type": "brand"
+    },
+    "Storedot": {
+      "canonical": "Storedot",
+      "type": "brand"
+    },
+    "Subang": {
+      "canonical": "Subang",
+      "type": "location"
+    },
+    "Supremebike Corporation": {
+      "canonical": "Supremebike Corporation",
+      "type": "generic"
+    },
+    "Sóc Sơn": {
+      "canonical": "Sóc Sơn",
+      "type": "location"
+    },
+    "Sạc Tại Nhà 3KW": {
+      "canonical": "Sạc Tại Nhà 3KW",
+      "type": "accessory"
+    },
+    "Sạc tại nhà": {
+      "canonical": "Sạc tại nhà",
+      "type": "accessory"
+    },
+    "Sổ bảo hành": {
+      "canonical": "Sổ bảo hành",
+      "type": "other"
+    },
+    "Sữa Ất Thảo 2": {
+      "canonical": "Sữa Ất Thảo 2",
+      "type": "other"
+    },
+    "T3 India Technology Awards": {
+      "canonical": "T3 India Technology Awards",
+      "type": "other"
+    },
+    "TP Hồ Chí Minh": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "TP. HCM": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "TP. Hồ Chí Minh": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "TP.HCM": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "TPE": {
+      "canonical": "TPE",
+      "type": "generic"
+    },
+    "TTTM Hiền Lương": {
+      "canonical": "TTTM Hiền Lương",
+      "type": "location"
+    },
+    "TTTM Lan Chi Ba Vì": {
+      "canonical": "TTTM Lan Chi Ba Vì",
+      "type": "other"
+    },
+    "TTTM Trương Định Plaza": {
+      "canonical": "TTTM Trương Định Plaza",
+      "type": "other"
+    },
+    "TTTM Vincom": {
+      "canonical": "TTTM Vincom",
+      "type": "other"
+    },
+    "Tapan Ghosh": {
+      "canonical": "Tapan Ghosh",
+      "type": "contact"
+    },
+    "Techcombank": {
+      "canonical": "Techcombank",
+      "type": "brand"
+    },
+    "Tempest": {
+      "canonical": "Tempest",
+      "type": "car_model"
+    },
+    "Tesla supercharger": {
+      "canonical": "Tesla supercharger",
+      "type": "generic"
+    },
+    "Thanh Ngang Giá Nóc": {
+      "canonical": "Thanh Ngang Giá Nóc",
+      "type": "accessory"
+    },
+    "Thanh Ngang Giá Nóc VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Thanh Oai": {
+      "canonical": "Thanh Oai",
+      "type": "location"
+    },
+    "Thanh Trì": {
+      "canonical": "Thanh Trì",
+      "type": "location"
+    },
+    "Thanh Xuân": {
+      "canonical": "Thanh Xuân",
+      "type": "location"
+    },
+    "Theon": {
+      "canonical": "Theon S",
+      "type": "ebike_model"
+    },
+    "Theon S": {
+      "canonical": "Theon S",
+      "type": "ebike_model"
+    },
+    "Thu xăng - Đổi điện": {
+      "canonical": "Thu xăng - Đổi điện",
+      "type": "generic"
+    },
+    "Thule": {
+      "canonical": "Thule",
+      "type": "generic"
+    },
+    "Thành phố Hồ Chí Minh": {
+      "canonical": "Hồ Chí Minh",
+      "type": "location"
+    },
+    "Thái Lan": {
+      "canonical": "Thái Lan",
+      "type": "location"
+    },
+    "Thông tư 16/2021/TT-BGTVT": {
+      "canonical": "Thông tư 16/2021/TT-BGTVT",
+      "type": "generic"
+    },
+    "Thông tư 36/2022/TT-BTC": {
+      "canonical": "Thông tư 36/2022/TT-BTC",
+      "type": "other"
+    },
+    "Thông tư 55/2022/TT-BTC": {
+      "canonical": "Thông tư 55/2022/TT-BTC",
+      "type": "other"
+    },
+    "Thông tư 70/2021": {
+      "canonical": "Thông tư 70/2021",
+      "type": "other"
+    },
+    "Thông tư 70/2021/TT-BTC": {
+      "canonical": "Thông tư 70/2021/TT-BTC",
+      "type": "other"
+    },
+    "Thông tư số 70/2021/TT-BTC": {
+      "canonical": "Thông tư 70/2021/TT-BTC",
+      "type": "other"
+    },
+    "Thường Tín": {
+      "canonical": "Thường Tín",
+      "type": "location"
+    },
+    "Thảm Cốp 3D": {
+      "canonical": "Thảm Cốp 3D",
+      "type": "accessory"
+    },
+    "Thảm Cốp 3D Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 6": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Thảm Cốp 3D VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Thảm Nhựa VF3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Thảm Sàn 3D Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thảm Sàn 3D VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Thảm Sàn 3D VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Thảm Sàn Nhựa 2D": {
+      "canonical": "Thảm Sàn Nhựa 2D",
+      "type": "accessory"
+    },
+    "Thảm Sàn Nhựa 2D VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Thảm Sàn Nhựa 2D VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Thảm Sàn Nhựa 2D VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Thảm Sàn Nhựa VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Thảm cốp 3D VinFast Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thảm cốp 3D VinFast VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Thảm cốp Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thảm lót cốp": {
+      "canonical": "Thảm Cốp 3D",
+      "type": "accessory"
+    },
+    "Thảm lót cốp 3D": {
+      "canonical": "Thảm Cốp 3D",
+      "type": "accessory"
+    },
+    "Thảm sàn 3D VinFast Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thảm sàn Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Thắt lưng da VinFast": {
+      "canonical": "Thắt lưng da",
+      "type": "accessory"
+    },
+    "Thỏa Thuận Đặt Cọc": {
+      "canonical": "Thỏa Thuận Đặt Cọc",
+      "type": "generic"
+    },
+    "Times Drive Auto Summit & Awards": {
+      "canonical": "Times Drive Auto Summit & Awards",
+      "type": "other"
+    },
+    "Tiên phong": {
+      "canonical": "Tiên phong",
+      "type": "generic"
+    },
+    "Torino Design": {
+      "canonical": "Torino Design",
+      "type": "other"
+    },
+    "Touliver": {
+      "canonical": "Touliver",
+      "type": "brand"
+    },
+    "Trung Quốc": {
+      "canonical": "Trung Quốc",
+      "type": "location"
+    },
+    "Trung tâm Triển lãm Việt Nam": {
+      "canonical": "Trung tâm Triển lãm Việt Nam",
+      "type": "other"
+    },
+    "Trung Đông": {
+      "canonical": "Trung Đông",
+      "type": "location"
+    },
+    "Trustwave": {
+      "canonical": "Trustwave",
+      "type": "brand"
+    },
+    "Trạm Đổi Xăng Lấy Điện": {
+      "canonical": "Trạm Đổi Xăng Lấy Điện",
+      "type": "other"
+    },
+    "Type 2": {
+      "canonical": "Type 2",
+      "type": "generic"
+    },
+    "Tây Hồ": {
+      "canonical": "Tây Hồ",
+      "type": "location"
+    },
+    "Tòa án Việt Nam": {
+      "canonical": "Tòa án Việt Nam",
+      "type": "other"
+    },
+    "Tấm Che Nắng Cửa": {
+      "canonical": "Tấm Che Nắng Cửa",
+      "type": "accessory"
+    },
+    "Tấm Che Nắng Cửa VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast Limo Green": {
+      "canonical": "Limo Green",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast VF 6": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "Tấm Che Nắng Cửa VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Tấm Che Pin Cao Áp": {
+      "canonical": "Tấm Che Pin Cao Áp",
+      "type": "accessory"
+    },
+    "Tấm Che Pin Cao Áp VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "Tấm Rèm Trần Panorama": {
+      "canonical": "Tấm Rèm Trần Panorama",
+      "type": "other"
+    },
+    "Tấm Rèm Trần Panorama VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "Tấm che pin VinFast": {
+      "canonical": "Tấm che pin VinFast",
+      "type": "generic"
+    },
+    "Tấm rèm": {
+      "canonical": "Tấm rèm",
+      "type": "accessory"
+    },
+    "Tết": {
+      "canonical": "Tết",
+      "type": "other"
+    },
+    "Tổ chức Tài chính Quốc tế": {
+      "canonical": "Tổ chức Tài chính Quốc tế",
+      "type": "other"
+    },
+    "Tổ hợp sản xuất ô tô": {
+      "canonical": "Tổ hợp sản xuất ô tô",
+      "type": "other"
+    },
+    "Tổ hợp sản xuất ô tô - xe máy điện": {
+      "canonical": "Tổ hợp sản xuất ô tô - xe máy điện",
+      "type": "other"
+    },
+    "Tổng đài Chăm sóc Khách hàng": {
+      "canonical": "Tổng đài Chăm sóc Khách hàng",
+      "type": "contact"
+    },
+    "Tổng đài Chăm sóc Khách hàng VinFast": {
+      "canonical": "Tổng đài Chăm sóc Khách hàng",
+      "type": "contact"
+    },
+    "UAE": {
+      "canonical": "UAE",
+      "type": "location"
+    },
+    "UL 1973": {
+      "canonical": "UL 1973",
+      "type": "generic"
+    },
+    "Ucraina": {
+      "canonical": "Ucraina",
+      "type": "location"
+    },
+    "Uỷ ban Nhân dân": {
+      "canonical": "Uỷ ban Nhân dân",
+      "type": "generic"
+    },
+    "V-Green": {
+      "canonical": "V-Green",
+      "type": "accessory"
+    },
+    "V8": {
+      "canonical": "V8",
+      "type": "generic"
+    },
+    "V8 President": {
+      "canonical": "President",
+      "type": "generic"
+    },
+    "VAN": {
+      "canonical": "VAN",
+      "type": "generic"
+    },
+    "VDE": {
+      "canonical": "VDE",
+      "type": "other"
+    },
+    "VEROX": {
+      "canonical": "VEROX",
+      "type": "generic"
+    },
+    "VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "VF 3 Plus": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "VF 3 Tiên phong": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "VF 5 Plus": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "VF 5 Tấm Che Pin Cao Áp": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "VF 6": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "VF 6 Eco": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "VF 6 Plus": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "VF 6 Tấm Che Pin Cao Áp": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VF 7 Eco": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VF 7 Plus": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VF 7 Plus AWD": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VF 7 Tấm Che Pin Cao Áp": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VF 7S": {
+      "canonical": "VF 7S",
+      "type": "car_model"
+    },
+    "VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VF 8 Eco": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VF 8 Plus": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VF 8 Tấm Che Pin Cao Áp": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "VF 9 Eco": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "VF 9 Plus": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "VF DrgnFly": {
+      "canonical": "DrgnFly",
+      "type": "ebike_model"
+    },
+    "VF EC Van": {
+      "canonical": "EC Van",
+      "type": "car_model"
+    },
+    "VF MPV 7": {
+      "canonical": "VF MPV 7",
+      "type": "car_model"
+    },
+    "VF Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "VF e34": {
+      "canonical": "VF e34",
+      "type": "car_model"
+    },
+    "VF e35": {
+      "canonical": "VF e35",
+      "type": "car_model"
+    },
+    "VF e36": {
+      "canonical": "VF e36",
+      "type": "car_model"
+    },
+    "VF x 3M": {
+      "canonical": "3M",
+      "type": "generic"
+    },
+    "VF8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VF9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "VIN xe": {
+      "canonical": "VIN xe",
+      "type": "generic"
+    },
+    "VINFAST": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "VPOINT": {
+      "canonical": "Vpoint",
+      "type": "brand"
+    },
+    "VPoint": {
+      "canonical": "Vpoint",
+      "type": "brand"
+    },
+    "VTV": {
+      "canonical": "VTV",
+      "type": "other"
+    },
+    "Vento": {
+      "canonical": "Vento",
+      "type": "ebike_model"
+    },
+    "Vento S": {
+      "canonical": "Vento S",
+      "type": "ebike_model"
+    },
+    "Vero X": {
+      "canonical": "Vero X",
+      "type": "brand"
+    },
+    "Vietnam Mobility Show": {
+      "canonical": "Vietnam Mobility Show",
+      "type": "generic"
+    },
+    "Vietnam Mobility Show 2025": {
+      "canonical": "Vietnam Mobility Show 2025",
+      "type": "generic"
+    },
+    "ViettelPay": {
+      "canonical": "ViettelPay",
+      "type": "generic"
+    },
+    "Vin 31 DrgnFly": {
+      "canonical": "DrgnFly",
+      "type": "ebike_model"
+    },
+    "VinAI": {
+      "canonical": "VinAI",
+      "type": "brand"
+    },
+    "VinBigdata": {
+      "canonical": "VinBigdata",
+      "type": "other"
+    },
+    "VinClub": {
+      "canonical": "VinClub",
+      "type": "brand"
+    },
+    "VinES": {
+      "canonical": "VinES",
+      "type": "generic"
+    },
+    "VinFast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "VinFast AMIO": {
+      "canonical": "Amio",
+      "type": "ebike_model"
+    },
+    "VinFast Amio": {
+      "canonical": "Amio",
+      "type": "ebike_model"
+    },
+    "VinFast Blue": {
+      "canonical": "VinFast Blue",
+      "type": "generic"
+    },
+    "VinFast E - Scooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "VinFast E-Scooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "VinFast Energy": {
+      "canonical": "VinFast Energy",
+      "type": "brand"
+    },
+    "VinFast Escooter": {
+      "canonical": "E-Scooter",
+      "type": "ebike_model"
+    },
+    "VinFast Evo": {
+      "canonical": "Evo",
+      "type": "ebike_model"
+    },
+    "VinFast Evo 200": {
+      "canonical": "Evo 200",
+      "type": "ebike_model"
+    },
+    "VinFast Fadil": {
+      "canonical": "Fadil",
+      "type": "car_model"
+    },
+    "VinFast Feliz": {
+      "canonical": "Feliz",
+      "type": "ebike_model"
+    },
+    "VinFast Feliz II": {
+      "canonical": "Feliz II",
+      "type": "ebike_model"
+    },
+    "VinFast Feliz S": {
+      "canonical": "Feliz S",
+      "type": "ebike_model"
+    },
+    "VinFast Flazz": {
+      "canonical": "Flazz",
+      "type": "ebike_model"
+    },
+    "VinFast Hà Nội": {
+      "canonical": "Hà Nội",
+      "type": "location"
+    },
+    "VinFast ID": {
+      "canonical": "VinFast ID",
+      "type": "brand"
+    },
+    "VinFast Impes": {
+      "canonical": "Impes",
+      "type": "other"
+    },
+    "VinFast Klara A2": {
+      "canonical": "Klara A2",
+      "type": "ebike_model"
+    },
+    "VinFast Klara S": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "VinFast Klara S 2022": {
+      "canonical": "Klara S",
+      "type": "ebike_model"
+    },
+    "VinFast Ludo": {
+      "canonical": "Ludo",
+      "type": "other"
+    },
+    "VinFast Lux A2.0": {
+      "canonical": "Lux A2.0",
+      "type": "car_model"
+    },
+    "VinFast Lux SA2.0": {
+      "canonical": "Lux SA2.0",
+      "type": "car_model"
+    },
+    "VinFast Nerio Green": {
+      "canonical": "Nerio Green",
+      "type": "car_model"
+    },
+    "VinFast Newway": {
+      "canonical": "Newway",
+      "type": "brand"
+    },
+    "VinFast O2O": {
+      "canonical": "VinFast O2O",
+      "type": "brand"
+    },
+    "VinFast Phạm Văn Đồng": {
+      "canonical": "VinFast Phạm Văn Đồng",
+      "type": "generic"
+    },
+    "VinFast President": {
+      "canonical": "President",
+      "type": "generic"
+    },
+    "VinFast Quốc Oai": {
+      "canonical": "Quốc Oai",
+      "type": "location"
+    },
+    "VinFast Smart City": {
+      "canonical": "Smart City",
+      "type": "other"
+    },
+    "VinFast Tempest": {
+      "canonical": "Tempest",
+      "type": "car_model"
+    },
+    "VinFast Theon": {
+      "canonical": "Theon S",
+      "type": "ebike_model"
+    },
+    "VinFast Theon S": {
+      "canonical": "Theon S",
+      "type": "ebike_model"
+    },
+    "VinFast Thăng Long": {
+      "canonical": "Thăng Long",
+      "type": "location"
+    },
+    "VinFast Trading": {
+      "canonical": "VinFast Trading",
+      "type": "brand"
+    },
+    "VinFast VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "VinFast VF 6": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "VinFast VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "VinFast VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "VinFast VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "VinFast VF e34": {
+      "canonical": "VF e34",
+      "type": "car_model"
+    },
+    "VinFast Vento": {
+      "canonical": "Vento",
+      "type": "ebike_model"
+    },
+    "VinFast Vento S": {
+      "canonical": "Vento S",
+      "type": "ebike_model"
+    },
+    "VinFast Viper": {
+      "canonical": "Viper",
+      "type": "ebike_model"
+    },
+    "VinFast ZGoo": {
+      "canonical": "ZGoo",
+      "type": "other"
+    },
+    "VinFast Zgoo": {
+      "canonical": "ZGoo",
+      "type": "other"
+    },
+    "VinFirst": {
+      "canonical": "VinFirst",
+      "type": "brand"
+    },
+    "VinFuture": {
+      "canonical": "VinFuture",
+      "type": "other"
+    },
+    "Vinaconex 1": {
+      "canonical": "Vinaconex 1",
+      "type": "other"
+    },
+    "Vinaconex 21": {
+      "canonical": "Vinaconex 21",
+      "type": "other"
+    },
+    "Vincom": {
+      "canonical": "Vincom",
+      "type": "location"
+    },
+    "Vincom Center": {
+      "canonical": "Vincom Center",
+      "type": "location"
+    },
+    "Vincom Center Bà Triệu": {
+      "canonical": "Vincom Center Bà Triệu",
+      "type": "location"
+    },
+    "Vincom Center Metropolis": {
+      "canonical": "Vincom Center Metropolis",
+      "type": "other"
+    },
+    "Vincom Center Nguyễn Chí Thanh": {
+      "canonical": "Vincom Center Nguyễn Chí Thanh",
+      "type": "location"
+    },
+    "Vincom Center Phạm Ngọc Thạch": {
+      "canonical": "Vincom Center Phạm Ngọc Thạch",
+      "type": "location"
+    },
+    "Vincom MegaMall Times City": {
+      "canonical": "Vincom MegaMall Times City",
+      "type": "location"
+    },
+    "Vincom Plaza Long Biên": {
+      "canonical": "Vincom Plaza Long Biên",
+      "type": "other"
+    },
+    "Vincom Plaza Ngô Quyền": {
+      "canonical": "Vincom Plaza Ngô Quyền",
+      "type": "other"
+    },
+    "Vinfastauto.com": {
+      "canonical": "vinfastauto.com",
+      "type": "contact"
+    },
+    "Vingroup": {
+      "canonical": "Vingroup",
+      "type": "brand"
+    },
+    "Vingroup JSC": {
+      "canonical": "Vingroup",
+      "type": "brand"
+    },
+    "Vinhomes": {
+      "canonical": "Vinhomes",
+      "type": "brand"
+    },
+    "Vinhomes Green Bay": {
+      "canonical": "Vinhomes Green Bay",
+      "type": "location"
+    },
+    "Vinhomes Green Paradise": {
+      "canonical": "Vinhomes Green Paradise",
+      "type": "other"
+    },
+    "Vinhomes Metropolis": {
+      "canonical": "Vinhomes Metropolis",
+      "type": "other"
+    },
+    "Vinhomes Ocean Park": {
+      "canonical": "Vinhomes Ocean Park",
+      "type": "location"
+    },
+    "Vinhomes Riverside": {
+      "canonical": "Vinhomes Riverside",
+      "type": "other"
+    },
+    "Vinhomes Royal City": {
+      "canonical": "Vinhomes Royal City",
+      "type": "location"
+    },
+    "Vinhomes Skylake": {
+      "canonical": "Vinhomes Skylake",
+      "type": "other"
+    },
+    "Vinhomes Smart City": {
+      "canonical": "Smart City",
+      "type": "other"
+    },
+    "Vinhomes Symphony": {
+      "canonical": "Vinhomes Symphony",
+      "type": "location"
+    },
+    "Vinhomes Thăng Long Nam": {
+      "canonical": "Vinhomes Thăng Long Nam",
+      "type": "location"
+    },
+    "Vinhomes Times City": {
+      "canonical": "Vinhomes Times City",
+      "type": "location"
+    },
+    "Vinhomes West Point": {
+      "canonical": "Vinhomes West Point",
+      "type": "other"
+    },
+    "Vinmec": {
+      "canonical": "Vinmec",
+      "type": "other"
+    },
+    "Vinmec Times City": {
+      "canonical": "Vinmec Times City",
+      "type": "location"
+    },
+    "Vinmec Đà Nẵng": {
+      "canonical": "Đà Nẵng",
+      "type": "location"
+    },
+    "Vinpearl": {
+      "canonical": "Vinpearl",
+      "type": "brand"
+    },
+    "Vinpearl Condotel Riverfront": {
+      "canonical": "Vinpearl Condotel Riverfront",
+      "type": "other"
+    },
+    "Vinpearl Nha Trang": {
+      "canonical": "Nha Trang",
+      "type": "location"
+    },
+    "Vinpearl Resort & Spa Đà Nẵng": {
+      "canonical": "Vinpearl Resort & Spa Đà Nẵng",
+      "type": "other"
+    },
+    "Viper": {
+      "canonical": "Viper",
+      "type": "ebike_model"
+    },
+    "Visacard": {
+      "canonical": "Visacard",
+      "type": "other"
+    },
+    "Viện tiêu chuẩn Anh Quốc": {
+      "canonical": "Viện tiêu chuẩn Anh Quốc",
+      "type": "generic"
+    },
+    "Việt Nam": {
+      "canonical": "Việt Nam",
+      "type": "location"
+    },
+    "Việt Đức Complex": {
+      "canonical": "Việt Đức Complex",
+      "type": "location"
+    },
+    "Vpoint": {
+      "canonical": "Vpoint",
+      "type": "brand"
+    },
+    "World Cup 2026": {
+      "canonical": "World Cup 2026",
+      "type": "other"
+    },
+    "XDV/NPP": {
+      "canonical": "XDV/NPP",
+      "type": "generic"
+    },
+    "XMĐ MAX": {
+      "canonical": "XMĐ MAX",
+      "type": "other"
+    },
+    "Xe": {
+      "canonical": "Xe",
+      "type": "generic"
+    },
+    "Xe Máy Điện Evo Grand": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "Xe Máy Điện Evo Grand Lite": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "Xe máy điện": {
+      "canonical": "xe máy điện",
+      "type": "generic"
+    },
+    "Xuân Mai Complex": {
+      "canonical": "Xuân Mai Complex",
+      "type": "location"
+    },
+    "Xưởng Dịch vụ VinFast": {
+      "canonical": "Xưởng dịch vụ",
+      "type": "other"
+    },
+    "Xưởng dịch vụ": {
+      "canonical": "Xưởng dịch vụ",
+      "type": "other"
+    },
+    "Xưởng dịch vụ chính hãng VinFast": {
+      "canonical": "Xưởng dịch vụ",
+      "type": "other"
+    },
+    "ZGOO": {
+      "canonical": "ZGoo",
+      "type": "other"
+    },
+    "ZGoo": {
+      "canonical": "ZGoo",
+      "type": "other"
+    },
+    "Zgoo": {
+      "canonical": "ZGoo",
+      "type": "other"
+    },
+    "big data": {
+      "canonical": "big data",
+      "type": "generic"
+    },
+    "báo cáo tài chính": {
+      "canonical": "báo cáo tài chính",
+      "type": "generic"
+    },
+    "bên bán": {
+      "canonical": "bên bán",
+      "type": "contact"
+    },
+    "bảo hiểm": {
+      "canonical": "bảo hiểm",
+      "type": "other"
+    },
+    "bảo hiểm bắt buộc": {
+      "canonical": "bảo hiểm bắt buộc",
+      "type": "generic"
+    },
+    "bảo hiểm mất cắp phụ tùng": {
+      "canonical": "bảo hiểm mất cắp phụ tùng",
+      "type": "generic"
+    },
+    "bảo hiểm thủy kích": {
+      "canonical": "bảo hiểm thủy kích",
+      "type": "generic"
+    },
+    "bảo hiểm trách nhiệm dân sự": {
+      "canonical": "bảo hiểm trách nhiệm dân sự",
+      "type": "generic"
+    },
+    "bảo hiểm trách nhiệm nhân sự": {
+      "canonical": "bảo hiểm trách nhiệm nhân sự",
+      "type": "generic"
+    },
+    "bảo hiểm vật chất": {
+      "canonical": "bảo hiểm vật chất",
+      "type": "generic"
+    },
+    "bảo hiểm vật chất xe ô tô": {
+      "canonical": "bảo hiểm vật chất xe ô tô",
+      "type": "generic"
+    },
+    "bảo hành": {
+      "canonical": "bảo hành",
+      "type": "other"
+    },
+    "bảo hành 10 năm": {
+      "canonical": "bảo hành 10 năm",
+      "type": "other"
+    },
+    "bảo hành 6 năm": {
+      "canonical": "bảo hành 6 năm",
+      "type": "other"
+    },
+    "bảo hành pin 8 năm": {
+      "canonical": "bảo hành pin 8 năm",
+      "type": "other"
+    },
+    "bến xe": {
+      "canonical": "bến xe",
+      "type": "other"
+    },
+    "bộ sạc": {
+      "canonical": "bộ sạc",
+      "type": "accessory"
+    },
+    "bộ sạc 2,2 kW": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "bộ sạc 3kW": {
+      "canonical": "bộ sạc 3kW",
+      "type": "accessory"
+    },
+    "bộ sạc 7,4kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "bộ sạc di động": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "bộ sạc di động 2,2 kW": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "bộ sạc di động 2,2kW": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "bộ sạc di động ô tô điện": {
+      "canonical": "bộ sạc di động",
+      "type": "accessory"
+    },
+    "bộ sạc theo xe 3,5 kW": {
+      "canonical": "bộ sạc theo xe 3,5 kW",
+      "type": "accessory"
+    },
+    "bộ sạc treo tường": {
+      "canonical": "bộ sạc treo tường",
+      "type": "generic"
+    },
+    "bộ sạc treo tường 7,4kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "bộ sạc treo tường 7.4kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "bộ sạc treo tường AC 7,4 kW": {
+      "canonical": "Bộ Sạc Treo Tường AC 7,4 kW",
+      "type": "accessory"
+    },
+    "bộ sạc ô tô điện treo tường": {
+      "canonical": "bộ sạc ô tô điện treo tường",
+      "type": "generic"
+    },
+    "cell pin LFP": {
+      "canonical": "cell pin LFP",
+      "type": "generic"
+    },
+    "cho thuê pin": {
+      "canonical": "cho thuê pin",
+      "type": "generic"
+    },
+    "chuyển đổi xanh": {
+      "canonical": "chuyển đổi xanh",
+      "type": "generic"
+    },
+    "châu Á": {
+      "canonical": "Châu Á",
+      "type": "location"
+    },
+    "châu Âu": {
+      "canonical": "Châu Âu",
+      "type": "location"
+    },
+    "chính sách 1 đổi 1": {
+      "canonical": "chính sách 1 đổi 1",
+      "type": "other"
+    },
+    "chính sách bán hàng": {
+      "canonical": "chính sách bán hàng",
+      "type": "other"
+    },
+    "chính sách bảo hiểm": {
+      "canonical": "chính sách bảo hiểm",
+      "type": "other"
+    },
+    "chính sách bảo hành": {
+      "canonical": "chính sách bảo hành",
+      "type": "other"
+    },
+    "chính sách bảo vệ dữ liệu": {
+      "canonical": "chính sách bảo vệ dữ liệu",
+      "type": "other"
+    },
+    "chính sách bồi thường": {
+      "canonical": "chính sách bồi thường",
+      "type": "generic"
+    },
+    "chính sách cam kết thời gian sửa chữa": {
+      "canonical": "chính sách cam kết thời gian sửa chữa",
+      "type": "other"
+    },
+    "chính sách cho thuê pin": {
+      "canonical": "chính sách cho thuê pin",
+      "type": "generic"
+    },
+    "chính sách cứu hộ": {
+      "canonical": "chính sách cứu hộ",
+      "type": "other"
+    },
+    "chính sách cứu hộ pin 24/7": {
+      "canonical": "chính sách cứu hộ pin 24/7",
+      "type": "other"
+    },
+    "chính sách giá": {
+      "canonical": "chính sách giá",
+      "type": "other"
+    },
+    "chính sách giá bán": {
+      "canonical": "chính sách giá bán",
+      "type": "other"
+    },
+    "chính sách hậu mãi": {
+      "canonical": "chính sách hậu mãi",
+      "type": "other"
+    },
+    "chính sách hỗ trợ chuyển đổi xanh": {
+      "canonical": "chính sách hỗ trợ chuyển đổi xanh",
+      "type": "generic"
+    },
+    "chính sách miễn phí sạc": {
+      "canonical": "chính sách miễn phí sạc",
+      "type": "other"
+    },
+    "chính sách mua 1 tặng 1": {
+      "canonical": "chính sách mua 1 tặng 1",
+      "type": "generic"
+    },
+    "chính sách sạc pin": {
+      "canonical": "chính sách sạc pin",
+      "type": "generic"
+    },
+    "chính sách thuê pin": {
+      "canonical": "chính sách thuê pin",
+      "type": "generic"
+    },
+    "chính sách thuê pin LFP": {
+      "canonical": "chính sách thuê pin LFP",
+      "type": "generic"
+    },
+    "chính sách ưu đãi": {
+      "canonical": "chính sách ưu đãi",
+      "type": "generic"
+    },
+    "chương trình 'Kiến tạo dịch vụ 5 sao'": {
+      "canonical": "chương trình 'Kiến tạo dịch vụ 5 sao'",
+      "type": "other"
+    },
+    "chương trình chuyển đổi": {
+      "canonical": "chương trình chuyển đổi",
+      "type": "generic"
+    },
+    "chương trình hỗ trợ": {
+      "canonical": "chương trình hỗ trợ",
+      "type": "generic"
+    },
+    "chương trình khuyến mãi": {
+      "canonical": "chương trình khuyến mãi",
+      "type": "other"
+    },
+    "chương trình trả góp": {
+      "canonical": "chương trình trả góp",
+      "type": "other"
+    },
+    "chương trình đào tạo kỹ sư": {
+      "canonical": "chương trình đào tạo kỹ sư",
+      "type": "other"
+    },
+    "cnet.com": {
+      "canonical": "cnet.com",
+      "type": "generic"
+    },
+    "cskh@vinfast.vn": {
+      "canonical": "cskh@vinfast.vn",
+      "type": "contact"
+    },
+    "công nghệ eKYC": {
+      "canonical": "công nghệ eKYC",
+      "type": "generic"
+    },
+    "công ước Vienna 1968": {
+      "canonical": "công ước Vienna 1968",
+      "type": "generic"
+    },
+    "cảnh sát giao thông": {
+      "canonical": "cảnh sát giao thông",
+      "type": "generic"
+    },
+    "cứu hộ": {
+      "canonical": "cứu hộ",
+      "type": "generic"
+    },
+    "cứu hộ miễn phí": {
+      "canonical": "cứu hộ miễn phí",
+      "type": "generic"
+    },
+    "cửa hàng xăng dầu": {
+      "canonical": "cửa hàng xăng dầu",
+      "type": "generic"
+    },
+    "dịch vụ Valet": {
+      "canonical": "dịch vụ Valet",
+      "type": "other"
+    },
+    "dịch vụ cho thuê pin": {
+      "canonical": "dịch vụ cho thuê pin",
+      "type": "generic"
+    },
+    "dịch vụ cứu hộ": {
+      "canonical": "dịch vụ cứu hộ",
+      "type": "generic"
+    },
+    "dịch vụ cứu hộ pin": {
+      "canonical": "dịch vụ cứu hộ pin",
+      "type": "generic"
+    },
+    "dịch vụ thuê pin": {
+      "canonical": "dịch vụ thuê pin",
+      "type": "generic"
+    },
+    "dịch vụ valet": {
+      "canonical": "dịch vụ valet",
+      "type": "other"
+    },
+    "dữ liệu cá nhân": {
+      "canonical": "dữ liệu cá nhân",
+      "type": "other"
+    },
+    "eCall": {
+      "canonical": "eCall",
+      "type": "other"
+    },
+    "eKYC": {
+      "canonical": "eKYC",
+      "type": "generic"
+    },
+    "film cách nhiệt VF x 3M": {
+      "canonical": "film cách nhiệt VF x 3M",
+      "type": "generic"
+    },
+    "gói 1": {
+      "canonical": "gói 1",
+      "type": "other"
+    },
+    "gói 2": {
+      "canonical": "gói 2",
+      "type": "other"
+    },
+    "gói 3": {
+      "canonical": "gói 3",
+      "type": "other"
+    },
+    "gói 4": {
+      "canonical": "gói 4",
+      "type": "generic"
+    },
+    "gói cước thuê pin": {
+      "canonical": "gói cước thuê pin",
+      "type": "generic"
+    },
+    "gói thuê pin": {
+      "canonical": "gói thuê pin",
+      "type": "generic"
+    },
+    "gói thuê pin cố định": {
+      "canonical": "gói thuê pin cố định",
+      "type": "generic"
+    },
+    "gói thuê pin linh hoạt": {
+      "canonical": "gói thuê pin linh hoạt",
+      "type": "generic"
+    },
+    "hotline 1900 23 23 89": {
+      "canonical": "1900 23 23 89",
+      "type": "contact"
+    },
+    "huf-group.com": {
+      "canonical": "huf-group.com",
+      "type": "generic"
+    },
+    "hóa đơn": {
+      "canonical": "hóa đơn",
+      "type": "other"
+    },
+    "hướng dẫn sử dụng": {
+      "canonical": "hướng dẫn sử dụng",
+      "type": "generic"
+    },
+    "hệ sinh thái sạc pin": {
+      "canonical": "hệ sinh thái sạc pin",
+      "type": "generic"
+    },
+    "hợp tác kinh doanh": {
+      "canonical": "hợp tác kinh doanh",
+      "type": "other"
+    },
+    "hợp đồng thuê pin": {
+      "canonical": "hợp đồng thuê pin",
+      "type": "other"
+    },
+    "hợp đồng điện tử": {
+      "canonical": "hợp đồng điện tử",
+      "type": "other"
+    },
+    "inox 304": {
+      "canonical": "inox 304",
+      "type": "generic"
+    },
+    "khuyến mại": {
+      "canonical": "khuyến mại",
+      "type": "other"
+    },
+    "khách hàng": {
+      "canonical": "Khách Hàng",
+      "type": "contact"
+    },
+    "kênh VinFast O2O": {
+      "canonical": "VinFast O2O",
+      "type": "brand"
+    },
+    "logo VinFast": {
+      "canonical": "logo VinFast",
+      "type": "brand"
+    },
+    "luật pháp Việt Nam": {
+      "canonical": "luật pháp Việt Nam",
+      "type": "other"
+    },
+    "lá vàng": {
+      "canonical": "lá vàng",
+      "type": "generic"
+    },
+    "lãi suất 0%": {
+      "canonical": "lãi suất 0%",
+      "type": "generic"
+    },
+    "lệ phí trước bạ": {
+      "canonical": "lệ phí trước bạ",
+      "type": "generic"
+    },
+    "lốp xe": {
+      "canonical": "lốp xe",
+      "type": "generic"
+    },
+    "miễn phí bảo dưỡng": {
+      "canonical": "miễn phí bảo dưỡng",
+      "type": "other"
+    },
+    "mức phí 300.000 đồng": {
+      "canonical": "300.000 đồng",
+      "type": "generic"
+    },
+    "ngày Nhà Giáo Việt Nam": {
+      "canonical": "ngày Nhà Giáo Việt Nam",
+      "type": "generic"
+    },
+    "nhà sản xuất": {
+      "canonical": "nhà sản xuất",
+      "type": "other"
+    },
+    "phí chuyển đổi": {
+      "canonical": "phí chuyển đổi",
+      "type": "generic"
+    },
+    "phí dịch vụ": {
+      "canonical": "phí dịch vụ",
+      "type": "generic"
+    },
+    "phí sử dụng đường bộ": {
+      "canonical": "phí sử dụng đường bộ",
+      "type": "generic"
+    },
+    "phí đăng kiểm": {
+      "canonical": "phí đăng kiểm",
+      "type": "generic"
+    },
+    "phí đăng ký": {
+      "canonical": "phí đăng ký",
+      "type": "generic"
+    },
+    "phí đường bộ": {
+      "canonical": "phí đường bộ",
+      "type": "generic"
+    },
+    "phụ kiện": {
+      "canonical": "phụ kiện",
+      "type": "accessory"
+    },
+    "phụ kiện Limo Green": {
+      "canonical": "phụ kiện Limo Green",
+      "type": "accessory"
+    },
+    "phụ kiện VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "phụ kiện VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "phụ kiện VF 6": {
+      "canonical": "VF 6",
+      "type": "car_model"
+    },
+    "phụ kiện VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "phụ kiện VF 8": {
+      "canonical": "VF 8",
+      "type": "car_model"
+    },
+    "phụ kiện VF 9": {
+      "canonical": "VF 9",
+      "type": "car_model"
+    },
+    "phụ kiện xe máy điện": {
+      "canonical": "phụ kiện xe máy điện",
+      "type": "accessory"
+    },
+    "phụ kiện ô tô điện": {
+      "canonical": "phụ kiện ô tô điện",
+      "type": "accessory"
+    },
+    "phụ nữ": {
+      "canonical": "phụ nữ",
+      "type": "other"
+    },
+    "phụ phí": {
+      "canonical": "phụ phí",
+      "type": "generic"
+    },
+    "phụ tùng": {
+      "canonical": "phụ tùng",
+      "type": "generic"
+    },
+    "pin": {
+      "canonical": "pin",
+      "type": "generic"
+    },
+    "pin 1,9 kW": {
+      "canonical": "pin 1,9 kW",
+      "type": "generic"
+    },
+    "pin 3,5 kW": {
+      "canonical": "pin 3,5 kW",
+      "type": "generic"
+    },
+    "pin B1": {
+      "canonical": "B1",
+      "type": "generic"
+    },
+    "pin B2": {
+      "canonical": "Pin B2",
+      "type": "generic"
+    },
+    "pin LFP": {
+      "canonical": "pin LFP",
+      "type": "generic"
+    },
+    "pin LFP/Gotion": {
+      "canonical": "pin LFP/Gotion",
+      "type": "generic"
+    },
+    "pin Lithium": {
+      "canonical": "pin Lithium",
+      "type": "generic"
+    },
+    "pin Lithium-ion": {
+      "canonical": "pin Lithium-ion",
+      "type": "generic"
+    },
+    "pin cao áp": {
+      "canonical": "pin cao áp",
+      "type": "generic"
+    },
+    "pin lithium": {
+      "canonical": "pin lithium",
+      "type": "generic"
+    },
+    "pin lithium-ion": {
+      "canonical": "pin lithium-ion",
+      "type": "generic"
+    },
+    "pin xe máy điện": {
+      "canonical": "pin xe máy điện",
+      "type": "generic"
+    },
+    "pin ô tô điện": {
+      "canonical": "pin ô tô điện",
+      "type": "generic"
+    },
+    "quy định 2015/758": {
+      "canonical": "quy định 2015/758",
+      "type": "other"
+    },
+    "quỹ Vì tương lai xanh": {
+      "canonical": "quỹ Vì tương lai xanh",
+      "type": "other"
+    },
+    "robotaxi": {
+      "canonical": "Robotaxi",
+      "type": "generic"
+    },
+    "shop.vinfastauto.com": {
+      "canonical": "vinfastauto.com",
+      "type": "contact"
+    },
+    "showroom": {
+      "canonical": "showroom",
+      "type": "generic"
+    },
+    "support.vn@vinfastauto.com": {
+      "canonical": "support.vn@vinfastauto.com",
+      "type": "contact"
+    },
+    "sạc dự phòng di động": {
+      "canonical": "sạc dự phòng di động",
+      "type": "generic"
+    },
+    "sạc nhanh": {
+      "canonical": "sạc nhanh",
+      "type": "generic"
+    },
+    "sạc pin": {
+      "canonical": "sạc pin",
+      "type": "generic"
+    },
+    "sạc siêu nhanh": {
+      "canonical": "sạc siêu nhanh",
+      "type": "generic"
+    },
+    "sạc ô tô điện": {
+      "canonical": "sạc ô tô điện",
+      "type": "accessory"
+    },
+    "sổ bảo hành": {
+      "canonical": "sổ bảo hành",
+      "type": "other"
+    },
+    "thiết bị sạc": {
+      "canonical": "thiết bị sạc",
+      "type": "generic"
+    },
+    "thuế trước bạ": {
+      "canonical": "thuế trước bạ",
+      "type": "generic"
+    },
+    "thảm cốp xe VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "thảm sàn 3D": {
+      "canonical": "Thảm Cốp 3D",
+      "type": "accessory"
+    },
+    "thẻ ATM": {
+      "canonical": "thẻ ATM",
+      "type": "accessory"
+    },
+    "thẻ quốc tế": {
+      "canonical": "thẻ quốc tế",
+      "type": "generic"
+    },
+    "tiền đặt cọc": {
+      "canonical": "tiền đặt cọc",
+      "type": "generic"
+    },
+    "trung tâm thương mại": {
+      "canonical": "trung tâm thương mại",
+      "type": "generic"
+    },
+    "trung tâm thương mại Vincom": {
+      "canonical": "Vincom",
+      "type": "location"
+    },
+    "trường đại học": {
+      "canonical": "trường đại học",
+      "type": "generic"
+    },
+    "trạm sạc": {
+      "canonical": "trạm sạc",
+      "type": "generic"
+    },
+    "trạm sạc V-GREEN": {
+      "canonical": "V-Green",
+      "type": "accessory"
+    },
+    "trạm sạc V-Green": {
+      "canonical": "V-Green",
+      "type": "accessory"
+    },
+    "trạm sạc VinFast": {
+      "canonical": "trạm sạc",
+      "type": "generic"
+    },
+    "trạm sạc công cộng": {
+      "canonical": "trạm sạc công cộng",
+      "type": "generic"
+    },
+    "trạm sạc xe điện": {
+      "canonical": "trạm sạc xe điện",
+      "type": "generic"
+    },
+    "trạm đăng kiểm": {
+      "canonical": "trạm đăng kiểm",
+      "type": "generic"
+    },
+    "trạm đổi xăng lấy điện": {
+      "canonical": "Trạm Đổi Xăng Lấy Điện",
+      "type": "other"
+    },
+    "trả góp": {
+      "canonical": "trả góp",
+      "type": "other"
+    },
+    "trụ AC 11kW": {
+      "canonical": "trụ sạc AC 11 kW",
+      "type": "other"
+    },
+    "trụ DC 150kW SC": {
+      "canonical": "trụ sạc 150kW",
+      "type": "generic"
+    },
+    "trụ DC 30kW": {
+      "canonical": "trụ DC 30kW",
+      "type": "other"
+    },
+    "trụ DC 60kW": {
+      "canonical": "trụ DC 60kW",
+      "type": "other"
+    },
+    "trụ sạc 11kW": {
+      "canonical": "trụ sạc 11 kW",
+      "type": "other"
+    },
+    "trụ sạc 150kW": {
+      "canonical": "trụ sạc 150kW",
+      "type": "generic"
+    },
+    "trụ sạc 250kW": {
+      "canonical": "trụ sạc 250kW",
+      "type": "generic"
+    },
+    "trụ sạc 30kW": {
+      "canonical": "trụ sạc 30kW",
+      "type": "other"
+    },
+    "trụ sạc 60kW": {
+      "canonical": "trụ sạc 60kW",
+      "type": "other"
+    },
+    "trụ sạc AC": {
+      "canonical": "trụ sạc AC",
+      "type": "other"
+    },
+    "trụ sạc AC 11 kW": {
+      "canonical": "trụ sạc AC 11 kW",
+      "type": "other"
+    },
+    "trụ sạc AC 11kW": {
+      "canonical": "trụ sạc AC 11 kW",
+      "type": "other"
+    },
+    "trụ sạc DC 150 kW": {
+      "canonical": "trụ sạc DC 150 kW",
+      "type": "other"
+    },
+    "trụ sạc DC 250 kW": {
+      "canonical": "trụ sạc DC 250 kW",
+      "type": "other"
+    },
+    "trụ sạc DC 30 kW": {
+      "canonical": "trụ sạc DC 30 kW",
+      "type": "other"
+    },
+    "trụ sạc DC 30kW": {
+      "canonical": "trụ sạc DC 30kW",
+      "type": "other"
+    },
+    "trụ sạc DC 60 kW": {
+      "canonical": "trụ sạc DC 60 kW",
+      "type": "other"
+    },
+    "trụ sạc DC 60kW": {
+      "canonical": "trụ sạc DC 60kW",
+      "type": "other"
+    },
+    "trụ sạc siêu nhanh 150kW": {
+      "canonical": "trụ sạc 150kW",
+      "type": "generic"
+    },
+    "trụ sạc siêu nhanh 300kW": {
+      "canonical": "trụ sạc 300kW",
+      "type": "generic"
+    },
+    "trụ sạc xe máy điện": {
+      "canonical": "trụ sạc xe máy điện",
+      "type": "accessory"
+    },
+    "trụ sạc ô tô điện": {
+      "canonical": "trụ sạc ô tô điện",
+      "type": "accessory"
+    },
+    "tấm che nắng cửa": {
+      "canonical": "tấm che nắng cửa",
+      "type": "accessory"
+    },
+    "tấm rèm trần panorama": {
+      "canonical": "tấm rèm trần panorama",
+      "type": "other"
+    },
+    "tỉnh thành": {
+      "canonical": "tỉnh thành",
+      "type": "generic"
+    },
+    "tổ hợp sản xuất ô tô": {
+      "canonical": "tổ hợp sản xuất ô tô",
+      "type": "other"
+    },
+    "tổng đài": {
+      "canonical": "tổng đài",
+      "type": "contact"
+    },
+    "tổng đài CSKH": {
+      "canonical": "tổng đài CSKH",
+      "type": "contact"
+    },
+    "tổng đài chăm sóc khách hàng": {
+      "canonical": "tổng đài chăm sóc khách hàng",
+      "type": "contact"
+    },
+    "tổng đài hỗ trợ 1900 23 23 89": {
+      "canonical": "1900 23 23 89",
+      "type": "contact"
+    },
+    "tổng đài tư vấn": {
+      "canonical": "tổng đài tư vấn",
+      "type": "contact"
+    },
+    "tủ đổi pin": {
+      "canonical": "tủ đổi pin",
+      "type": "other"
+    },
+    "vinfast": {
+      "canonical": "VinFast",
+      "type": "brand"
+    },
+    "vinfast.noreply@vinfast.vn": {
+      "canonical": "vinfast.noreply@vinfast.vn",
+      "type": "contact"
+    },
+    "vinfastauto": {
+      "canonical": "vinfastauto",
+      "type": "generic"
+    },
+    "vinfastauto.com": {
+      "canonical": "vinfastauto.com",
+      "type": "contact"
+    },
+    "voucher": {
+      "canonical": "voucher",
+      "type": "generic"
+    },
+    "vân tay": {
+      "canonical": "vân tay",
+      "type": "generic"
+    },
+    "website": {
+      "canonical": "website",
+      "type": "generic"
+    },
+    "website https://vinfastauto.com/vn_vi": {
+      "canonical": "website https://vinfastauto.com/vn_vi",
+      "type": "generic"
+    },
+    "website vinfastauto.com": {
+      "canonical": "vinfastauto.com",
+      "type": "contact"
+    },
+    "xe VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "xe Vento": {
+      "canonical": "Vento",
+      "type": "ebike_model"
+    },
+    "xe VinFast Fadil": {
+      "canonical": "Fadil",
+      "type": "car_model"
+    },
+    "xe hơi": {
+      "canonical": "xe hơi",
+      "type": "generic"
+    },
+    "xe máy điện": {
+      "canonical": "xe máy điện",
+      "type": "generic"
+    },
+    "xe máy điện Evo Grand": {
+      "canonical": "Evo Grand",
+      "type": "ebike_model"
+    },
+    "xe máy điện Feliz Lite": {
+      "canonical": "Feliz Lite",
+      "type": "ebike_model"
+    },
+    "xe máy điện Theon": {
+      "canonical": "Theon S",
+      "type": "ebike_model"
+    },
+    "xe máy điện VinFast": {
+      "canonical": "xe máy điện",
+      "type": "generic"
+    },
+    "xe xăng": {
+      "canonical": "xe xăng",
+      "type": "generic"
+    },
+    "xe ô tô": {
+      "canonical": "ô tô",
+      "type": "generic"
+    },
+    "xe ô tô VinFast": {
+      "canonical": "ô tô",
+      "type": "generic"
+    },
+    "xe ô tô VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "xe ô tô điện": {
+      "canonical": "ô tô điện",
+      "type": "generic"
+    },
+    "xe điện": {
+      "canonical": "xe điện",
+      "type": "generic"
+    },
+    "xe điện VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "xe điện VinFast": {
+      "canonical": "xe điện",
+      "type": "generic"
+    },
+    "xe đạp điện": {
+      "canonical": "xe đạp điện",
+      "type": "generic"
+    },
+    "xưởng dịch vụ": {
+      "canonical": "Xưởng dịch vụ",
+      "type": "other"
+    },
+    "Áo Mưa Cánh Dơi Hai Mũ": {
+      "canonical": "Áo mưa cánh dơi",
+      "type": "accessory"
+    },
+    "Áo Mưa Cánh Dơi Một Mũ": {
+      "canonical": "Áo mưa cánh dơi",
+      "type": "accessory"
+    },
+    "Áo Phông VF 7": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Áo Phông VF 7 Đặc Biệt": {
+      "canonical": "VF 7",
+      "type": "car_model"
+    },
+    "Áo Phông VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Áo Phông VinFast VF 5 Thêu Hoa": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Áo Polo Nam": {
+      "canonical": "Áo Polo Nam",
+      "type": "accessory"
+    },
+    "Áo Polo Nữ": {
+      "canonical": "Áo Polo Nữ",
+      "type": "accessory"
+    },
+    "Áo Polo VinFast VF 5": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Áo Polo VinFast VF 5 Thêu Hoa": {
+      "canonical": "VF 5",
+      "type": "car_model"
+    },
+    "Áo mưa cánh dơi": {
+      "canonical": "Áo mưa cánh dơi",
+      "type": "accessory"
+    },
+    "Ô Golf 2 Tầng": {
+      "canonical": "Ô Golf 2 Tầng",
+      "type": "accessory"
+    },
+    "ô tô": {
+      "canonical": "ô tô",
+      "type": "generic"
+    },
+    "ô tô VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "ô tô VinFast": {
+      "canonical": "ô tô",
+      "type": "generic"
+    },
+    "ô tô xăng": {
+      "canonical": "ô tô xăng",
+      "type": "generic"
+    },
+    "ô tô điện": {
+      "canonical": "ô tô điện",
+      "type": "generic"
+    },
+    "ô tô điện VinFast": {
+      "canonical": "ô tô điện",
+      "type": "generic"
+    },
+    "ĐTM": {
+      "canonical": "ĐTM",
+      "type": "other"
+    },
+    "Điểm Cung Cấp Dịch Vụ": {
+      "canonical": "Điểm Cung Cấp Dịch Vụ",
+      "type": "generic"
+    },
+    "Đà Nẵng": {
+      "canonical": "Đà Nẵng",
+      "type": "location"
+    },
+    "Đài Bắc": {
+      "canonical": "Đài Bắc",
+      "type": "location"
+    },
+    "Đài Loan": {
+      "canonical": "Đài Loan",
+      "type": "location"
+    },
+    "Đông Anh": {
+      "canonical": "Đông Anh",
+      "type": "location"
+    },
+    "Đông Nam Á": {
+      "canonical": "Đông Nam Á",
+      "type": "generic"
+    },
+    "Đơn Đặt Hàng": {
+      "canonical": "Đơn Đặt Hàng",
+      "type": "other"
+    },
+    "Đường 356": {
+      "canonical": "Đường 356",
+      "type": "generic"
+    },
+    "Đại học Bách Khoa Hà Nội": {
+      "canonical": "Đại học Bách Khoa Hà Nội",
+      "type": "location"
+    },
+    "Đại học Bách Khoa TP.HCM": {
+      "canonical": "Đại học Bách Khoa Hồ Chí Minh",
+      "type": "other"
+    },
+    "Đại học Công nghiệp Hà Nội": {
+      "canonical": "Đại học Công nghiệp Hà Nội",
+      "type": "other"
+    },
+    "Đại học Giao thông Vận tải": {
+      "canonical": "Đại học Giao thông Vận tải",
+      "type": "other"
+    },
+    "Đại học Quản lý Singapore": {
+      "canonical": "Đại học Quản lý Singapore",
+      "type": "other"
+    },
+    "Đại học Sư phạm Kỹ thuật Hưng Yên": {
+      "canonical": "Đại học Sư phạm Kỹ thuật Hưng Yên",
+      "type": "other"
+    },
+    "Đại lý Phân phối Xe Máy Điện VinFast": {
+      "canonical": "Đại lý Phân phối Xe Máy Điện VinFast",
+      "type": "other"
+    },
+    "Đại lý phân phối": {
+      "canonical": "Đại lý phân phối",
+      "type": "other"
+    },
+    "Đại lý phân phối chính hãng": {
+      "canonical": "Đại lý phân phối chính hãng",
+      "type": "other"
+    },
+    "Đại lý Ô tô VinFast Newway": {
+      "canonical": "Newway",
+      "type": "brand"
+    },
+    "Đại lý ô tô VinFast Hải Châu": {
+      "canonical": "Đại lý ô tô Hải Châu",
+      "type": "other"
+    },
+    "Đại lý ủy quyền": {
+      "canonical": "Đại lý ủy quyền",
+      "type": "other"
+    },
+    "Đối Tác Thanh Toán": {
+      "canonical": "Đối Tác Thanh Toán",
+      "type": "generic"
+    },
+    "Đống Đa": {
+      "canonical": "Đống Đa",
+      "type": "location"
+    },
+    "Đức": {
+      "canonical": "Đức",
+      "type": "location"
+    },
+    "đơn giá sạc": {
+      "canonical": "đơn giá sạc",
+      "type": "generic"
+    },
+    "đơn đặt hàng": {
+      "canonical": "đơn đặt hàng",
+      "type": "other"
+    },
+    "đại lý": {
+      "canonical": "đại lý",
+      "type": "generic"
+    },
+    "đại lý chính hãng": {
+      "canonical": "đại lý chính hãng",
+      "type": "other"
+    },
+    "đại lý phân phối": {
+      "canonical": "đại lý phân phối",
+      "type": "other"
+    },
+    "đại lý ủy quyền": {
+      "canonical": "Đại lý ủy quyền",
+      "type": "other"
+    },
+    "đảo Cát Bà": {
+      "canonical": "Cát Bà",
+      "type": "location"
+    },
+    "đội cứu hộ pin": {
+      "canonical": "đội cứu hộ pin",
+      "type": "generic"
+    },
+    "ưu đãi sạc pin": {
+      "canonical": "ưu đãi sạc pin",
+      "type": "generic"
+    },
+    "ưu đãi đổi pin": {
+      "canonical": "ưu đãi đổi pin",
+      "type": "generic"
+    },
+    "Ấn Độ": {
+      "canonical": "Ấn Độ",
+      "type": "location"
+    },
+    "ắc quy": {
+      "canonical": "ắc quy",
+      "type": "generic"
+    },
+    "ắc quy 12V": {
+      "canonical": "ắc quy 12V",
+      "type": "generic"
+    },
+    "Ốp La-zăng VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Ốp Lưng Ghế Sau": {
+      "canonical": "Ốp lưng ghế sau",
+      "type": "accessory"
+    },
+    "Ốp lưng ghế sau": {
+      "canonical": "Ốp lưng ghế sau",
+      "type": "accessory"
+    },
+    "Ốp mâm xe VF 3": {
+      "canonical": "VF 3",
+      "type": "car_model"
+    },
+    "Ứng Hòa": {
+      "canonical": "Ứng Hòa",
+      "type": "location"
+    },
+    "Ứng dụng VinFast": {
+      "canonical": "ứng dụng VinFast",
+      "type": "generic"
+    },
+    "Ứng dụng VinFast E-Scooter": {
+      "canonical": "ứng dụng VinFast E-Scooter",
+      "type": "generic"
+    },
+    "ứng dụng VinFast": {
+      "canonical": "ứng dụng VinFast",
+      "type": "generic"
+    },
+    "ứng dụng VinFast E-Scooter": {
+      "canonical": "ứng dụng VinFast E-Scooter",
+      "type": "generic"
+    }
+  }
+}

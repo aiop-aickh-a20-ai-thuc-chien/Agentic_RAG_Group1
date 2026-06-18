@@ -1037,6 +1037,7 @@ class LocalPdfEvidenceProvider:
                     document_ids=request.document_ids,
                     top_k=request.page_size or _default_page_size(),
                     exclude_dedup_layers=request.exclude_dedup_layers or None,
+                    entity_filter=request.entity_filter,
                 )
             )
 
