@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.core.contracts import Answer, SearchResult
 
@@ -21,6 +21,12 @@ class PreprocessNodeOutput(_AgentNodeOutput):
     pending_queries: list[str] | None = None
     trace: list[dict[str, Any]]
     detected_language: str = "vi"
+    # Canonical entities for the retrieval pre-filter. Kept separate from the
+    # clarification node's ``detected_entities`` (VinFast model names, lowercase).
+    filter_entities: list[str] = Field(default_factory=list)
+    # Per-query map: {query: [canonical, ...]}. Decomposed queries each get their
+    # own focused filter; single queries produce a one-entry map.
+    filter_entities_map: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class RetrieveNodeOutput(_AgentNodeOutput):

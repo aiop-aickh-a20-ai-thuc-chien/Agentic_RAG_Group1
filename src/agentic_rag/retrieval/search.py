@@ -8,6 +8,7 @@ import re
 import unicodedata
 from collections import Counter
 from collections.abc import Iterable
+from functools import lru_cache
 from hashlib import sha256
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -24,12 +25,28 @@ from agentic_rag.model_runtime.embeddings import (
 from agentic_rag.model_runtime.factory import get_embedding_client
 from agentic_rag.retrieval.config import VectorStoreConfig, resolve_vector_store_config
 
+
+def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
+    def _decorator(func: Any) -> Any:
+        return func
+
+    return _decorator
+
+
+try:
+    from langsmith import traceable as _ls_traceable
+except Exception:  # pragma: no cover - langsmith optional
+    _ls_traceable = _noop_traceable  # type: ignore[assignment]
+
+
 EmbeddingProfile = EmbeddingOutput
 _QDRANT_DOCUMENT_ID_FIELD = "document_id"
 _QDRANT_DEDUP_PRIMARY_LAYER_FIELD = "metadata.deduplication.primary_layer"
+_QDRANT_ENTITIES_CANONICAL_FIELD = "metadata.entities_canonical"
 _QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS = (
     _QDRANT_DOCUMENT_ID_FIELD,
     _QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
+    _QDRANT_ENTITIES_CANONICAL_FIELD,
 )
 
 REQUERY_ROUTER_PROMPT = """
@@ -375,14 +392,131 @@ def _configured_qdrant_collection() -> str:
     return _vector_store_config().collection
 
 
+def _entity_prefilter_enabled() -> bool:
+    """Entity pre-filter is on unless ENTITY_PREFILTER_ENABLED is a falsy string."""
+    import os
+
+    return os.getenv("ENTITY_PREFILTER_ENABLED", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _entity_prefilter_llm_enabled() -> bool:
+    """LLM paraphrase fallback is OFF unless ENTITY_PREFILTER_LLM is a truthy string."""
+    import os
+
+    return os.getenv("ENTITY_PREFILTER_LLM", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+_ENTITY_LLM_SYSTEM = (
+    "Bạn trích xuất thực thể để LỌC tài liệu xe điện VinFast. CHỈ được chọn các tên "
+    "có trong danh sách cho sẵn. Trả về DUY NHẤT một JSON array, không giải thích."
+)
+
+
+def _parse_str_array(text: str) -> list[str]:
+    import json
+
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    first, last = stripped.find("["), stripped.rfind("]")
+    if first >= 0 and last > first:
+        stripped = stripped[first : last + 1]
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        return []
+    return [str(item).strip() for item in data] if isinstance(data, list) else []
+
+
+@lru_cache(maxsize=512)
+@_ls_traceable(name="entity-prefilter-llm", run_type="llm")
+def _llm_detect_entities(query: str) -> tuple[str, ...]:
+    """Map a paraphrased query onto the canonical menu via the LLM (closed-set).
+
+    Only fires when dictionary detection found nothing AND ENTITY_PREFILTER_LLM is
+    on. Cached per query so the retrieve-node trace re-derivation reuses it (no
+    second LLM call). Output is validated against the allowlist — the LLM cannot
+    invent a filter that is not a known canonical.
+    """
+    from agentic_rag.core.contracts import LLMCompletionInput
+    from agentic_rag.ingestion.metadata import allowlisted_canonicals, build_entity_menu
+    from agentic_rag.model_runtime.errors import ModelInvocationError
+    from agentic_rag.model_runtime.factory import get_llm_client
+
+    menu = build_entity_menu()
+    if not menu:
+        return ()
+    client = get_llm_client("query_rewrite")
+    if client is None:
+        return ()
+    prompt = (
+        f"<menu>\n{menu}\n</menu>\n"
+        f"<query>{query}</query>\n"
+        "Trả về JSON array các tên CHÍNH XÁC trong <menu> mà câu hỏi đề cập, kể cả khi "
+        "diễn đạt khác. Ví dụ: 'Vinfast 8' → 'VF 8', 'Vinfast 9' → 'VF 9', "
+        "'SUV điện 7 chỗ' → 'VF 9'. Nếu không có entity nào liên quan thì trả []."
+    )
+    try:
+        response = client.complete(
+            LLMCompletionInput(prompt=prompt, system_message=_ENTITY_LLM_SYSTEM, temperature=0.0)
+        )
+    except ModelInvocationError:
+        return ()
+    allow = allowlisted_canonicals()
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in _parse_str_array(response.text):
+        if item in allow and item not in seen:
+            seen.add(item)
+            out.append(item)
+    return tuple(out)
+
+
+def _entity_prefilter_for(query: str) -> list[str] | None:
+    """Detect filter-worthy canonical entities in the query (None = no pre-filter).
+
+    Dictionary lookup first (free, catches direct mentions). If that finds nothing
+    and ENTITY_PREFILTER_LLM is on, an LLM maps a paraphrased query onto the menu.
+    """
+    if not _entity_prefilter_enabled():
+        return None
+    from agentic_rag.ingestion.metadata import detect_in_query
+
+    entities = detect_in_query(query)
+    if not entities and _entity_prefilter_llm_enabled():
+        entities = list(_llm_detect_entities(query))
+    return entities or None
+
+
+@_ls_traceable(name="entity-prefilter", run_type="tool")
+def _trace_entity_prefilter(summary: dict[str, object]) -> dict[str, object]:
+    """Emit the entity pre-filter decision to LangSmith (entities, count, fallback)."""
+    return summary
+
+
 def qdrant_hybrid_search(
     query: str,
     *,
     document_ids: list[str] | None = None,
     top_k: int = 10,
     exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
 ) -> list[SearchResult]:
-    """Run Qdrant-backed hybrid retrieval and return shared search results."""
+    """Run Qdrant-backed hybrid retrieval and return shared search results.
+
+    ``entity_filter`` carries canonical entities detected upstream (preprocess
+    node) — a list (possibly empty = "no entities, don't filter"). When it is
+    ``None`` (direct callers / tests), entities are self-detected from the query
+    via :func:`_entity_prefilter_for`. A non-empty filter pre-filters the Qdrant
+    search to chunks whose ``entities_canonical`` contains any of them (union);
+    if that returns nothing, the search is retried unfiltered.
+    """
 
     if top_k <= 0:
         return []
@@ -401,31 +535,56 @@ def qdrant_hybrid_search(
         collection=collection,
         embedding_profile=embedding_profile,
     )
-    response = _query_qdrant_points(
-        client=client,
-        collection=collection,
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        embedding_profile=embedding_profile,
-        document_ids=document_ids,
-        top_k=top_k,
-        exclude_dedup_layers=exclude_dedup_layers,
-    )
-    raw_points = getattr(response, "points", response)
-    if not isinstance(raw_points, Iterable):
-        return []
-    results: list[SearchResult] = []
-    for rank, point in enumerate(raw_points, start=1):
-        payload = getattr(point, "payload", {})
-        if not isinstance(payload, dict):
-            payload = {}
-        results.append(
-            SearchResult(
-                chunk=_chunk_from_qdrant_payload(payload),
-                score=float(getattr(point, "score", 0.0)),
-                rank=rank,
-                retriever="hybrid",
+
+    def _run(entity_filter: list[str] | None) -> list[SearchResult]:
+        response = _query_qdrant_points(
+            client=client,
+            collection=collection,
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            embedding_profile=embedding_profile,
+            document_ids=document_ids,
+            top_k=top_k,
+            exclude_dedup_layers=exclude_dedup_layers,
+            entity_filter=entity_filter,
+        )
+        raw_points = getattr(response, "points", response)
+        if not isinstance(raw_points, Iterable):
+            return []
+        out: list[SearchResult] = []
+        for rank, point in enumerate(raw_points, start=1):
+            payload = getattr(point, "payload", {})
+            if not isinstance(payload, dict):
+                payload = {}
+            out.append(
+                SearchResult(
+                    chunk=_chunk_from_qdrant_payload(payload),
+                    score=float(getattr(point, "score", 0.0)),
+                    rank=rank,
+                    retriever="hybrid",
+                )
             )
+        return out
+
+    # None = caller did not pre-detect (direct call/test) -> self-detect here.
+    # A list (incl. empty) = decision made upstream; respect it as-is.
+    if entity_filter is None:
+        entity_filter = _entity_prefilter_for(query) or []
+    results = _run(entity_filter or None)
+    # Fallback: an entity pre-filter that returns nothing must not blank out the
+    # query — drop the filter and search the full corpus instead.
+    used_fallback = False
+    if entity_filter and not results:
+        results = _run(None)
+        used_fallback = True
+    if entity_filter:
+        _trace_entity_prefilter(
+            {
+                "query": query,
+                "entities": entity_filter,
+                "result_count": len(results),
+                "fallback_unfiltered": used_fallback,
+            }
         )
     return results
 
@@ -607,6 +766,35 @@ def update_qdrant_payload(chunks: list[Chunk]) -> dict[str, object]:
         "enabled": True,
         "vector_store": "qdrant",
         "updated_points": updated,
+        "collection": config.collection,
+    }
+
+
+def ensure_entity_canonical_index() -> dict[str, object]:
+    """Create the Qdrant keyword index on ``metadata.entities_canonical`` (idempotent).
+
+    Required so the query-time entity pre-filter (``MatchAny`` on canonical
+    entities) runs against an index instead of a full scan. Safe to call repeatedly.
+    """
+    config = _vector_store_config()
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    client = _qdrant_client(config)
+    create_payload_index = getattr(client, "create_payload_index", None)
+    if not callable(create_payload_index):
+        return {"created": False, "reason": "client lacks create_payload_index"}
+    from qdrant_client import models
+
+    with contextlib.suppress(Exception):
+        create_payload_index(
+            collection_name=config.collection,
+            field_name=_QDRANT_ENTITIES_CANONICAL_FIELD,
+            field_schema=models.PayloadSchemaType.KEYWORD,
+            wait=True,
+        )
+    return {
+        "created": True,
+        "field": _QDRANT_ENTITIES_CANONICAL_FIELD,
         "collection": config.collection,
     }
 
@@ -908,6 +1096,7 @@ def _query_qdrant_points(
     document_ids: list[str] | None,
     top_k: int,
     exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
 ) -> object:
     if type(client).__module__.startswith("qdrant_client"):
         try:
@@ -916,7 +1105,10 @@ def _query_qdrant_points(
             pass
         else:
             q_filter = _qdrant_combined_filter(
-                document_ids, exclude_dedup_layers=exclude_dedup_layers, models=models
+                document_ids,
+                exclude_dedup_layers=exclude_dedup_layers,
+                entity_filter=entity_filter,
+                models=models,
             )
             sparse_indices = sparse_vector["indices"]
             sparse_values = sparse_vector["values"]
@@ -1007,6 +1199,7 @@ def _qdrant_combined_filter(
     document_ids: list[str] | None,
     *,
     exclude_dedup_layers: list[str] | None,
+    entity_filter: list[str] | None = None,
     models: Any,
 ) -> Any:
     """Build a Qdrant filter that optionally restricts document_ids AND excludes
@@ -1032,6 +1225,16 @@ def _qdrant_combined_filter(
             models.FieldCondition(
                 key=_QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
                 match=models.MatchAny(any=list(exclude_dedup_layers)),
+            )
+        )
+
+    if entity_filter:
+        # Union (OR) across canonical entities: a chunk matches if it carries ANY
+        # of them. Pre-filter only removes chunks about none of the entities.
+        must.append(
+            models.FieldCondition(
+                key=_QDRANT_ENTITIES_CANONICAL_FIELD,
+                match=models.MatchAny(any=list(entity_filter)),
             )
         )
 
