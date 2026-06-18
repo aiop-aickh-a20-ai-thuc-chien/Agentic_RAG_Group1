@@ -11,7 +11,6 @@ from agentic_rag.core.contracts import Answer, SearchResult
 
 class _AgentNodeOutput(BaseModel):
     """Strict immutable base for partial AgentState updates."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
@@ -27,6 +26,7 @@ class PreprocessNodeOutput(_AgentNodeOutput):
     # Per-query map: {query: [canonical, ...]}. Decomposed queries each get their
     # own focused filter; single queries produce a one-entry map.
     filter_entities_map: dict[str, list[str]] = Field(default_factory=dict)
+    boost_query_type: str = "unknown"
 
 
 class RetrieveNodeOutput(_AgentNodeOutput):

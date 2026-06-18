@@ -7,6 +7,10 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from agentic_rag.retrieval.boosting import (
+    apply_metadata_boost
+)
+
 from agentic_rag.agent.clarification import (
     build_clarification_question,
     build_pending_clarification,
@@ -91,13 +95,16 @@ def _retrieve_query(
     document_ids: list[str] | None,
     exclude_dedup_layers: list[str] | None = None,
     entity_filter: list[str] | None = None,
+    boost_query_type: str | None = None,
 ) -> list[SearchResult]:
     bm25, dense = _search_via_provider(
         provider, query, document_ids, exclude_dedup_layers, entity_filter
     )
     if not dense:
-        return bm25
-    return _fuse(bm25, dense)
+        fused = bm25
+    else:
+        fused = _fuse(bm25, dense)
+    return apply_metadata_boost(fused, query_type=boost_query_type)
 
 
 @_ls_traceable(name="retrieve-aggregate", run_type="tool")
@@ -175,6 +182,7 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
             detected_language=lang,
             filter_entities=entities,
             filter_entities_map={resolved_by_rules: entities},
+            boost_query_type="unknown",
             trace=[
                 {
                     "node": "preprocess",
@@ -188,6 +196,7 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
 
     llm_client = get_llm_client("query_rewrite")
     result = preprocess_query(question, history, llm_client)
+    boost_query_type = result.get("query_type", "unknown")
 
     if result["type"] == "multi":
         questions: list[str] = result.get("questions", [question])
@@ -207,6 +216,7 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
                 detected_language=lang,
                 filter_entities=all_entities,
                 filter_entities_map=filter_entities_map,
+                boost_query_type=boost_query_type,
                 trace=[
                     {
                         "node": "preprocess",
@@ -229,6 +239,7 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
         detected_language=lang,
         filter_entities=entities,
         filter_entities_map={rewritten: entities},
+        boost_query_type=boost_query_type,
         trace=[
             {
                 "node": "preprocess",
@@ -261,6 +272,7 @@ def make_retrieve_node(
         extra_tried: list[str] = []
         per_query: list[dict[str, Any]] = []
         worker_count = min(len(queries_this_round), _configured_retrieve_workers())
+        boost_query_type = state.get("boost_query_type")  
         query_results = _retrieve_queries_parallel(
             provider=provider,
             queries=queries_this_round,
@@ -268,8 +280,8 @@ def make_retrieve_node(
             worker_count=worker_count,
             exclude_dedup_layers=exclude_dedup_layers,
             entity_filters=entity_filters,
+            boost_query_type=boost_query_type,
         )
-
         for query_index, (query, results, entity_filter) in enumerate(
             zip(queries_this_round, query_results, entity_filters, strict=True)
         ):
@@ -679,13 +691,14 @@ def _retrieve_queries_parallel(
     worker_count: int,
     exclude_dedup_layers: list[str] | None = None,
     entity_filters: list[list[str]] | None = None,
+    boost_query_type=None,
 ) -> list[list[SearchResult]]:
     if not queries:
         return []
     _filters: list[list[str]] = entity_filters or [[] for _ in queries]
     if worker_count <= 1 or len(queries) == 1:
         return [
-            _retrieve_query(provider, q, document_ids, exclude_dedup_layers, f)
+            _retrieve_query(provider, q, document_ids, exclude_dedup_layers, f, boost_query_type)
             for q, f in zip(queries, _filters, strict=True)
         ]
 
@@ -694,7 +707,7 @@ def _retrieve_queries_parallel(
         return list(
             executor.map(
                 lambda qf: _retrieve_query(
-                    provider, qf[0], document_ids, exclude_dedup_layers, qf[1]
+                    provider, qf[0], document_ids, exclude_dedup_layers, qf[1], boost_query_type
                 ),
                 zip(queries, _filters, strict=True),
             )

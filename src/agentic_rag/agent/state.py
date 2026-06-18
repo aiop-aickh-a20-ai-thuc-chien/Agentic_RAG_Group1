@@ -44,3 +44,4 @@ class AgentState(TypedDict):
     pending_clarification: NotRequired[dict[str, str] | None]
     # Language detection — set once in preprocess, read by all downstream nodes
     detected_language: NotRequired[str]
+    boost_query_type: NotRequired[str] # detected query type for boosting
