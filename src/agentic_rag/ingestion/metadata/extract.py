@@ -7,7 +7,7 @@ structured call.
 
 ⚠️ The OUTPUT of this stage is :class:`LLMExtractedMetadata` — a deliberately
 small schema kept SEPARATE from :class:`ChunkMetadata`, so the LLM-extracted
-subset never gets confused with the full unified chunk metadata. Only the six
+subset never gets confused with the full unified chunk metadata. Only the seven
 fields declared on :class:`LLMExtractedMetadata` are produced here; every other
 field on a chunk comes from the rule-based loaders or the storage layer.
 """
@@ -63,7 +63,7 @@ class MetadataExtractionInput(BaseModel):
 class LLMExtractedMetadata(BaseModel):
     """⚠️ LLM Extract OUTPUT schema — the ``[L]`` subset ONLY (not ChunkMetadata).
 
-    Exactly these six fields are produced by the LLM Extract stage:
+    Exactly these seven fields are produced by the LLM Extract stage:
 
     - ``summary``       : 1-2 sentence summary of the chunk        (retrieval)
     - ``keywords``      : salient keywords                         (retrieval)
@@ -71,6 +71,7 @@ class LLMExtractedMetadata(BaseModel):
     - ``entities``      : named entities mentioned                 (retrieval)
     - ``document_type`` : enum in DOCUMENT_TYPE_VALUES             (filter)
     - ``language``      : enum in LANGUAGE_VALUES                  (filter)
+    - ``quality_score`` : 0.0-1.0 self-contained/usefulness rating (ranking)
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
@@ -81,6 +82,7 @@ class LLMExtractedMetadata(BaseModel):
     entities: list[str] = Field(default_factory=list)
     document_type: str = DEFAULT_DOCUMENT_TYPE
     language: str = DEFAULT_LANGUAGE
+    quality_score: float | None = None
 
     @field_validator("summary", mode="before")
     @classmethod
@@ -118,6 +120,21 @@ class LLMExtractedMetadata(BaseModel):
     @classmethod
     def _coerce_language(cls, value: object) -> str:
         return _coerce_enum(value, LANGUAGE_VALUES, DEFAULT_LANGUAGE)
+
+    @field_validator("quality_score", mode="before")
+    @classmethod
+    def _coerce_quality_score(cls, value: object) -> float | None:
+        # bool is an int subclass — reject it so True/False never become 1.0/0.0.
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return max(0.0, min(1.0, float(value)))
+        if isinstance(value, str):
+            try:
+                return max(0.0, min(1.0, float(value.strip())))
+            except ValueError:
+                return None
+        return None
 
 
 def build_extraction_input(chunk: Chunk) -> MetadataExtractionInput:
@@ -170,7 +187,8 @@ def build_extraction_prompt(payload: MetadataExtractionInput) -> str:
         '  "questions": ["2-4 câu hỏi mà đoạn này trả lời được"],',
         '  "entities": ["tên riêng: sản phẩm, model, tổ chức, địa điểm, chính sách"],',
         f'  "document_type": "một trong: {document_types}",',
-        f'  "language": "một trong: {languages}"',
+        f'  "language": "một trong: {languages}",',
+        '  "quality_score": 0.0',
         "}",
         "</output_schema>",
         "",
@@ -179,6 +197,8 @@ def build_extraction_prompt(payload: MetadataExtractionInput) -> str:
         "- Viết summary/keywords/questions bằng đúng ngôn ngữ của nội dung.",
         "- document_type và language phải thuộc tập giá trị cho phép;",
         '  nếu không chắc, dùng "unknown".',
+        "- quality_score: số thực 0.0-1.0 — đoạn càng tự chứa, rõ ràng và",
+        "  nhiều thông tin hữu ích cho việc trả lời thì điểm càng cao.",
         "- Trả về JSON thuần: KHÔNG markdown, KHÔNG giải thích, KHÔNG code fence.",
         "</instructions>",
     ]
@@ -251,6 +271,7 @@ def apply_extracted_metadata(
     metadata["entities"] = list(extracted.entities)
     metadata["document_type"] = extracted.document_type
     metadata["language"] = extracted.language
+    metadata["quality_score"] = extracted.quality_score
     return metadata
 
 
