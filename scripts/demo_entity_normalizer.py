@@ -4,7 +4,7 @@
 
 Edit the lists below to try your own inputs.
 """
-# ruff: noqa: E402, E501  (demo util: stdout reconfigure before imports; long Vietnamese strings)
+# ruff: noqa: E402  (demo util: stdout reconfigure before imports)
 
 import sys
 

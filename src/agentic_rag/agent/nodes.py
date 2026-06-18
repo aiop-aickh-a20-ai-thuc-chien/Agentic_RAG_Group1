@@ -686,7 +686,7 @@ def _retrieve_queries_parallel(
     if worker_count <= 1 or len(queries) == 1:
         return [
             _retrieve_query(provider, q, document_ids, exclude_dedup_layers, f)
-            for q, f in zip(queries, _filters)
+            for q, f in zip(queries, _filters, strict=True)
         ]
 
     max_workers = min(worker_count, len(queries))
@@ -696,7 +696,7 @@ def _retrieve_queries_parallel(
                 lambda qf: _retrieve_query(
                     provider, qf[0], document_ids, exclude_dedup_layers, qf[1]
                 ),
-                zip(queries, _filters),
+                zip(queries, _filters, strict=True),
             )
         )
 
