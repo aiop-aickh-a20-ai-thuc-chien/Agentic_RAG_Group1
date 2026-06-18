@@ -38,7 +38,11 @@ TYPE_ORDER = [*FILTERABLE, "brand", "accessory", "contact", "generic", "other"]
 
 
 def _conn() -> str:
-    return re.sub(r"^postgresql\+psycopg://", "postgresql://", os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", ""))
+    return re.sub(
+        r"^postgresql\+psycopg://",
+        "postgresql://",
+        os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", ""),
+    )
 
 
 def main() -> None:
@@ -84,9 +88,13 @@ def main() -> None:
     a("")
     a(f"- Raw entity (cách viết thô): **{len(entity_map)}**")
     a(f"- Canonical (sau chuẩn hóa): **{len(variants)}**")
-    a(f"- Tỉ lệ gộp: {len(entity_map)}/{len(variants)} = **{len(entity_map) / len(variants):.2f}** variant/canonical")
+    a(
+        f"- Tỉ lệ gộp: {len(entity_map)}/{len(variants)} = **{len(entity_map) / len(variants):.2f}** variant/canonical"
+    )
     a(f"- Tổng chunk trong corpus: **{total_chunks}**")
-    a(f"- Chunk có ≥1 entity filterable: **{chunks_with_any}** ({100 * chunks_with_any / total_chunks:.1f}%)")
+    a(
+        f"- Chunk có ≥1 entity filterable: **{chunks_with_any}** ({100 * chunks_with_any / total_chunks:.1f}%)"
+    )
     a(f"- Canonical thực sự lọc ra chunk: **{len(coverage)}**")
     a("")
 
@@ -113,7 +121,9 @@ def main() -> None:
 
     a("## 4. Coverage — mỗi canonical lọc ra bao nhiêu chunk")
     a("")
-    a(f"Số canonical lọc ra ≥1 chunk: **{len(coverage)}**. (Filter `entities_canonical` chứa giá trị.)")
+    a(
+        f"Số canonical lọc ra ≥1 chunk: **{len(coverage)}**. (Filter `entities_canonical` chứa giá trị.)"
+    )
     a("")
     a("| canonical | type | #chunks | % corpus |")
     a("|-----------|------|---------|----------|")
@@ -132,11 +142,17 @@ def main() -> None:
 
     a("## 6. Ghi chú")
     a("")
-    a("- **Non-filterable** (brand/generic/contact/other): cố tình loại khỏi filter "
-      "(vd 'VinFast' 75% chunk, 'pin', 'xe điện') — không phải rác, chỉ không dùng pre-filter.")
-    a("- **Đuôi dài** (canonical ít chunk): hiếm nhưng hợp lệ; vô hại, chỉ trigger khi query nhắc tới.")
-    a("- **Lưu ý type:** một canonical có thể hiện sai type ở vài chỗ (vd 'Lux A2.0') do type "
-      "được LLM gán theo cụm — số coverage vẫn đúng.")
+    a(
+        "- **Non-filterable** (brand/generic/contact/other): cố tình loại khỏi filter "
+        "(vd 'VinFast' 75% chunk, 'pin', 'xe điện') — không phải rác, chỉ không dùng pre-filter."
+    )
+    a(
+        "- **Đuôi dài** (canonical ít chunk): hiếm nhưng hợp lệ; vô hại, chỉ trigger khi query nhắc tới."
+    )
+    a(
+        "- **Lưu ý type:** một canonical có thể hiện sai type ở vài chỗ (vd 'Lux A2.0') do type "
+        "được LLM gán theo cụm — số coverage vẫn đúng."
+    )
 
     OUT_PATH.write_text("\n".join(L), encoding="utf-8")
     print(f"Wrote {OUT_PATH}")

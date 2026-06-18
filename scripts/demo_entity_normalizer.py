@@ -17,15 +17,24 @@ from agentic_rag.ingestion.metadata import (
     normalize_all,
 )
 
-VARIANTS = ["VF8", "VinFast VF 8", "Thảm Cốp 3D VF 7", "TP.HCM", "KlaraS", "EVO GRAND", "pin", "xe điện"]
+VARIANTS = [
+    "VF8",
+    "VinFast VF 8",
+    "Thảm Cốp 3D VF 7",
+    "TP.HCM",
+    "KlaraS",
+    "EVO GRAND",
+    "pin",
+    "xe điện",
+]
 QUERIES = [
     "pin VF8 mấy kWh",
     "VinFast VF 8 giá bao nhiêu",
     "Theon chạy được bao xa",
     "trạm sạc ở TP.HCM và Hà Nội",
-    "chính sách bảo hành thế nào",   # no entity -> []
+    "chính sách bảo hành thế nào",  # no entity -> []
     "so sánh VF 8 với VF 9",
-    "thẩm mỹ viện gần đây",          # must NOT false-match location "Mỹ"
+    "thẩm mỹ viện gần đây",  # must NOT false-match location "Mỹ"
 ]
 
 print("=== normalize() — variant -> canonical ===")

@@ -53,8 +53,14 @@ def main() -> None:
         by_type[types[canonical]].append((canonical, count))
 
     type_order = [
-        "car_model", "ebike_model", "location",
-        "brand", "accessory", "contact", "generic", "other",
+        "car_model",
+        "ebike_model",
+        "location",
+        "brand",
+        "accessory",
+        "contact",
+        "generic",
+        "other",
     ]
     lines.append("")
     lines.append("## Full list by type (canonical — #variants)")
