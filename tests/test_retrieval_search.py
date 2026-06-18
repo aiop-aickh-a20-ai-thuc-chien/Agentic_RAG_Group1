@@ -83,6 +83,44 @@ def test_bm25_search_returns_matching_chunk_not_loop_index() -> None:
     assert results[0].rank == 1
 
 
+def test_bm25_indexes_text_only_by_default(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_BM25_AUGMENT_KEYWORDS", raising=False)
+    # "pin" lives only in metadata keywords, not in the chunk text.
+    chunk = Chunk(
+        chunk_id="c1",
+        text="noi dung khong chua tu khoa muc tieu",
+        metadata={"keywords": ["pin"]},
+    )
+    store = Store([chunk])
+
+    results = store.bm25_search("pin", top_k=1)
+
+    # Baseline indexes chunk.text only, so the keyword contributes nothing.
+    assert results[0].score == 0.0
+
+
+# Three chunks so the appended keyword lands in 1/3 docs → positive BM25 IDF
+# (with 2 docs a 1/2-frequency term gets idf log(1)=0 and scores 0).
+def test_bm25_augments_with_keywords_when_enabled(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_BM25_AUGMENT_KEYWORDS", "true")
+    chunks = [
+        Chunk(chunk_id="c1", text="lich bao duong lop xe", metadata={}),
+        Chunk(chunk_id="c2", text="huong dan thay the gat mua", metadata={}),
+        Chunk(
+            chunk_id="c3",
+            text="noi dung khong chua tu khoa muc tieu",
+            metadata={"keywords": ["pin"]},
+        ),
+    ]
+    store = Store(chunks)
+
+    results = store.bm25_search("pin", top_k=3)
+
+    # The appended keyword makes c3 the only lexical match for "pin".
+    assert results[0].chunk.chunk_id == "c3"
+    assert results[0].score > 0.0
+
+
 def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
     monkeypatch: MonkeyPatch,
 ) -> None:

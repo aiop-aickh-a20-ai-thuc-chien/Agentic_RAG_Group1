@@ -69,6 +69,33 @@ Return Vietnamese only. Use this exact JSON format:
 """
 
 
+def _bm25_augment_keywords() -> bool:
+    """BM25 keyword-augmentation experiment flag (default OFF → baseline).
+
+    When ``RETRIEVAL_BM25_AUGMENT_KEYWORDS=true``, a chunk's LLM-extracted
+    ``keywords`` are appended to the text the sparse index covers so those terms
+    gain lexical weight. Used to A/B test sparse recall without touching the
+    dense embedding. Off keeps the sparse index text-only (current behaviour).
+    """
+    return os.getenv("RETRIEVAL_BM25_AUGMENT_KEYWORDS", "false").lower() == "true"
+
+
+def _bm25_index_text(chunk: Chunk) -> str:
+    """Return the document text the sparse index should cover for ``chunk``.
+
+    Baseline is ``chunk.text``. Shared by BOTH sparse backends — the in-memory
+    ``BM25Okapi`` corpus and the Qdrant sparse vector — so the augmentation
+    experiment behaves identically regardless of which retrieval path runs.
+    """
+    if not _bm25_augment_keywords():
+        return chunk.text
+    keywords = chunk.metadata.get("keywords")
+    if not isinstance(keywords, (list, tuple)):
+        return chunk.text
+    appended = " ".join(str(keyword) for keyword in keywords if str(keyword).strip())
+    return f"{chunk.text}\n{appended}" if appended else chunk.text
+
+
 class Store:
     def __init__(self, chunks: list[Chunk]):
         self._chunks = chunks
@@ -105,7 +132,7 @@ class Store:
 
     def _build_bm25_index(self, chunks: list[Chunk]) -> BM25Okapi:
         """Build or refresh a BM25 index from shared chunks."""
-        corpus = [_tokenize(chunk.text) for chunk in chunks]
+        corpus = [_tokenize(_bm25_index_text(chunk)) for chunk in chunks]
         store = BM25Okapi(corpus=corpus)  # type: ignore[no-untyped-call]
         return store
 
@@ -855,7 +882,7 @@ def _upsert_qdrant_embeddings(
         points = []
         for local_idx, chunk in enumerate(batch):
             global_idx = batch_start + local_idx + 1
-            sparse_vector = _sparse_vector(chunk.text)
+            sparse_vector = _sparse_vector(_bm25_index_text(chunk))
             sparse_indices = sparse_vector["indices"]
             sparse_values = sparse_vector["values"]
             points.append(
