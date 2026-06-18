@@ -4,22 +4,61 @@ from __future__ import annotations
 
 import math
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from agentic_rag.core.contracts import SearchResult
 
 _DOCUMENT_TYPE_BOOST_MATRIX: dict[str, dict[str, float]] = {
-    "faq":        {"faq": 1.3, "manual": 1.1, "article": 1.0, "spec_sheet": 0.95, "policy": 0.9,  "unknown": 0.85},
-    "spec_sheet": {"spec_sheet": 1.3, "manual": 1.1, "article": 1.0, "faq": 0.95, "policy": 0.9,  "unknown": 0.85},
-    "manual":     {"manual": 1.3, "faq": 1.1, "article": 1.0, "spec_sheet": 1.0,  "policy": 0.9,  "unknown": 0.85},
-    "policy":     {"policy": 1.3, "article": 1.0, "faq": 1.0, "manual": 0.95, "spec_sheet": 0.9,  "unknown": 0.85},
-    "article":    {"article": 1.1, "faq": 1.0, "manual": 1.0, "spec_sheet": 1.0,  "policy": 1.0,  "unknown": 0.9},
+    "faq": {
+        "faq": 1.3,
+        "manual": 1.1,
+        "article": 1.0,
+        "spec_sheet": 0.95,
+        "policy": 0.9,
+        "unknown": 0.85,
+    },
+    "spec_sheet": {
+        "spec_sheet": 1.3,
+        "manual": 1.1,
+        "article": 1.0,
+        "faq": 0.95,
+        "policy": 0.9,
+        "unknown": 0.85,
+    },
+    "manual": {
+        "manual": 1.3,
+        "faq": 1.1,
+        "article": 1.0,
+        "spec_sheet": 1.0,
+        "policy": 0.9,
+        "unknown": 0.85,
+    },
+    "policy": {
+        "policy": 1.3,
+        "article": 1.0,
+        "faq": 1.0,
+        "manual": 0.95,
+        "spec_sheet": 0.9,
+        "unknown": 0.85,
+    },
+    "article": {
+        "article": 1.1,
+        "faq": 1.0,
+        "manual": 1.0,
+        "spec_sheet": 1.0,
+        "policy": 1.0,
+        "unknown": 0.9,
+    },
 }
 
 _DEFAULT_DOC_TYPE_BOOST: dict[str, float] = {
-    "faq": 1.0, "policy": 1.0, "manual": 1.0,
-    "spec_sheet": 1.1, "article": 1.0, "unknown": 0.9,
+    "faq": 1.0,
+    "policy": 1.0,
+    "manual": 1.0,
+    "spec_sheet": 1.1,
+    "article": 1.0,
+    "unknown": 0.9,
 }
 
 _DEDUP_CANDIDATE_FACTOR = 0.8
@@ -71,10 +110,7 @@ def apply_metadata_boost(
         boosted.append(result.model_copy(update={"score": normalized_score * factor}))
 
     boosted.sort(key=lambda r: r.score, reverse=True)
-    return [
-        r.model_copy(update={"rank": rank})
-        for rank, r in enumerate(boosted, start=1)
-    ]
+    return [r.model_copy(update={"rank": rank}) for rank, r in enumerate(boosted, start=1)]
 
 
 def _document_type_factor(doc_type: str, query_type: str | None) -> float:
@@ -91,8 +127,8 @@ def _recency_factor(fetched_at: Any) -> float:
     try:
         dt = datetime.fromisoformat(fetched_at)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        age_days = (datetime.now(timezone.utc) - dt).days
+            dt = dt.replace(tzinfo=UTC)
+        age_days = (datetime.now(UTC) - dt).days
         decay = math.exp(-age_days * math.log(2) / _RECENCY_HALF_LIFE_DAYS)
         return _RECENCY_MIN_SCORE + (_RECENCY_MAX_BOOST - _RECENCY_MIN_SCORE) * decay
     except (ValueError, TypeError):

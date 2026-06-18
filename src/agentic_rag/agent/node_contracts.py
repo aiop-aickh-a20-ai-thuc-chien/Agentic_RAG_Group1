@@ -11,6 +11,7 @@ from agentic_rag.core.contracts import Answer, SearchResult
 
 class _AgentNodeOutput(BaseModel):
     """Strict immutable base for partial AgentState updates."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

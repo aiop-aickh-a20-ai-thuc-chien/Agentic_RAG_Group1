@@ -150,16 +150,16 @@ Good example for "so sánh VF3 và VF7":
 
 <output>
 Return JSON only. Keep rewritten questions in the same language as the original question.
-  Single: {{"type": "single", "question": "...", "query_type": "faq|spec_sheet|manual|policy|article|unknown"}}
-  Multi:  {{"type": "multi", "questions": ["q1", "q2"], "query_type": "faq|spec_sheet|manual|policy|article|unknown"}}
+    Single: {{"type": "single", "question": "...",
+            "query_type": "faq|spec_sheet|manual|policy|article|unknown"}}
+    Multi:  {{"type": "multi", "questions": ["q1", "q2"],
+            "query_type": "faq|spec_sheet|manual|policy|article|unknown"}}
 
 _rule_based_query_type rules:
-- faq: questions about how-to, steps, instructions ("làm thế nào", "như thế nào", "có thể không")
-- spec_sheet: questions about specs, dimensions, battery, performance ("thông số", "kích thước", "công suất")
-- manual: questions about usage, operation, maintenance ("sử dụng", "vận hành", "bảo dưỡng")
-- policy: questions about warranty, returns, terms ("bảo hành", "đổi trả", "chính sách")
-- article: general info, news, overview questions
-- unknown: if unclear
+- faq: questions about how-to, steps, instructions
+    ("làm thế nào", "như thế nào", "có thể không")
+- spec_sheet: questions about specs, dimensions, battery, performance
+    ("thông số", "kích thước", "công suất")
 </output>"""
 
 
@@ -227,8 +227,7 @@ def preprocess_query(
 
     history_text = (
         "\n".join(
-            f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}"
-            for m in history[-6:]
+            f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}" for m in history[-6:]
         )
         or "none"
     )
@@ -368,45 +367,126 @@ def _complete_text(prompt: str, llm_client: LLMClient) -> str:
         LLMCompletionInput(prompt=prompt, system_message=GROUNDING_SYSTEM_MESSAGE)
     ).text
 
+
 _FAQ_SIGNALS = {
     # Vietnamese
-    "làm thế nào", "như thế nào", "có thể không", "làm sao", "hướng dẫn",
-    "cách nào", "bằng cách nào", "có được không", "được không", "có hỗ trợ",
-    "tôi có thể", "làm được không", "cách để", "steps", "bước",
+    "làm thế nào",
+    "như thế nào",
+    "có thể không",
+    "làm sao",
+    "hướng dẫn",
+    "cách nào",
+    "bằng cách nào",
+    "có được không",
+    "được không",
+    "có hỗ trợ",
+    "tôi có thể",
+    "làm được không",
+    "cách để",
+    "steps",
+    "bước",
     # English
-    "how to", "how do", "how can", "can i", "is it possible", "guide",
+    "how to",
+    "how do",
+    "how can",
+    "can i",
+    "is it possible",
+    "guide",
 }
 
 _SPEC_SIGNALS = {
     # Vietnamese
-    "thông số", "kích thước", "công suất", "tốc độ", "pin", "dung lượng",
-    "trọng lượng", "chiều dài", "chiều rộng", "chiều cao", "động cơ",
-    "mã lực", "mô men", "phạm vi", "giá", "giá bán", "giá xe", "bao nhiêu tiền",
-    "màu sắc", "tùy chọn", "phiên bản",
+    "thông số",
+    "kích thước",
+    "công suất",
+    "tốc độ",
+    "pin",
+    "dung lượng",
+    "trọng lượng",
+    "chiều dài",
+    "chiều rộng",
+    "chiều cao",
+    "động cơ",
+    "mã lực",
+    "mô men",
+    "phạm vi",
+    "giá",
+    "giá bán",
+    "giá xe",
+    "bao nhiêu tiền",
+    "màu sắc",
+    "tùy chọn",
+    "phiên bản",
     # English
-    "specs", "range", "horsepower", "torque", "weight", "dimensions",
-    "battery", "price", "cost", "how much", "capacity", "power",
+    "specs",
+    "range",
+    "horsepower",
+    "torque",
+    "weight",
+    "dimensions",
+    "battery",
+    "price",
+    "cost",
+    "how much",
+    "capacity",
+    "power",
 }
 
 _MANUAL_SIGNALS = {
     # Vietnamese
-    "sử dụng", "vận hành", "bảo dưỡng", "cách dùng", "thao tác",
-    "kết nối", "cài đặt", "thiết lập", "khởi động", "tắt máy",
-    "sạc", "nạp điện", "lái xe", "điều khiển",
+    "sử dụng",
+    "vận hành",
+    "bảo dưỡng",
+    "cách dùng",
+    "thao tác",
+    "kết nối",
+    "cài đặt",
+    "thiết lập",
+    "khởi động",
+    "tắt máy",
+    "sạc",
+    "nạp điện",
+    "lái xe",
+    "điều khiển",
     # English
-    "operate", "maintain", "connect", "setup", "configure", "charge",
-    "start", "turn on", "turn off", "drive",
+    "operate",
+    "maintain",
+    "connect",
+    "setup",
+    "configure",
+    "charge",
+    "start",
+    "turn on",
+    "turn off",
+    "drive",
 }
 
 _POLICY_SIGNALS = {
     # Vietnamese
-    "bảo hành", "đổi trả", "chính sách", "điều khoản", "hoàn tiền",
-    "bồi thường", "khiếu nại", "điều kiện", "quy định", "cam kết",
-    "thời hạn", "phạm vi bảo hành",
+    "bảo hành",
+    "đổi trả",
+    "chính sách",
+    "điều khoản",
+    "hoàn tiền",
+    "bồi thường",
+    "khiếu nại",
+    "điều kiện",
+    "quy định",
+    "cam kết",
+    "thời hạn",
+    "phạm vi bảo hành",
     # English
-    "warranty", "policy", "return", "refund", "terms", "conditions",
-    "guarantee", "coverage", "claim",
+    "warranty",
+    "policy",
+    "return",
+    "refund",
+    "terms",
+    "conditions",
+    "guarantee",
+    "coverage",
+    "claim",
 }
+
 
 def _rule_based_query_type(question: str) -> str:
     q = question.lower()

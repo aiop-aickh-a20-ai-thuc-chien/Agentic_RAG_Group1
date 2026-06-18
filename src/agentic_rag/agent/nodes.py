@@ -7,10 +7,6 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from agentic_rag.retrieval.boosting import (
-    apply_metadata_boost
-)
-
 from agentic_rag.agent.clarification import (
     build_clarification_question,
     build_pending_clarification,
@@ -40,6 +36,7 @@ from agentic_rag.ingestion.metadata import filter_coverage
 from agentic_rag.ingestion.metadata.entity_normalizer import detect_in_query
 from agentic_rag.language import detect_language
 from agentic_rag.model_runtime.factory import get_llm_client
+from agentic_rag.retrieval.boosting import apply_metadata_boost
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
     rerank_with_metadata,
@@ -100,10 +97,7 @@ def _retrieve_query(
     bm25, dense = _search_via_provider(
         provider, query, document_ids, exclude_dedup_layers, entity_filter
     )
-    if not dense:
-        fused = bm25
-    else:
-        fused = _fuse(bm25, dense)
+    fused = bm25 if not dense else _fuse(bm25, dense)
     return apply_metadata_boost(fused, query_type=boost_query_type)
 
 
@@ -272,7 +266,7 @@ def make_retrieve_node(
         extra_tried: list[str] = []
         per_query: list[dict[str, Any]] = []
         worker_count = min(len(queries_this_round), _configured_retrieve_workers())
-        boost_query_type = state.get("boost_query_type")  
+        boost_query_type = state.get("boost_query_type")
         query_results = _retrieve_queries_parallel(
             provider=provider,
             queries=queries_this_round,
@@ -691,7 +685,7 @@ def _retrieve_queries_parallel(
     worker_count: int,
     exclude_dedup_layers: list[str] | None = None,
     entity_filters: list[list[str]] | None = None,
-    boost_query_type=None,
+    boost_query_type: str | None = None,
 ) -> list[list[SearchResult]]:
     if not queries:
         return []
