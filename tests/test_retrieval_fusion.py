@@ -19,6 +19,7 @@ from agentic_rag.retrieval.fusion import (
     rerank,
     rerank_with_metadata,
     rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 
@@ -65,6 +66,35 @@ def test_threshold_config_is_pydantic_contract() -> None:
 
     with pytest.raises(ValidationError):
         setattr(config, field_name, 0.4)
+
+
+def _fusion_result(chunk_id: str, rank: int, retriever: str) -> SearchResult:
+    return SearchResult(
+        chunk=Chunk(chunk_id=chunk_id, text=chunk_id, metadata={}),
+        score=1.0 / rank,
+        rank=rank,
+        retriever=retriever,
+    )
+
+
+def test_rrf_fusion_nway_fuses_three_retrievers() -> None:
+    bm25 = [_fusion_result("c1", 1, "bm25")]
+    dense = [_fusion_result("c2", 1, "dense")]
+    questions = [_fusion_result("c3", 1, "question")]
+
+    fused = rrf_fusion_nway([bm25, dense, questions], top_k=10)
+
+    assert {result.chunk.chunk_id for result in fused} == {"c1", "c2", "c3"}
+
+
+def test_rrf_fusion_nway_matches_two_way_rrf_fusion() -> None:
+    bm25 = [_fusion_result("c1", 1, "bm25"), _fusion_result("c2", 2, "bm25")]
+    dense = [_fusion_result("c2", 1, "dense"), _fusion_result("c3", 2, "dense")]
+
+    nway = rrf_fusion_nway([bm25, dense], top_k=10)
+    two_way = rrf_fusion(bm25, dense, top_k=10)
+
+    assert [r.chunk.chunk_id for r in nway] == [r.chunk.chunk_id for r in two_way]
 
 
 def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
