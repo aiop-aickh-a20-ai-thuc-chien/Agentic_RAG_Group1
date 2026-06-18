@@ -48,6 +48,8 @@ def apply_metadata_boost(
         return results
     if not results:
         return results
+    if len(results) == 1:
+        return [results[0].model_copy(update={"rank": 1})]
 
     min_score = min(r.score for r in results)
     max_score = max(r.score for r in results)

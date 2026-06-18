@@ -245,7 +245,9 @@ def preprocess_query(
         result: dict[str, Any] = json.loads(raw)
         if result.get("type") not in {"single", "multi"}:
             return {"type": "single", "question": question, "query_type": "unknown"}
-        result.setdefault("query_type", "unknown")
+        if not result.get("query_type") or result.get("query_type") == "unknown":
+            base_q = result.get("question", question) if result["type"] == "single" else question
+            result["query_type"] = _rule_based_query_type(base_q)
         allow = allowlisted_canonicals()
         if result["type"] == "single":
             raw_ents = result.get("entities") or []
