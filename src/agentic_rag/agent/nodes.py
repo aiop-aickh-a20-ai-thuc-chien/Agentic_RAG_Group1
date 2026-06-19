@@ -32,13 +32,17 @@ from agentic_rag.agent.state import AgentState
 from agentic_rag.core.contracts import Answer, RetrievalInput, SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
 from agentic_rag.generation.answering import generate_answer_with_trace
+from agentic_rag.ingestion.metadata import filter_coverage
+from agentic_rag.ingestion.metadata.entity_normalizer import detect_in_query
 from agentic_rag.language import detect_language
 from agentic_rag.model_runtime.factory import get_llm_client
+from agentic_rag.retrieval.boosting import apply_metadata_boost
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
     rerank_with_metadata,
     rrf_fusion,
 )
+from agentic_rag.retrieval.search import _entity_prefilter_for
 
 
 def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
@@ -87,11 +91,14 @@ def _retrieve_query(
     query: str,
     document_ids: list[str] | None,
     exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
+    boost_query_type: str | None = None,
 ) -> list[SearchResult]:
-    bm25, dense = _search_via_provider(provider, query, document_ids, exclude_dedup_layers)
-    if not dense:
-        return bm25
-    return _fuse(bm25, dense)
+    bm25, dense = _search_via_provider(
+        provider, query, document_ids, exclude_dedup_layers, entity_filter
+    )
+    fused = bm25 if not dense else _fuse(bm25, dense)
+    return apply_metadata_boost(fused, query_type=boost_query_type)
 
 
 @_ls_traceable(name="retrieve-aggregate", run_type="tool")
@@ -158,14 +165,18 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
     # Detect language once here; all downstream nodes read from state
     lang = detect_language(question, history)
 
-    # Fast-path: rule-based resolution of clarification replies
+    # Fast-path: rule-based resolution of clarification replies (no LLM → full detect)
     resolved_by_rules = resolve_clarification_reply(question, history, lang=lang)
     if resolved_by_rules is not None:
         extra = [resolved_by_rules] if resolved_by_rules != question else []
+        entities = _entity_prefilter_for(resolved_by_rules) or []
         return PreprocessNodeOutput(
             rewritten_question=resolved_by_rules,
             queries_tried=extra,
             detected_language=lang,
+            filter_entities=entities,
+            filter_entities_map={resolved_by_rules: entities},
+            boost_query_type="unknown",
             trace=[
                 {
                     "node": "preprocess",
@@ -179,20 +190,33 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
 
     llm_client = get_llm_client("query_rewrite")
     result = preprocess_query(question, history, llm_client)
+    boost_query_type = result.get("query_type", "unknown")
 
     if result["type"] == "multi":
         questions: list[str] = result.get("questions", [question])
         if len(questions) > 1:
+            # LLM already extracted per-query entities in preprocess_query.
+            # Fall back to dict detect per sub-query if the LLM omitted the field.
+            llm_ents: list[list[str]] = result.get("entities") or []
+            filter_entities_map = {
+                q: (llm_ents[i] if i < len(llm_ents) else detect_in_query(q))
+                for i, q in enumerate(questions)
+            }
+            all_entities = sorted({e for ents in filter_entities_map.values() for e in ents})
             return PreprocessNodeOutput(
                 rewritten_question=questions[0],
                 queries_tried=[questions[0]],
                 pending_queries=questions[1:],
                 detected_language=lang,
+                filter_entities=all_entities,
+                filter_entities_map=filter_entities_map,
+                boost_query_type=boost_query_type,
                 trace=[
                     {
                         "node": "preprocess",
                         "type": "multi",
                         "questions": questions,
+                        "filter_entities_map": filter_entities_map,
                         "detected_language": lang,
                     }
                 ],
@@ -200,10 +224,16 @@ def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
 
     rewritten: str = result.get("question", question)
     extra = [rewritten] if rewritten != question else []
+    # LLM already extracted entities in the same call; fall back to full detect
+    # (dict + optional LLM) if the field was omitted or empty.
+    entities = result.get("entities") or _entity_prefilter_for(rewritten) or []
     return PreprocessNodeOutput(
         rewritten_question=rewritten,
         queries_tried=extra,
         detected_language=lang,
+        filter_entities=entities,
+        filter_entities_map={rewritten: entities},
+        boost_query_type=boost_query_type,
         trace=[
             {
                 "node": "preprocess",
@@ -225,21 +255,31 @@ def make_retrieve_node(
 
         document_ids = state.get("document_ids")
         exclude_dedup_layers = state.get("exclude_dedup_layers") or None
+        # Per-query entity filters from preprocess_node. Decomposed queries each
+        # get their own focused filter; fall back to the union list for queries
+        # added later by transform_query_node (not in the map).
+        filter_map = state.get("filter_entities_map") or {}
+        global_filter = state.get("filter_entities") or []
+        entity_filters = [filter_map.get(q, global_filter) for q in queries_this_round]
+
         new_fused: list[SearchResult] = []
         extra_tried: list[str] = []
         per_query: list[dict[str, Any]] = []
         worker_count = min(len(queries_this_round), _configured_retrieve_workers())
+        boost_query_type = state.get("boost_query_type")
         query_results = _retrieve_queries_parallel(
             provider=provider,
             queries=queries_this_round,
             document_ids=document_ids,
             worker_count=worker_count,
             exclude_dedup_layers=exclude_dedup_layers,
+            entity_filters=entity_filters,
+            boost_query_type=boost_query_type,
         )
-
-        for query_index, (query, results) in enumerate(
-            zip(queries_this_round, query_results, strict=True)
+        for query_index, (query, results, entity_filter) in enumerate(
+            zip(queries_this_round, query_results, entity_filters, strict=True)
         ):
+            coverage = filter_coverage(entity_filter)
             added_chunk_ids: list[str] = []
             for r in results:
                 tagged = _with_retrieval_query_metadata(r, query, query_index)
@@ -251,12 +291,17 @@ def make_retrieve_node(
             per_query.append(
                 {
                     "query": query,
+                    "entity_filter": entity_filter,
+                    "candidate_chunks": coverage,
+                    "candidate_chunks_total": sum(coverage.values()),
                     "returned_chunks": len(results),
                     "added_chunks": len(results),
                     "added_chunk_ids": added_chunk_ids,
                 }
             )
 
+        # per_query carries the entity_filter used + the resulting chunk count,
+        # so the retrieve node trace shows the pre-filter's effect directly.
         aggregate_trace = _trace_retrieve_aggregation(
             {
                 "query_count": len(queries_this_round),
@@ -605,12 +650,14 @@ def _search_via_provider(
     query: str,
     document_ids: list[str] | None,
     exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
 ) -> tuple[list[SearchResult], list[SearchResult]]:
     chunks = provider.retrieve(
         RetrievalInput(
             question=query,
             document_ids=document_ids,
             exclude_dedup_layers=exclude_dedup_layers or [],
+            entity_filter=entity_filter or [],
         )
     ).results
     bm25 = [r for r in chunks if r.retriever == "bm25"]
@@ -637,21 +684,26 @@ def _retrieve_queries_parallel(
     document_ids: list[str] | None,
     worker_count: int,
     exclude_dedup_layers: list[str] | None = None,
+    entity_filters: list[list[str]] | None = None,
+    boost_query_type: str | None = None,
 ) -> list[list[SearchResult]]:
     if not queries:
         return []
+    _filters: list[list[str]] = entity_filters or [[] for _ in queries]
     if worker_count <= 1 or len(queries) == 1:
         return [
-            _retrieve_query(provider, query, document_ids, exclude_dedup_layers)
-            for query in queries
+            _retrieve_query(provider, q, document_ids, exclude_dedup_layers, f, boost_query_type)
+            for q, f in zip(queries, _filters, strict=True)
         ]
 
     max_workers = min(worker_count, len(queries))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return list(
             executor.map(
-                lambda query: _retrieve_query(provider, query, document_ids, exclude_dedup_layers),
-                queries,
+                lambda qf: _retrieve_query(
+                    provider, qf[0], document_ids, exclude_dedup_layers, qf[1], boost_query_type
+                ),
+                zip(queries, _filters, strict=True),
             )
         )
 

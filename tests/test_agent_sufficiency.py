@@ -32,7 +32,7 @@ def _result(chunk_id: str) -> SearchResult:
 
 def test_preprocess_passthrough_simple_no_llm() -> None:
     result = preprocess_query("Pin bảo hành bao lâu?", [], llm_client=None)
-    assert result == {"type": "single", "question": "Pin bảo hành bao lâu?"}
+    assert result == {"type": "single", "question": "Pin bảo hành bao lâu?", "query_type": "policy"}
 
 
 def test_preprocess_passthrough_no_trigger_signals() -> None:

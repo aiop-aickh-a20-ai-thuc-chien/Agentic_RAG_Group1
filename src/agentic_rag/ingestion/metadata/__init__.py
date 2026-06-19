@@ -1,4 +1,4 @@
-from agentic_rag.ingestion.metadata.extract import (
+from agentic_rag.ingestion.metadata.extract import (  # noqa: I001
     EXTRACTION_SYSTEM_MESSAGE,
     LLMExtractedMetadata,
     MetadataExtractionInput,
@@ -13,6 +13,20 @@ from agentic_rag.ingestion.metadata.normalize import (
     build_response_format,
     normalize_metadata,
     normalize_product_models,
+)
+
+# Imported AFTER the ``normalize`` submodule so the package-level name
+# ``normalize`` resolves to this function, not the submodule object.
+from agentic_rag.ingestion.metadata.entity_normalizer import (
+    allowlisted_canonicals,
+    build_entity_menu,
+    detect_in_query,
+    entity_type,
+    filter_coverage,
+    filterable_canonicals,
+    normalize,
+    normalize_all,
+    normalize_filterable,
 )
 from agentic_rag.ingestion.metadata.schema import (
     DOCUMENT_TYPE_VALUES,
@@ -40,14 +54,23 @@ __all__ = [
     "SOURCE_CATEGORY_VALUES",
     "SOURCE_TYPE_VALUES",
     "ChunkMetadata",
+    "allowlisted_canonicals",
     "apply_extracted_metadata",
+    "build_entity_menu",
     "build_extraction_input",
     "build_extraction_prompt",
     "build_response_format",
+    "detect_in_query",
+    "entity_type",
     "extract_chunk_metadata",
+    "filter_coverage",
+    "filterable_canonicals",
     "has_required_metadata",
     "infer_source_type",
     "missing_required_metadata",
+    "normalize",
+    "normalize_all",
+    "normalize_filterable",
     "normalize_metadata",
     "normalize_product_models",
     "parse_extraction_response",

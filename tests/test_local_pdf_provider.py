@@ -1073,6 +1073,7 @@ def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
         document_ids: list[str] | None = None,
         top_k: int = 10,
         exclude_dedup_layers: list[str] | None = None,
+        entity_filter: list[str] | None = None,
     ) -> list[SearchResult]:
         seen["question"] = question
         seen["document_ids"] = document_ids

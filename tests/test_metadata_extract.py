@@ -43,6 +43,7 @@ def test_output_schema_coerces_string_and_enums() -> None:
             "entities": ["VF e34"],
             "document_type": "SPEC_SHEET",  # case-insensitive enum
             "language": "klingon",  # invalid -> unknown
+            "quality_score": "1.4",  # string + out of range -> clamped to 1.0
         }
     )
     assert extracted.summary == "Tóm tắt"
@@ -50,6 +51,16 @@ def test_output_schema_coerces_string_and_enums() -> None:
     assert extracted.questions == ["Quãng đường?"]
     assert extracted.document_type == "spec_sheet"
     assert extracted.language == "unknown"
+    assert extracted.quality_score == 1.0
+
+
+def test_quality_score_coercion_edge_cases() -> None:
+    # missing -> None; invalid string -> None; bool rejected; negative clamped to 0.0
+    assert LLMExtractedMetadata.model_validate({}).quality_score is None
+    assert LLMExtractedMetadata.model_validate({"quality_score": "abc"}).quality_score is None
+    assert LLMExtractedMetadata.model_validate({"quality_score": True}).quality_score is None
+    assert LLMExtractedMetadata.model_validate({"quality_score": -0.5}).quality_score == 0.0
+    assert LLMExtractedMetadata.model_validate({"quality_score": 0.73}).quality_score == 0.73
 
 
 def test_parse_extraction_response_strips_code_fence() -> None:
@@ -78,6 +89,7 @@ def test_build_extraction_prompt_contains_context_and_schema() -> None:
     assert "Cẩm nang VF e34" in prompt
     assert "Thông số > Pin" in prompt
     assert "spec_sheet" in prompt  # enum values rendered
+    assert "quality_score" in prompt
 
 
 def test_extract_chunk_metadata_uses_injected_client() -> None:
@@ -107,9 +119,11 @@ def test_apply_extracted_metadata_writes_llm_fields() -> None:
         entities=["VF e34"],
         document_type="spec_sheet",
         language="vi",
+        quality_score=0.8,
     )
     apply_extracted_metadata(metadata, extracted)
     assert metadata.summary == "Tóm tắt"
     assert metadata.questions == ["Quãng đường?"]
     assert metadata.document_type == "spec_sheet"
     assert metadata.language == "vi"
+    assert metadata.quality_score == 0.8

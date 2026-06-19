@@ -17,6 +17,7 @@ from agentic_rag.retrieval.fusion_strategies import (
     RRF_K,
     normalized_score_fusion,
     rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 from agentic_rag.retrieval.thresholds import (
@@ -158,5 +159,6 @@ __all__ = [
     "rerank_metadata",
     "rerank_with_metadata",
     "rrf_fusion",
+    "rrf_fusion_nway",
     "weighted_rrf_fusion",
 ]

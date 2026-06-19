@@ -96,15 +96,17 @@ def test_sentence_transformers_reranker_maps_scores_to_candidates(
         _result("chunk-b", score=0.2, rank=2, text="B"),
         _result("chunk-c", score=0.4, rank=3, text="C"),
     ]
+    # device="cpu" so the result is machine-independent (CUDA resolution is
+    # covered separately by the _resolve_device tests).
     reranker = SentenceTransformersReranker(
         config=_config(provider="sentence_transformers", model="test-reranker"),
-        device="cuda",
+        device="cpu",
     )
 
     output = reranker.rerank(_request(candidates, top_k=2))
 
     assert seen["model_name"] == "test-reranker"
-    assert seen["device"] == "cuda"
+    assert seen["device"] == "cpu"
     assert seen["pairs"] == [
         ("warranty question", "A"),
         ("warranty question", "B"),
@@ -113,6 +115,22 @@ def test_sentence_transformers_reranker_maps_scores_to_candidates(
     assert [result.chunk.chunk_id for result in output.results] == ["chunk-b", "chunk-c"]
     assert [result.score for result in output.results] == [0.95, 0.4]
     assert output.metadata["used_provider"] == "sentence_transformers"
+
+
+def test_resolve_device_cuda_fallback() -> None:
+    from agentic_rag.model_runtime import rerankers
+
+    no_cuda = lambda: False  # noqa: E731
+    has_cuda = lambda: True  # noqa: E731
+
+    # CUDA unavailable -> cuda requests fall back to cpu; others pass through.
+    assert rerankers._resolve_device("cuda", cuda_available=no_cuda) == "cpu"
+    assert rerankers._resolve_device("cuda:0", cuda_available=no_cuda) == "cpu"
+    assert rerankers._resolve_device("cpu", cuda_available=no_cuda) == "cpu"
+    assert rerankers._resolve_device(None, cuda_available=no_cuda) is None
+
+    # CUDA available -> cuda request is honored.
+    assert rerankers._resolve_device("cuda", cuda_available=has_cuda) == "cuda"
 
 
 def test_litellm_reranker_passes_documents_and_top_n(monkeypatch: MonkeyPatch) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import lru_cache
 from typing import Any, Protocol, cast
 
@@ -245,6 +245,37 @@ def _preimport_sklearn_before_torch() -> None:
 
 
 @lru_cache(maxsize=8)
+def _cuda_available() -> bool:
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _resolve_device(
+    device: str | None, *, cuda_available: Callable[[], bool] = _cuda_available
+) -> str | None:
+    """Downgrade a requested CUDA device to CPU when CUDA is unavailable.
+
+    Honors any non-CUDA device as-is. A machine with CPU-only torch (or no GPU)
+    would otherwise raise "Torch not compiled with CUDA enabled"; falling back to
+    CPU keeps the reranker working (slower) instead of failing every request.
+    """
+    if not device or not str(device).lower().startswith("cuda"):
+        return device
+    if cuda_available():
+        return device
+    import warnings
+
+    warnings.warn(
+        f"RERANK_DEVICE={device!r} requested but CUDA is unavailable; using CPU.",
+        stacklevel=2,
+    )
+    return "cpu"
+
+
 def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderModel:
     _preimport_sklearn_before_torch()
     try:
@@ -255,7 +286,7 @@ def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderMod
         ) from exc
     cross_encoder = sentence_transformers.CrossEncoder
     try:
-        return cast(_CrossEncoderModel, cross_encoder(model_name, device=device))
+        return cast(_CrossEncoderModel, cross_encoder(model_name, device=_resolve_device(device)))
     except Exception as exc:
         raise ModelInvocationError(f"Local reranker load failed: {exc}") from exc
 

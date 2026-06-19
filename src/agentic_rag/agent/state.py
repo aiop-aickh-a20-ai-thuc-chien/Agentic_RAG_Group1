@@ -34,6 +34,14 @@ class AgentState(TypedDict):
     clarification_reason: NotRequired[str | None]
     detected_entities: NotRequired[list[str]]
     detected_intents: NotRequired[list[str]]
+    # Canonical entities for the retrieval pre-filter (set in preprocess, read in
+    # retrieve). Distinct from detected_entities (clarification's model names).
+    filter_entities: NotRequired[list[str]]
+    # Per-query entity filter map: query string → canonical entities.
+    # Populated by preprocess_node; retrieve_node looks up each sub-query here so
+    # decomposed queries get their own focused filter instead of a shared union.
+    filter_entities_map: NotRequired[dict[str, list[str]]]
     pending_clarification: NotRequired[dict[str, str] | None]
     # Language detection — set once in preprocess, read by all downstream nodes
     detected_language: NotRequired[str]
+    boost_query_type: NotRequired[str]  # detected query type for boosting

@@ -55,10 +55,15 @@ from agentic_rag.ingestion.knowledge_quality import (
     annotate_chunks_with_quality,
     parse_knowledge_quality_methods,
 )
+from agentic_rag.ingestion.metadata import (
+    apply_extracted_metadata,
+    extract_chunk_metadata,
+)
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
 from agentic_rag.ingestion.url import load_text_chunks, load_url_with_artifacts
 from agentic_rag.integrations.local_pdf.storage import (
+    HybridLocalSourceStore,
     LocalSourceStore,
     PostgresLocalSourceStore,
     S3LocalSourceStore,
@@ -73,7 +78,7 @@ from agentic_rag.retrieval.fusion import (
     apply_fusion_threshold,
     apply_pre_fusion_thresholds,
     normalized_score_fusion,
-    rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 from agentic_rag.retrieval.search import (
@@ -323,6 +328,7 @@ class LocalPdfEvidenceProvider:
         finally:
             self._delete_temporary_path(pdf_path)
             self._delete_temporary_path(markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
         return LocalPdfUploadedDocument(
             document_id=document_id,
@@ -449,6 +455,7 @@ class LocalPdfEvidenceProvider:
             )
         finally:
             self._delete_temporary_path(local_markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
 
         return LocalPdfUploadedDocument(
@@ -567,6 +574,7 @@ class LocalPdfEvidenceProvider:
             )
         finally:
             self._delete_temporary_path(markdown_path)
+        chunks = self._enrich_chunks_with_llm(document_id=document_id, chunks=chunks)
         write_latency_ms = _latency_ms(write_started_at)
 
         return LocalPdfUploadedDocument(
@@ -1029,6 +1037,7 @@ class LocalPdfEvidenceProvider:
                     document_ids=request.document_ids,
                     top_k=request.page_size or _default_page_size(),
                     exclude_dedup_layers=request.exclude_dedup_layers or None,
+                    entity_filter=request.entity_filter,
                 )
             )
 
@@ -1053,6 +1062,9 @@ class LocalPdfEvidenceProvider:
         # Dense uses original question (with diacritics) for better embedding quality
         dense_results, dense_error = _traced_dense(store, request.question, candidate_k)
         dense_latency_ms = _latency_ms(dense_started_at)
+        # Question-index retriever (experiment, off by default; uses the original
+        # question for question↔question matching). Empty when the toggle is off.
+        question_results = store.question_search(request.question, candidate_k)
         threshold_config = _threshold_config_from_env()
         bm25_results, dense_results, pre_fusion_threshold_trace = _traced_pre_fusion_threshold(
             bm25_results, dense_results, threshold_config
@@ -1061,6 +1073,7 @@ class LocalPdfEvidenceProvider:
         fused_results, fusion_method_trace = _fuse_results(
             bm25_results=bm25_results,
             dense_results=dense_results,
+            question_results=question_results,
             candidate_k=candidate_k,
         )
         fused_results, fusion_threshold_trace = _traced_post_fusion_threshold(
@@ -1108,6 +1121,18 @@ class LocalPdfEvidenceProvider:
             self._source_store.replace_document_chunks(document_id, chunks)
             return
         self._write_chunks(document_id=document_id, chunks=chunks)
+
+    def _enrich_chunks_with_llm(self, *, document_id: str, chunks: list[Chunk]) -> list[Chunk]:
+        any_enriched = False
+        for chunk in chunks:
+            extracted = extract_chunk_metadata(chunk)
+            if extracted is not None:
+                apply_extracted_metadata(chunk.metadata, extracted)
+                any_enriched = True
+        if any_enriched:
+            self._replace_document_chunks(document_id=document_id, chunks=chunks)
+            _upsert_dense_embeddings_safely(chunks)
+        return chunks
 
     def _write_source_store(
         self,
@@ -2330,6 +2355,8 @@ def _source_store_from_env() -> LocalSourceStore | None:
     raw_store = os.getenv("LOCAL_SOURCE_STORE", "jsonl").strip().lower()
     if raw_store == "s3":
         return S3LocalSourceStore.from_env()
+    if raw_store == "hybrid":
+        return HybridLocalSourceStore.from_env()
     if raw_store not in {"postgres", "postgresql", "pg"}:
         return None
 
@@ -2347,6 +2374,8 @@ def _source_store_from_env() -> LocalSourceStore | None:
 
 
 def _source_store_trace_type(source_store: LocalSourceStore) -> str:
+    if isinstance(source_store, HybridLocalSourceStore):
+        return "hybrid"
     if isinstance(source_store, S3LocalSourceStore):
         return "s3"
     if isinstance(source_store, PostgresLocalSourceStore):
@@ -2486,6 +2515,7 @@ def _fuse_results(
     bm25_results: list[SearchResult],
     dense_results: list[SearchResult],
     candidate_k: int,
+    question_results: list[SearchResult] | None = None,
 ) -> tuple[list[SearchResult], dict[str, object]]:
     method = os.getenv("FUSION_METHOD", "rrf").strip().lower()
     if method == "weighted_rrf":
@@ -2517,14 +2547,15 @@ def _fuse_results(
             "alpha": alpha,
         }
     rrf_k = _env_int("FUSION_RRF_K", RRF_K)
-    return rrf_fusion(
-        bm25_results=bm25_results,
-        dense_results=dense_results,
-        top_k=candidate_k,
-        rrf_k=rrf_k,
-    ), {
+    # Question-index results (when enabled) fuse as a 3rd RRF retriever; the
+    # weighted/normalized methods above stay 2-way (bm25/dense) by design.
+    result_lists = [bm25_results, dense_results]
+    if question_results:
+        result_lists.append(question_results)
+    return rrf_fusion_nway(result_lists, top_k=candidate_k, rrf_k=rrf_k), {
         "method": "reciprocal_rank_fusion",
         "rrf_k": rrf_k,
+        "question_count": len(question_results or []),
     }
 
 
