@@ -502,6 +502,9 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
+    # Isolate from the question-index path (and any leaked env flag) so only the
+    # main hybrid query_points call is captured.
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false")
 
     results = qdrant_hybrid_search("pin vf8", document_ids=["doc-1"], top_k=3)
 
@@ -648,6 +651,10 @@ def test_qdrant_hybrid_search_filters_out_excluded_dedup_layers(
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
+
+    # Isolate from the question-index path (and any leaked env flag) so only the
+    # main hybrid query_points call is captured.
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false")
 
     results = qdrant_hybrid_search(
         "pin vf8",

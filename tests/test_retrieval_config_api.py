@@ -25,6 +25,11 @@ def test_set_retrieval_config_applies_live_and_persists(
     env_file.write_text("HARD_FILTER_ENABLED=true\n# keep comment\nOTHER=keep\n", encoding="utf-8")
     monkeypatch.setattr(api, "_ENV_FILE", env_file)
     for name in _FLAG_ENVS:
+        # setenv registers the original value (even when absent) so monkeypatch
+        # restores it on teardown — set_retrieval_config writes os.environ
+        # directly, which would otherwise leak into later tests. Then delenv for
+        # a clean slate during this test.
+        monkeypatch.setenv(name, os.environ.get(name, ""))
         monkeypatch.delenv(name, raising=False)
 
     result = api.set_retrieval_config(
