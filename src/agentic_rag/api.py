@@ -11,6 +11,7 @@ import warnings
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.error import HTTPError as UrlHTTPError
 from urllib.error import URLError
@@ -377,6 +378,103 @@ api.include_router(eval_review_router, prefix="/eval-review")
 api.include_router(autodata_eval_router, prefix="/internal")
 
 
+# ── Retrieval config (global defaults for the chat /answer pipeline) ─────────
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+_RETRIEVAL_FLAG_ENV = {
+    "hard_filter_enabled": "HARD_FILTER_ENABLED",
+    "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
+    "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
+    "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+}
+_RETRIEVAL_FLAG_DEFAULTS = {
+    "hard_filter_enabled": True,
+    "metadata_boosting_enabled": True,
+    "question_index_enabled": False,
+    "entity_prefilter_llm": False,
+}
+
+
+def _env_truthy(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def _write_env_file(updates: dict[str, str]) -> None:
+    """Update KEY=VALUE lines in .env in place (preserve comments/order); append new keys."""
+    lines = _ENV_FILE.read_text(encoding="utf-8").splitlines() if _ENV_FILE.exists() else []
+    remaining = dict(updates)
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in remaining:
+                out.append(f"{key}={remaining.pop(key)}")
+                continue
+        out.append(line)
+    for key, val in remaining.items():
+        out.append(f"{key}={val}")
+    _ENV_FILE.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def _configured_exclude_dedup_layers() -> list[str]:
+    """Global default dedup layers to exclude during retrieval (chat /answer)."""
+    raw = os.getenv("RETRIEVAL_EXCLUDE_DEDUP_LAYERS", "").strip()
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+class RetrievalConfig(BaseModel):
+    hard_filter_enabled: bool
+    metadata_boosting_enabled: bool
+    question_index_enabled: bool
+    entity_prefilter_llm: bool
+    question_min_score: float | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
+
+
+def _current_retrieval_config() -> RetrievalConfig:
+    raw = os.getenv("QUESTION_MIN_SCORE", "").strip()
+    try:
+        qms = float(raw) if raw else None
+    except ValueError:
+        qms = None
+    return RetrievalConfig(
+        question_min_score=qms,
+        exclude_dedup_layers=_configured_exclude_dedup_layers(),
+        **{
+            field: _env_truthy(os.getenv(env_name), default=_RETRIEVAL_FLAG_DEFAULTS[field])
+            for field, env_name in _RETRIEVAL_FLAG_ENV.items()
+        },
+    )
+
+
+@api.get("/config/retrieval", response_model=RetrievalConfig)
+def get_retrieval_config() -> RetrievalConfig:
+    """Current global retrieval flags used by the chat /answer pipeline."""
+    return _current_retrieval_config()
+
+
+@api.post("/config/retrieval", response_model=RetrievalConfig)
+def set_retrieval_config(config: RetrievalConfig) -> RetrievalConfig:
+    """Apply retrieval flags live (os.environ, picked up by the next chat query)
+    and persist them to .env so they survive a backend restart."""
+    updates: dict[str, str] = {}
+    for field, env_name in _RETRIEVAL_FLAG_ENV.items():
+        val = "true" if getattr(config, field) else "false"
+        os.environ[env_name] = val
+        updates[env_name] = val
+    qms = "" if config.question_min_score is None else str(config.question_min_score)
+    os.environ["QUESTION_MIN_SCORE"] = qms
+    updates["QUESTION_MIN_SCORE"] = qms
+    dedup = ",".join(config.exclude_dedup_layers)
+    os.environ["RETRIEVAL_EXCLUDE_DEDUP_LAYERS"] = dedup
+    updates["RETRIEVAL_EXCLUDE_DEDUP_LAYERS"] = dedup
+    _write_env_file(updates)
+    return _current_retrieval_config()
+
+
 @api.get("/health")
 def health() -> dict[str, str]:
     """Return API health and active configuration for the frontend."""
@@ -391,6 +489,16 @@ def health() -> dict[str, str]:
     return payload
 
 
+def _apply_global_dedup_default(request: AnswerRequest) -> None:
+    """Fall back to the .env-configured dedup exclusion when the request omits it.
+
+    The chat UI no longer carries a per-message dedup filter — it is a global
+    setting on the config page (RETRIEVAL_EXCLUDE_DEDUP_LAYERS).
+    """
+    if not request.exclude_dedup_layers:
+        request.exclude_dedup_layers = _configured_exclude_dedup_layers()
+
+
 @api.post("/answer", response_model=Answer)
 def answer_question(request: AnswerRequest) -> Answer:
     """Generate an answer grounded in retrieved evidence.
@@ -399,6 +507,7 @@ def answer_question(request: AnswerRequest) -> Answer:
     fabricating an answer.  Set ``use_mock_evidence=true`` only for local demos.
     """
 
+    _apply_global_dedup_default(request)
     return _answer_for_request(request)
 
 
@@ -406,6 +515,7 @@ def answer_question(request: AnswerRequest) -> Answer:
 def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
     """Stream generated answer text and citations as server-sent events."""
 
+    _apply_global_dedup_default(request)
     small_talk_answer = _small_talk_answer(request.question)
     if small_talk_answer is not None:
         return StreamingResponse(

@@ -46,3 +46,18 @@ export interface JobStatus {
   errors: string[];
   message: string;
 }
+
+export interface EvalFlags {
+  hard_filter_enabled: boolean;
+  metadata_boosting_enabled: boolean;
+  question_index_enabled: boolean;
+  entity_prefilter_llm: boolean;
+}
+
+export interface QuestionIndexStatus {
+  exists: boolean;
+  count: number;
+  collection: string;
+  build_status: "idle" | "running" | "done" | "error";
+  build_message: string;
+}

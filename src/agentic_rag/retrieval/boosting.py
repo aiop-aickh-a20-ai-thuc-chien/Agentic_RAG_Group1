@@ -9,6 +9,30 @@ from typing import Any
 
 from agentic_rag.core.contracts import SearchResult
 
+
+def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
+    def _decorator(func: Any) -> Any:
+        return func
+
+    return _decorator
+
+
+try:
+    from langsmith import traceable as _ls_traceable
+except Exception:  # pragma: no cover - langsmith optional
+    _ls_traceable = _noop_traceable  # type: ignore[assignment]
+
+
+@_ls_traceable(name="metadata-boosting", run_type="tool")
+def _trace_boosting(summary: dict[str, Any]) -> dict[str, Any]:
+    """Emit the soft-boosting decision to LangSmith (factors, reordering).
+
+    A span only appears when ``METADATA_BOOSTING_ENABLED`` is on, so an absent
+    span = boosting off. Shows the multiplicative factor range applied and whether
+    the top result changed, so an A/B run can tell if boosting actually reordered.
+    """
+    return summary
+
 _DOCUMENT_TYPE_BOOST_MATRIX: dict[str, dict[str, float]] = {
     "faq": {
         "faq": 1.3,
@@ -94,6 +118,8 @@ def apply_metadata_boost(
     max_score = max(r.score for r in results)
     score_range = max_score - min_score or 1.0
 
+    top_before = results[0].chunk.chunk_id
+    factors: list[float] = []
     boosted: list[SearchResult] = []
     for result in results:
         normalized_score = (result.score - min_score) / score_range
@@ -106,11 +132,25 @@ def apply_metadata_boost(
         factor *= _recency_factor(metadata.get("fetched_at"))
         factor *= _dedup_factor(metadata.get("deduplication"))
         factor = max(0.7, min(1.4, factor))
+        factors.append(factor)
 
         boosted.append(result.model_copy(update={"score": normalized_score * factor}))
 
     boosted.sort(key=lambda r: r.score, reverse=True)
-    return [r.model_copy(update={"rank": rank}) for rank, r in enumerate(boosted, start=1)]
+    reranked = [r.model_copy(update={"rank": rank}) for rank, r in enumerate(boosted, start=1)]
+    _trace_boosting(
+        {
+            "enabled": True,
+            "query_type": query_type,
+            "count": len(results),
+            "min_factor": min(factors),
+            "max_factor": max(factors),
+            "mean_factor": sum(factors) / len(factors),
+            "boosted_count": sum(1 for f in factors if abs(f - 1.0) > 1e-9),
+            "top_changed": top_before != reranked[0].chunk.chunk_id,
+        }
+    )
+    return reranked
 
 
 def _document_type_factor(doc_type: str, query_type: str | None) -> float:

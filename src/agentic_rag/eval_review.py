@@ -183,6 +183,9 @@ _job: dict[str, Any] = {
     "message": "",
 }
 
+# Separate background job for building the auxiliary question-index collection.
+_qi_job: dict[str, Any] = {"status": "idle", "message": "", "indexed": 0}
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 
@@ -195,6 +198,43 @@ class RowUpdate(BaseModel):
 
 class RunConfig(BaseModel):
     run_ragas: bool = True
+    # Per-run retrieval toggles. None = leave the .env value untouched; an explicit
+    # bool overrides the env var for this run only (restored afterwards). The flag
+    # readers use os.getenv live (no caching), so no backend restart is needed.
+    hard_filter_enabled: bool | None = None
+    metadata_boosting_enabled: bool | None = None
+    question_index_enabled: bool | None = None
+    entity_prefilter_llm: bool | None = None
+
+
+# Maps a RunConfig field → the env var the retrieval code reads.
+_RUN_TOGGLE_ENV = {
+    "hard_filter_enabled": "HARD_FILTER_ENABLED",
+    "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
+    "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
+    "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+}
+
+# Default each flag reverts to when its env var is unset (mirrors the retrieval code).
+_RUN_TOGGLE_DEFAULTS = {
+    "hard_filter_enabled": True,
+    "metadata_boosting_enabled": True,
+    "question_index_enabled": False,
+    "entity_prefilter_llm": False,
+}
+
+
+def _env_truthy(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+class EvalFlags(BaseModel):
+    hard_filter_enabled: bool
+    metadata_boosting_enabled: bool
+    question_index_enabled: bool
+    entity_prefilter_llm: bool
 
 
 class JobStatus(BaseModel):
@@ -663,6 +703,17 @@ def _append_to_reject(row_data: dict[str, Any], header: dict[str, int]) -> None:
     rb.close()
 
 
+@router.get("/api/eval/flags")
+def get_eval_flags() -> EvalFlags:
+    """Current retrieval-toggle values (from env) so the run modal can pre-fill."""
+    return EvalFlags(
+        **{
+            field: _env_truthy(os.getenv(env_name), default=_RUN_TOGGLE_DEFAULTS[field])
+            for field, env_name in _RUN_TOGGLE_ENV.items()
+        }
+    )
+
+
 @router.post("/api/eval/run")
 def run_eval(config: RunConfig) -> dict[str, Any]:
     global _job
@@ -677,16 +728,43 @@ def run_eval(config: RunConfig) -> dict[str, Any]:
         "message": "Starting...",
     }
 
-    thread = threading.Thread(target=_run_eval_job, args=(config.run_ragas,), daemon=True)
+    thread = threading.Thread(target=_run_eval_job, args=(config,), daemon=True)
     thread.start()
     return {"message": "Evaluation started"}
 
 
-def _run_eval_job(run_ragas: bool) -> None:
+@contextlib.contextmanager
+def _temp_toggle_env(config: RunConfig) -> Any:
+    """Apply per-run toggle overrides to os.environ, restoring them afterwards.
+
+    The flag readers in retrieval call os.getenv live, so setting these here takes
+    effect for the eval run without a restart. NOTE: os.environ is process-global,
+    so any concurrent /answer requests during the run see these overrides too — run
+    eval when not serving production traffic.
+    """
+    previous: dict[str, str | None] = {}
+    try:
+        for field, env_name in _RUN_TOGGLE_ENV.items():
+            value = getattr(config, field)
+            if value is None:
+                continue
+            previous[env_name] = os.environ.get(env_name)
+            os.environ[env_name] = "true" if value else "false"
+        yield
+    finally:
+        for env_name, old in previous.items():
+            if old is None:
+                os.environ.pop(env_name, None)
+            else:
+                os.environ[env_name] = old
+
+
+def _run_eval_job(config: RunConfig) -> None:
     global _job
     try:
         from agentic_rag.evaluation.runner import EvaluationRunner
 
+        run_ragas = config.run_ragas
         _job["message"] = "Counting approved rows..."
         rows = _read_all_rows()
         approved = [
@@ -708,7 +786,8 @@ def _run_eval_job(run_ragas: bool) -> None:
             approved_only=True,
             on_row_done=_increment_progress,
         )
-        runner.run()
+        with _temp_toggle_env(config):
+            runner.run()
         _invalidate_rows_cache()
 
         _job["status"] = "done"
@@ -727,6 +806,65 @@ def _increment_progress() -> None:
 @router.get("/api/eval/status")
 def get_eval_status() -> JobStatus:
     return JobStatus(**_job)
+
+
+class QuestionIndexStatus(BaseModel):
+    exists: bool
+    count: int
+    collection: str
+    build_status: Literal["idle", "running", "done", "error"]
+    build_message: str
+
+
+@router.get("/api/eval/question-index")
+def get_question_index_status() -> QuestionIndexStatus:
+    """Whether the auxiliary question collection is built (+ count) and build job state."""
+    from agentic_rag.retrieval.search import question_index_status
+
+    try:
+        status = question_index_status()
+    except Exception as exc:
+        return QuestionIndexStatus(
+            exists=False,
+            count=0,
+            collection="",
+            build_status="error",
+            build_message=str(exc),
+        )
+    return QuestionIndexStatus(
+        exists=bool(status.get("exists")),
+        count=int(status.get("count") or 0),
+        collection=str(status.get("collection") or ""),
+        build_status=_qi_job["status"],
+        build_message=_qi_job["message"],
+    )
+
+
+@router.post("/api/eval/question-index/build")
+def build_question_index() -> dict[str, Any]:
+    """Embed all chunk questions into the auxiliary Qdrant collection (background)."""
+    global _qi_job
+    if _qi_job["status"] == "running":
+        raise HTTPException(status_code=409, detail="Build already running")
+    _qi_job = {"status": "running", "message": "Embedding questions...", "indexed": 0}
+
+    def _run() -> None:
+        global _qi_job
+        try:
+            from agentic_rag.retrieval.search import upsert_question_index
+
+            result = upsert_question_index()
+            indexed = int(result.get("indexed_questions") or 0)
+            _qi_job = {
+                "status": "done",
+                "message": f"Đã build {indexed} câu hỏi.",
+                "indexed": indexed,
+            }
+        except Exception as exc:
+            _qi_job = {"status": "error", "message": str(exc), "indexed": 0}
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"message": "Build started"}
 
 
 _qdrant_cache: dict[str, Any] = {"at": 0.0, "key": None, "payloads": []}

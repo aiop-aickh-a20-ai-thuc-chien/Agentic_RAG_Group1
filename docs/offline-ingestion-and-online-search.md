@@ -43,20 +43,23 @@ embeddings and reranking:
 uv sync --extra local-models
 ```
 
-Torch wheel selection is machine-specific, so this repo does not pin a global
-CUDA wheel or PyTorch index in `pyproject.toml`.
+Torch wheel selection is machine-specific. For Windows/Linux local development,
+this repo routes `torch` to the PyTorch `cu124` index so
+`uv sync --extra local-models` installs a CUDA-enabled wheel that works with a
+compatible NVIDIA driver. macOS keeps the default PyPI wheel.
 
-- Windows/Linux CPU: use `EMBEDDING_DEVICE=cpu` and `RERANK_DEVICE=cpu`.
-- Windows/Linux NVIDIA CUDA: install the torch build recommended by the official
-  PyTorch selector for the machine's CUDA target, then use
-  `EMBEDDING_DEVICE=cuda` and `RERANK_DEVICE=cuda`.
+- Windows/Linux CPU-only machines: use `EMBEDDING_DEVICE=cpu` and
+  `RERANK_DEVICE=cpu`.
+- Windows/Linux NVIDIA CUDA: run `uv sync --extra local-models`, verify that
+  `torch.version.cuda` is not `None`, then use `EMBEDDING_DEVICE=cuda` and
+  `RERANK_DEVICE=cuda`.
 - macOS: start with `auto`; use `mps` only when the installed PyTorch and
   sentence-transformers stack supports it, otherwise use `cpu`.
 
 Verify local torch/device behavior with:
 
 ```bash
-uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available())"
+uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'no cuda')"
 ```
 
 ## 2. Baseline Local Environment

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agentic RAG · Báo cáo tuần: Metadata</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  :root{
+    --paper:#f4f7fb; --paper2:#eaeff7; --card:#ffffff;
+    --ink:#1b2540; --muted:#5d6b86; --faint:#8c98b3;
+    --line:#e3e9f3; --line2:#eef2f9;
+    --accent:#179b86; --accent-ink:#0c5e52; --accent-soft:#e6f4f0; --accent-mid:#33b7a1;
+    --amber:#b5832a; --amber-soft:#fbf2e0;
+    --shadow:0 18px 50px rgba(27,37,64,.10), 0 2px 8px rgba(27,37,64,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Plus Jakarta Sans",system-ui,sans-serif;
+    color:var(--ink);overflow:hidden;
+    background:
+      radial-gradient(1100px 760px at 82% -8%, #e3f3ee 0, transparent 55%),
+      radial-gradient(900px 720px at 2% 108%, #e7ecfb 0, transparent 52%),
+      var(--paper);
+  }
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(rgba(27,37,64,.045) 1px, transparent 1px);
+    background-size:22px 22px;mask-image:radial-gradient(circle at 50% 40%, #000 30%, transparent 85%)}
+
+  .stage{position:relative;height:100vh;width:100vw;display:grid;place-items:center;perspective:2000px;z-index:1}
+  .deck{position:relative;width:min(1120px,93vw);height:min(680px,88vh)}
+  .slide{
+    position:absolute;inset:0;border-radius:26px;padding:38px 46px;
+    background:var(--card);border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    opacity:0;transform:translateY(20px) scale(.985);filter:blur(3px);
+    transition:opacity .5s ease, transform .6s cubic-bezier(.16,1,.3,1), filter .5s ease;
+    pointer-events:none;overflow:hidden;display:flex;flex-direction:column;
+  }
+  .slide.active{opacity:1;transform:none;filter:none;pointer-events:auto}
+  .slide::after{content:"";position:absolute;right:-90px;top:-90px;width:260px;height:260px;border-radius:50%;
+    background:radial-gradient(circle, var(--accent-soft), transparent 70%);opacity:.7;pointer-events:none}
+
+  .ico{width:52px;height:52px;border-radius:15px;display:grid;place-items:center;
+    background:var(--accent-soft);color:var(--accent-ink);font-size:27px;margin-bottom:14px;
+    border:1px solid #d3ebe4}
+  .ksmall{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);font-weight:700}
+  .ksmall code{background:#eef2f9;color:var(--accent-ink);text-transform:none;letter-spacing:0}
+  h1{font-size:42px;line-height:1.06;font-weight:800;letter-spacing:-.025em;margin:8px 0}
+  h2{font-size:28px;line-height:1.12;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px}
+  .sub{color:var(--muted);font-size:15.5px;margin-top:7px;line-height:1.5;max-width:62ch}
+  .chip{font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+  .chip.k{background:var(--accent-soft);border-color:#cfeae2;color:var(--accent-ink)}
+  .who{display:inline-flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
+
+  .body{margin-top:14px;flex:1;min-height:0;overflow:auto;padding-right:4px}
+  ul{list-style:none;display:flex;flex-direction:column;gap:10px}
+  li{position:relative;padding-left:26px;font-size:15px;line-height:1.46;color:#33405e}
+  li::before{content:"";position:absolute;left:2px;top:8px;width:7px;height:7px;border-radius:2px;background:var(--accent);transform:rotate(45deg)}
+  li b{color:var(--ink);font-weight:700}
+  code{font-family:"JetBrains Mono",monospace;font-size:12.6px;background:#eef2f9;color:#36507a;padding:2px 7px;border-radius:6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
+  .card2{border:1px solid var(--line);background:var(--paper);border-radius:16px;padding:15px 17px}
+  .card2 h3{font-size:13px;letter-spacing:.02em;color:var(--accent-ink);margin-bottom:8px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .card2 h3 i{font-size:16px}
+  .card2 p{font-size:13.6px;color:#46536f;line-height:1.45}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;margin:4px 4px 0 0;border:1px solid var(--line);background:#fff;color:#52608a}
+
+  .flow{display:flex;align-items:stretch;gap:9px;flex-wrap:wrap;margin-top:4px}
+  .step{flex:1;min-width:108px;border:1px solid var(--line);background:var(--paper);border-radius:14px;padding:13px;text-align:center}
+  .step .n{font-size:10.5px;color:var(--faint);font-weight:700;letter-spacing:.08em}
+  .step .t{font-size:14px;font-weight:800;margin-top:3px;color:var(--ink)}
+  .step .d{font-size:11.8px;color:var(--muted);margin-top:5px;line-height:1.35}
+  .arrow{align-self:center;color:var(--accent-mid);font-size:18px}
+
+  .formula{font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--accent-ink);background:var(--accent-soft);
+    border:1px solid #cfeae2;border-radius:13px;padding:14px 18px;margin:6px 0;text-align:center;letter-spacing:.01em}
+  .mono{font-family:"JetBrains Mono",monospace;font-size:12.4px;color:#42506e;background:#f7f9fd;border:1px solid var(--line);border-radius:13px;padding:13px 16px;line-height:1.65;white-space:pre-wrap}
+  .mono .c{color:#9aa6c0}.mono .k{color:var(--accent-ink);font-weight:600}.mono .v{color:#b5832a}
+
+  table.t{width:100%;border-collapse:collapse;font-size:13.4px}
+  table.t th{text-align:left;padding:8px 12px;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;border-bottom:1px solid var(--line)}
+  table.t td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line2);color:#46536f}
+  table.t tr:last-child td{border-bottom:0}
+  table.t td b{color:var(--ink)}
+  table.t thead th{position:sticky;top:0;background:var(--card);z-index:1}
+  table.t tr.cut td{color:var(--accent-ink);font-weight:700;background:var(--accent-soft);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;text-align:center}
+
+  .scrollbox{max-height:400px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;
+    scrollbar-width:thin;scrollbar-color:var(--accent-mid) #eef2f9}
+  .scrollbox::-webkit-scrollbar{width:10px}
+  .scrollbox::-webkit-scrollbar-track{background:#eef2f9;border-radius:10px}
+  .scrollbox::-webkit-scrollbar-thumb{background:var(--accent-mid);border-radius:10px;border:2px solid #eef2f9}
+  .scrollbox::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+  .scrollbox table.t td{padding:6px 12px}
+  /* đồng nhất độ đậm cột tên: mọi dòng như nhau dù có <b> hay không (bỏ qua dòng ngưỡng colspan) */
+  .scrollbox table.t td:first-child:not(:only-child){color:var(--ink);font-weight:600}
+  .scrollbox table.t td b{font-weight:600}
+
+  .note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:0 12px 12px 0;font-size:13.6px;color:#235;color:var(--accent-ink)}
+  .warn{border-left:3px solid var(--amber);background:var(--amber-soft);padding:10px 14px;border-radius:0 12px 12px 0;font-size:13.6px;color:#7a5618}
+
+  .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:26px;align-items:center;height:100%}
+  .heroimg{position:relative;height:78%;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow)}
+  .heroimg img{width:100%;height:100%;object-fit:cover;filter:saturate(.6) brightness(1.05)}
+  .heroimg .ov{position:absolute;inset:0;background:linear-gradient(150deg, rgba(23,155,134,.34), rgba(91,110,224,.20))}
+
+  .hud{position:fixed;left:0;right:0;bottom:16px;display:flex;justify-content:center;z-index:5}
+  .dots{display:flex;gap:6px;flex-wrap:wrap;max-width:70vw;justify-content:center}
+  .dot{width:8px;height:8px;border-radius:50%;background:#cdd6e6;cursor:pointer;transition:.25s;border:none}
+  .dot.on{background:var(--accent);width:22px;border-radius:6px}
+  .count{position:fixed;top:16px;right:24px;font-size:12.5px;color:var(--muted);z-index:5;letter-spacing:.08em;font-weight:600}
+  .brand{position:fixed;top:15px;left:24px;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;z-index:5}
+  .nav{position:fixed;bottom:13px;left:24px;z-index:5;font-size:11px;color:var(--faint)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-mid));z-index:6;transition:width .45s ease}
+  @media (prefers-reduced-motion: reduce){.slide{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="progress" id="prog"></div>
+<div class="brand">Agentic RAG · Nhóm 1</div>
+<div class="count" id="count"></div>
+
+<div class="stage"><div class="deck" id="deck">
+
+  <!-- 1 TITLE -->
+  <section class="slide">
+    <div class="hero">
+      <div>
+        <div class="ksmall">Báo cáo tuần · chủ đề Metadata</div>
+        <h1>Metadata cho<br/>Agentic RAG xe điện</h1>
+        <p class="sub">Vòng đời metadata: sinh ra (rule-based + LLM), lưu trữ, áp dụng vào truy hồi, và đo lường tác động.</p>
+        <div class="who">
+          <span class="chip k">Dũng · Tú</span>
+          <span class="chip k">Nguyên · Huy</span>
+          <span class="chip k">Vinh · Hoàng</span>
+        </div>
+      </div>
+      <div class="heroimg">
+        <img src="https://picsum.photos/seed/agentic-rag-metadata-soft/900/1100" alt="ảnh nền trừu tượng"/>
+        <div class="ov"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 PIPELINE -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-flow-arrow"></i></div>
+    <div class="ksmall">Tổng quan</div>
+    <h2>Vòng đời metadata: sinh → lưu → áp dụng → đo</h2>
+    <div class="body">
+      <div class="grid">
+        <div class="card2"><h3><i class="ph ph-package"></i> Offline · Ingest</h3>
+          <p><b>Parse</b> (PDF/HTML → text + chunk) → <b>Rule base extract metadata</b> (cấu trúc/URL/regex) → <b>LLM Extract</b> (entities, questions, keywords, document_type) → <b>Store</b> (Neon + Qdrant + S3).</p></div>
+        <div class="card2"><h3><i class="ph ph-chat-circle-dots"></i> Online · Trả lời</h3>
+          <p>Query → <b>detect entity</b> → <b>hard filter</b> + hybrid (dense + sparse) + <b>question-index</b> → fusion RRF → <b>boost</b> → rerank → trả lời có trích dẫn.</p></div>
+    </div>
+  </section>
+
+  <!-- 3 RULE-BASED -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-ruler"></i></div>
+    <div class="ksmall">Sinh metadata · Dũng · Tú</div>
+    <h2>Rule-based metadata <code>[P]</code></h2>
+    <p class="sub">Suy ra từ cấu trúc, URL, regex. Không gọi LLM.</p>
+    <div class="body">
+      <div class="grid">
+        <div class="card2"><h3><i class="ph ph-globe"></i> Nguồn &amp; meta HTML</h3>
+          <p><code>source_type</code> · <code>domain</code> · <code>canonical_url</code> · <code>author</code> · <code>published_at</code> (bóc từ thẻ meta).</p></div>
+        <div class="card2"><h3><i class="ph ph-tree-structure"></i> Cấu trúc tài liệu</h3>
+          <p><code>title</code> (H1) · <code>section</code> · <code>section_path</code> · <code>breadcrumb</code> · <code>content_hash</code> · <code>chunk_id</code> tất định.</p></div>
+        <div class="card2"><h3><i class="ph ph-tag"></i> Sản phẩm</h3>
+          <p><code>is_product</code> + <code>product{prices, specs}</code> bóc từ DOM (regex giá, bảng spec).</p></div>
+        <div class="card2"><h3><i class="ph ph-squares-four"></i> Phân loại trang</h3>
+          <p><code>page_type</code> = <code>classify_page()</code> chấm điểm (slide kế).</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 classify_page -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-funnel"></i></div>
+    <div class="ksmall">Phương pháp · rule-based</div>
+    <h2>classify_page() chấm điểm theo luật</h2>
+    <p class="sub">Mỗi nhóm cộng điểm từ từ khóa / regex; lấy nhóm cao nhất làm page_type. Hoàn toàn tất định.</p>
+    <div class="body">
+      <table class="t">
+        <tr><th>page_type</th><th>Tín hiệu cộng điểm</th></tr>
+        <tr><td><b>product</b></td><td>is_product (+4) · regex giá (+2) · "sản phẩm liên quan" (+2) · từ khóa spec</td></tr>
+        <tr><td><b>faq</b></td><td>từ khóa FAQ + số câu hỏi cao (+3 mỗi loại)</td></tr>
+        <tr><td><b>policy</b></td><td>từ khóa pháp lý / chính sách (+3) · danh sách đánh số (+1)</td></tr>
+        <tr><td><b>service</b></td><td>bảo hành / bảo dưỡng / dịch vụ (+3)</td></tr>
+        <tr><td><b>article · listing · generic</b></td><td>tin tức/blog (+2..3) · list sản phẩm có giá (+2) · mặc định</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 5 LLM EXTRACT -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-sparkle"></i></div>
+    <div class="ksmall">Sinh metadata · Nguyên · Huy</div>
+    <h2>LLM Extract metadata <code>[L]</code></h2>
+    <p class="sub"><code>extract_chunk_metadata()</code>: 1 lần gọi LLM mỗi chunk, sinh 7 trường ngữ nghĩa.</p>
+    <div class="body">
+      <table class="t">
+        <tr><th>Trường</th><th>Ràng buộc</th><th>Dùng ở</th></tr>
+        <tr><td><b>entities</b></td><td>≤ 8, dedupe</td><td>hard filter</td></tr>
+        <tr><td><b>questions</b></td><td>2-4 câu, ≤ 8</td><td>question-index</td></tr>
+        <tr><td><b>keywords</b></td><td>≤ 8</td><td>BM25 augment</td></tr>
+        <tr><td><b>document_type</b></td><td>enum (faq/spec/manual/policy/article/unknown)</td><td>boosting</td></tr>
+        <tr><td><b>summary · language · quality_score</b></td><td>str · enum · 0-1 clamp</td><td>sinh + lưu, chưa nối consumer</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6 LLM method -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-brackets-curly"></i></div>
+    <div class="ksmall">Phương pháp · LLM extract</div>
+    <h2>Prompt có cấu trúc, validate chặt</h2>
+    <div class="body">
+      <div class="mono"><span class="c">// 1 call / chunk · temperature 0 · ép JSON thuần</span>
+&lt;task&gt;     trích metadata ngữ nghĩa cho chunk RAG xe điện
+&lt;context&gt;  title, section, source       <span class="c">// chỉ định hướng</span>
+&lt;content&gt;  chunk.text                    <span class="c">// nguồn DUY NHẤT</span>
+&lt;schema&gt;   { summary, keywords[], questions[], entities[],
+            document_type, language, quality_score }</div>
+      <ul style="margin-top:11px">
+        <li><b>Guard:</b> chunk ≥ 40 ký tự mới gọi; context field ≤ 300 ký tự.</li>
+        <li><b>Validate:</b> enum sai → <code>unknown</code>; list dedupe + cắt ≤ 8; <code>quality_score</code> clamp [0,1] và loại bool; <code>summary</code> trim.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 STORE -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-database"></i></div>
+    <div class="ksmall">Lưu metadata · Vinh · Hoàng</div>
+    <h2>Store: 3 backend + hybrid</h2>
+    <div class="body">
+      <div class="grid3">
+        <div class="card2"><h3><i class="ph ph-hard-drives"></i> Neon / Postgres</h3><p><b>Source of truth.</b> Bảng <code>documents</code> + <code>chunks</code> (text + <code>metadata</code> JSONB, GIN + full-text).</p></div>
+        <div class="card2"><h3><i class="ph ph-vector-three"></i> Qdrant</h3><p>Vector: <b>dense</b> + <b>sparse</b> mỗi chunk + payload + keyword index (<code>entities_canonical</code>, dedup layer).</p></div>
+        <div class="card2"><h3><i class="ph ph-cloud"></i> S3</h3><p>Raw &amp; backup: <code>raw/*.pdf</code> · <code>parsed/*.md</code> · <code>chunks.jsonl</code> · <code>manifest.json</code>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 STORE method -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-arrows-down-up"></i></div>
+    <div class="ksmall">Phương pháp · lưu vector</div>
+    <h2>upsert_dense_embeddings: cách ghi Qdrant</h2>
+    <div class="body">
+      <div class="mono"><span class="c"># mỗi chunk → 1 point (theo batch DENSE_EMBED_BATCH_SIZE)</span>
+id      = <span class="k">UUID5</span>(storage_chunk_id)         <span class="c"># tất định, ổn định khi chạy lại</span>
+dense   = embed(chunk.text)                 <span class="c"># hoặc vector tính sẵn</span>
+sparse  = <span class="k">_sparse_vector</span>(_bm25_index_text(chunk))
+payload = { text, document_id, metadata{}, _embedding_profile }</div>
+      <ul style="margin-top:11px">
+        <li><b>Sparse = bag-of-words băm:</b> <code>Counter(tokens)</code> → index = <code>sha256(token)[:8] % 2^31-1</code>, value = tần suất.</li>
+        <li><b><code>_embedding_profile</code></b> (provider, model, dimensions) lưu kèm để validate lúc query, chặn lệch model/chiều vector.</li>
+        <li>Id tất định nên re-upsert ghi đè đúng chỗ, không nhân bản.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CORPUS ANALYSIS: entity vs keyword frequency -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-chart-pie-slice"></i></div>
+    <div class="ksmall">Phân tích corpus · 1.488 chunks</div>
+    <h2>Entity vs Keyword: tần suất thật</h2>
+    <div class="body">
+      <div class="grid">
+        <div class="card2"><h3><i class="ph ph-identification-card"></i> Top 50 entities (count · % chunk)</h3>
+          <div class="scrollbox"><table class="t">
+            <thead><tr><th>entity</th><th>count · %</th></tr></thead>
+            <tbody>
+            <tr><td><b>VinFast</b></td><td>1116 · 75.0%</td></tr>
+            <tr><td><b>VF 8</b></td><td>175 · 11.8%</td></tr>
+            <tr><td><b>VF 9</b></td><td>115 · 7.7%</td></tr>
+            <tr><td><b>VF e34</b></td><td>108 · 7.3%</td></tr>
+            <tr><td>xe máy điện</td><td>98 · 6.6%</td></tr>
+            <tr><td><b>Hà Nội</b></td><td>74 · 5.0%</td></tr>
+            <tr><td><b>VF 7</b></td><td>62 · 4.2%</td></tr>
+            <tr><td>ô tô điện</td><td>52 · 3.5%</td></tr>
+            <tr><td><b>VF 6</b></td><td>51 · 3.4%</td></tr>
+            <tr><td><b>VF 5</b></td><td>50 · 3.4%</td></tr>
+            <tr><td><b>VF 3</b></td><td>49 · 3.3%</td></tr>
+            <tr><td>Việt Nam</td><td>48 · 3.2%</td></tr>
+            <tr><td>Indonesia</td><td>40 · 2.7%</td></tr>
+            <tr><td>Theon S</td><td>40 · 2.7%</td></tr>
+            <tr><td>Klara S</td><td>39 · 2.6%</td></tr>
+            <tr><td>Vento S</td><td>39 · 2.6%</td></tr>
+            <tr><td>Feliz S</td><td>34 · 2.3%</td></tr>
+            <tr><td>VF MPV 7</td><td>31 · 2.1%</td></tr>
+            <tr><td>Nerio Green</td><td>28 · 1.9%</td></tr>
+            <tr><td>Vinfastauto.com</td><td>28 · 1.9%</td></tr>
+            <tr><td>Limo Green</td><td>27 · 1.8%</td></tr>
+            <tr><td>Đà Nẵng</td><td>26 · 1.7%</td></tr>
+            <tr><td>VinFast Trading</td><td>25 · 1.7%</td></tr>
+            <tr><td>Pin</td><td>24 · 1.6%</td></tr>
+            <tr><td>Theon</td><td>23 · 1.5%</td></tr>
+            <tr><td>1900 23 23 89</td><td>22 · 1.5%</td></tr>
+            <tr><td>pin LFP</td><td>22 · 1.5%</td></tr>
+            <tr><td>Feliz</td><td>22 · 1.5%</td></tr>
+            <tr><td>Mobile Service</td><td>20 · 1.3%</td></tr>
+            <tr><td>Hợp Đồng</td><td>20 · 1.3%</td></tr>
+            <tr><td>Vingroup</td><td>19 · 1.3%</td></tr>
+            <tr><td>Hải Phòng</td><td>19 · 1.3%</td></tr>
+            <tr><td>Evo200</td><td>18 · 1.2%</td></tr>
+            <tr><td>NVIDIA</td><td>17 · 1.1%</td></tr>
+            <tr><td>xe điện</td><td>17 · 1.1%</td></tr>
+            <tr><td>Ludo</td><td>17 · 1.1%</td></tr>
+            <tr><td>Ấn Độ</td><td>16 · 1.1%</td></tr>
+            <tr><td>Impes</td><td>16 · 1.1%</td></tr>
+            <tr><td>Khách Hàng</td><td>16 · 1.1%</td></tr>
+            <tr><td>VinFast VF 3</td><td>15 · 1.0%</td></tr>
+            <tr><td>Evo200 Lite</td><td>15 · 1.0%</td></tr>
+            <tr><td>trạm sạc</td><td>14 · 0.9%</td></tr>
+            <tr><td>VinClub</td><td>14 · 0.9%</td></tr>
+            <tr><td>TP. Hồ Chí Minh</td><td>14 · 0.9%</td></tr>
+            <tr><td>V-Green</td><td>14 · 0.9%</td></tr>
+            <tr><td>Philippines</td><td>13 · 0.9%</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <div class="card2"><h3><i class="ph ph-text-aa"></i> Top 60 keywords (count · % chunk)</h3>
+          <div class="scrollbox"><table class="t">
+            <thead><tr><th>keyword</th><th>count · %</th></tr></thead>
+            <tbody>
+            <tr><td><b>vinfast</b></td><td>1019 · 68.5%</td></tr>
+            <tr><td>xe máy điện</td><td>299 · 20.1%</td></tr>
+            <tr><td>xe điện</td><td>287 · 19.3%</td></tr>
+            <tr><td>ô tô điện</td><td>218 · 14.7%</td></tr>
+            <tr><td>khách hàng</td><td>191 · 12.8%</td></tr>
+            <tr><td>bảo hành</td><td>134 · 9.0%</td></tr>
+            <tr><td>an toàn</td><td>130 · 8.7%</td></tr>
+            <tr><td>dịch vụ</td><td>104 · 7.0%</td></tr>
+            <tr><td>trạm sạc</td><td>104 · 7.0%</td></tr>
+            <tr><td>vf 8</td><td>100 · 6.7%</td></tr>
+            <tr><td>thuê pin</td><td>91 · 6.1%</td></tr>
+            <tr><td>ưu đãi</td><td>88 · 5.9%</td></tr>
+            <tr><td>chi phí</td><td>62 · 4.2%</td></tr>
+            <tr><td>công nghệ</td><td>61 · 4.1%</td></tr>
+            <tr><td>sạc pin</td><td>59 · 4.0%</td></tr>
+            <tr><td>trải nghiệm</td><td>57 · 3.8%</td></tr>
+            <tr><td>công suất</td><td>56 · 3.8%</td></tr>
+            <tr><td>chính sách</td><td>55 · 3.7%</td></tr>
+            <tr><td>bảo dưỡng</td><td>54 · 3.6%</td></tr>
+            <tr><td>vf 9</td><td>53 · 3.6%</td></tr>
+            <tr><td>quãng đường</td><td>52 · 3.5%</td></tr>
+            <tr><td>thời gian sạc</td><td>50 · 3.4%</td></tr>
+            <tr><td>thiết kế</td><td>46 · 3.1%</td></tr>
+            <tr><td>showroom</td><td>45 · 3.0%</td></tr>
+            <tr><td>vf 7</td><td>44 · 3.0%</td></tr>
+            <tr><td>pin</td><td>43 · 2.9%</td></tr>
+            <tr><td>hà nội</td><td>42 · 2.8%</td></tr>
+            <tr><td>ứng dụng</td><td>42 · 2.8%</td></tr>
+            <tr><td>quãng đường di chuyển</td><td>41 · 2.8%</td></tr>
+            <tr><td>thanh toán</td><td>41 · 2.8%</td></tr>
+            <tr><td>pin lfp</td><td>40 · 2.7%</td></tr>
+            <tr><td>giá</td><td>38 · 2.6%</td></tr>
+            <tr><td>hướng dẫn</td><td>37 · 2.5%</td></tr>
+            <tr><td>vf e34</td><td>37 · 2.5%</td></tr>
+            <tr><td>ô tô</td><td>36 · 2.4%</td></tr>
+            <tr><td>sản phẩm tương tự</td><td>36 · 2.4%</td></tr>
+            <tr><td>tính năng</td><td>34 · 2.3%</td></tr>
+            <tr><td>hợp đồng</td><td>34 · 2.3%</td></tr>
+            <tr><td>vinfast vf 8</td><td>33 · 2.2%</td></tr>
+            <tr><td>mưa bão</td><td>32 · 2.2%</td></tr>
+            <tr><td>bảo mật</td><td>32 · 2.2%</td></tr>
+            <tr><td>tiện nghi</td><td>32 · 2.2%</td></tr>
+            <tr><td>di chuyển an toàn</td><td>31 · 2.1%</td></tr>
+            <tr><td>tuổi thọ pin</td><td>31 · 2.1%</td></tr>
+            <tr><td>ứng dụng vinfast</td><td>31 · 2.1%</td></tr>
+            <tr><td>tốc độ tối đa</td><td>30 · 2.0%</td></tr>
+            <tr><td>hỗ trợ</td><td>29 · 1.9%</td></tr>
+            <tr><td>địa chỉ</td><td>29 · 1.9%</td></tr>
+            <tr><td>tấm che nắng</td><td>29 · 1.9%</td></tr>
+            <tr><td>trải nghiệm khách hàng</td><td>29 · 1.9%</td></tr>
+            <tr><td>trách nhiệm</td><td>29 · 1.9%</td></tr>
+            <tr><td>sạc ô tô điện</td><td>28 · 1.9%</td></tr>
+            <tr><td>vf 6</td><td>28 · 1.9%</td></tr>
+            <tr><td>sản phẩm</td><td>28 · 1.9%</td></tr>
+            <tr><td>vf 3</td><td>28 · 1.9%</td></tr>
+            <tr><td>sạc nhanh</td><td>28 · 1.9%</td></tr>
+            <tr><td>dịch vụ 5 sao</td><td>28 · 1.9%</td></tr>
+            <tr><td>màu sắc</td><td>27 · 1.8%</td></tr>
+            <tr><td>hướng dẫn sử dụng</td><td>27 · 1.8%</td></tr>
+            <tr><td>indonesia</td><td>27 · 1.8%</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CORPUS ANALYSIS: entity clusters -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-graph"></i></div>
+    <div class="ksmall">Phân tích corpus · clustering</div>
+    <h2>Cluster thô (lexical) → LLM gán canonical</h2>
+    <p class="sub">Cluster chỉ gom theo ký tự (high-recall): gom dư, thậm chí gộp nhầm chuỗi khác nghĩa. LLM mới là bước tách và gán canonical sạch.</p>
+    <div class="body">
+      <div class="flow">
+        <div class="step"><div class="t">1.036</div><div class="d">cách viết (Neon)</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="t">Cluster @0.4</div><div class="d">233 cụm · lớn nhất 703</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="t">LLM</div><div class="d">tách + gán canonical</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="t">762</div><div class="d">canonical → allowlist 33</div></div>
+      </div>
+      <div class="grid" style="margin-top:14px">
+        <div class="card2"><h3><i class="ph ph-stack"></i> Cụm thô (chỉ giống ký tự)</h3>
+          <div class="mono">cụm lớn nhất <span class="v">703</span>: "1 năm" · "1 triệu IDR" · "10 năm"
+   · "1900 23 23 89" · "2025" …  <span class="c"># số/giá/ngày dồn 1 cụm</span>
+gộp <span class="v">nhầm nghĩa</span>: "Cần Giờ" · "Cần Thơ" · "Giờ Trái Đất"
+                "AGENTIC AI" · "AI" · "Agentic AI"
+biến thể đúng:  "DrgnFly" · "VF DrgnFly" · "Vin 31 DrgnFly"</div>
+        </div>
+        <div class="card2"><h3><i class="ph ph-sparkle"></i> Sau LLM (canonical + type)</h3>
+          <div class="mono">tách nhóm sai → <span class="k">Cần Giờ</span>, <span class="k">Cần Thơ</span> (location);
+                "Giờ Trái Đất" → other
+gộp biến thể → <span class="k">DrgnFly</span> (ebike_model)
+số/giá/ngày  → other/generic (<span class="v">không</span> filterable)</div>
+          <p style="margin-top:8px">762 canonical → giữ loại lọc được (car/ebike/location) + coverage &gt; 10 → <b>33 allowlist</b>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CORPUS ANALYSIS: canonical coverage -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-funnel"></i></div>
+    <div class="ksmall">Phân tích corpus · coverage sau chuẩn hóa</div>
+    <h2>Số chunk mỗi canonical → chọn allowlist</h2>
+    <p class="sub">Sau khi gộp biến thể về canonical (1.492 chunk, 890 có entity lọc được).</p>
+    <div class="body">
+      <div class="grid">
+        <div class="card2"><h3><i class="ph ph-ranking"></i> Canonical theo số chunk (cuộn)</h3>
+          <div class="scrollbox"><table class="t">
+            <thead><tr><th>canonical</th><th>chunks · %</th></tr></thead>
+            <tbody>
+            <tr><td><b>VF 8</b></td><td>203 · 13.6%</td></tr>
+            <tr><td><b>VF 9</b></td><td>133 · 8.9%</td></tr>
+            <tr><td><b>VF e34</b></td><td>116 · 7.8%</td></tr>
+            <tr><td><b>VF 7</b></td><td>86 · 5.8%</td></tr>
+            <tr><td><b>VF 5</b></td><td>77 · 5.2%</td></tr>
+            <tr><td><b>VF 3</b></td><td>76 · 5.1%</td></tr>
+            <tr><td>Hà Nội</td><td>74 · 5.0%</td></tr>
+            <tr><td>Theon S</td><td>70 · 4.7%</td></tr>
+            <tr><td><b>VF 6</b></td><td>65 · 4.4%</td></tr>
+            <tr><td>Klara S</td><td>57 · 3.8%</td></tr>
+            <tr><td>Việt Nam</td><td>48 · 3.2%</td></tr>
+            <tr><td>Vento S</td><td>43 · 2.9%</td></tr>
+            <tr><td>Indonesia</td><td>40 · 2.7%</td></tr>
+            <tr><td>Nerio Green</td><td>39 · 2.6%</td></tr>
+            <tr><td>Feliz S</td><td>39 · 2.6%</td></tr>
+            <tr><td>Evo 200</td><td>35 · 2.3%</td></tr>
+            <tr><td>Hồ Chí Minh</td><td>34 · 2.3%</td></tr>
+            <tr><td>Limo Green</td><td>33 · 2.2%</td></tr>
+            <tr><td>VF MPV 7</td><td>31 · 2.1%</td></tr>
+            <tr><td>Đà Nẵng</td><td>26 · 1.7%</td></tr>
+            <tr><td>Feliz</td><td>24 · 1.6%</td></tr>
+            <tr><td>Evo Grand</td><td>22 · 1.5%</td></tr>
+            <tr><td>E-Scooter</td><td>21 · 1.4%</td></tr>
+            <tr><td>Hải Phòng</td><td>19 · 1.3%</td></tr>
+            <tr><td>Fadil</td><td>17 · 1.1%</td></tr>
+            <tr><td>Ấn Độ</td><td>16 · 1.1%</td></tr>
+            <tr><td>EC Van</td><td>15 · 1.0%</td></tr>
+            <tr><td>Lux A2.0</td><td>15 · 1.0%</td></tr>
+            <tr><td>Lux SA2.0</td><td>15 · 1.0%</td></tr>
+            <tr><td>Feliz Lite</td><td>13 · 0.9%</td></tr>
+            <tr><td>Vento</td><td>13 · 0.9%</td></tr>
+            <tr><td>Philippines</td><td>13 · 0.9%</td></tr>
+            <tr><td><b>Flazz</b></td><td>11 · 0.7%</td></tr>
+            <tr class="cut"><td colspan="2">ngưỡng &gt; 10 chunk → allowlist = 33</td></tr>
+            <tr><td>Minio Green</td><td>9 · 0.6%</td></tr>
+            <tr><td>Evo</td><td>9 · 0.6%</td></tr>
+            <tr><td>Châu Âu</td><td>8 · 0.5%</td></tr>
+            <tr><td>Klara A2</td><td>7 · 0.5%</td></tr>
+            <tr><td>Viper</td><td>7 · 0.5%</td></tr>
+            <tr><td>Cần Thơ</td><td>6 · 0.4%</td></tr>
+            <tr><td>Feliz II</td><td>6 · 0.4%</td></tr>
+            <tr><td>Feliz 2025</td><td>6 · 0.4%</td></tr>
+            <tr><td>DrgnFly</td><td>5 · 0.3%</td></tr>
+            <tr><td>Đình Vũ - Cát Hải</td><td>5 · 0.3%</td></tr>
+            <tr><td>Amio</td><td>5 · 0.3%</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <div class="card2"><h3><i class="ph ph-funnel-simple"></i> Cổng coverage → allowlist</h3>
+          <div class="flow" style="flex-direction:column;gap:8px">
+            <div class="step"><div class="t">163</div><div class="d">canonical phân biệt (sau chuẩn hóa)</div></div>
+            <div class="arrow"><i class="ph ph-arrow-down"></i> giữ &gt; 10 chunk</div>
+            <div class="step"><div class="t">33</div><div class="d">vào allowlist (đáng pre-filter)</div></div>
+          </div>
+          <p style="margin-top:10px">Chuẩn hóa còn <b>gộp biến thể</b> nên coverage tăng: <code>VF 8</code> từ 175 (raw) lên <b>203 chunk</b>, lấy lại phần exact-match bị miss.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 MAP -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-git-fork"></i></div>
+    <div class="ksmall">Áp dụng metadata vào retrieval</div>
+    <h2>Trường metadata nào dùng ở đâu</h2>
+    <p class="sub">Trọng tâm tuần này: mỗi tính năng truy hồi tiêu thụ một trường metadata cụ thể.</p>
+    <div class="body">
+      <table class="t">
+        <tr><th>Trường metadata</th><th>Tính năng áp dụng</th><th>Người</th></tr>
+        <tr><td><b>entities → entities_canonical</b></td><td>Hard filter (lọc cứng Qdrant)</td><td>Nguyên</td></tr>
+        <tr><td><b>questions</b></td><td>Question-index (đường thứ 3, RRF)</td><td>Huy</td></tr>
+        <tr><td><b>keywords</b></td><td>BM25 keyword augmentation</td><td>chung</td></tr>
+        <tr><td><b>document_type · fetched_at · deduplication</b></td><td>Soft boosting (nhân điểm)</td><td>Hoàng</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 10 HARD FILTER -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-funnel"></i></div>
+    <div class="ksmall">Áp dụng metadata · <code>entities</code> · Nguyên</div>
+    <h2>Entity → Hard filter</h2>
+    <div class="body">
+      <div class="flow">
+        <div class="step"><div class="n">OFFLINE</div><div class="t">Từ điển</div><div class="d">entity_map 1036 form + allowlist 33 canonical</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="n">RUNTIME</div><div class="t">detect_in_query</div><div class="d">pure-lookup, không LLM</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="n">BACKFILL</div><div class="t">entities_canonical</div><div class="d">ghi Neon + Qdrant</div></div>
+      </div>
+      <ul style="margin-top:13px">
+        <li><b>Query:</b> <code>MatchAny(canonicals)</code> trên <code>metadata.entities_canonical</code> (union / OR).</li>
+        <li><b>Một công tắc</b> <code>HARD_FILTER_ENABLED</code>: gate ở chokepoint nên áp mọi path (thay cờ cũ bị rò ở agent path).</li>
+        <li><b>Fallback:</b> lọc ra 0 kết quả thì tìm lại không lọc, không bao giờ trống đáp án.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 BUILD DICTIONARY -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-graph"></i></div>
+    <div class="ksmall">Phương pháp · dựng từ điển (offline)</div>
+    <h2>Tạo entity_map &amp; allowlist</h2>
+    <p class="sub">Phase 1: gom biến thể về canonical. Phase 4A: chọn canonical đáng để lọc. Read-only với store.</p>
+    <div class="body">
+      <div class="flow">
+        <div class="step"><div class="n">BLOCKING</div><div class="t">TF-IDF char n-gram</div><div class="d">cosine ≥ ngưỡng, gom biến thể theo ký tự chung</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="n">CLUSTER</div><div class="t">connected components</div><div class="d">single-linkage, high-recall (gom dư vô hại)</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="n">MATCH</div><div class="t">LLM mỗi cluster</div><div class="d">gán canonical + type, chạy song song</div></div>
+      </div>
+      <ul style="margin-top:12px">
+        <li><b>Nhất quán:</b> biến thể cùng 1 cluster → cùng 1 lần gọi LLM → cùng canonical (không lệch kiểu "EVO GRAND" vs "Evo Grand"). Phân biệt số (VF 8 vs VF 3) do <b>LLM</b> quyết, không phải string-similarity. → <code>entity_map.json</code> (1036 form), có <code>--incremental</code>.</li>
+        <li><b>Allowlist coverage-gate:</b> canonical chỉ vào allowlist nếu phủ <b>&gt; 10 chunk</b> (đọc từ Neon). Lọc entity 1-chunk thu hẹp không đáng + dễ over-restrict; dưới ngưỡng thì không pre-filter, hybrid vẫn chạy. → <code>entity_filter_allowlist.json</code> (33 canonical).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LLM MAP ENTITY FROM QUERY -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-magic-wand"></i></div>
+    <div class="ksmall">Phương pháp · entity từ query (LLM fallback)</div>
+    <h2>Từ điển trượt → LLM map về canonical</h2>
+    <p class="sub">Từ điển chạy trước (rẻ). Trượt thì LLM đoán entity, nhưng chỉ được chọn trong danh sách cho sẵn.</p>
+    <div class="body">
+      <div class="flow">
+        <div class="step"><div class="n">1 · RẺ</div><div class="t">detect_in_query</div><div class="d">tra từ điển, word-boundary</div></div>
+        <div class="arrow"><i class="ph ph-arrow-right"></i></div>
+        <div class="step"><div class="n">CÓ HIT</div><div class="t">dùng luôn</div><div class="d">không gọi LLM</div></div>
+        <div class="arrow"><i class="ph ph-arrow-bend-down-right"></i></div>
+        <div class="step"><div class="n">TRƯỢT</div><div class="t">LLM closed-set</div><div class="d">chỉ khi ENTITY_PREFILTER_LLM=true</div></div>
+      </div>
+      <div class="mono" style="margin-top:11px"><span class="c"># _llm_detect_entities : closed-set, không bịa</span>
+&lt;menu&gt;  {allowlist canonical}  &lt;/menu&gt;          <span class="c"># danh sách cho sẵn</span>
+&lt;query&gt; "{câu hỏi người dùng}" &lt;/query&gt;
+→ LLM trả JSON array các tên <span class="k">CHÍNH XÁC trong menu</span> mà query nhắc tới
+→ <span class="k">validate</span> lại theo allowlist  <span class="c"># tên ngoài menu bị loại</span></div>
+      <ul style="margin-top:10px">
+        <li><b>Bắt diễn đạt lạ</b> mà từ điển không khớp: <code>"Vinfast 8" → "VF 8"</code> · <code>"SUV điện 7 chỗ" → "VF 9"</code>. Không liên quan thì trả <code>[]</code>.</li>
+        <li><b>Closed-set là chốt an toàn:</b> LLM không thể tạo filter ngoài 33 canonical đã biết. Kết quả <code>lru_cache</code> theo query; có trace span <code>entity-prefilter-llm</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 12 BOOST -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-trend-up"></i></div>
+    <div class="ksmall">Áp dụng metadata · <code>document_type · fetched_at · deduplication</code> · Hoàng</div>
+    <h2>Soft boosting</h2>
+    <p class="sub">Nhân điểm sau fusion, trước rerank (per-query).</p>
+    <div class="body">
+      <div class="flow">
+        <div class="step"><div class="t">document_type</div><div class="d">ma trận query-aware</div></div>
+        <div class="arrow"><i class="ph ph-x"></i></div>
+        <div class="step"><div class="t">deduplication</div><div class="d">bản trùng ×0.8</div></div>
+        <div class="arrow"><i class="ph ph-equals"></i></div>
+        <div class="step"><div class="t">factor</div><div class="d">clamp [0.7 - 1.4]</div></div>
+      </div>
+      <ul style="margin-top:13px">
+        <li><b>Điều kiện:</b> <code>METADATA_BOOSTING_ENABLED</code> + <code>AGENT_MODE=true</code>.</li>
+        <li><b>Mới:</b> thêm trace span <code>metadata-boosting</code> lên LangSmith (factor min/max, top có đổi).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 13 BOOST method -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-function"></i></div>
+    <div class="ksmall">Phương pháp · boosting</div>
+    <h2>Công thức 2 hệ số</h2>
+    <div class="body">
+      <div class="formula">score' = norm(score) × clamp( f<sub>doctype</sub> × f<sub>dedup</sub> , 0.7, 1.4 )</div>
+      <ul style="margin-top:6px">
+        <li><b>f<sub>doctype</sub>:</b> ma trận <code>query_type → document_type</code> (query "faq" ưu chunk faq ×1.3, manual ×1.1, lệch loại ×0.85); query "unknown" dùng hệ số mặc định.</li>
+        <li><b>f<sub>dedup</sub>:</b> chunk <code>duplicate_candidate</code> ×0.8 (đẩy bản trùng xuống).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 14 QUESTION -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-chats-circle"></i></div>
+    <div class="ksmall">Áp dụng metadata · <code>questions</code> · Huy</div>
+    <h2>Question-index: đường thứ 3</h2>
+    <p class="sub">Khớp câu hỏi người dùng với câu hỏi của chunk (question ↔ question), fuse RRF.</p>
+    <div class="body">
+      <div class="grid">
+        <div class="card2"><h3><i class="ph ph-vector-three"></i> Collection phụ Qdrant (ưu tiên)</h3><p><code>{collection}_questions</code>: 1 point / câu hỏi, dense-embed, payload denormalize chunk cha. Bền, gần như 0 RAM, embed 1 lần. <span class="tag">build_question_index.py</span><span class="tag">5.803 câu</span></p></div>
+        <div class="card2"><h3><i class="ph ph-cpu"></i> In-memory fallback</h3><p>Chưa build thì scroll + embed toàn collection lần đầu rồi cache. Trace <code>source=qdrant_native|in_memory</code>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 QUESTION method -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-graph"></i></div>
+    <div class="ksmall">Phương pháp · question-index</div>
+    <h2>Cách hoạt động</h2>
+    <div class="body">
+      <div class="mono"><span class="c"># build</span>  mỗi chunk → ≤ 4 questions → embed → point{ parent_chunk_id, text, q }
+<span class="c"># query</span>  q_vec = <span class="k">reuse</span> dense vector của hybrid   <span class="c"># embed 1 lần dùng cho cả 2</span>
+        hits = search(questions_collection, q_vec)
+        gom theo parent → <span class="k">max-score</span>/chunk → cắt <span class="v">QUESTION_MIN_SCORE</span>
+        results(retriever=<span class="v">"question"</span>) → <span class="k">rrf_fusion_nway</span>([hybrid, question])</div>
+      <ul style="margin-top:11px">
+        <li><b>Dedup max-score:</b> nhiều câu hỏi trỏ cùng 1 chunk thì giữ điểm cao nhất.</li>
+        <li><b>RRF:</b> hợp nhất theo thứ hạng <code>1 / (k + rank)</code>, k = 60, nên các thang điểm khác nhau vẫn fuse công bằng.</li>
+        <li><b>Tối ưu:</b> query chỉ embed 1 lần, dùng chung cho hybrid và question-index.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 16 BM25 -->
+  <section class="slide">
+    <div class="ico"><i class="ph ph-text-aa"></i></div>
+    <div class="ksmall">Áp dụng metadata · <code>keywords</code> · BM25</div>
+    <h2>Bơm keywords vào sparse</h2>
+    <div class="body">
+      <ul>
+        <li><b>Ý tưởng:</b> nối <code>keywords</code> (LLM) vào cuối text mà sparse index bao phủ, tăng tín hiệu lexical; không đụng dense, không đụng text gốc.</li>
+        <li><b>Với Qdrant là cờ lúc INDEX:</b> sparse vector lưu sẵn nên đổi <code>RETRIEVAL_BM25_AUGMENT_KEYWORDS</code> phải chạy <code>reupsert_sparse.py</code> (<code>update_vectors</code> sparse-only, không re-embed dense).</li>
+      </ul>
+      <div class="formula" style="margin-top:6px">_bm25_index_text(chunk) = chunk.text + "\n" + join(keywords)</div>
+    </div>
+  </section>
+
+  <!-- Q&A -->
+  <section class="slide">
+    <div style="height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:16px">
+      <div class="ico" style="width:66px;height:66px;font-size:33px;margin:0"><i class="ph ph-chats-teardrop"></i></div>
+      <div>
+        <div class="ksmall" style="display:block">Cảm ơn đã lắng nghe</div>
+        <h1 style="font-size:62px;margin-top:6px">Hỏi &amp; Đáp</h1>
+      </div>
+      <p class="sub" style="max-width:64ch">Metadata: sinh (rule-based + LLM) → lưu (Neon · Qdrant · S3) → áp dụng (hard filter · question-index · BM25 · boosting).</p>
+      <div class="who" style="justify-content:center">
+        <span class="chip k">Dũng · Tú</span>
+        <span class="chip k">Nguyên · Huy</span>
+        <span class="chip k">Vinh · Hoàng</span>
+      </div>
+    </div>
+  </section>
+
+</div></div>
+
+<div class="hud"><div class="dots" id="dots"></div></div>
+<div class="nav">Dùng phím ← → để chuyển slide · F: toàn màn hình</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const dots=document.getElementById('dots');
+  const prog=document.getElementById('prog');
+  const count=document.getElementById('count');
+  let i=0;
+  slides.forEach((_,n)=>{const d=document.createElement('button');d.className='dot';d.setAttribute('aria-label','Slide '+(n+1));d.onclick=()=>go(n);dots.appendChild(d);});
+  const dotEls=[...dots.children];
+  function render(){
+    slides.forEach((s,n)=>s.classList.toggle('active',n===i));
+    dotEls.forEach((d,n)=>d.classList.toggle('on',n===i));
+    prog.style.width=(i/(slides.length-1)*100)+'%';
+    count.textContent=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+  }
+  function go(n){i=Math.max(0,Math.min(slides.length-1,n));render();}
+  function next(){go(i+1)} function prev(){go(i-1)}
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){e.preventDefault();next();}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prev();}
+    else if(e.key==='Home'){go(0)} else if(e.key==='End'){go(slides.length-1)}
+    else if(e.key.toLowerCase()==='f'){if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();}
+  });
+  let sx=0;addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>50)dx<0?next():prev();},{passive:true});
+  render();
+</script>
+</body>
+</html>

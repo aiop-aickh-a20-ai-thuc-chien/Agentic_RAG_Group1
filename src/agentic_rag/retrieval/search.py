@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Iterable
 from functools import lru_cache
 from hashlib import sha256
+from threading import Lock
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
@@ -102,6 +103,20 @@ MAX_QUESTIONS_PER_CHUNK = 4
 def _question_index_enabled() -> bool:
     """Master toggle for the question-index retriever (default OFF → baseline)."""
     return os.getenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false").lower() == "true"
+
+
+def _question_index_collection() -> str:
+    """Name of the auxiliary Qdrant collection holding per-question embeddings.
+
+    Defaults to ``{main_collection}_questions``; override with
+    ``QUESTION_INDEX_COLLECTION``. When this collection exists, the question-index
+    retriever queries it directly (persistent, no in-memory scroll/embed);
+    otherwise it falls back to the in-memory index.
+    """
+    explicit = os.getenv("QUESTION_INDEX_COLLECTION", "").strip()
+    if explicit:
+        return explicit
+    return f"{_configured_qdrant_collection()}_questions"
 
 
 def _question_min_score() -> float | None:
@@ -510,11 +525,17 @@ def _configured_qdrant_collection() -> str:
     return _vector_store_config().collection
 
 
-def _entity_prefilter_enabled() -> bool:
-    """Entity pre-filter is on unless ENTITY_PREFILTER_ENABLED is a falsy string."""
+def _hard_filter_enabled() -> bool:
+    """Single on/off switch for the entity hard-filter (default ON).
+
+    Set ``HARD_FILTER_ENABLED`` to a falsy string to disable filtering entirely.
+    Gated at the Qdrant chokepoint (:func:`_qdrant_combined_filter`) so it applies
+    to every path — including the agent path where entities are LLM-extracted in
+    ``preprocess_query`` and never pass through :func:`_entity_prefilter_for`.
+    """
     import os
 
-    return os.getenv("ENTITY_PREFILTER_ENABLED", "true").strip().lower() not in {
+    return os.getenv("HARD_FILTER_ENABLED", "true").strip().lower() not in {
         "0",
         "false",
         "no",
@@ -602,7 +623,7 @@ def _entity_prefilter_for(query: str) -> list[str] | None:
     Dictionary lookup first (free, catches direct mentions). If that finds nothing
     and ENTITY_PREFILTER_LLM is on, an LLM maps a paraphrased query onto the menu.
     """
-    if not _entity_prefilter_enabled():
+    if not _hard_filter_enabled():
         return None
     from agentic_rag.ingestion.metadata import detect_in_query
 
@@ -616,6 +637,279 @@ def _entity_prefilter_for(query: str) -> list[str] | None:
 def _trace_entity_prefilter(summary: dict[str, object]) -> dict[str, object]:
     """Emit the entity pre-filter decision to LangSmith (entities, count, fallback)."""
     return summary
+
+
+@_ls_traceable(name="question-index", run_type="retriever")
+def _trace_question_index(summary: dict[str, object]) -> dict[str, object]:
+    """Emit the question-index retriever decision to LangSmith.
+
+    A span only appears when ``RETRIEVAL_QUESTION_INDEX_ENABLED`` is on, so an
+    absent span = feature off. Carries the inputs/outputs needed to judge whether
+    it helped: indexed chunk count, how many question matches survived
+    ``QUESTION_MIN_SCORE``, and the hybrid→fused result counts.
+    """
+    return summary
+
+
+def _fusion_method() -> str:
+    """Active fusion strategy (question-index only fuses under classic RRF)."""
+    return os.getenv("FUSION_METHOD", "rrf").strip().lower()
+
+
+# One in-memory question Store per Qdrant collection. Built by scrolling the whole
+# collection once (chunk questions only change on re-ingest), so the first query
+# with RETRIEVAL_QUESTION_INDEX_ENABLED pays the build cost and later queries reuse
+# it. Cleared on process restart.
+_QDRANT_QUESTION_STORE: dict[str, Any] = {}
+_QDRANT_QUESTION_STORE_LOCK = Lock()
+
+
+def _qdrant_question_store(client: Any, collection: str) -> Any:
+    """Return a cached in-memory :class:`Store` over the collection's chunks.
+
+    Scrolls every payload once and rebuilds ``Chunk`` objects (carrying their
+    ``questions`` metadata) so :meth:`Store.question_search` can match the query
+    against chunk questions — the question-index retriever, wired into the Qdrant
+    path. Expensive on first call (loads + embeds all questions); cached after.
+    """
+    cached = _QDRANT_QUESTION_STORE.get(collection)
+    if cached is not None:
+        return cached
+    with _QDRANT_QUESTION_STORE_LOCK:
+        cached = _QDRANT_QUESTION_STORE.get(collection)
+        if cached is not None:
+            return cached
+        chunks: list[Chunk] = []
+        offset = None
+        while True:
+            batch, offset = client.scroll(
+                collection_name=collection,
+                limit=250,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in batch:
+                payload = getattr(point, "payload", None)
+                if isinstance(payload, dict):
+                    chunks.append(_chunk_from_qdrant_payload(payload))
+            if offset is None:
+                break
+        store = Store(chunks)
+        _QDRANT_QUESTION_STORE[collection] = store
+        return store
+
+
+def _qdrant_collection_exists(client: Any, collection: str) -> bool:
+    """True if ``collection`` exists in Qdrant (handles client API variants)."""
+    exists = getattr(client, "collection_exists", None)
+    if callable(exists):
+        with contextlib.suppress(Exception):
+            return bool(exists(collection))
+    get_collection = getattr(client, "get_collection", None)
+    if not callable(get_collection):
+        return False
+    try:
+        get_collection(collection)
+        return True
+    except Exception:
+        return False
+
+
+def _question_point_id(parent_chunk_id: str, question_index: int) -> str:
+    """Deterministic id for one question point (stable across re-runs)."""
+    return str(uuid5(NAMESPACE_URL, f"question:{parent_chunk_id}::{question_index}"))
+
+
+def _ensure_question_collection(
+    *, client: Any, collection: str, embedding_profile: EmbeddingProfile, models: Any
+) -> None:
+    """Create the dense-only auxiliary questions collection if missing (idempotent)."""
+    if _qdrant_collection_exists(client, collection):
+        return
+    create_collection = getattr(client, "create_collection", None)
+    if not callable(create_collection):
+        raise RuntimeError("Qdrant client must implement create_collection.")
+    create_collection(
+        collection_name=collection,
+        vectors_config={
+            "dense": models.VectorParams(
+                size=embedding_profile.dimensions,
+                distance=models.Distance.COSINE,
+            )
+        },
+    )
+
+
+def upsert_question_index(
+    chunks: list[Chunk] | None = None, *, batch_size: int = 128
+) -> dict[str, object]:
+    """Build/refresh the auxiliary Qdrant collection of per-question embeddings.
+
+    One point per chunk question, dense-embedded. The payload carries the parent
+    chunk (``chunk_id``/``text``/``metadata``) so a query-time hit reconstructs the
+    parent chunk directly — no second lookup into the main collection. Persistent,
+    so unlike the in-memory index it survives restarts and costs the embedding pass
+    only once.
+
+    ``chunks=None`` scrolls the main collection and rebuilds chunks from payloads.
+    Idempotent: point ids are deterministic, so re-running overwrites in place.
+    """
+    config = _vector_store_config()
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
+
+    client = _qdrant_client(config)
+    questions_collection = _question_index_collection()
+
+    if chunks is None:
+        chunks = []
+        offset = None
+        while True:
+            batch, offset = client.scroll(
+                collection_name=config.collection,
+                limit=250,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in batch:
+                payload = getattr(point, "payload", None)
+                if isinstance(payload, dict):
+                    chunks.append(_chunk_from_qdrant_payload(payload))
+            if offset is None:
+                break
+
+    pairs: list[tuple[Chunk, int, str]] = []
+    for chunk in chunks:
+        questions = chunk.metadata.get("questions")
+        if not isinstance(questions, (list, tuple)):
+            continue
+        for q_index, question in enumerate(list(questions)[:MAX_QUESTIONS_PER_CHUNK]):
+            text = str(question).strip()
+            if text:
+                pairs.append((chunk, q_index, text))
+
+    if not pairs:
+        return {
+            "enabled": True,
+            "questions_collection": questions_collection,
+            "indexed_questions": 0,
+        }
+
+    embedding = _configured_embedding()
+    embedding_config = resolve_embedding_config()
+    indexed = 0
+    ensured = False
+    for start in range(0, len(pairs), batch_size):
+        batch_pairs = pairs[start : start + batch_size]
+        vectors = _embed_documents(embedding, [text for _, _, text in batch_pairs])
+        if not ensured:
+            embedding_profile = _validate_embedding_vectors(vectors, config=embedding_config)
+            _ensure_question_collection(
+                client=client,
+                collection=questions_collection,
+                embedding_profile=embedding_profile,
+                models=models,
+            )
+            ensured = True
+        points = [
+            models.PointStruct(
+                id=_question_point_id(chunk.chunk_id, q_index),
+                vector={"dense": vector},
+                payload={
+                    "chunk_id": chunk.chunk_id,
+                    "text": chunk.text,
+                    "metadata": dict(chunk.metadata),
+                    "question_text": text,
+                },
+            )
+            for (chunk, q_index, text), vector in zip(batch_pairs, vectors, strict=True)
+        ]
+        client.upsert(collection_name=questions_collection, points=points)
+        indexed += len(points)
+
+    return {
+        "enabled": True,
+        "questions_collection": questions_collection,
+        "indexed_questions": indexed,
+    }
+
+
+def question_index_status() -> dict[str, object]:
+    """Report whether the auxiliary question collection exists and its point count."""
+    config = _vector_store_config()
+    collection = _question_index_collection()
+    if config.provider != "qdrant" or config.url is None:
+        return {"enabled": False, "exists": False, "count": 0, "collection": collection}
+    client = _qdrant_client(config)
+    if not _qdrant_collection_exists(client, collection):
+        return {"enabled": True, "exists": False, "count": 0, "collection": collection}
+    count = 0
+    with contextlib.suppress(Exception):
+        info = client.get_collection(collection)
+        count = int(getattr(info, "points_count", 0) or 0)
+    return {"enabled": True, "exists": True, "count": count, "collection": collection}
+
+
+def _qdrant_native_question_search(
+    client: Any, query: str, top_k: int, *, dense_vector: list[float] | None = None
+) -> list[SearchResult] | None:
+    """Query the auxiliary questions collection; ``None`` if it does not exist.
+
+    Maps each question hit back to its parent chunk (dedup to the best score per
+    parent), applies ``QUESTION_MIN_SCORE``, and rebuilds parent chunks from the
+    denormalized payload — so no second lookup into the main collection.
+
+    ``dense_vector`` lets the caller pass the query embedding already computed for
+    the main hybrid search, so the query is embedded once and reused for both (the
+    questions collection uses the same embedding model as the main collection).
+    """
+    collection = _question_index_collection()
+    if not _qdrant_collection_exists(client, collection):
+        return None
+    if top_k <= 0:
+        return []
+    if dense_vector is None:
+        dense_vector = _embed_query(_configured_embedding(), query)
+    response = client.query_points(
+        collection_name=collection,
+        query=dense_vector,
+        using="dense",
+        limit=top_k * MAX_QUESTIONS_PER_CHUNK,
+        with_payload=True,
+    )
+    raw_points = getattr(response, "points", response)
+    if not isinstance(raw_points, Iterable):
+        return []
+    min_score = _question_min_score()
+    best_by_parent: dict[str, tuple[float, dict[str, object]]] = {}
+    for point in raw_points:
+        payload = getattr(point, "payload", {})
+        if not isinstance(payload, dict):
+            continue
+        score = float(getattr(point, "score", 0.0))
+        if min_score is not None and score < min_score:
+            continue
+        parent_id = str(payload.get("chunk_id") or "")
+        if not parent_id:
+            continue
+        if parent_id not in best_by_parent or score > best_by_parent[parent_id][0]:
+            best_by_parent[parent_id] = (score, payload)
+    ranked = sorted(best_by_parent.values(), key=lambda item: item[0], reverse=True)[:top_k]
+    return [
+        SearchResult(
+            chunk=_chunk_from_qdrant_payload(payload),
+            score=score,
+            rank=rank,
+            retriever="question",
+        )
+        for rank, (score, payload) in enumerate(ranked, start=1)
+    ]
 
 
 def qdrant_hybrid_search(
@@ -702,6 +996,51 @@ def qdrant_hybrid_search(
                 "entities": entity_filter,
                 "result_count": len(results),
                 "fallback_unfiltered": used_fallback,
+            }
+        )
+    # Question-index retriever as a 3rd RRF path (off by default). Matches the
+    # query against each chunk's questions and fuses the parent chunks with the
+    # hybrid results. Only under classic RRF, mirroring the linear path. Emits a
+    # "question-index" span to LangSmith whenever the toggle is on.
+    fusion_method = _fusion_method()
+    if _question_index_enabled() and fusion_method == "rrf":
+        hybrid_count = len(results)
+        question_results: list[SearchResult] = []
+        store_chunks = 0
+        source = "qdrant_native"
+        error: str | None = None
+        try:
+            # Prefer the persistent auxiliary collection; fall back to the
+            # in-memory index when it has not been built yet. Reuse the query
+            # embedding already computed for the hybrid search above.
+            native = _qdrant_native_question_search(
+                client, query, top_k, dense_vector=dense_vector
+            )
+            if native is None:
+                source = "in_memory"
+                store = _qdrant_question_store(client, collection)
+                store_chunks = len(store._chunks)
+                question_results = store.question_search(query, top_k)
+            else:
+                question_results = native
+        except Exception as exc:  # pragma: no cover - defensive, never blank the answer
+            error = repr(exc)
+        if question_results:
+            from agentic_rag.retrieval.fusion_strategies import rrf_fusion_nway
+
+            results = rrf_fusion_nway([results, question_results], top_k=top_k)
+        _trace_question_index(
+            {
+                "query": query,
+                "enabled": True,
+                "source": source,
+                "fusion_method": fusion_method,
+                "min_score": _question_min_score(),
+                "store_chunks": store_chunks,
+                "question_hits": len(question_results),
+                "hybrid_count": hybrid_count,
+                "fused_count": len(results),
+                "error": error,
             }
         )
     return results
@@ -845,6 +1184,68 @@ def delete_all_qdrant_points() -> dict[str, object]:
     }
 
 
+def delete_qdrant_document_questions(document_id: str) -> dict[str, object]:
+    """Delete one document's points from the auxiliary question collection.
+
+    Question points denormalize the parent chunk, so they must be removed when the
+    document is deleted — otherwise a query hit would surface stale/deleted content.
+    Best-effort: a missing side collection is a no-op (returns ``skipped``).
+    """
+    config = _vector_store_config()
+    if config.provider != "qdrant":
+        return {"enabled": False, "vector_store": config.provider}
+    client = _qdrant_client(config)
+    collection = _question_index_collection()
+    if not _qdrant_collection_exists(client, collection):
+        return {"enabled": True, "questions_collection": collection, "skipped": "absent"}
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
+    delete = getattr(client, "delete", None)
+    if not callable(delete):
+        raise RuntimeError("Qdrant client must implement delete.")
+    selector = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="metadata.document_id", match=models.MatchValue(value=document_id)
+            )
+        ]
+    )
+    try:
+        delete(
+            collection_name=collection,
+            points_selector=models.FilterSelector(filter=selector),
+            wait=True,
+        )
+    except Exception as exc:
+        if not _is_qdrant_not_found(exc):
+            raise
+    return {
+        "enabled": True,
+        "questions_collection": collection,
+        "document_id": document_id,
+        "deleted": True,
+    }
+
+
+def delete_all_qdrant_questions() -> dict[str, object]:
+    """Delete every point in the auxiliary question collection (best-effort)."""
+    config = _vector_store_config()
+    if config.provider != "qdrant":
+        return {"enabled": False, "vector_store": config.provider}
+    client = _qdrant_client(config)
+    collection = _question_index_collection()
+    if not _qdrant_collection_exists(client, collection):
+        return {"enabled": True, "questions_collection": collection, "skipped": "absent"}
+    try:
+        _delete_qdrant_points(client=client, collection=collection, document_ids=None)
+    except Exception as exc:
+        if not _is_qdrant_not_found(exc):
+            raise
+    return {"enabled": True, "questions_collection": collection, "deleted": True}
+
+
 def update_qdrant_payload(chunks: list[Chunk]) -> dict[str, object]:
     """Update only the payload metadata of existing Qdrant points (no re-embed).
 
@@ -885,6 +1286,75 @@ def update_qdrant_payload(chunks: list[Chunk]) -> dict[str, object]:
         "vector_store": "qdrant",
         "updated_points": updated,
         "collection": config.collection,
+    }
+
+
+def reupsert_qdrant_sparse(batch_size: int = 250) -> dict[str, object]:
+    """Recompute and overwrite every point's sparse vector (no dense re-embed).
+
+    The BM25 keyword augmentation (``RETRIEVAL_BM25_AUGMENT_KEYWORDS``) only
+    changes the *document-side* sparse vector, which Qdrant stores at ingest time.
+    Toggling the flag has no effect on an existing collection until the sparse
+    vectors are rebuilt — that is what this does: scroll every point, recompute
+    ``_sparse_vector(_bm25_index_text(chunk))`` (honouring the flag's current
+    value), and ``update_vectors`` only the ``sparse`` named vector. Dense vectors
+    and payloads are left untouched.
+
+    Run with ``RETRIEVAL_BM25_AUGMENT_KEYWORDS=true`` to switch augmentation ON for
+    the collection, or with it ``false`` to revert to text-only sparse.
+    """
+
+    config = _vector_store_config()
+    if config.provider != "qdrant" or config.url is None:
+        raise ValueError("VECTOR_STORE_PROVIDER=qdrant requires VECTOR_STORE_URL.")
+    try:
+        from qdrant_client import models
+    except ImportError as exc:
+        raise RuntimeError("VECTOR_STORE_PROVIDER=qdrant requires qdrant-client.") from exc
+
+    client = _qdrant_client(config)
+    collection = config.collection
+    updated = 0
+    offset = None
+    while True:
+        batch, offset = client.scroll(
+            collection_name=collection,
+            limit=batch_size,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        point_vectors = []
+        for point in batch:
+            payload = getattr(point, "payload", None)
+            if not isinstance(payload, dict):
+                continue
+            chunk = _chunk_from_qdrant_payload(payload)
+            sparse_vector = _sparse_vector(_bm25_index_text(chunk))
+            point_vectors.append(
+                models.PointVectors(
+                    id=point.id,
+                    vector={
+                        "sparse": models.SparseVector(
+                            indices=[int(v) for v in sparse_vector["indices"]],
+                            values=[float(v) for v in sparse_vector["values"]],
+                        )
+                    },
+                )
+            )
+        if point_vectors:
+            client.update_vectors(
+                collection_name=collection, points=point_vectors, wait=True
+            )
+            updated += len(point_vectors)
+        if offset is None:
+            break
+    return {
+        "enabled": True,
+        "vector_store": "qdrant",
+        "updated_points": updated,
+        "collection": collection,
+        "augment_keywords": _bm25_augment_keywords(),
     }
 
 
@@ -1346,9 +1816,12 @@ def _qdrant_combined_filter(
             )
         )
 
-    if entity_filter:
+    if entity_filter and _hard_filter_enabled():
         # Union (OR) across canonical entities: a chunk matches if it carries ANY
         # of them. Pre-filter only removes chunks about none of the entities.
+        # Gated by the master kill-switch so entities extracted upstream (agent
+        # path: LLM-extracted in preprocess_query, bypassing _entity_prefilter_for)
+        # also stop filtering when HARD_FILTER_ENABLED is off.
         must.append(
             models.FieldCondition(
                 key=_QDRANT_ENTITIES_CANONICAL_FIELD,

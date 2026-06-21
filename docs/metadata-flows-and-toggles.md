@@ -38,7 +38,7 @@ Ký hiệu giai đoạn: `[P]` rule-based parser · `[L]` LLM Extract · `[S]` s
 | ENV | Default | Tác dụng | Luồng | Trạng thái |
 |---|---|---|---|---|
 | `METADATA_BOOSTING_ENABLED` | `true` | bật/tắt **soft boosting** (document_type × recency × dedup) | agent path | develop |
-| `ENTITY_PREFILTER_ENABLED` | `true` | bật/tắt **hard filter** entity | retrieval (Qdrant) | develop |
+| `HARD_FILTER_ENABLED` | `true` | bật/tắt **hard filter** entity (công tắc on/off duy nhất, gate ở chokepoint → mọi path) | retrieval (Qdrant) | develop |
 | `ENTITY_PREFILTER_LLM` | `false` | LLM map query→canonical khi từ điển không bắt được | preprocess | develop |
 | `VECTOR_STORE_PROVIDER` | `turbovec` | **phải = `qdrant`** thì hard filter mới áp | retrieval | develop |
 | `AGENT_MODE` | `false` | **phải = `true`** thì boosting mới chạy | pipeline | develop |
@@ -65,7 +65,7 @@ Ký hiệu giai đoạn: `[P]` rule-based parser · `[L]` LLM Extract · `[S]` s
 - **Query:** `detect_in_query()` (word-boundary, ≥3 ký tự, allowlist) → `filter_entities` →
   Qdrant `MatchAny(any=[canonicals])` trên `metadata.entities_canonical` (union/OR).
 - **Fallback:** filter ra 0 kết quả → tìm lại KHÔNG filter (không bao giờ làm trống đáp án).
-- **Điều kiện active:** `ENTITY_PREFILTER_ENABLED=true` **AND** `VECTOR_STORE_PROVIDER=qdrant`
+- **Điều kiện active:** `HARD_FILTER_ENABLED=true` **AND** `VECTOR_STORE_PROVIDER=qdrant`
   **AND** đã chạy backfill. Thiếu bất kỳ điều nào → không lọc.
 
 ### 3.2 SOFT BOOSTING (`boosting.py`, PR90)
@@ -80,14 +80,30 @@ Ký hiệu giai đoạn: `[P]` rule-based parser · `[L]` LLM Extract · `[S]` s
 - Nối `keywords` vào **CUỐI** text mà sparse index bao phủ (BM25Okapi in-memory + Qdrant
   sparse vector). **Không** đụng dense embedding, **không** đụng text gốc trong kho.
 - **Điều kiện active:** `RETRIEVAL_BM25_AUGMENT_KEYWORDS=true`. BM25 in-memory nhận ngay;
-  Qdrant sparse cần re-upsert (sparse-only) để có hiệu lực.
+  **Qdrant**: đây là cờ *lúc index* — đổi xong phải chạy `scripts/reupsert_sparse.py`
+  (`reupsert_qdrant_sparse()`, update-vectors sparse-only, không re-embed dense) thì collection
+  hiện có mới có hiệu lực. Không thể bật/tắt per-query vì query không biết keywords của chunk.
 
 ### 3.4 Question-index retriever (MỚI — `feature/question-index-retrieval`)
 - "Dense search thứ 2": index là **các câu hỏi** của chunk; query↔question matching →
   trả **chunk cha** → fuse làm **đường thứ 3** trong RRF. In-memory, không re-embed kho chính.
 - Dedup nhiều câu hỏi→1 chunk (max score); cắt `QUESTION_MIN_SCORE`.
-- **Điều kiện active:** `RETRIEVAL_QUESTION_INDEX_ENABLED=true` **AND** `FUSION_METHOD=rrf`
-  **AND** linear path (provider `_fuse_results`). **Chưa** wire cho nhánh Qdrant lẫn agent.
+- **Điều kiện active:** `RETRIEVAL_QUESTION_INDEX_ENABLED=true` **AND** `FUSION_METHOD=rrf`.
+  Đã wire cho **cả 3 path**: linear (`_fuse_results`), **Qdrant** (`qdrant_hybrid_search`,
+  fuse `rrf_fusion_nway`), và **agent** (đã sửa bước tách giữ `retriever != "dense"`).
+- **Hai backend cho index câu hỏi (Qdrant path tự chọn):**
+  1. **Collection phụ trên Qdrant** (ưu tiên, production): `{collection}_questions` —
+     1 point / câu hỏi, dense-embed, payload denormalize chunk cha (rebuild không cần lookup
+     lần 2). Build bằng `scripts/build_question_index.py` (`upsert_question_index()`). Bền,
+     ~0 RAM, embed **1 lần**, không mất khi restart. Override tên: `QUESTION_INDEX_COLLECTION`.
+  2. **In-memory fallback**: khi collection phụ chưa tồn tại. Scroll + embed toàn collection
+     lần query đầu rồi cache tới khi restart (tốn RAM + chậm lần đầu).
+  Trace `question-index` có `source = qdrant_native | in_memory` để biết đang dùng cái nào.
+- **Đồng bộ tự động:** khi `RETRIEVAL_QUESTION_INDEX_ENABLED=true`, ingest tài liệu mới sẽ tự
+  upsert question points (`_sync_question_index_safely`, best-effort không chặn ingest). Xóa
+  tài liệu sẽ tự xóa question points của nó (`delete_qdrant_document_questions`), clear-all sẽ
+  xóa toàn bộ (`delete_all_qdrant_questions`) — tránh point mồ côi trả nội dung đã xóa. Cờ tắt
+  lúc ingest thì không sync; bật lại + chạy `build_question_index.py` để backfill data cũ.
 
 ### 3.5 quality_score (MỚI — `feature/metadata-topic-quality`)
 - LLM Extract sinh 0.0–1.0 + clamp. `apply_extracted_metadata` ghi vào chunk.
@@ -103,10 +119,10 @@ phần lớn **không active**.
 
 | Luồng | Cờ riêng | Bị chặn bởi | Active ở config MẶC ĐỊNH? |
 |---|---|---|---|
-| Entity hard-filter | `ENTITY_PREFILTER_ENABLED=true` | cần `qdrant` + đã backfill | ❌ (default `turbovec`) |
+| Entity hard-filter | `HARD_FILTER_ENABLED=true` | cần `qdrant` + đã backfill | ❌ (default `turbovec`) |
 | Soft boosting | `METADATA_BOOSTING_ENABLED=true` | cần `AGENT_MODE=true` | ❌ (default `false`) |
-| BM25 keyword aug | off | toggle off + chưa merge | ❌ |
-| Question-index | off | toggle off + chưa merge | ❌ |
+| BM25 keyword aug | `RETRIEVAL_BM25_AUGMENT_KEYWORDS=true` | Qdrant cần chạy `reupsert_sparse.py` | ❌ (default off) |
+| Question-index | `RETRIEVAL_QUESTION_INDEX_ENABLED=true` | cần `FUSION_METHOD=rrf` (đã wire Qdrant+agent) | ❌ (default off) |
 | quality_score | (sinh nếu có LLM ingest) | không consumer | ❌ (chưa ai đọc) |
 | Answer-side page/price/model | luôn | — | ✅ (vào evidence prompt) |
 
@@ -120,11 +136,12 @@ phần lớn **không active**.
    entity-filter và boosting mới thực sự hoạt động — lúc đó hạ tầng đã sẵn sàng
    (map 1036 forms, allowlist 33 canonical).
 
-### Lỗi tương tác cần biết (chưa active nhưng sẽ cắn khi bật)
-- **Question-index ↔ agent path:** agent (`_search_via_provider`) tách kết quả fused theo
-  `retriever == "bm25"/"dense"` rồi fuse lại. Kết quả tag `retriever="question"` **rơi rụng**
-  ở bước tách này. ⇒ Question-index hiện chỉ đúng ở **linear path**; muốn dùng ở agent path
-  phải sửa bước tách (đưa "question" vào danh sách giữ lại). Hiện vô hại vì cả 2 cờ đều off.
+### Lỗi tương tác (ĐÃ FIX)
+- **Question-index ↔ agent path:** trước đây agent (`_search_via_provider`) tách kết quả theo
+  `retriever == "bm25"/"dense"` → kết quả `retriever="question"` rơi rụng. **Đã sửa**: giờ giữ
+  mọi kết quả `retriever != "dense"` vào bucket đầu nên "question"/"hybrid" sống sót qua fusion.
+- **Question-index ↔ Qdrant path:** trước đây `retrieve()` return sớm ở nhánh Qdrant nên không
+  bao giờ chạy `question_search`. **Đã sửa**: fuse trực tiếp trong `qdrant_hybrid_search`.
 
 ---
 
