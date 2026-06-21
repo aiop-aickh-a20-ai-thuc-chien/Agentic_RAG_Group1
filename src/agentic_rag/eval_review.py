@@ -831,9 +831,10 @@ def get_question_index_status() -> QuestionIndexStatus:
             build_status="error",
             build_message=str(exc),
         )
+    raw_count = status.get("count")
     return QuestionIndexStatus(
         exists=bool(status.get("exists")),
-        count=int(status.get("count") or 0),
+        count=raw_count if isinstance(raw_count, int) else 0,
         collection=str(status.get("collection") or ""),
         build_status=_qi_job["status"],
         build_message=_qi_job["message"],
@@ -854,7 +855,8 @@ def build_question_index() -> dict[str, Any]:
             from agentic_rag.retrieval.search import upsert_question_index
 
             result = upsert_question_index()
-            indexed = int(result.get("indexed_questions") or 0)
+            raw_indexed = result.get("indexed_questions")
+            indexed = raw_indexed if isinstance(raw_indexed, int) else 0
             _qi_job = {
                 "status": "done",
                 "message": f"Đã build {indexed} câu hỏi.",

@@ -31,6 +31,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 try:
     from agentic_rag.runtime_env import load_local_env
+
     load_local_env()
 except Exception:
     pass
@@ -60,7 +61,9 @@ def _load_data() -> pd.DataFrame:
             WHERE metadata->'entities' IS NOT NULL
             """
         ).fetchall()
-    return pd.DataFrame(rows, columns=["chunk_id", "document_type", "entities", "keywords", "text_preview"])
+    return pd.DataFrame(
+        rows, columns=["chunk_id", "document_type", "entities", "keywords", "text_preview"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +78,7 @@ def section_frequency(df: pd.DataFrame) -> list[str]:
                 counter[str(e).strip()] += 1
 
     top = counter.most_common(50)
-    rows = [{"entity": e, "count": c, "pct_chunks": f"{100*c/len(df):.1f}%"} for e, c in top]
+    rows = [{"entity": e, "count": c, "pct_chunks": f"{100 * c / len(df):.1f}%"} for e, c in top]
     return rows
 
 
@@ -128,11 +131,13 @@ def section_clustering(df: pd.DataFrame, threshold: float = 0.75) -> list[dict]:
     results = []
     for cluster in sorted(clusters, key=lambda c: -sum(counter[s] for s in c)):
         canonical = max(cluster, key=lambda s: counter[s])  # most frequent = canonical
-        results.append({
-            "canonical (most frequent)": canonical,
-            "variants": " | ".join(s for s in cluster if s != canonical),
-            "total_occurrences": sum(counter[s] for s in cluster),
-        })
+        results.append(
+            {
+                "canonical (most frequent)": canonical,
+                "variants": " | ".join(s for s in cluster if s != canonical),
+                "total_occurrences": sum(counter[s] for s in cluster),
+            }
+        )
     return results
 
 
@@ -145,13 +150,20 @@ _VF_PATTERN = re.compile(
 )
 
 _VF_CANONICAL = {
-    "vf e34": "VF e34", "vfe34": "VF e34",
-    "vf3": "VF 3", "vf 3": "VF 3",
-    "vf5": "VF 5", "vf 5": "VF 5",
-    "vf6": "VF 6", "vf 6": "VF 6",
-    "vf7": "VF 7", "vf 7": "VF 7",
-    "vf8": "VF 8", "vf 8": "VF 8",
-    "vf9": "VF 9", "vf 9": "VF 9",
+    "vf e34": "VF e34",
+    "vfe34": "VF e34",
+    "vf3": "VF 3",
+    "vf 3": "VF 3",
+    "vf5": "VF 5",
+    "vf 5": "VF 5",
+    "vf6": "VF 6",
+    "vf 6": "VF 6",
+    "vf7": "VF 7",
+    "vf 7": "VF 7",
+    "vf8": "VF 8",
+    "vf 8": "VF 8",
+    "vf9": "VF 9",
+    "vf 9": "VF 9",
     "vf wild": "VF Wild",
     "vf drgnfly": "VF DrgnFly",
 }
@@ -182,13 +194,15 @@ def section_model_normalization(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for canonical, variants in sorted(model_counter.items()):
         total = sum(variants.values())
-        variant_str = ", ".join(f'"{v}"×{c}' for v, c in variants.most_common())
-        rows.append({
-            "canonical": canonical,
-            "total": total,
-            "variants_found": variant_str,
-            "normalized?": "✓" if len(variants) == 1 else "⚠ inconsistent",
-        })
+        variant_str = ", ".join(f'"{v}"×{c}' for v, c in variants.most_common())  # noqa: RUF001
+        rows.append(
+            {
+                "canonical": canonical,
+                "total": total,
+                "variants_found": variant_str,
+                "normalized?": "✓" if len(variants) == 1 else "⚠ inconsistent",
+            }
+        )
     return pd.DataFrame(rows)
 
 

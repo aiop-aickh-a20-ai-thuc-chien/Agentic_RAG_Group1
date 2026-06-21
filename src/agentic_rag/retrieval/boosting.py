@@ -33,6 +33,7 @@ def _trace_boosting(summary: dict[str, Any]) -> dict[str, Any]:
     """
     return summary
 
+
 _DOCUMENT_TYPE_BOOST_MATRIX: dict[str, dict[str, float]] = {
     "faq": {
         "faq": 1.3,

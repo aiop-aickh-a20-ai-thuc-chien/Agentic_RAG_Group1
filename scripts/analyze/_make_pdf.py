@@ -2,15 +2,17 @@
 
 import pathlib
 import re
+
 from fpdf import FPDF
 
 FONT_DIR = pathlib.Path("C:/Windows/Fonts")
-MD_FILE  = pathlib.Path("scripts/analyze/metadata_field_guide.md")
+MD_FILE = pathlib.Path("scripts/analyze/metadata_field_guide.md")
 OUT_FILE = pathlib.Path("scripts/analyze/metadata_field_guide.pdf")
 
 # ---------------------------------------------------------------------------
 # Parse markdown into structured blocks
 # ---------------------------------------------------------------------------
+
 
 def parse_md(text: str) -> list[dict]:
     blocks = []
@@ -20,14 +22,14 @@ def parse_md(text: str) -> list[dict]:
         line = lines[i]
 
         # Heading
-        m = re.match(r'^(#{1,3})\s+(.*)', line)
+        m = re.match(r"^(#{1,3})\s+(.*)", line)
         if m:
             blocks.append({"type": f"h{len(m.group(1))}", "text": m.group(2).strip()})
             i += 1
             continue
 
         # HR
-        if re.match(r'^-{3,}$', line.strip()):
+        if re.match(r"^-{3,}$", line.strip()):
             blocks.append({"type": "hr"})
             i += 1
             continue
@@ -50,7 +52,7 @@ def parse_md(text: str) -> list[dict]:
             continue
 
         # Table
-        if "|" in line and i + 1 < len(lines) and re.match(r'^\|[-| :]+\|', lines[i + 1]):
+        if "|" in line and i + 1 < len(lines) and re.match(r"^\|[-| :]+\|", lines[i + 1]):
             rows = []
             header = [c.strip() for c in line.strip().strip("|").split("|")]
             rows.append(header)
@@ -63,8 +65,8 @@ def parse_md(text: str) -> list[dict]:
             continue
 
         # Bullet
-        if re.match(r'^[-*]\s+', line):
-            blocks.append({"type": "bullet", "text": re.sub(r'^[-*]\s+', '', line)})
+        if re.match(r"^[-*]\s+", line):
+            blocks.append({"type": "bullet", "text": re.sub(r"^[-*]\s+", "", line)})
             i += 1
             continue
 
@@ -77,30 +79,45 @@ def parse_md(text: str) -> list[dict]:
 
 
 _EMOJI_MAP = {
-    "🔴": "[Cao]", "🟡": "[TB]", "🟢": "[Nho]",
-    "✅": "[OK]", "❌": "[X]",
-    "│": "|", "├": "+", "─": "-", "┬": "+", "┐": "+",
-    "└": "+", "┘": "+", "┼": "+", "┴": "+", "▼": "v", "▸": ">",
+    "🔴": "[Cao]",
+    "🟡": "[TB]",
+    "🟢": "[Nho]",
+    "✅": "[OK]",
+    "❌": "[X]",
+    "│": "|",
+    "├": "+",
+    "─": "-",
+    "┬": "+",
+    "┐": "+",
+    "└": "+",
+    "┘": "+",
+    "┼": "+",
+    "┴": "+",
+    "▼": "v",
+    "▸": ">",
     "∋": "in",
 }
+
 
 def _clean(text: str) -> str:
     for ch, repl in _EMOJI_MAP.items():
         text = text.replace(ch, repl)
     return text
 
+
 def strip_inline(text: str) -> str:
     """Remove markdown inline markup: **bold**, *italic*, `code`."""
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = re.sub(r'`(.+?)`', r'\1', text)
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     return _clean(text)
 
 
 # ---------------------------------------------------------------------------
 # PDF builder
 # ---------------------------------------------------------------------------
+
 
 class MetaPDF(FPDF):
     def header(self):
@@ -209,6 +226,7 @@ def build_pdf(blocks: list[dict]) -> FPDF:
                 continue
             pdf.ln(3)
             from fpdf.table import FontFace
+
             head_style = FontFace(
                 emphasis="BOLD",
                 color=(255, 255, 255),
@@ -254,7 +272,7 @@ def build_pdf(blocks: list[dict]) -> FPDF:
 # Main
 # ---------------------------------------------------------------------------
 md_text = _clean(MD_FILE.read_text(encoding="utf-8"))
-blocks  = parse_md(md_text)
-pdf     = build_pdf(blocks)
+blocks = parse_md(md_text)
+pdf = build_pdf(blocks)
 pdf.output(str(OUT_FILE))
 print(f"Saved: {OUT_FILE}  ({OUT_FILE.stat().st_size // 1024} KB,  {pdf.page} trang)")

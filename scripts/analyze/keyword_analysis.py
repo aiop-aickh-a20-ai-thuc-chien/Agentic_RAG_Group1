@@ -27,6 +27,7 @@ load_dotenv()
 
 try:
     from agentic_rag.runtime_env import load_local_env
+
     load_local_env()
 except Exception:
     pass
@@ -69,7 +70,7 @@ def section_frequency(df: pd.DataFrame, top_n: int = 60) -> list[dict]:
                 counter[str(k).strip().lower()] += 1
     total_chunks = len(df)
     return [
-        {"keyword": k, "count": c, "in_pct_chunks": f"{100*c/total_chunks:.1f}%"}
+        {"keyword": k, "count": c, "in_pct_chunks": f"{100 * c / total_chunks:.1f}%"}
         for k, c in counter.most_common(top_n)
     ]
 
@@ -111,7 +112,7 @@ def section_overlap(df: pd.DataFrame) -> dict:
         "total_keyword_occurrences": total,
         "already_in_text": in_text,
         "new_info_not_in_text": not_in_text,
-        "pct_new": f"{100*not_in_text/total:.1f}%" if total else "0%",
+        "pct_new": f"{100 * not_in_text / total:.1f}%" if total else "0%",
         "top_new_keywords": [{"keyword": k, "count": c} for k, c in new_keywords.most_common(20)],
     }
 
@@ -127,12 +128,14 @@ def section_by_doctype(df: pd.DataFrame) -> pd.DataFrame:
             if kws:
                 all_kws.extend(str(k).strip().lower() for k in kws)
         top3 = ", ".join(k for k, _ in Counter(all_kws).most_common(3))
-        rows.append({
-            "document_type": dtype or "None",
-            "chunks": len(group),
-            "avg_keywords": round(len(all_kws) / max(1, len(group)), 1),
-            "top_3_keywords": top3,
-        })
+        rows.append(
+            {
+                "document_type": dtype or "None",
+                "chunks": len(group),
+                "avg_keywords": round(len(all_kws) / max(1, len(group)), 1),
+                "top_3_keywords": top3,
+            }
+        )
     return pd.DataFrame(rows).sort_values("chunks", ascending=False)
 
 
@@ -212,7 +215,9 @@ def main() -> None:
     overlap = section_overlap(df)
     print(f"  Total keyword occurrences : {overlap['total_keyword_occurrences']:,}")
     print(f"  Already in chunk text     : {overlap['already_in_text']:,}")
-    print(f"  New info (not in text)    : {overlap['new_info_not_in_text']:,}  ({overlap['pct_new']})")
+    print(
+        f"  New info (not in text)    : {overlap['new_info_not_in_text']:,}  ({overlap['pct_new']})"
+    )
     print()
     print("  Top 20 keywords that add NEW information (not literally in text):")
     print(tabulate(overlap["top_new_keywords"], headers="keys", tablefmt="github"))

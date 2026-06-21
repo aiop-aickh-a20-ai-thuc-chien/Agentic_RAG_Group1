@@ -8,7 +8,6 @@ import pytest
 
 from agentic_rag.autodata_eval.worker import _toggle_env_overrides
 
-
 _ALL_FLAG_ENVS = [
     "HARD_FILTER_ENABLED",
     "METADATA_BOOSTING_ENABLED",

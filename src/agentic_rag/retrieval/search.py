@@ -1013,9 +1013,7 @@ def qdrant_hybrid_search(
             # Prefer the persistent auxiliary collection; fall back to the
             # in-memory index when it has not been built yet. Reuse the query
             # embedding already computed for the hybrid search above.
-            native = _qdrant_native_question_search(
-                client, query, top_k, dense_vector=dense_vector
-            )
+            native = _qdrant_native_question_search(client, query, top_k, dense_vector=dense_vector)
             if native is None:
                 source = "in_memory"
                 store = _qdrant_question_store(client, collection)
@@ -1343,9 +1341,7 @@ def reupsert_qdrant_sparse(batch_size: int = 250) -> dict[str, object]:
                 )
             )
         if point_vectors:
-            client.update_vectors(
-                collection_name=collection, points=point_vectors, wait=True
-            )
+            client.update_vectors(collection_name=collection, points=point_vectors, wait=True)
             updated += len(point_vectors)
         if offset is None:
             break

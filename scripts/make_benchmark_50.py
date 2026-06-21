@@ -7,7 +7,7 @@ CÂN BẰNG để A/B các cờ (hard filter / question-index / boosting / dedup
 
 Chạy:
     PYTHONIOENCODING=utf-8 uv run python scripts/make_benchmark_50.py            # dry-run, chỉ in
-    PYTHONIOENCODING=utf-8 uv run python scripts/make_benchmark_50.py --create    # tạo dataset + link
+    PYTHONIOENCODING=utf-8 uv run python scripts/make_benchmark_50.py --create  # tạo + link
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ SOURCE_NAME_LIKE = "%enchmark%"  # "Benchmark gốc (1002 câu)"
 
 # (bucket, target). Tổng = 50. Ưu tiên gán câu vào bucket hiếm trước (từ trên xuống).
 BUCKETS = [
-    ("dedup", 4),            # GT chunk là bản trùng (dedup ảnh hưởng)
-    ("paraphrase", 6),       # GT có entity_canonical nhưng câu KHÔNG match từ điển → LLM-map
-    ("multi_entity", 6),     # đa model / so sánh → hard filter dễ cắt nhầm
-    ("question_idx", 8),     # GT chunk có field questions → question-index lộ tác dụng
-    ("doc_type", 6),         # GT doc_type rõ (faq/spec/policy/manual) → boosting
-    ("negative", 8),         # không entity → kiểm tra filter KHÔNG làm hại
-    ("entity_single", 12),   # entity rõ, đơn model (hard filter giúp)
+    ("dedup", 4),  # GT chunk là bản trùng (dedup ảnh hưởng)
+    ("paraphrase", 6),  # GT có entity_canonical nhưng câu KHÔNG match từ điển → LLM-map
+    ("multi_entity", 6),  # đa model / so sánh → hard filter dễ cắt nhầm
+    ("question_idx", 8),  # GT chunk có field questions → question-index lộ tác dụng
+    ("doc_type", 6),  # GT doc_type rõ (faq/spec/policy/manual) → boosting
+    ("negative", 8),  # không entity → kiểm tra filter KHÔNG làm hại
+    ("entity_single", 12),  # entity rõ, đơn model (hard filter giúp)
 ]
 _COMPARE_HINTS = ("so sánh", " vs ", "khác nhau", "so với", "chênh")
 _BOOST_TYPES = {"faq", "spec_sheet", "policy", "manual"}
@@ -45,8 +45,11 @@ def _qdrant_metadata_index() -> dict[str, dict]:
     offset = None
     while True:
         batch, offset = client.scroll(
-            collection_name=collection, limit=500, offset=offset,
-            with_payload=True, with_vectors=False,
+            collection_name=collection,
+            limit=500,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
         )
         for point in batch:
             payload = point.payload or {}
@@ -69,7 +72,9 @@ def _classify(question: str, gt_md: dict, detect) -> str:
     has_entity = len(ents) > 0
     multi = len({e for e in ents}) >= 2 or any(h in question.lower() for h in _COMPARE_HINTS)
     canonical = bool(gt_md.get("entities_canonical"))
-    has_questions = isinstance(gt_md.get("questions"), (list, tuple)) and bool(gt_md.get("questions"))
+    has_questions = isinstance(gt_md.get("questions"), (list, tuple)) and bool(
+        gt_md.get("questions")
+    )
     dedup = bool((gt_md.get("deduplication") or {}).get("primary_layer"))
     doc_type = str(gt_md.get("document_type") or "").lower()
 
@@ -103,9 +108,7 @@ def main() -> None:
     dataset_name = _arg("--name", NEW_DATASET_NAME)
     # Bỏ câu có GT chunk thuộc các dedup layer này (vì khi bật filter layer đó,
     # eval-run sẽ ẩn câu — GT bị loại). VD bật L1 → --exclude-gt-layers exact_sha256.
-    exclude_gt_layers = {
-        x.strip() for x in _arg("--exclude-gt-layers", "").split(",") if x.strip()
-    }
+    exclude_gt_layers = {x.strip() for x in _arg("--exclude-gt-layers", "").split(",") if x.strip()}
     from agentic_rag.ingestion.metadata import detect_in_query
 
     conn = psycopg.connect(os.environ["NEON_CONNECTION"])
@@ -163,10 +166,7 @@ def main() -> None:
                 chosen_ids.add(qid)
     if len(selected) < 50:
         leftovers = [
-            (qid, q, b)
-            for b, _ in BUCKETS
-            for qid, q in by_bucket[b]
-            if qid not in chosen_ids
+            (qid, q, b) for b, _ in BUCKETS for qid, q in by_bucket[b] if qid not in chosen_ids
         ]
         for qid, q, b in leftovers:
             if len(selected) >= 50:
@@ -185,16 +185,25 @@ def main() -> None:
 
     cur.execute("SELECT id FROM eval_datasets WHERE name = %s", (dataset_name,))
     if cur.fetchone():
-        print(f"\nDataset '{dataset_name}' đã tồn tại — bỏ qua tạo (xoá thủ công nếu muốn làm lại).")
+        print(
+            f"\nDataset '{dataset_name}' đã tồn tại — bỏ qua tạo (xoá thủ công nếu muốn làm lại)."
+        )
         return
     cur.execute(
-        "INSERT INTO eval_datasets (name, description, is_benchmark) VALUES (%s, %s, %s) RETURNING id",
-        (dataset_name, "50 câu phân biệt cao chọn từ Benchmark gốc (hard-filter/question-index/boosting/dedup/LLM-map/negative)", True),
+        "INSERT INTO eval_datasets (name, description, is_benchmark) "
+        "VALUES (%s, %s, %s) RETURNING id",
+        (
+            dataset_name,
+            "50 câu phân biệt cao chọn từ Benchmark gốc "
+            "(hard-filter/question-index/boosting/dedup/LLM-map/negative)",
+            True,
+        ),
     )
     new_id = str(cur.fetchone()[0])
     for qid, _, _ in selected:
         cur.execute(
-            "INSERT INTO eval_dataset_questions (dataset_id, question_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            "INSERT INTO eval_dataset_questions (dataset_id, question_id) "
+            "VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (new_id, qid),
         )
     conn.commit()
