@@ -1,0 +1,805 @@
+# Entity Map — Canonical Groups
+
+- Raw strings: **1036**
+- Canonical entities: **762**
+- Source: `lexical-cluster + llm-canonicalization`
+
+Mỗi canonical theo sau là các variant gộp vào nó. Type lọc được (dùng cho filter): `car_model`, `ebike_model`, `location`.
+
+## car_model — 19 canonical / 115 variants ✅ FILTERABLE
+
+- **VF 3**  ←  Bọc Ghế Da VF 3, Bọc Vô Lăng VF 3, Bộ Thanh Ngang Giá Nóc VF 3, Camera Lùi VF 3, Camera lùi VF 3, Gói Dán Film Cách Nhiệt VinFast VF 3, Mô Hình Xe VinFast VF 3, Thảm Cốp 3D VF 3, Thảm Nhựa VF3, Thảm cốp 3D VinFast VF 3, Tấm Che Nắng Cửa VinFast VF 3, VF 3, VF 3 Plus, VF 3 Tiên phong, VinFast VF 3, thảm cốp xe VF 3, xe VF 3, ô tô VF 3, Ốp La-zăng VF 3, Ốp mâm xe VF 3
+- **VF 7**  ←  Bình Giữ Nhiệt VF 7, Gói Dán Film Cách Nhiệt VinFast VF 7, Gói Film Cách Nhiệt Dán Trần VinFast VF 7, Thảm Cốp 3D VF 7, Thảm Sàn 3D VF 7, Tấm Che Nắng Cửa VF 7, VF 7, VF 7 Eco, VF 7 Plus, VF 7 Plus AWD, VF 7 Tấm Che Pin Cao Áp, VinFast VF 7, xe điện VF 7, Áo Phông VF 7, Áo Phông VF 7 Đặc Biệt
+- **VF 8**  ←  Cốp Nóc Phi Thuyền ô tô VinFast VF 8, Gói Dán Film Cách Nhiệt VinFast VF 8, Gói Film Cách Nhiệt Dán Trần VinFast VF 8, Mô Hình Xe VinFast VF 8, Thanh Ngang Giá Nóc VinFast VF 8, Thảm Cốp 3D VF 8, Thảm Sàn Nhựa 2D VF 8, Tấm Che Nắng Cửa VinFast VF 8, VF 8, VF 8 Eco, VF 8 Plus, VF 8 Tấm Che Pin Cao Áp, VF8, VinFast VF 8
+- **VF 5**  ←  Gói Dán Film Cách Nhiệt VinFast VF 5, Thảm Cốp 3D VF 5, Thảm Sàn Nhựa 2D VF 5, Tấm Che Nắng Cửa VinFast VF 5, VF 5, VF 5 Plus, VF 5 Tấm Che Pin Cao Áp, VinFast VF 5, xe ô tô VinFast VF 5, Áo Phông VinFast VF 5, Áo Phông VinFast VF 5 Thêu Hoa, Áo Polo VinFast VF 5, Áo Polo VinFast VF 5 Thêu Hoa
+- **VF 9**  ←  Gói Dán Film Cách Nhiệt VinFast VF 9, Gói Film Cách Nhiệt Dán Trần VinFast VF 9, Mô Hình Xe VinFast VF 9, Thảm Cốp 3D VF 9, Thảm Sàn 3D VF 9, Tấm Che Nắng Cửa VinFast VF 9, Tấm Rèm Trần Panorama VinFast VF 9, VF 9, VF 9 Eco, VF 9 Plus, VF9, VinFast VF 9
+- **Nerio Green**  ←  Thảm Cốp 3D VinFast Nerio Green, Thảm Sàn Nhựa 2D VinFast Nerio Green, Thảm Sàn Nhựa VinFast Nerio Green, Tấm Che Nắng Cửa VinFast Nerio Green, Tấm Che Pin Cao Áp VinFast Nerio Green, VF Nerio Green, VinFast Nerio Green
+- **VF 6**  ←  Thảm Cốp 3D VF 6, Tấm Che Nắng Cửa VinFast VF 6, VF 6, VF 6 Eco, VF 6 Plus, VF 6 Tấm Che Pin Cao Áp, VinFast VF 6
+- **Limo Green**  ←  Thảm Cốp 3D Limo Green, Thảm Sàn 3D Limo Green, Thảm cốp 3D VinFast Limo Green, Thảm sàn 3D VinFast Limo Green, Tấm Che Nắng Cửa VinFast Limo Green
+- **Lux A2.0**  ←  LUX A2.0, Lux A 2.0, Lux A2.0, VinFast Lux A2.0
+- **Lux SA2.0**  ←  LUX SA2.0, Lux SA 2.0, Lux SA2.0, VinFast Lux SA2.0
+- **Fadil**  ←  Fadil, VinFast Fadil, xe VinFast Fadil
+- **EC Van**  ←  EC Van, VF EC Van
+- **Tempest**  ←  Tempest, VinFast Tempest
+- **VF e34**  ←  VF e34, VinFast VF e34
+- **Lux**
+- **VF 7S**
+- **VF e35**
+- **VF e36**
+- **VF MPV 7**
+
+## ebike_model — 27 canonical / 74 variants ✅ FILTERABLE
+
+- **Evo Grand**  ←  EVO GRAND, EVO Grand, EVO Grand Lite, Evo Grand, Evo Grand Lite, Xe Máy Điện Evo Grand, Xe Máy Điện Evo Grand Lite, xe máy điện Evo Grand
+- **Klara S**  ←  Klara S, Klara S (2022), Klara S 2022, Klara S2, KlaraS, VinFast Klara S, VinFast Klara S 2022
+- **E-Scooter**  ←  App VF Escooter, E-Scooter, E-scooter, VinFast E - Scooter, VinFast E-Scooter, VinFast Escooter
+- **Evo 200**  ←  Evo 200, Evo 200 Lite, Evo 200 lite, Evo200, Evo200 Lite, VinFast Evo 200
+- **Theon S**  ←  Theon, Theon S, VinFast Theon, VinFast Theon S, xe máy điện Theon
+- **Flazz**  ←  FLAZZ, FLazz, Flazz, VinFast Flazz
+- **Amio**  ←  Amio, VinFast AMIO, VinFast Amio
+- **DrgnFly**  ←  DrgnFly, VF DrgnFly, Vin 31 DrgnFly
+- **Feliz S**  ←  Feliz S, Feliz S 2022, VinFast Feliz S
+- **Vento**  ←  Vento, VinFast Vento, xe Vento
+- **Evo**  ←  Evo, VinFast Evo
+- **Evo Lite Neo**  ←  EVO LITE NEO, Evo Lite Neo
+- **Feliz**  ←  Feliz, VinFast Feliz
+- **Feliz 2025**  ←  FELIZ 2025, Feliz 2025
+- **Feliz II**  ←  Feliz II, VinFast Feliz II
+- **Feliz Lite**  ←  Feliz Lite, xe máy điện Feliz Lite
+- **Klara A2**  ←  Klara A2, VinFast Klara A2
+- **Vento S**  ←  Vento S, VinFast Vento S
+- **Viper**  ←  VinFast Viper, Viper
+- **EB 6**
+- **Evo Lite**
+- **Klara**
+- **Lạc Hồng 800S**
+- **Lạc Hồng 900 LX**
+- **Lạc Hồng 900S**
+- **Minio**
+- **Minio Green**
+
+## location — 117 canonical / 135 variants ✅ FILTERABLE
+
+- **Hồ Chí Minh**  ←  Hồ Chí Minh, TP Hồ Chí Minh, TP. HCM, TP. Hồ Chí Minh, TP.HCM, Thành phố Hồ Chí Minh
+- **Châu Âu**  ←  Châu Âu, Liên minh châu Âu, châu Âu
+- **Cát Bà**  ←  Cát Bà, đảo Cát Bà
+- **Golden West Complex**  ←  Chung cư Golden West Complex, Golden West Complex
+- **Hà Nội**  ←  Hà Nội, VinFast Hà Nội
+- **King Palace**  ←  Chung cư King Palace, King Palace
+- **Nha Trang**  ←  Nha Trang, Vinpearl Nha Trang
+- **Quốc Oai**  ←  Quốc Oai, VinFast Quốc Oai
+- **Stellar Garden**  ←  Chung cư Stellar Garden, Stellar Garden
+- **Thăng Long**  ←  Big C Thăng Long, VinFast Thăng Long
+- **Việt Đức Complex**  ←  Chung cư Việt Đức Complex, Việt Đức Complex
+- **Đà Nẵng**  ←  Vinmec Đà Nẵng, Đà Nẵng
+- **Đình Vũ – Cát Hải**  ←  Khu Kinh tế Đình Vũ – Cát Hải, Khu kinh tế Đình Vũ – Cát Hải
+- **An Giang**
+- **An Hải**
+- **Ba Vì**
+- **Ba Đình**
+- **Bãi đỗ xe Mễ Trì**
+- **Bãi đỗ xe Trạm đăng kiểm 29.15D**
+- **Bình Vượng Tower**
+- **Bắc Giang**
+- **Bắc Mỹ**
+- **Bắc Từ Liêm**
+- **Chung cư A15 Bộ Công An**
+- **Chung cư CT2-3 Dream Town**
+- **Chung cư Hồ Hà Eco City**
+- **Chung cư Intracom 1**
+- **Chung cư Ruby City 3**
+- **Chung cư Splendora**
+- **Chung cư Tecco Garden**
+- **Chung cư Tecco Skyville**
+- **Châu Á**  ←  châu Á
+- **Chí Tuyến Bắc**
+- **Coninco Tower**
+- **Cát Hải**
+- **Cần Giờ**
+- **Cần Thơ**
+- **Cầu Giấy**
+- **Dubai**
+- **D’ EL Dorado 1**
+- **D’ Le Roi Soleil**
+- **Gia Lâm**
+- **Hai Bà Trưng**
+- **Hoài Đức**
+- **Hoàng Hà**
+- **Hoàng Mai**
+- **HPC Landmark 105**
+- **Hà Thành**
+- **Hà Tĩnh**
+- **Hà Đông**
+- **Hòa Khánh**  ←  Cửa hàng xăng dầu Hòa Khánh
+- **Hòa Vang**
+- **Hòn Tre**
+- **Hải Châu**
+- **Hải Phòng**
+- **Indonesia**
+- **Israel**
+- **Italy**
+- **Kazakhstan**
+- **Khu đô thị Thanh Hà**
+- **Khánh Hoà**
+- **Liên Chiểu**
+- **Long Biên**
+- **Malaysia**
+- **Mê Linh**
+- **Mũi Cà Mau**
+- **Mỹ**
+- **Nam Từ Liêm**
+- **Ngũ Hành Sơn**
+- **Nhật Bản**
+- **Philippines**
+- **Phú Quốc**
+- **Phú Quốc United Center**
+- **Phú Sơn**
+- **Phúc Thọ**
+- **Quang Minh**  ←  Cửa hàng xăng dầu Quang Minh
+- **Quảng Ninh**
+- **Rainbow Văn Quán**
+- **Singapore**
+- **Somerset West Lake Hanoi**
+- **Somerset West Point**
+- **Subang**
+- **Sóc Sơn**
+- **Thanh Oai**
+- **Thanh Trì**
+- **Thanh Xuân**
+- **Thái Lan**
+- **Thường Tín**
+- **Trung Quốc**
+- **Trung Đông**
+- **TTTM Hiền Lương**
+- **Tây Hồ**
+- **UAE**
+- **Ucraina**
+- **Vincom**  ←  trung tâm thương mại Vincom
+- **Vincom Center**
+- **Vincom Center Bà Triệu**
+- **Vincom Center Nguyễn Chí Thanh**
+- **Vincom Center Phạm Ngọc Thạch**
+- **Vincom MegaMall Times City**
+- **Vinhomes Green Bay**
+- **Vinhomes Ocean Park**
+- **Vinhomes Royal City**
+- **Vinhomes Symphony**
+- **Vinhomes Thăng Long Nam**
+- **Vinhomes Times City**
+- **Vinmec Times City**
+- **Việt Nam**
+- **Xuân Mai Complex**
+- **Đài Bắc**
+- **Đài Loan**
+- **Đông Anh**
+- **Đại học Bách Khoa Hà Nội**
+- **Đống Đa**
+- **Đức**
+- **Ấn Độ**
+- **Ứng Hòa**
+
+## brand — 36 canonical / 52 variants
+
+- **VinFast**  ←  Công Ty TNHH Kinh Doanh Thương Mại và Dịch Vụ VinFast, Công ty TNHH Kinh Doanh Thương Mại và Dịch Vụ VinFast, Công ty TNHH Kinh doanh Thương mại và Dịch vụ VinFast, Công ty TNHH Sản xuất và Kinh doanh VinFast, VINFAST, VinFast, vinfast
+- **VinFast O2O**  ←  Kênh VinFast O2O, VinFast O2O, kênh VinFast O2O
+- **Vpoint**  ←  VPOINT, VPoint, Vpoint
+- **Autobrains**  ←  AUTOBRAINS, Autobrains
+- **Gotion High-Tech**  ←  Gotion High - Tech, Gotion High-Tech
+- **Newway**  ←  VinFast Newway, Đại lý Ô tô VinFast Newway
+- **Prologium**  ←  ProLogium, Prologium
+- **Storedot**  ←  StoreDot, Storedot
+- **Vingroup**  ←  Vingroup, Vingroup JSC
+- **ASEAN NCAP**
+- **BIDV**
+- **Bộ Tài chính**
+- **FPT**
+- **Geleximco**
+- **Gói Dán Film Cách Nhiệt VinFast**
+- **IFC**
+- **logo VinFast**
+- **Netzero**
+- **Ngân hàng nhà nước Việt Nam**
+- **NHTSA**
+- **NVIDIA**
+- **PAAK**
+- **Phenikaa**
+- **Techcombank**
+- **Touliver**
+- **Trustwave**
+- **V-Green**
+- **Vero X**
+- **VinAI**
+- **VinClub**
+- **VinFast Energy**
+- **VinFast ID**
+- **VinFast Trading**
+- **VinFirst**
+- **Vinhomes**
+- **Vinpearl**
+
+## accessory — 53 canonical / 76 variants
+
+- **bộ sạc di động**  ←  Bộ Sạc Di Động Ô Tô Điện, Bộ Sạc Di Động Ô Tô Điện 2.2 kW, bộ sạc 2,2 kW, bộ sạc di động, bộ sạc di động 2,2 kW, bộ sạc di động 2,2kW, bộ sạc di động ô tô điện
+- **Bộ Sạc Treo Tường AC 7,4 kW**  ←  Bộ Sạc Treo Tường AC 7,4 kW, Bộ sạc treo tường AC 7,4 kW, bộ sạc 7,4kW, bộ sạc treo tường 7,4kW, bộ sạc treo tường 7.4kW, bộ sạc treo tường AC 7,4 kW
+- **Thảm Cốp 3D**  ←  Thảm Cốp 3D, Thảm lót cốp, Thảm lót cốp 3D, thảm sàn 3D
+- **VF 7**  ←  Mũ Lưỡi Trai VF 7, Mũ lưỡi trai VF 7, phụ kiện VF 7
+- **Áo mưa cánh dơi**  ←  Áo Mưa Cánh Dơi Hai Mũ, Áo Mưa Cánh Dơi Một Mũ, Áo mưa cánh dơi
+- **Limo Green**  ←  Thảm cốp Limo Green, Thảm sàn Limo Green
+- **Smart Key**  ←  Smart Key, Smartkey
+- **V-Green**  ←  trạm sạc V-GREEN, trạm sạc V-Green
+- **VF 5**  ←  Mũ Lưỡi Trai Thêu Hoa VF 5, phụ kiện VF 5
+- **Ốp lưng ghế sau**  ←  Ốp Lưng Ghế Sau, Ốp lưng ghế sau
+- **Bao Da Giấy Tờ Xe**
+- **Bình Giữ Nhiệt Classic**
+- **bộ sạc**
+- **bộ sạc 3kW**
+- **bộ sạc theo xe 3,5 kW**
+- **Bộ Sạc Treo Tường AC 11 kW**
+- **Cốc Giữ Nhiệt Summit**
+- **Cốp nóc**
+- **Cốp Nóc Phi Thuyền**
+- **Gói Dán Film Cách Nhiệt**
+- **Gói dán film cách nhiệt**
+- **Gói Film Cách Nhiệt Dán Trần**
+- **Gối Cổ Chữ U**
+- **Gối Da Tựa Đầu**
+- **Khăn Lụa Cao Cấp VinFast**
+- **Khăn lụa cao cấp VinFast**
+- **Lót Cốc Sơn Mài VinFast**
+- **Mobile charger**
+- **Mũ Bảo Hiểm Siêu Nhẹ An Toàn**
+- **phụ kiện**
+- **phụ kiện Limo Green**
+- **phụ kiện xe máy điện**
+- **phụ kiện ô tô điện**
+- **Sạc tại nhà**
+- **Sạc Tại Nhà 3KW**
+- **sạc ô tô điện**
+- **Thanh Ngang Giá Nóc**
+- **Thảm Sàn Nhựa 2D**
+- **Thắt lưng da**  ←  Thắt lưng da VinFast
+- **thẻ ATM**
+- **trụ sạc xe máy điện**
+- **trụ sạc ô tô điện**
+- **Tấm Che Nắng Cửa**
+- **tấm che nắng cửa**
+- **Tấm Che Pin Cao Áp**
+- **Tấm rèm**
+- **VF 3**  ←  phụ kiện VF 3
+- **VF 6**  ←  phụ kiện VF 6
+- **VF 8**  ←  phụ kiện VF 8
+- **VF 9**  ←  phụ kiện VF 9
+- **Áo Polo Nam**
+- **Áo Polo Nữ**
+- **Ô Golf 2 Tầng**
+
+## contact — 27 canonical / 36 variants
+
+- **1900 23 23 89**  ←  1900 23 23 89, Hotline 1900 23 23 89, hotline 1900 23 23 89, tổng đài hỗ trợ 1900 23 23 89
+- **vinfastauto.com**  ←  Vinfastauto.com, shop.vinfastauto.com, vinfastauto.com, website vinfastauto.com
+- **Khách Hàng**  ←  Khách Hàng, khách hàng
+- **Lê Thị Thu Thủy**  ←  Bà Lê Thị Thu Thủy, Lê Thị Thu Thủy
+- **Tổng đài Chăm sóc Khách hàng**  ←  Tổng đài Chăm sóc Khách hàng, Tổng đài Chăm sóc Khách hàng VinFast
+- **ATM**
+- **Bên Bán**
+- **bên bán**
+- **cskh@vinfast.vn**
+- **Công ty Cổ phần đầu tư KCN Vinhomes Hải Phòng**
+- **Công ty TNHH Thương mại ACS Việt Nam**
+- **Hotline 1900232389**
+- **Lê Anh Dũng**
+- **Lê Đoàn Thanh**
+- **Nguyễn Mạnh Thắng**
+- **Nguyễn Thị Bích Hậu**
+- **Nguyễn Văn Phong**
+- **Phạm Nhật Quân**
+- **Phạm Nhật Quân Anh**
+- **Phạm Nhật Vượng**
+- **support.vn@vinfastauto.com**
+- **Tapan Ghosh**
+- **tổng đài**
+- **tổng đài chăm sóc khách hàng**
+- **tổng đài CSKH**
+- **tổng đài tư vấn**
+- **vinfast.noreply@vinfast.vn**
+
+## generic — 278 canonical / 306 variants
+
+- **ô tô**  ←  xe ô tô, xe ô tô VinFast, ô tô, ô tô VinFast
+- **B1**  ←  B1, Pin B1, pin B1
+- **President**  ←  President, V8 President, VinFast President
+- **trụ sạc 150kW**  ←  trụ DC 150kW SC, trụ sạc 150kW, trụ sạc siêu nhanh 150kW
+- **xe máy điện**  ←  Xe máy điện, xe máy điện, xe máy điện VinFast
+- **ô tô điện**  ←  xe ô tô điện, ô tô điện, ô tô điện VinFast
+- **200.000 km**  ←  200.000 km, 200.000km
+- **300.000 đồng**  ←  300.000 đồng, mức phí 300.000 đồng
+- **34 tỉnh thành**  ←  34 Tỉnh và Thành phố, 34 tỉnh thành
+- **3M**  ←  3M, VF x 3M
+- **Agentic AI**  ←  AGENTIC AI, Agentic AI
+- **chuyển đổi xanh**  ←  Chuyển đổi xanh, chuyển đổi xanh
+- **Chính Phủ**  ←  Chính Phủ, Chính phủ
+- **Pin B2**  ←  Pin B2, pin B2
+- **pin LFP**  ←  Pin LFP, pin LFP
+- **Robotaxi**  ←  Robotaxi, robotaxi
+- **showroom**  ←  Showroom, showroom
+- **trạm sạc**  ←  trạm sạc, trạm sạc VinFast
+- **xe điện**  ←  xe điện, xe điện VinFast
+- **ứng dụng VinFast**  ←  Ứng dụng VinFast, ứng dụng VinFast
+- **ứng dụng VinFast E-Scooter**  ←  Ứng dụng VinFast E-Scooter, ứng dụng VinFast E-Scooter
+- **1 triệu IDR**
+- **1,6 triệu IDR**
+- **1.309.000.000 VNĐ**
+- **1.492.000.000 VNĐ**
+- **13.900.000 VNĐ**
+- **150.000 cổng sạc**
+- **1800 W**
+- **3 ngày**
+- **3000 W**
+- **31/05/2026**
+- **350.000 đồng/tháng**
+- **39.900.000 VNĐ**
+- **4.950.000 VNĐ**
+- **5 stack**
+- **51.2V**
+- **63 tỉnh thành**
+- **7,4 kW**
+- **7,4kW**
+- **999 triệu đồng**
+- **A-SUV**
+- **AC11kW**
+- **ADAS**
+- **AI**
+- **Android Auto**
+- **ANSI/CAN/UL2849**
+- **ANSI/UL 2271**
+- **Apple CarPlay**
+- **B-SUV**
+- **BESS**
+- **big data**
+- **Bluetooth**
+- **Brahminy White**
+- **báo cáo tài chính**
+- **bảo hiểm bắt buộc**
+- **bảo hiểm mất cắp phụ tùng**
+- **bảo hiểm thủy kích**
+- **bảo hiểm trách nhiệm dân sự**
+- **bảo hiểm trách nhiệm nhân sự**
+- **bảo hiểm vật chất**
+- **bảo hiểm vật chất xe ô tô**
+- **Bảo Minh**
+- **Bảo Việt**
+- **Bộ Công thương**
+- **Bộ Nông nghiệp và Môi trường**
+- **bộ sạc treo tường**
+- **bộ sạc ô tô điện treo tường**
+- **CAN Protocol**
+- **Car Awards 2021**
+- **CATL**
+- **CCS 2**
+- **cell pin LFP**
+- **cho thuê pin**
+- **chính sách bồi thường**
+- **chính sách cho thuê pin**
+- **chính sách hỗ trợ chuyển đổi xanh**
+- **chính sách mua 1 tặng 1**
+- **chính sách sạc pin**
+- **chính sách thuê pin**
+- **chính sách thuê pin LFP**
+- **chính sách ưu đãi**
+- **chương trình chuyển đổi**
+- **chương trình hỗ trợ**
+- **Chỉ thị 20/CT-TTg**
+- **cnet.com**
+- **Continental**
+- **Cookies**
+- **Covid-19**
+- **Crimson Red**
+- **CSGT**
+- **công nghệ eKYC**
+- **Công ty tài chính ACS**
+- **công ước Vienna 1968**
+- **cảnh sát giao thông**
+- **cứu hộ**
+- **cứu hộ miễn phí**
+- **cửa hàng xăng dầu**
+- **D-SUV**
+- **DC30kW**
+- **DC60kW**
+- **Deloitte**
+- **Desat Silver**
+- **Diamond**
+- **Diesel 0,001S-V**
+- **dịch vụ cho thuê pin**
+- **dịch vụ cứu hộ**
+- **dịch vụ cứu hộ pin**
+- **dịch vụ thuê pin**
+- **E-SUV**
+- **E-voucher**
+- **Eagle Ottawa**
+- **EBus**
+- **ECM**
+- **ECU**
+- **eKYC**
+- **ESHIA**
+- **Face ID**
+- **Film Cách Nhiệt**
+- **film cách nhiệt VF x 3M**
+- **Gold**
+- **Google Analytics**
+- **Gotion**
+- **GPS**
+- **GSM**
+- **gói 4**
+- **gói cước thuê pin**
+- **gói thuê pin**
+- **gói thuê pin cố định**
+- **gói thuê pin linh hoạt**
+- **Hotline**
+- **huf-group.com**
+- **hướng dẫn sử dụng**
+- **hệ sinh thái sạc pin**
+- **Hội Tự động hóa Việt Nam**
+- **ICM**
+- **IEC 61851**
+- **IEC 63056**
+- **IEC61140**
+- **IEC62040**
+- **Immobilizer**
+- **inox 304**
+- **IP67**
+- **ISO 14001**
+- **ISO 6469-3**
+- **ISO-15118**
+- **Jet Black**
+- **Karamba Security**
+- **Lazada**
+- **LFP**
+- **Lithium-ion**
+- **lá vàng**
+- **lãi suất 0%**
+- **lệ phí trước bạ**
+- **lốp xe**
+- **Machine Learning**
+- **Market & Market**
+- **Maverick Racing Factory Inc.**
+- **MCredit**
+- **MICU**
+- **MiniCar**
+- **Mobile Service**
+- **Momo**
+- **MotorCentral**
+- **MPV**
+- **My Viettel**
+- **Neptune Grey**
+- **New Nemar Development Corp.**
+- **Nghị định 100/2019**
+- **ngày Nhà Giáo Việt Nam**
+- **Nhà nước**
+- **NPP ủy quyền**
+- **NVIDIA DRIVE Hyperion**
+- **O2O**
+- **OEM**
+- **Online**
+- **P1**
+- **PCI DSS**
+- **PCM**
+- **Phone as a key**
+- **Pháp Luật Bảo Vệ Dữ Liệu Cá Nhân**
+- **phí chuyển đổi**
+- **phí dịch vụ**
+- **phí sử dụng đường bộ**
+- **phí đăng kiểm**
+- **phí đăng ký**
+- **phí đường bộ**
+- **phụ phí**
+- **phụ tùng**
+- **Pin**
+- **pin**
+- **pin 1,9 kW**
+- **pin 3,5 kW**
+- **pin cao áp**
+- **pin LFP/Gotion**
+- **Pin Lithium**
+- **pin Lithium**
+- **pin lithium**
+- **pin Lithium-ion**
+- **pin lithium-ion**
+- **Pin SDI**
+- **pin xe máy điện**
+- **pin ô tô điện**
+- **Pininfarina**
+- **Platinum**
+- **PVI**
+- **QR code**
+- **QUATEST 3**
+- **Quỹ CEP**
+- **Renesas R-Car M3**
+- **RoHS**
+- **RON 95-III**
+- **Rèm che nắng**
+- **SDI cell**
+- **showroom 3S**  ←  Showroom 3S
+- **Smart Service**
+- **Supremebike Corporation**
+- **SUV điện**
+- **sạc dự phòng di động**
+- **sạc nhanh**
+- **sạc pin**
+- **sạc siêu nhanh**
+- **Tesla supercharger**
+- **thiết bị sạc**
+- **Thu xăng - Đổi điện**
+- **Thule**
+- **thuế trước bạ**
+- **Thông tư 16/2021/TT-BGTVT**
+- **thẻ quốc tế**
+- **Thỏa Thuận Đặt Cọc**
+- **Tiên phong**
+- **tiền đặt cọc**
+- **TPE**
+- **trung tâm thương mại**
+- **trường đại học**
+- **trạm sạc công cộng**
+- **trạm sạc xe điện**
+- **trạm đăng kiểm**
+- **trụ sạc 250kW**
+- **trụ sạc 300kW**  ←  trụ sạc siêu nhanh 300kW
+- **Type 2**
+- **Tấm che pin VinFast**
+- **tỉnh thành**
+- **UL 1973**
+- **Uỷ ban Nhân dân**
+- **V8**
+- **VAN**
+- **VEROX**
+- **Vietnam Mobility Show**
+- **Vietnam Mobility Show 2025**
+- **ViettelPay**
+- **VIN xe**
+- **Vincom**
+- **VinES**
+- **VinFast Blue**
+- **VinFast Phạm Văn Đồng**
+- **vinfastauto**
+- **Viện tiêu chuẩn Anh Quốc**
+- **voucher**
+- **vân tay**
+- **website**
+- **website https://vinfastauto.com/vn_vi**
+- **XDV/NPP**
+- **Xe**
+- **xe hơi**
+- **xe xăng**
+- **xe đạp điện**
+- **ô tô xăng**
+- **Điểm Cung Cấp Dịch Vụ**
+- **Đông Nam Á**
+- **đơn giá sạc**
+- **Đường 356**
+- **đại lý**
+- **Đối Tác Thanh Toán**
+- **đội cứu hộ pin**
+- **ưu đãi sạc pin**
+- **ưu đãi đổi pin**
+- **ắc quy**
+- **ắc quy 12V**
+
+## other — 217 canonical / 242 variants
+
+- **ZGoo**  ←  VinFast ZGoo, VinFast Zgoo, ZGOO, ZGoo, Zgoo
+- **Xưởng dịch vụ**  ←  Xưởng Dịch vụ VinFast, Xưởng dịch vụ, Xưởng dịch vụ chính hãng VinFast, xưởng dịch vụ
+- **trụ sạc AC 11 kW**  ←  trụ AC 11kW, trụ sạc AC 11 kW, trụ sạc AC 11kW
+- **chương trình khuyến mãi**  ←  Chương trình khuyến mại, chương trình khuyến mãi
+- **dữ liệu cá nhân**  ←  Dữ Liệu Cá Nhân, dữ liệu cá nhân
+- **gói 1**  ←  Gói 1, gói 1
+- **gói 2**  ←  Gói 2, gói 2
+- **hợp đồng thuê pin**  ←  Hợp đồng thuê pin, hợp đồng thuê pin
+- **Impes**  ←  Impes, VinFast Impes
+- **Ludo**  ←  Ludo, VinFast Ludo
+- **Mãnh liệt vì tương lai xanh**  ←  Mãnh liệt vì tương lai Xanh, Mãnh liệt vì tương lai xanh
+- **Nerio Green**  ←  Gói Dán Film Cách Nhiệt VinFast Nerio Green, Nerio Green
+- **Nghị định 03/2021/NĐ-CP**  ←  Nghị định 03/2021/NĐ-CP, Nghị định số 03/2021/NĐ-CP
+- **Nghị định 51/2025/NĐ-CP**  ←  Nghị định 51/2025/NĐ-CP, Nghị định số 51/2025/NĐ - CP
+- **Smart City**  ←  VinFast Smart City, Vinhomes Smart City
+- **Thông tư 70/2021/TT-BTC**  ←  Thông tư 70/2021/TT-BTC, Thông tư số 70/2021/TT-BTC
+- **Trạm Đổi Xăng Lấy Điện**  ←  Trạm Đổi Xăng Lấy Điện, trạm đổi xăng lấy điện
+- **Vinaconex 1**  ←  Chung cư Vinaconex 1, Vinaconex 1
+- **Đại lý ủy quyền**  ←  Đại lý ủy quyền, đại lý ủy quyền
+- **1 năm**
+- **1 triệu đồng**
+- **1 đổi 1**
+- **10 năm**
+- **106 tuyến quốc lộ**
+- **160.000 km**
+- **19.900.000 đồng/pin**
+- **199.000 đồng/tháng**
+- **2.2kW**
+- **2025**
+- **21.912 xe**
+- **24 tháng**
+- **250 triệu đồng**
+- **27/5/2026**
+- **3 năm**
+- **3 tháng**
+- **3 tháng bảo hành**
+- **3.5kW**
+- **3/6/2026**
+- **30/06/2025**
+- **31/12/2025**
+- **45.500.000 VNĐ**
+- **48 tỉnh, thành phố**
+- **500 km/tháng**
+- **51 triệu đồng**
+- **511,6 triệu USD**
+- **7 năm**
+- **8/3**
+- **9,4 triệu đồng**
+- **App Store**
+- **Argus Cyber Security**
+- **BESTWOMAN**
+- **BSI**
+- **Báo cáo ESHIA**
+- **bảo hiểm**
+- **bảo hành**
+- **bảo hành 10 năm**
+- **bảo hành 6 năm**
+- **bảo hành pin 8 năm**
+- **bến xe**
+- **Bộ Giao thông Vận tải**
+- **Bộ Giao thông vận tải**
+- **Car India Awards**
+- **Car&Bike Awards**
+- **CES 2022**
+- **CH Play**
+- **Chung cư Quân đội K33 BQP**
+- **Chung cư Valencia Garden**
+- **chính sách 1 đổi 1**
+- **chính sách bán hàng**
+- **chính sách bảo hiểm**
+- **chính sách bảo hành**
+- **chính sách bảo vệ dữ liệu**
+- **Chính sách bảo vệ dữ liệu cá nhân**
+- **chính sách cam kết thời gian sửa chữa**
+- **chính sách cứu hộ**
+- **chính sách cứu hộ pin 24/7**
+- **chính sách giá**
+- **chính sách giá bán**
+- **chính sách hậu mãi**
+- **chính sách miễn phí sạc**
+- **chương trình 'Kiến tạo dịch vụ 5 sao'**
+- **chương trình trả góp**
+- **chương trình đào tạo kỹ sư**
+- **Chị Vàng**
+- **Công viên Bờ sông Sài Gòn**
+- **Cục Đăng kiểm Việt Nam**
+- **Discovery Complex**
+- **Dreamland Bonanza**
+- **Dịch vụ Hậu mãi chuẩn 5 sao**
+- **dịch vụ Valet**
+- **dịch vụ valet**
+- **Dự án Tổ hợp sản xuất ô tô**
+- **Dự án Tổ hợp sản xuất ô tô - xe máy điện**
+- **E1000**
+- **eCall**
+- **Eco Lake View**
+- **ERM**
+- **EURO NCAP**
+- **EVN Finance**
+- **FRS 8A.1.13.1**
+- **FRS 8B.1.13.0**
+- **FRS 9A.5.12.0**
+- **Gamuda Garden**
+- **Giờ Trái Đất**
+- **Gymkhana Otofun Championship 2022**
+- **gói 3**
+- **HDF**
+- **Herio Green**
+- **hóa đơn**
+- **HĐTP**
+- **hợp tác kinh doanh**
+- **Hợp Đồng**
+- **Hợp đồng cho thuê pin ô tô**
+- **hợp đồng điện tử**
+- **IEC62196-2**
+- **Innovation Technology and Imaging Awards**
+- **Intracom Riverside**
+- **ISO 45001**
+- **Khu bảo tồn chim và đa dạng sinh học An Hải**
+- **khuyến mại**
+- **Khách sạn La Thành**
+- **Landmark 81**
+- **Limo Green**
+- **Liên Hợp Quốc**
+- **Los Angeles Auto Show**
+- **Lotte Finance**
+- **Lux A2.0**  ←  Gói Dán Film Cách Nhiệt VinFast Lux A2.0
+- **luật pháp Việt Nam**
+- **Lạc Hồng chống đạn**
+- **Marriott Resort & Spa Đà Nẵng**
+- **Mastercard**
+- **miễn phí bảo dưỡng**
+- **Motoring World Awards**
+- **Mãnh liệt tinh thần Việt Nam – Vì tương lai xanh**
+- **Nghị định 10/2022/NĐ-CP**
+- **Nghị định 123/2021/NĐ-CP**
+- **Nghị định số 10/2022/NĐ-CP**
+- **nhà sản xuất**
+- **NXP Semiconductor**
+- **Năm 2026**
+- **Nội**
+- **PCCC**
+- **Pearl Club**
+- **phụ nữ**
+- **quy định 2015/758**
+- **Quý 3**
+- **quỹ Vì tương lai xanh**
+- **Shinhan Finance**
+- **SOS**
+- **Sổ bảo hành**
+- **sổ bảo hành**
+- **Sữa Ất Thảo 2**
+- **T3 India Technology Awards**
+- **Thông tư 36/2022/TT-BTC**
+- **Thông tư 55/2022/TT-BTC**
+- **Thông tư 70/2021**
+- **Times Drive Auto Summit & Awards**
+- **Torino Design**
+- **Trung tâm Triển lãm Việt Nam**
+- **trả góp**
+- **trụ DC 30kW**
+- **trụ DC 60kW**
+- **trụ sạc 11 kW**  ←  trụ sạc 11kW
+- **trụ sạc 30kW**
+- **trụ sạc 60kW**
+- **trụ sạc AC**
+- **trụ sạc DC 150 kW**
+- **trụ sạc DC 250 kW**
+- **trụ sạc DC 30 kW**
+- **trụ sạc DC 30kW**
+- **trụ sạc DC 60 kW**
+- **trụ sạc DC 60kW**
+- **TTTM Lan Chi Ba Vì**
+- **TTTM Trương Định Plaza**
+- **TTTM Vincom**
+- **Tòa án Việt Nam**
+- **Tấm Rèm Trần Panorama**
+- **tấm rèm trần panorama**
+- **Tết**
+- **Tổ chức Tài chính Quốc tế**
+- **Tổ hợp sản xuất ô tô**
+- **tổ hợp sản xuất ô tô**
+- **Tổ hợp sản xuất ô tô - xe máy điện**
+- **tủ đổi pin**
+- **VDE**
+- **Vinaconex 21**
+- **VinBigdata**
+- **Vincom Center Metropolis**
+- **Vincom Plaza Long Biên**
+- **Vincom Plaza Ngô Quyền**
+- **VinFuture**
+- **Vinhomes Green Paradise**
+- **Vinhomes Metropolis**
+- **Vinhomes Riverside**
+- **Vinhomes Skylake**
+- **Vinhomes West Point**
+- **Vinmec**
+- **Vinpearl Condotel Riverfront**
+- **Vinpearl Resort & Spa Đà Nẵng**
+- **Visacard**
+- **VTV**
+- **World Cup 2026**
+- **XMĐ MAX**
+- **ĐTM**
+- **Đơn Đặt Hàng**
+- **đơn đặt hàng**
+- **Đại học Bách Khoa Hồ Chí Minh**  ←  Đại học Bách Khoa TP.HCM
+- **Đại học Công nghiệp Hà Nội**
+- **Đại học Giao thông Vận tải**
+- **Đại học Quản lý Singapore**
+- **Đại học Sư phạm Kỹ thuật Hưng Yên**
+- **đại lý chính hãng**
+- **Đại lý phân phối**
+- **đại lý phân phối**
+- **Đại lý phân phối chính hãng**
+- **Đại lý Phân phối Xe Máy Điện VinFast**
+- **Đại lý ô tô Hải Châu**  ←  Đại lý ô tô VinFast Hải Châu

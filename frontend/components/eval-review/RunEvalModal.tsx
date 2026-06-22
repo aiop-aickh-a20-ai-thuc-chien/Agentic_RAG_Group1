@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, X, Zap } from "lucide-react";
 import { evalApi } from "@/lib/eval-review-api";
-import type { JobStatus } from "@/lib/eval-review-types";
+import type {
+  EvalFlags,
+  JobStatus,
+  QuestionIndexStatus,
+} from "@/lib/eval-review-types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -13,10 +17,122 @@ interface Props {
 
 type Phase = "confirm" | "running" | "done" | "error";
 
+const TOGGLES: { key: keyof EvalFlags; label: string; hint: string }[] = [
+  {
+    key: "hard_filter_enabled",
+    label: "Hard filter (entity)",
+    hint: "Lọc theo entity (model/địa điểm) phát hiện trong câu hỏi",
+  },
+  {
+    key: "metadata_boosting_enabled",
+    label: "Metadata boosting",
+    hint: "Tăng/giảm điểm theo document_type × recency × dedup",
+  },
+  {
+    key: "question_index_enabled",
+    label: "Question-index retriever",
+    hint: "Đường thứ 3 (RRF): khớp câu hỏi ↔ câu hỏi của chunk",
+  },
+  {
+    key: "entity_prefilter_llm",
+    label: "LLM map entity",
+    hint: "Khi từ điển trượt, dùng LLM đoán entity (chỉ khi hard filter bật)",
+  },
+];
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-start justify-between gap-3 rounded-lg border border-line px-3 py-2.5 text-left transition hover:bg-paper"
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{label}</p>
+        <p className="text-xs leading-snug text-ink/50">{hint}</p>
+      </div>
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition",
+          checked ? "bg-mint" : "bg-mist",
+        )}
+      >
+        <span
+          className={cn(
+            "h-4 w-4 rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-4" : "translate-x-0",
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
 export function RunEvalModal({ approvedCount, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("confirm");
   const [status, setStatus] = useState<JobStatus | null>(null);
+  const [runRagas, setRunRagas] = useState(true);
+  const [flags, setFlags] = useState<EvalFlags | null>(null);
+  const [qi, setQi] = useState<QuestionIndexStatus | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const qiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    evalApi
+      .getEvalFlags()
+      .then(setFlags)
+      .catch(() => setFlags(null));
+    evalApi
+      .getQuestionIndexStatus()
+      .then(setQi)
+      .catch(() => setQi(null));
+    return () => {
+      if (qiPollRef.current) clearInterval(qiPollRef.current);
+    };
+  }, []);
+
+  const handleBuildQi = async () => {
+    setQi((prev) =>
+      prev
+        ? { ...prev, build_status: "running", build_message: "Đang build..." }
+        : prev,
+    );
+    try {
+      await evalApi.buildQuestionIndex();
+    } catch (e) {
+      setQi((prev) =>
+        prev
+          ? {
+              ...prev,
+              build_status: "error",
+              build_message: e instanceof Error ? e.message : String(e),
+            }
+          : prev,
+      );
+      return;
+    }
+    if (qiPollRef.current) clearInterval(qiPollRef.current);
+    qiPollRef.current = setInterval(async () => {
+      try {
+        const s = await evalApi.getQuestionIndexStatus();
+        setQi(s);
+        if (s.build_status === "done" || s.build_status === "error") {
+          if (qiPollRef.current) clearInterval(qiPollRef.current);
+          qiPollRef.current = null;
+        }
+      } catch {}
+    }, 2000);
+  };
 
   const stopPoll = () => {
     if (pollRef.current) {
@@ -30,7 +146,7 @@ export function RunEvalModal({ approvedCount, onClose }: Props) {
   const handleStart = async () => {
     setPhase("running");
     try {
-      await evalApi.runEval(true);
+      await evalApi.runEval(runRagas, flags ?? undefined);
     } catch (e) {
       setStatus({
         status: "error",
@@ -125,6 +241,70 @@ export function RunEvalModal({ approvedCount, onClose }: Props) {
                   <li>RAGAS: Context Precision, Context Recall</li>
                 </ul>
               </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-ink/80">
+                  Cấu hình retrieval (áp cho lần chạy này, không cần restart):
+                </p>
+                {flags ? (
+                  TOGGLES.map((t) => (
+                    <Toggle
+                      key={t.key}
+                      label={t.label}
+                      hint={t.hint}
+                      checked={flags[t.key]}
+                      onChange={(v) => setFlags({ ...flags, [t.key]: v })}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-ink/40">Đang tải cấu hình hiện tại...</p>
+                )}
+                <Toggle
+                  label="RAGAS metrics"
+                  hint="Faithfulness, Answer Relevancy, Context Precision/Recall (chậm hơn)"
+                  checked={runRagas}
+                  onChange={setRunRagas}
+                />
+              </div>
+
+              {/* Question-index side collection: build/rebuild without the CLI */}
+              <div className="rounded-lg border border-line bg-paper px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-ink/80">
+                      Question index (collection phụ Qdrant)
+                    </p>
+                    <p className="text-xs text-ink/50">
+                      {qi == null
+                        ? "Đang kiểm tra..."
+                        : qi.build_status === "running"
+                          ? "Đang build..."
+                          : qi.exists
+                            ? `Đã build: ${qi.count.toLocaleString()} câu hỏi`
+                            : "Chưa build — sẽ chạy fallback in-memory"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBuildQi}
+                    disabled={qi?.build_status === "running"}
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 text-xs font-medium text-ink/70 transition hover:bg-white disabled:opacity-50"
+                  >
+                    {qi?.build_status === "running" && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    )}
+                    {qi?.exists ? "Build lại" : "Build"}
+                  </button>
+                </div>
+                {qi?.build_status === "error" && (
+                  <p className="mt-1.5 text-xs text-danger">{qi.build_message}</p>
+                )}
+              </div>
+
+              <p className="text-[11px] leading-snug text-ink/40">
+                Lưu ý: BM25 keyword-augment là cờ lúc index nên không có ở đây — đổi nó cần
+                chạy lại <span className="font-mono">reupsert_sparse.py</span>.
+              </p>
             </div>
           )}
 

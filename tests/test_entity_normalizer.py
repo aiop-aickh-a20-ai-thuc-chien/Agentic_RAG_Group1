@@ -160,14 +160,14 @@ def test_combined_filter_without_entity_filter_has_no_entity_condition() -> None
 def test_prefilter_flag_off(monkeypatch: pytest.MonkeyPatch) -> None:
     from agentic_rag.retrieval import search
 
-    monkeypatch.setenv("ENTITY_PREFILTER_ENABLED", "false")
+    monkeypatch.setenv("HARD_FILTER_ENABLED", "false")
     assert search._entity_prefilter_for("VF 8 giá bao nhiêu") is None
 
 
 def test_prefilter_flag_on(monkeypatch: pytest.MonkeyPatch) -> None:
     from agentic_rag.retrieval import search
 
-    monkeypatch.setenv("ENTITY_PREFILTER_ENABLED", "true")
+    monkeypatch.setenv("HARD_FILTER_ENABLED", "true")
     assert search._entity_prefilter_for("VF 8 giá bao nhiêu") == ["VF 8"]
 
 
@@ -178,7 +178,7 @@ def test_llm_paraphrase_fallback_on(monkeypatch: pytest.MonkeyPatch) -> None:
     from agentic_rag.retrieval import search
 
     search._llm_detect_entities.cache_clear()
-    monkeypatch.setenv("ENTITY_PREFILTER_ENABLED", "true")
+    monkeypatch.setenv("HARD_FILTER_ENABLED", "true")
     monkeypatch.setenv("ENTITY_PREFILTER_LLM", "true")
 
     class FakeClient:
@@ -198,7 +198,7 @@ def test_llm_paraphrase_fallback_off_by_default(monkeypatch: pytest.MonkeyPatch)
     from agentic_rag.retrieval import search
 
     search._llm_detect_entities.cache_clear()
-    monkeypatch.setenv("ENTITY_PREFILTER_ENABLED", "true")
+    monkeypatch.setenv("HARD_FILTER_ENABLED", "true")
     monkeypatch.delenv("ENTITY_PREFILTER_LLM", raising=False)  # default off
     # No literal entity + LLM off -> no pre-filter (full search).
     assert search._entity_prefilter_for("mẫu SUV điện cao cấp nhất") is None

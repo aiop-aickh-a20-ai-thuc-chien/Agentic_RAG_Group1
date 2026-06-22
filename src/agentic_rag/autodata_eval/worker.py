@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import threading
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from agentic_rag.autodata_eval.db import get_conn, retry_on_operational_error
@@ -14,6 +17,45 @@ logger = logging.getLogger(__name__)
 _POLL_INTERVAL = 3.0
 _BATCH_SIZE = 3
 _RAGAS_MAX_FAILURES = 3  # số batch lỗi liên tiếp trước khi RAGAS bỏ cuộc cho 1 run
+
+# Per-run retrieval toggles carried in run_config → env var the retrieval code reads.
+# Absent key = leave the env value untouched for this run.
+_TOGGLE_ENV = {
+    "hard_filter_enabled": "HARD_FILTER_ENABLED",
+    "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
+    "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
+    "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+    "question_min_score": "QUESTION_MIN_SCORE",
+}
+
+
+@contextlib.contextmanager
+def _toggle_env_overrides(run_config: dict[str, Any]) -> Iterator[None]:
+    """Apply this run's retrieval toggles to os.environ, restoring them afterwards.
+
+    The flag readers call os.getenv live, so this takes effect for the run without
+    a restart. NOTE: os.environ is process-global — concurrent /answer traffic sees
+    the overrides while the run is active.
+    """
+    previous: dict[str, str | None] = {}
+    try:
+        for key, env_name in _TOGGLE_ENV.items():
+            if key not in run_config or run_config[key] is None:
+                continue
+            value = run_config[key]
+            previous[env_name] = os.environ.get(env_name)
+            if isinstance(value, bool):
+                os.environ[env_name] = "true" if value else "false"
+            else:
+                os.environ[env_name] = str(value)
+        yield
+    finally:
+        for env_name, old in previous.items():
+            if old is None:
+                os.environ.pop(env_name, None)
+            else:
+                os.environ[env_name] = old
+
 
 # Guard chống 2 worker thread cùng chạy cho 1 run_id
 _running_workers: set[str] = set()
@@ -440,22 +482,23 @@ def run_eval_worker(run_id: str) -> None:
         )
         ragas_thread.start()
 
-        while True:
-            if _get_run_status(run_id) == "paused":
-                time.sleep(_POLL_INTERVAL)
-                continue
+        with _toggle_env_overrides(run_config):
+            while True:
+                if _get_run_status(run_id) == "paused":
+                    time.sleep(_POLL_INTERVAL)
+                    continue
 
-            row = _next_pending_question(run_id)
-            if row is None:
-                break
+                row = _next_pending_question(run_id)
+                if row is None:
+                    break
 
-            payload = run_pipeline_for_question(
-                question_id=str(row["id"]),
-                question=row["question"],
-                source_chunk_ids=row.get("source_chunk_ids") or [],
-                exclude_dedup_layers=exclude_dedup_layers or None,
-            )
-            _write_result(run_id, str(row["id"]), payload)
+                payload = run_pipeline_for_question(
+                    question_id=str(row["id"]),
+                    question=row["question"],
+                    source_chunk_ids=row.get("source_chunk_ids") or [],
+                    exclude_dedup_layers=exclude_dedup_layers or None,
+                )
+                _write_result(run_id, str(row["id"]), payload)
 
         logger.info("Pipeline done for run %s, waiting for RAGAS consumer", run_id)
         pipeline_done.set()

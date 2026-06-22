@@ -106,6 +106,10 @@ That provider also supplies the multilingual default model when
 uv sync --extra local-models
 ```
 
+On Windows/Linux, the `local-models` extra resolves `torch` from the PyTorch
+`cu124` index declared in `pyproject.toml`; verify `torch.version.cuda` before
+setting a device explicitly to `cuda`.
+
 `EMBEDDING_DEVICE` supports `auto`, `cpu`, `cuda`, and `mps`, but is used only
 for `sentence_transformers`. HTTP and named API providers ignore it.
 
