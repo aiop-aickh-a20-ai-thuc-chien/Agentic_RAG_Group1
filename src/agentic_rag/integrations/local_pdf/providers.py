@@ -83,13 +83,17 @@ from agentic_rag.retrieval.fusion import (
 )
 from agentic_rag.retrieval.search import (
     Store,
+    _question_index_enabled,
     delete_all_qdrant_points,
+    delete_all_qdrant_questions,
     delete_qdrant_document_points,
+    delete_qdrant_document_questions,
     dense_embedding_metadata,
     embed_chunk_texts,
     qdrant_hybrid_search,
     qdrant_similar_by_vectors,
     upsert_dense_embeddings,
+    upsert_question_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -2404,7 +2408,8 @@ def _upsert_dense_embeddings_safely(
 
     if _qdrant_vector_store_enabled():
         trace = _upsert(chunks)
-        return {**trace, "latency_ms": _latency_ms(started_at)}
+        question_trace = _sync_question_index_safely(chunks)
+        return {**trace, "question_index": question_trace, "latency_ms": _latency_ms(started_at)}
 
     embedding_metadata = dense_embedding_metadata()
     try:
@@ -2420,23 +2425,51 @@ def _upsert_dense_embeddings_safely(
     return {**trace, "latency_ms": _latency_ms(started_at)}
 
 
+def _sync_question_index_safely(chunks: list[Chunk]) -> dict[str, object]:
+    """Best-effort: keep the auxiliary Qdrant question collection in sync on ingest.
+
+    Only runs when the question-index retriever is enabled, so ingestion pays the
+    extra embedding cost only while the feature is in use. Never raises — a failure
+    here must not block document ingestion (the side collection can be rebuilt later
+    with scripts/build_question_index.py).
+    """
+    if not _question_index_enabled():
+        return {"enabled": False}
+    try:
+        return upsert_question_index(chunks)
+    except Exception as exc:  # pragma: no cover - defensive, ingest must not fail here
+        return {"enabled": True, "status": "error", "error": str(exc)}
+
+
 def _delete_dense_document(document_id: str) -> dict[str, object]:
     try:
-        return delete_qdrant_document_points(document_id)
+        trace = delete_qdrant_document_points(document_id)
     except Exception as exc:
         raise RuntimeError(
             f"Qdrant deletion failed for document {document_id!r}; "
             f"source storage was not deleted: {exc}"
         ) from exc
+    # Best-effort: drop the document's question points so a hit cannot surface
+    # deleted content. A failure here must not block the primary deletion.
+    try:
+        delete_qdrant_document_questions(document_id)
+    except Exception:
+        logger.warning("Failed to delete question points for %s", document_id, exc_info=True)
+    return trace
 
 
 def _delete_all_dense_embeddings() -> dict[str, object]:
     try:
-        return delete_all_qdrant_points()
+        trace = delete_all_qdrant_points()
     except Exception as exc:
         raise RuntimeError(
             f"Qdrant deletion failed while clearing sources; source storage was not deleted: {exc}"
         ) from exc
+    try:
+        delete_all_qdrant_questions()
+    except Exception:
+        logger.warning("Failed to clear question index collection", exc_info=True)
+    return trace
 
 
 def _qdrant_vector_store_enabled() -> bool:

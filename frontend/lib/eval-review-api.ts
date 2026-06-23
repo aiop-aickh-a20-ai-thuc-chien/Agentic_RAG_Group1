@@ -1,4 +1,12 @@
-import type { Chunk, EvalRowStatus, JobStatus, RejectedRow, Row } from "./eval-review-types";
+import type {
+  Chunk,
+  EvalFlags,
+  EvalRowStatus,
+  JobStatus,
+  QuestionIndexStatus,
+  RejectedRow,
+  Row,
+} from "./eval-review-types";
 
 const BASE = `${process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://127.0.0.1:8000"}/eval-review`;
 
@@ -38,11 +46,21 @@ export const evalApi = {
       { method: "POST" },
     ),
 
-  runEval: (runRagas = true) =>
+  runEval: (runRagas = true, toggles?: Partial<EvalFlags>) =>
     fetchJSON<{ message: string }>(`${BASE}/api/eval/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ run_ragas: runRagas }),
+      body: JSON.stringify({ run_ragas: runRagas, ...toggles }),
+    }),
+
+  getEvalFlags: () => fetchJSON<EvalFlags>(`${BASE}/api/eval/flags`),
+
+  getQuestionIndexStatus: () =>
+    fetchJSON<QuestionIndexStatus>(`${BASE}/api/eval/question-index`),
+
+  buildQuestionIndex: () =>
+    fetchJSON<{ message: string }>(`${BASE}/api/eval/question-index/build`, {
+      method: "POST",
     }),
 
   getEvalStatus: () => fetchJSON<JobStatus>(`${BASE}/api/eval/status`),

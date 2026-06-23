@@ -20,6 +20,25 @@ const DEDUP_LAYERS = [
   { key: "embedding_similarity", label: "L3 Embedding", field: "embedding_chunks" },
 ] as const;
 
+type RetrievalFlags = {
+  hard_filter_enabled: boolean;
+  metadata_boosting_enabled: boolean;
+  question_index_enabled: boolean;
+  entity_prefilter_llm: boolean;
+};
+type QIStatus = {
+  exists: boolean;
+  count: number;
+  build_status: "idle" | "running" | "done" | "error";
+  build_message: string;
+};
+const RETRIEVAL_TOGGLES: { key: keyof RetrievalFlags; label: string; hint: string }[] = [
+  { key: "hard_filter_enabled",       label: "Hard filter (entity)", hint: "Lọc theo entity trong câu hỏi" },
+  { key: "metadata_boosting_enabled", label: "Metadata boosting",    hint: "document_type × recency × dedup" },
+  { key: "question_index_enabled",    label: "Question-index",       hint: "Đường thứ 3 RRF: query ↔ câu hỏi" },
+  { key: "entity_prefilter_llm",      label: "LLM map entity",       hint: "LLM đoán entity khi từ điển trượt" },
+];
+
 const STATUS_LABEL: Record<string, string> = {
   queued:  "Đang chờ",
   running: "Đang chạy",
@@ -57,6 +76,40 @@ export default function EvalRunPage() {
   const [affectedQ,          setAffectedQ]          = useState<{ total: number; affected: number; remaining: number } | null>(null);
   const toggleDedupLayer = (key: string) =>
     setExcludeDedupLayers((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
+  // Retrieval feature toggles + question-index side collection
+  const [flags, setFlags] = useState<RetrievalFlags | null>(null);
+  const [qi, setQi] = useState<QIStatus | null>(null);
+  const qiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toggleFlag = (key: keyof RetrievalFlags) =>
+    setFlags((f) => (f ? { ...f, [key]: !f[key] } : f));
+
+  useEffect(() => {
+    fetch(`${API}/eval-review/api/eval/flags`).then((r) => r.json()).then(setFlags).catch(() => {});
+    fetch(`${API}/eval-review/api/eval/question-index`).then((r) => r.json()).then(setQi).catch(() => {});
+    return () => { if (qiPollRef.current) clearInterval(qiPollRef.current); };
+  }, []);
+
+  async function buildQuestionIndex() {
+    setQi((q) => (q ? { ...q, build_status: "running", build_message: "Đang build..." } : q));
+    try {
+      await fetch(`${API}/eval-review/api/eval/question-index/build`, { method: "POST" });
+    } catch {
+      return;
+    }
+    if (qiPollRef.current) clearInterval(qiPollRef.current);
+    qiPollRef.current = setInterval(async () => {
+      try {
+        const s: QIStatus = await fetch(`${API}/eval-review/api/eval/question-index`).then((r) => r.json());
+        setQi(s);
+        if (s.build_status === "done" || s.build_status === "error") {
+          if (qiPollRef.current) clearInterval(qiPollRef.current);
+          qiPollRef.current = null;
+          if (s.build_status === "done") toast.success(`Question index: ${s.count} câu hỏi`);
+        }
+      } catch {}
+    }, 2000);
+  }
 
   // Rename state
   const [editingId,   setEditingId]   = useState<string | null>(null);
@@ -143,7 +196,10 @@ export default function EvalRunPage() {
         body: JSON.stringify({
           dataset_id: datasetId,
           name: runName.trim(),
-          config: excludeDedupLayers.size ? { exclude_dedup_layers: [...excludeDedupLayers] } : {},
+          config: {
+            ...(excludeDedupLayers.size ? { exclude_dedup_layers: [...excludeDedupLayers] } : {}),
+            ...(flags ?? {}),
+          },
         }),
       });
       const d: Run = await r.json();
@@ -359,6 +415,76 @@ export default function EvalRunPage() {
                 </div>
               );
             })()}
+          </div>
+
+          {/* Retrieval feature toggles (áp cho run này, không cần restart) */}
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Layers size={13} className="text-gray-400 shrink-0" />
+              <span className="text-xs font-medium text-gray-500">Tính năng retrieval (cho run này)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {RETRIEVAL_TOGGLES.map(({ key, label, hint }) => {
+                const active = flags?.[key] ?? false;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={!flags}
+                    onClick={() => toggleFlag(key)}
+                    className={cn(
+                      "relative rounded-xl border px-3 py-2.5 text-left transition-all pressable disabled:opacity-50",
+                      active
+                        ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600/30 shadow-sm"
+                        : "border-black/10 bg-white hover:border-black/20 hover:bg-gray-50"
+                    )}
+                  >
+                    <span className={cn(
+                      "absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full border text-[10px] transition-colors",
+                      active ? "border-emerald-600 bg-emerald-600 text-white" : "border-gray-300 bg-white text-transparent"
+                    )}>
+                      ✓
+                    </span>
+                    <p className={cn("text-xs font-semibold", active ? "text-emerald-800" : "text-gray-700")}>{label}</p>
+                    <p className={cn("text-[11px] mt-0.5", active ? "text-emerald-700" : "text-gray-400")}>{hint}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Question-index side collection: status + build */}
+            <div className="rounded-lg border border-black/8 bg-gray-50 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-700">Question index (collection phụ)</p>
+                  <p className="text-[11px] text-gray-500">
+                    {qi == null
+                      ? "Đang kiểm tra..."
+                      : qi.build_status === "running"
+                        ? "Đang build..."
+                        : qi.exists
+                          ? `Đã build: ${qi.count.toLocaleString()} câu hỏi`
+                          : "Chưa build — sẽ fallback in-memory"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={buildQuestionIndex}
+                  disabled={qi?.build_status === "running"}
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {qi?.build_status === "running" && <Loader2 size={13} className="animate-spin" />}
+                  {qi?.exists ? "Build lại" : "Build"}
+                </button>
+              </div>
+              {qi?.build_status === "error" && (
+                <p className="mt-1.5 text-[11px] text-red-600">{qi.build_message}</p>
+              )}
+            </div>
+            <p className="text-[11px] leading-snug text-gray-400">
+              BM25 keyword-augment là cờ lúc index nên không có ở đây — đổi cần chạy lại{" "}
+              <span className="font-mono">reupsert_sparse.py</span>.
+            </p>
           </div>
 
           <button onClick={startRun} disabled={creating || !datasetId || !runName.trim()}

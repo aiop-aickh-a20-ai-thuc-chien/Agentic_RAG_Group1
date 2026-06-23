@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, ChevronLeft, Loader2, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronLeft, Eye, EyeOff, Loader2, TrendingDown, TrendingUp } from "lucide-react";
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
@@ -251,6 +251,22 @@ export default function EvalComparePage() {
   const [datasetId, setDatasetId] = useState<string>("");
   const [runs, setRuns]           = useState<RunSummary[]>([]);
   const [loading, setLoading]     = useState(false);
+  const [hiddenRuns, setHiddenRuns] = useState<Set<string>>(new Set());
+  // run_ids đã được hiện-lại, theo thứ tự khôi phục → đẩy xuống cuối bảng.
+  const [restoreOrder, setRestoreOrder] = useState<string[]>([]);
+  const toggleHidden = (runId: string) => {
+    const isHidden = hiddenRuns.has(runId);
+    setHiddenRuns((prev) => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+    setRestoreOrder((ord) =>
+      isHidden
+        ? [...ord.filter((x) => x !== runId), runId] // hiện lại → xếp cuối
+        : ord.filter((x) => x !== runId), // ẩn đi → bỏ khỏi đuôi
+    );
+  };
 
   // Detailed per-question comparison
   const [detailA, setDetailA]   = useState<string>("");
@@ -273,6 +289,8 @@ export default function EvalComparePage() {
     if (!datasetId) return;
     setLoading(true);
     setDetailA(""); setDetailB(""); setResA([]); setResB([]); setExpanded(null); setDetailPage(0);
+    setHiddenRuns(new Set());
+    setRestoreOrder([]);
     fetch(`${API}/internal/compare?dataset_id=${datasetId}`)
       .then((r) => r.json())
       .then((d: RunSummary[]) => { setRuns(d); setLoading(false); })
@@ -338,6 +356,19 @@ export default function EvalComparePage() {
   // TrendChart chỉ dùng native run — inherited run không thuộc "tiến trình" dataset này
   const nativeRuns  = runs.filter((r) => !r.external);
   const ordered     = [...nativeRuns].reverse();
+  // Dòng đang hiện — delta được tính so với dòng HIỆN liền trước, nên ẩn bớt
+  // giữa rồi chỉ chừa 2 dòng là so trực tiếp 2 dòng đó. Dòng được hiện-lại bị
+  // đẩy xuống CUỐI (theo thứ tự khôi phục) thay vì về vị trí gốc.
+  const restoredSet = new Set(restoreOrder);
+  const baseVisible = ordered.filter(
+    (r) => !hiddenRuns.has(r.run_id) && !restoredSet.has(r.run_id),
+  );
+  const tailVisible = restoreOrder
+    .filter((id) => !hiddenRuns.has(id))
+    .map((id) => ordered.find((r) => r.run_id === id))
+    .filter((r): r is RunSummary => Boolean(r));
+  const visibleOrdered = [...baseVisible, ...tailVisible];
+  const hiddenList = ordered.filter((r) => hiddenRuns.has(r.run_id));
   const inheritedRuns = runs.filter((r) => r.external);
 
   return (
@@ -368,6 +399,32 @@ export default function EvalComparePage() {
         </div>
       )}
 
+      {!loading && hiddenList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <span className="text-xs font-medium text-amber-700">
+            Đã ẩn {hiddenList.length} dòng:
+          </span>
+          {hiddenList.map((run) => (
+            <button
+              key={run.run_id}
+              type="button"
+              onClick={() => toggleHidden(run.run_id)}
+              title="Hiện lại"
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-800 transition hover:bg-amber-100"
+            >
+              <Eye size={11} /> {run.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setHiddenRuns(new Set())}
+            className="ml-auto text-[11px] font-medium text-amber-700 underline hover:text-amber-900"
+          >
+            Hiện tất cả
+          </button>
+        </div>
+      )}
+
       {!loading && runs.length > 0 && (
         <div className="bg-white rounded-xl border border-black/8 overflow-hidden">
           <table className="w-full text-sm">
@@ -386,12 +443,22 @@ export default function EvalComparePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {ordered.map((run, i) => {
-                const prev = i > 0 ? ordered[i - 1] : null;
+              {visibleOrdered.map((run, i) => {
+                const prev = i > 0 ? visibleOrdered[i - 1] : null;
                 return (
                   <tr key={run.run_id} className="hover:bg-gray-50/40 transition-colors">
                     <td className="px-4 py-4">
-                      <p className="font-medium text-gray-800">{run.name}</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleHidden(run.run_id)}
+                          title="Ẩn dòng này khỏi so sánh"
+                          className="shrink-0 text-gray-300 transition hover:text-gray-600"
+                        >
+                          <EyeOff size={14} />
+                        </button>
+                        <p className="font-medium text-gray-800">{run.name}</p>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className="text-gray-600 tabular-nums">{run.total_questions.toLocaleString()}</span>
