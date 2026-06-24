@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>URL ground truth chunk review</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.5; margin: 24px; color: #1f2933; }
+    section { border: 1px solid #d6dde5; border-radius: 8px; margin: 18px 0; padding: 16px; }
+    pre {
+      background: #f6f8fa;
+      border-radius: 6px;
+      overflow-x: auto;
+      padding: 12px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>URL ground truth chunk review</h1>
+  <h2>Missing important values</h2>
+  <ul><li>None</li></ul>
+  <section><h2>1. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> VF3 | <strong>Price:</strong> no | <strong>modelId:</strong> yes | <strong>Choices:</strong> no</p><pre># Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+- Dataset ID: dat_coc_vinfast_state
+- Target URL: https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF3
+- Status: state_only_not_yet_calculated</pre></section><section><h2>2. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> VF 9, VF3, VF9 | <strong>Price:</strong> no | <strong>modelId:</strong> yes | <strong>Choices:</strong> yes</p><pre>## Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+- Tên file có VF9 nhưng dataset này được dùng làm ground truth trạng thái cho URL đặt cọc có modelId=Products-Car-VF3.
+- Ground truth hiện mô tả state/configurator và panel modelId; không coi các chi phí lăn bánh là kết quả tính toán cuối cùng cho VF3.
+
+## Thông tin xe hiện tại
+
+- Mẫu xe đang hiển thị: VF 9
+- Trạng thái dataset: state_only_not_yet_calculated</pre></section><section><h2>3. Phiên bản VF 9</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state &gt; Phiên bản VF 9</p><p><strong>Models:</strong> VF 9, VF 9 Plus | <strong>Price:</strong> yes | <strong>modelId:</strong> no | <strong>Choices:</strong> yes</p><pre>### Phiên bản VF 9
+
+- Giá thực tế hiện tại: 1.499.000.000 VNĐ
+- Giá nguyên gốc: 1.589.000.000 VNĐ
+- Trạng thái hiển thị giá gốc: line-through
+- HTML class của giá gốc: field-spec-item--desc-sub
+- Tùy chọn pin: Bao gồm PIN ~423 km/1 lần sạc
+
+### VF 9 Plus tùy chọn 7 chỗ
+
+- Giá thực tế hiện tại: 1.699.000.000 VNĐ
+- Giá nguyên gốc: 1.789.000.000 VNĐ
+- Trạng thái hiển thị giá gốc: line-through
+- HTML class của giá gốc: field-spec-item--desc-sub
+- Tùy chọn pin: Bao gồm PIN ~423 km/1 lần sạc</pre></section><section><h2>4. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> VF9 | <strong>Price:</strong> yes | <strong>modelId:</strong> no | <strong>Choices:</strong> yes</p><pre>### Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+- Giá thực tế hiện tại: 1.731.000.000 VNĐ
+- Giá nguyên gốc: 1.821.000.000 VNĐ
+- Trạng thái hiển thị giá gốc: line-through
+- HTML class của giá gốc: field-spec-item--desc-sub
+- Tùy chọn pin: Bao gồm PIN ~438 km/1 lần sạc
+
+## Ngoại thất VF9
+
+### Màu cơ bản theo xe
+
+- Infinity Blanc (Trắng)
+- Jet Black (Đen)
+- Zenith Grey (Xám)
+- Crimson Red (Đỏ)
+- Urban Mint (Xanh ngọc)
+
+### Màu nâng cao
+
+- Phụ phí: 12.000.000 VNĐ
+- Ivy Green (Xanh lá)
+- Desat Silver (Bạc)</pre></section><section><h2>5. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> - | <strong>Price:</strong> no | <strong>modelId:</strong> no | <strong>Choices:</strong> yes</p><pre>## Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+- Granite Black (Đen)
+- Saddle Brown (Nâu)
+- Cotton Beige (Be)
+- Ghi chú: Tùy chọn màu nội thất phụ thuộc vào việc lựa chọn phiên bản Eco hay Plus.
+## Khách hàng và thanh toán
+### Hạng thành viên VinClub
+- Chưa có
+- VinClub Vàng
+- VinClub Bạch Kim
+- VinClub Kim Cương
+- Quyền lợi: Áp dụng tích điểm và giảm giá trực tiếp tùy theo hạng thẻ VinClub
+### Ưu đãi
+- Mã khuyến mãi: null
+- Chương trình áp dụng: Miễn phí sạc pin, ưu đãi gửi xe công cộng Vingroup
+### Tỉnh thành</pre></section><section><h2>6. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> - | <strong>Price:</strong> no | <strong>modelId:</strong> no | <strong>Choices:</strong> yes</p><pre>## Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+Granite Black (Đen)
+- Saddle Brown (Nâu)
+- Cotton Beige (Be)
+- Ghi chú: Tùy chọn màu nội thất phụ thuộc vào việc lựa chọn phiên bản Eco hay Plus.
+## Khách hàng và thanh toán
+### Hạng thành viên VinClub
+- Chưa có
+- VinClub Vàng
+- VinClub Bạch Kim
+- VinClub Kim Cương
+- Quyền lợi: Áp dụng tích điểm và giảm giá trực tiếp tùy theo hạng thẻ VinClub
+### Ưu đãi
+- Mã khuyến mãi: null
+- Chương trình áp dụng: Miễn phí sạc pin, ưu đãi gửi xe công cộng Vingroup
+### Tỉnh thành
+- Hà Nội
+- TP. Hồ Chí Minh
+- Hà Tĩnh
+- Các tỉnh/thành phố khác</pre></section><section><h2>7. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> - | <strong>Price:</strong> yes | <strong>modelId:</strong> no | <strong>Choices:</strong> yes</p><pre>### Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+| Hạng mục | Giá trị |
+| --- | --- |
+| Giá xe | 1.499.000.000 VNĐ |
+| Phí giảm về ưu đãi | - 0 VNĐ |
+| Lệ phí trước bạ | 0 VNĐ (Ô tô điện được miễn 100% LPTB) |
+| Phí đăng ký biển số | 20.000.000 VNĐ (Tạm tính tại vùng I) |
+| Phí đăng kiểm | 340.000 VNĐ |
+| Phí bảo trì | 1.560.000 VNĐ / năm (Phí bảo trì đường bộ) |
+| Bảo hiểm TNDS bắt buộc | 873.400 VNĐ / năm |
+| Tổng chi phí lăn bánh | 1.521.773.400 VNĐ |
+## Các xe VF khác</pre></section><section><h2>8. Ground truth đặt cọc VinFast: dat_coc_vinfast_state</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state</p><p><strong>Models:</strong> - | <strong>Price:</strong> yes | <strong>modelId:</strong> yes | <strong>Choices:</strong> yes</p><pre>### Ground truth đặt cọc VinFast: dat_coc_vinfast_state
+
+Hạng mục | Giá trị |
+| --- | --- |
+| Giá xe | 1.499.000.000 VNĐ |
+| Phí giảm về ưu đãi | - 0 VNĐ |
+| Lệ phí trước bạ | 0 VNĐ (Ô tô điện được miễn 100% LPTB) |
+| Phí đăng ký biển số | 20.000.000 VNĐ (Tạm tính tại vùng I) |
+| Phí đăng kiểm | 340.000 VNĐ |
+| Phí bảo trì | 1.560.000 VNĐ / năm (Phí bảo trì đường bộ) |
+| Bảo hiểm TNDS bắt buộc | 873.400 VNĐ / năm |
+| Tổng chi phí lăn bánh | 1.521.773.400 VNĐ |
+## Các xe VF khác
+- Mô tả: Panel điều hướng bên phải. Khi tương tác sẽ cập nhật tham số URL ?modelId=</pre></section><section><h2>9. Các xe VF khác</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state &gt; Các xe VF khác</p><p><strong>Models:</strong> VF 5, VF 6, VF 7, VF 8, VF3, VF5, VF6, VF7, VF8 | <strong>Price:</strong> no | <strong>modelId:</strong> yes | <strong>Choices:</strong> no</p><pre>### Các xe VF khác
+
+- modelId: Products-Car-VF3
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.
+
+### VF 5
+
+- modelId: Products-Car-VF5
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.
+
+### VF 6
+
+- modelId: Products-Car-VF6
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.
+
+### VF 7
+
+- modelId: Products-Car-VF7
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.
+
+### VF 8
+
+- modelId: Products-Car-VF8
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.</pre></section><section><h2>10. Các xe VF khác</h2><p><strong>Section:</strong> dat_coc_vinfast_state &gt; Ground truth đặt cọc VinFast: dat_coc_vinfast_state &gt; Các xe VF khác</p><p><strong>Models:</strong> MPV 7, MPV7, VF8 | <strong>Price:</strong> no | <strong>modelId:</strong> yes | <strong>Choices:</strong> no</p><pre>### Các xe VF khác
+
+- modelId: Products-Car-VF8-The-All-New
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.
+
+### MPV 7
+
+- modelId: Products-Car-MPV7
+- Vai trò: mẫu xe trong panel điều hướng cập nhật tham số URL.</pre></section>
+</body>
+</html>

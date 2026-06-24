@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-ghi-nhan-da-tang-truong-manh-me-trong-quy-3-so-xe-ban-giao-tang-115-doanh-thu-tang-493",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-ghi-nhan-da-tang-truong-manh-me-trong-quy-3-so-xe-ban-giao-tang-115-doanh-thu-tang-493",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

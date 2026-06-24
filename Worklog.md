@@ -1,5 +1,494 @@
 # Worklog
 
+## 2026-06-22 - Rule-Based Metadata and V2 Deduplication / LLM Review
+
+### Completed
+
+- **L2 Metadata Blocking and LLM Review Layer**:
+  - Implemented L2 metadata-based blocking and LLM-assisted duplicate review (`metadata_llm` layer) in [pipeline.py](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/ingestion/dedup_detect/pipeline.py).
+  - Structured metadata key construction ([metadata_block_key](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/ingestion/dedup_detect/blocking/keys.py#L37)) using static and dynamic block fields (e.g., `source_type`, `document_type`, `domain`, `product_model`, `language`, `scope_type`, `attribute_group`).
+  - Introduced [DuplicateReview](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/ingestion/dedup_detect/models.py#L67) model to represent conservative L2 classification with confidence, reason, compared metadata fields, evidence refs, and pair categories (e.g., cross-model, same-state-replay, sibling-state).
+  - Added a state-guard review ([_state_guard_review](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/ingestion/dedup_detect/llm_review/reviewer.py#L74)) to deterministically identify non-duplicates based on critical dynamic-state differences (e.g., `edition_id`, `exterior_id`, `surcharge`, etc.) or same-state replays.
+- **Shared Ingestion Metadata Normalization**:
+  - Upgraded shared metadata schemas and normalization in [normalize.py](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/ingestion/metadata/normalize.py).
+  - Ensured that standard required fields (`source_type`, `updated_date`) are properly populated and validated across PDF and URL loaders.
+- **RAG Ingestion and Retrieval Enhancements**:
+  - Integrated question-index contribution tracing and Qdrant index fields.
+  - Excluded debug-only chunks from local retrieval and optimized metadata pre-filtering.
+
+### Verification
+
+```powershell
+uv run pytest -q
+```
+
+### Current Status
+
+- All unit and integration tests pass: 560 passed.
+- Robust, conservative L2 deduplication layer with deterministic state guards and LLM review integration is complete and tested.
+
+## 2026-06-19 - Crawlee Renderer for Ill-Structured URL Pages
+
+### Completed
+
+- Added optional `crawlee[playwright]` support under the `crawling` extra.
+- Added a Crawlee-backed Playwright extractor that returns the existing
+  `ExtractedMarkdown` contract, including rendered HTML, final URL, product
+  tables, and embedded JSON hydration.
+- Updated render options to allow `timeout_seconds=None` for explicit
+  unbounded Crawlee runs while still validating positive bounded timeouts.
+- Routed render-required URL profiles through Crawlee first, then direct
+  Playwright fallback if Crawlee is unavailable or fails.
+- Added sleep/retry settling for slow or inactive configurators. When
+  `timeout_seconds` is set, each sleep is bounded by the remaining budget.
+- Added focused tests for unbounded render options and Crawlee-first loader
+  selection.
+
+### Verification
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/url/extractor.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/rendering/browser.py src/agentic_rag/ingestion/url/tests/test_acquisition_rendering_quality.py src/agentic_rag/ingestion/url/tests/test_loader.py
+uv run ruff check src/agentic_rag/ingestion/url/extractor.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/rendering/browser.py src/agentic_rag/ingestion/url/rendering/__init__.py src/agentic_rag/ingestion/url/tests/test_acquisition_rendering_quality.py src/agentic_rag/ingestion/url/tests/test_loader.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_acquisition_rendering_quality.py src/agentic_rag/ingestion/url/tests/test_loader.py -q
+```
+
+### Current Status
+
+- Focused rendering and loader tests pass: 36 passed.
+- Ruff check passes for the touched URL rendering files.
+- Existing Pydantic serializer warnings for flexible chunk metadata still appear.
+- Live VF 9 verification still needs to be rerun with the optional `crawling`
+  extra installed.
+
+## 2026-06-19 - VF 9 Configurator DOM Entity Extraction
+
+### Completed
+
+- Preserved configurator `data-*` attributes on semantic DOM blocks, including
+  values such as `data-price-value` and `data-bs-target`.
+- Added primary page entity inference from title, path, and query parameters
+  such as `modelId=Products-Car-VF9`.
+- Filtered semantic DOM blocks against the primary model before structure-aware
+  Markdown and entity extraction, reducing cross-sell model promotion.
+- Extended product spec extraction with nested `editions` and `colors` while
+  keeping existing flat shortcut fields for retrieval compatibility.
+- Added embedded JSON state hydration for `application/json` and `__NEXT_DATA__`
+  scripts, rendering edition pricing into stable Markdown tables.
+- Added a BeautifulSoup helper for CSS grid/flex sibling label-value pairs.
+- Added regression tests for data attributes, primary-model filtering,
+  Eco/Plus pricing, label-value pairs, and embedded JSON hydration.
+
+### Verification
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/url/extractor.py src/agentic_rag/ingestion/url/dom/blocks.py src/agentic_rag/ingestion/url/dom/entities.py src/agentic_rag/ingestion/url/entities/__init__.py src/agentic_rag/ingestion/url/entities/extractor.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/metadata/enrichment.py src/agentic_rag/ingestion/url/tests/test_dom_entities_metadata.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_dom_entities_metadata.py src/agentic_rag/ingestion/url/tests/test_loader.py -q
+uv run ruff check src/agentic_rag/ingestion/url/extractor.py src/agentic_rag/ingestion/url/dom/blocks.py src/agentic_rag/ingestion/url/dom/entities.py src/agentic_rag/ingestion/url/entities/__init__.py src/agentic_rag/ingestion/url/entities/extractor.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/metadata/enrichment.py src/agentic_rag/ingestion/url/tests/test_dom_entities_metadata.py
+```
+
+### Current Status
+
+- Focused DOM/entity and loader tests pass: 31 passed.
+- Ruff check passes for the touched URL ingestion files.
+- Existing Pydantic serializer warnings for flexible chunk metadata still appear.
+- A live `guide_2/verify_ingestion.py` rerun is still needed to measure the VF 9
+  score change against the real page.
+
+## 2026-06-19 - Promoted Interaction Artifacts in Main URL Output
+
+### Completed
+
+- Updated URL ingestion so promoted dynamic interaction chunks are rendered into
+  the primary `LoadedUrlDocument.markdown`.
+- Rewrote primary URL ingestion artifacts after interaction promotion so
+  `parsed.md`, `chunks.jsonl`, and `manifest.json` stay aligned with the
+  returned chunks.
+- Added evaluatable Markdown plus fenced JSON for promoted interaction facts,
+  making selected model and deposit amount fields visible to
+  `guide_2/verify_ingestion.py`.
+- Added a focused loader regression test covering promoted interaction chunks,
+  artifact Markdown, JSONL chunks, and manifest counters.
+- Updated `guide_2/TODO.md` to mark the main verifier merge path complete.
+
+### Verification
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/tests/test_loader.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_loader.py -q
+```
+
+### Current Status
+
+- Focused URL loader tests pass: 22 passed.
+- Existing Pydantic serializer warnings for flexible chunk metadata still appear.
+- VF 9 edition tables, color tables, warranty extraction, CTA extraction, and
+  cross-model filtering remain open in `guide_2/TODO.md`.
+
+## 2026-06-19 - Structure-Aware URL Ingestion Pass
+
+### Completed
+
+- Added DOM structure-aware Markdown augmentation before URL chunking:
+  product cards, comparison rows/tables, and FAQ-like blocks can emit generated
+  `## Structured DOM Content` sections.
+- Added dedupe fingerprints for generated structural blocks via
+  `structure_dedupe_hash`.
+- Added chunk metadata for downstream filtering/dedup:
+  `section_origin`, `structure_aware`, `structure_block_types`,
+  `structure_block_ids`, and `structure_dedupe_hashes`.
+- Exported DOM structure and visual-semantic helpers from
+  `agentic_rag.ingestion.url.dom`.
+- Promoted model-scoped deposit network payloads from interaction capture into
+  normal dynamic chunks. `CarsDeposit-BankInfo` payloads now preserve
+  `selected_model_id`, `selected_product_model`, and `deposit_amount`.
+- Updated `guide_2/TODO.md` with the structure-aware implementation status and
+  remaining VF 9 evaluation follow-ups.
+
+### Verification
+
+```powershell
+uv run ruff check src\agentic_rag\ingestion\url\dom\blocks.py src\agentic_rag\ingestion\url\dom\__init__.py src\agentic_rag\ingestion\url\loader.py src\agentic_rag\ingestion\url\tests\test_dom_entities_metadata.py src\agentic_rag\ingestion\url\tests\test_loader.py
+uv run pytest src\agentic_rag\ingestion\url\tests\test_dom_entities_metadata.py src\agentic_rag\ingestion\url\tests\test_loader.py src\agentic_rag\ingestion\url\tests\test_visual_semantics.py src\agentic_rag\ingestion\url\tests\test_url_package_exports.py -q
+uv run ruff check src\agentic_rag\ingestion\url\interactions\extractor.py src\agentic_rag\ingestion\url\tests\test_interactions.py src\agentic_rag\ingestion\url\loader.py src\agentic_rag\ingestion\url\tests\test_loader.py
+uv run pytest src\agentic_rag\ingestion\url\tests\test_interactions.py src\agentic_rag\ingestion\url\tests\test_loader.py -q
+```
+
+### Current Status
+
+- Focused URL ingestion slice passes: 33 passed.
+- Focused interaction and loader slice passes: 42 passed.
+- 2026-06-19 verifier rerun still scores 3/10. Interaction artifacts now include
+  one normal promoted VF 9 deposit chunk, but the primary URL ingestion chunks
+  still lack deposit context and remain cross-model noisy.
+- Existing Pydantic metadata serialization warnings still appear in artifact
+  tests.
+
+## 2026-06-19 - Metadata Utilization Implementation
+
+### Completed
+
+- Implemented shared metadata normalization in
+  `src/agentic_rag/ingestion/metadata/normalize.py`:
+  list coercion, enum cleanup, date alias alignment, blank-value handling, and
+  canonical entity derivation.
+- Added `entities_canonical` to `ChunkMetadata` and aligned
+  `QDRANT_INDEX_FIELDS` with retrieval payload indexes.
+- Extended URL metadata enrichment to store:
+  `semantic_blocks`, `url_entities`, and `entities_canonical`.
+- Preserved leaf chunk `section` while mapping `heading` and `breadcrumb` to
+  page-level context for URL chunks.
+- Normalized local PDF/URL/text metadata at storage boundaries and after LLM
+  enrichment.
+- Excluded debug-only chunks from local retrieval before BM25/dense indexes are
+  built.
+- Added Qdrant filter exclusion for `metadata.metadata_prefilter_exclude=true`.
+- Made Qdrant payload indexes derive from the shared metadata schema, with a
+  boolean schema for `metadata.metadata_prefilter_exclude`.
+- Added opt-in metadata boost factors for `quality_score`, `retrieval_weight`,
+  and retrieval trust, with per-result `metadata_boost` trace output.
+- Preserved non-`bm25`/`dense` retriever results in the agent provider split so
+  question-index results can survive agent path retrieval.
+- Added question-index contribution tracing in the local provider RRF trace.
+- Updated `guide_2/TODO.md` to mark implemented phases.
+
+### Verification
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/metadata/normalize.py src/agentic_rag/ingestion/metadata/schema.py src/agentic_rag/ingestion/url/metadata/enrichment.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/integrations/local_pdf/providers.py src/agentic_rag/agent/nodes.py src/agentic_rag/retrieval/boosting.py src/agentic_rag/retrieval/search.py tests/test_ingestion_metadata_schema.py tests/test_retrieval_search.py
+uv run ruff check src/agentic_rag/ingestion/metadata/normalize.py src/agentic_rag/ingestion/metadata/schema.py src/agentic_rag/ingestion/url/metadata/enrichment.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/integrations/local_pdf/providers.py src/agentic_rag/agent/nodes.py src/agentic_rag/retrieval/boosting.py src/agentic_rag/retrieval/search.py tests/test_ingestion_metadata_schema.py tests/test_retrieval_search.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_loader.py src/agentic_rag/ingestion/url/tests/test_visual_semantics.py tests/test_ingestion_metadata_schema.py tests/test_retrieval_search.py -q
+```
+
+### Current Status
+
+- Focused metadata, URL loader, visual semantics, and retrieval tests pass:
+  60 passed.
+- Ruff check passes for touched implementation and test files.
+- Warnings remain from existing deprecated vector-store env aliases and flexible
+  Pydantic metadata serialization.
+
+## 2026-06-18 - URL Information Gain Interaction Discovery
+
+### Completed
+
+- Reframed Playwright interaction handling from safe-option discovery toward
+  information-gain discovery.
+- Added per-click DOM diff gain storage for:
+  `new_text_tokens`, `changed_nodes`, `new_tables`, `new_prices`, and
+  `new_specs`.
+- Added per-click API gain storage for:
+  `new_endpoints`, `new_json_fields`, and `new_entities`.
+- Added entity gain storage for:
+  `new_models` and `new_variants`.
+- Added `gain_score = dom_gain + api_gain + entity_gain` to
+  `InteractionPanelDiff`, `InteractionStateRecord`, and chunk metadata.
+- Prioritized captured states by `gain_score` before truncating to
+  `InteractionOptions.max_states`.
+- Added Bootstrap modal trigger discovery for controls such as:
+  `a[data-bs-toggle="modal"]`, `data-toggle="modal"`, `data-bs-target`,
+  `data-target`, `aria-expanded`, `role="dialog"`, `role="tab"`, and
+  `role="button"`.
+- Ensured hidden modal content such as `.modal-body` is captured after click
+  and can emit price/spec state evidence.
+
+### Changed Parts
+
+```json
+{
+  "interaction_panel_diff": {
+    "dom_gain": 31,
+    "api_gain": 22,
+    "entity_gain": 10,
+    "gain_score": 63,
+    "information_gain": {
+      "dom": {
+        "new_text_token_count": 12,
+        "changed_node_count": 2,
+        "new_tables": 1,
+        "new_prices": ["1.499.000.000 VND"],
+        "new_specs": {
+          "driving_range": "626 km"
+        }
+      },
+      "api": {
+        "new_endpoints": ["/api/specifications"],
+        "new_json_fields": ["specifications.range"],
+        "new_entities": ["VF 9 Plus"]
+      },
+      "entity": {
+        "new_models": ["VF 9"],
+        "new_variants": ["VF 9 Plus"]
+      }
+    }
+  },
+  "bootstrap_modal_trigger": {
+    "before": "DOM without #rollingUpCostPopUp modal-body content",
+    "action": "click('Chi tiet')",
+    "after": "DOM with .modal-body visible",
+    "extract": ["new_prices", "new_specs", "changed_nodes"]
+  }
+}
+```
+
+Pseudo-code:
+
+```python
+for control in discover_information_controls(page):
+    before_dom = capture_panels(page)
+    before_api_count = len(network_payloads)
+
+    click(control)
+    wait()
+
+    after_dom = capture_panels(page)
+    new_api = network_payloads[before_api_count:]
+
+    gain = measure_gain(before_dom, after_dom, new_api)
+    if gain.gain_score > 0:
+        store_diff(control, gain)
+        store_state(control, gain)
+
+states = sorted(states, key=lambda state: state.gain_score, reverse=True)
+```
+
+### Test Commands
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/url/interactions/models.py src/agentic_rag/ingestion/url/interactions/extractor.py src/agentic_rag/ingestion/url/interactions/playwright.py src/agentic_rag/ingestion/url/tests/test_interactions.py
+uv run ruff check src/agentic_rag/ingestion/url/interactions/models.py src/agentic_rag/ingestion/url/interactions/extractor.py src/agentic_rag/ingestion/url/interactions/playwright.py src/agentic_rag/ingestion/url/tests/test_interactions.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_interactions.py -q -p no:cacheprovider --basetemp .pytest-tmp3
+uv run mypy src/agentic_rag/ingestion/url/interactions src/agentic_rag/ingestion/url/tests/test_interactions.py
+```
+
+### Current Status
+
+- Focused URL interaction tests pass: 18 passed.
+- Focused mypy passes for URL interaction modules and tests.
+- Existing Pydantic serializer warnings for flexible chunk metadata still
+  appear in artifact persistence tests.
+
+## 2026-06-18 - URL API And Right-Panel Spec Mapping
+
+### Completed
+
+- Added structured `specifications` to URL interaction state records so model
+  specs from API payloads or visible right-panel/modal content survive into
+  retrieval chunks.
+- Mapped common product spec labels into canonical metadata keys such as
+  `driving_range`, `battery_capacity`, `seats`, `power`, `torque`,
+  `dimensions`, and `charging_time`.
+- Promoted API-backed spec states into normal retrieval chunks while keeping
+  hidden API price-only states debug-only unless visible DOM evidence exists.
+- Expanded Playwright control discovery so safe spec/detail/technical buttons
+  can be clicked, including right-panel or popup/modal spec windows.
+- Expanded panel capture to include modal/dialog/spec/table content and parse
+  right-panel text into `product_specs`.
+
+### Changed Parts
+
+```json
+{
+  "interaction_state": {
+    "before": {
+      "price": "string | null",
+      "image_url": "string | null"
+    },
+    "after": {
+      "price": "string | null",
+      "specifications": {
+        "driving_range": "626 km",
+        "battery_capacity": "123 kWh",
+        "seats": "7"
+      },
+      "image_url": "string | null"
+    }
+  },
+  "chunk_metadata": {
+    "product_specs": "state.specifications",
+    "attribute_group": "pricing_specs when price or specifications exist",
+    "dedupe_text": "normalized interaction text"
+  },
+  "promotion_rule": {
+    "api_specs": "network state with changed_fields=['specifications'] -> normal retrieval chunk",
+    "hidden_api_price": "network price without DOM evidence -> debug_only"
+  },
+  "playwright_capture": {
+    "discover_controls": [
+      "spec",
+      "specification",
+      "technical",
+      "detail",
+      "thong so",
+      "chi tiet"
+    ],
+    "capture_panels": [
+      "right_panel",
+      "role=dialog",
+      "modal",
+      "popup",
+      "table",
+      "dl"
+    ]
+  }
+}
+```
+
+Pseudo-code:
+
+```python
+def state_from_payload(candidate):
+    specs = specifications_from_candidate(candidate)
+    if not price and not image and not specs:
+        return None
+    return InteractionStateRecord(
+        option_group="specifications" if specs else "variant",
+        specifications=specs,
+        changed_fields=["specifications"] if specs else [],
+    )
+
+
+def promoted(state):
+    if state.evidence_source == "network" and state.specifications:
+        return True
+    return has_visible_dom_fact(state)
+```
+
+### Test Commands
+
+```powershell
+uv run ruff format src/agentic_rag/ingestion/url/interactions/models.py src/agentic_rag/ingestion/url/interactions/extractor.py src/agentic_rag/ingestion/url/interactions/playwright.py src/agentic_rag/ingestion/url/interactions/__init__.py src/agentic_rag/ingestion/url/tests/test_interactions.py
+uv run ruff check src/agentic_rag/ingestion/url/interactions/models.py src/agentic_rag/ingestion/url/interactions/extractor.py src/agentic_rag/ingestion/url/interactions/playwright.py src/agentic_rag/ingestion/url/interactions/__init__.py src/agentic_rag/ingestion/url/tests/test_interactions.py
+uv run pytest src/agentic_rag/ingestion/url/tests/test_interactions.py -q -p no:cacheprovider --basetemp .pytest-tmp
+```
+
+### Current Status
+
+- Focused URL interaction tests pass: 15 passed.
+- Existing Pydantic serializer warnings for flexible chunk metadata still
+  appear in artifact persistence tests.
+
+## 2026-06-18 - URL Chunk Dedupe Text Bridge
+
+### Completed
+
+- Added explicit `dedupe_text` metadata to URL/text chunk creation so
+  duplicate detection can reuse URL-specific normalization instead of
+  recomputing from raw chunk text.
+- Updated `dedup_detect` exact and SimHash layers to read canonical dedupe text
+  from `DedupDocument.metadata["dedupe_text"]`, then fall back to
+  `normalized_text`, then raw text normalization.
+- Updated `documents_from_chunks()` to serialize Pydantic `ChunkMetadata`
+  safely, replace document text with the canonical dedupe text, and record
+  `dedup_text_source` for review/debugging.
+- Hardened dedup metadata helpers to work with both dict metadata and
+  `ChunkMetadata` model instances.
+- Exported `VisualEvidenceSource` from the URL DOM package so typed URL loader
+  checks remain clean.
+- Added focused regression coverage for the URL chunking -> dedup handoff.
+
+### Changed Parts
+
+```json
+{
+  "url_chunk_metadata": {
+    "before": {
+      "dedupe_hash": "short_hash(normalize_for_dedupe_hash(chunk_text))"
+    },
+    "after": {
+      "dedupe_text": "normalize_for_dedupe_hash(chunk_text)",
+      "dedupe_hash": "short_hash(dedupe_text)"
+    }
+  },
+  "dedup_text_resolution": [
+    "metadata.dedupe_text",
+    "metadata.normalized_text",
+    "normalize_text(document.text)"
+  ],
+  "documents_from_chunks": {
+    "metadata": "ChunkMetadata -> dict via model_dump(...)",
+    "text": "dedup_text(document)",
+    "trace": "metadata.dedup_text_source"
+  },
+  "exact_and_simhash": {
+    "fingerprint_input": "dedup_text(document)"
+  }
+}
+```
+
+Pseudo-code:
+
+```python
+def dedup_text(document):
+    if document.metadata.get("dedupe_text"):
+        return normalize_text(document.metadata["dedupe_text"])
+    if document.metadata.get("normalized_text"):
+        return normalize_text(document.metadata["normalized_text"])
+    return normalize_text(document.text)
+
+
+def documents_from_chunks(chunks):
+    docs = [DedupDocument(text=chunk.text, metadata=as_dict(chunk.metadata)) for chunk in chunks]
+    return [
+        doc.copy(text=dedup_text(doc), metadata={**doc.metadata, "dedup_text_source": source})
+        for doc in docs
+    ]
+```
+
+### Test Commands
+
+```powershell
+.venv\Scripts\ruff.exe check src/agentic_rag/ingestion/url/chunking/core.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/dedup_detect/normalization.py src/agentic_rag/ingestion/dedup_detect/exact.py src/agentic_rag/ingestion/dedup_detect/simhash.py src/agentic_rag/ingestion/dedup_detect/pipeline.py src/agentic_rag/ingestion/dedup_detect/metadata.py src/agentic_rag/ingestion/url/dom/__init__.py src/agentic_rag/ingestion/url/tests/test_chunking.py src/agentic_rag/ingestion/url/tests/test_loader.py tests/test_dedup_detect_pipeline.py
+.venv\Scripts\mypy.exe src/agentic_rag/ingestion/dedup_detect src/agentic_rag/ingestion/url/chunking/core.py src/agentic_rag/ingestion/url/loader.py src/agentic_rag/ingestion/url/dom/__init__.py
+.venv\Scripts\pytest.exe -q -p no:cacheprovider --basetemp .pytest-tmp tests/test_dedup_detect_pipeline.py src/agentic_rag/ingestion/url/tests/test_chunking.py src/agentic_rag/ingestion/url/tests/test_loader.py tests/test_ingestion_chunking.py tests/test_dedup_detect_metadata_contract.py tests/test_dedup_detect_embedding.py
+```
+
+### Current Status
+
+- Focused lint passed.
+- Targeted mypy passed for the touched ingestion modules.
+- Focused regression tests passed: 39 passed, with 2 existing Pydantic
+  serializer warnings in URL artifact tests.
+
 ## 2026-06-16 - Source Category Metadata And PDF Review Demo
 
 ### Completed

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-lap-ky-luc-viet-nam-can-moc-100000-o-to-ban-ra-trong-3-quy-dau-nam",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-lap-ky-luc-viet-nam-can-moc-100000-o-to-ban-ra-trong-3-quy-dau-nam",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

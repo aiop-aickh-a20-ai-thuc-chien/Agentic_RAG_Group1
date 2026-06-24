@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/huong-dan-kiem-tra-khi-o-to-de-khong-no-may",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/huong-dan-kiem-tra-khi-o-to-de-khong-no-may",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

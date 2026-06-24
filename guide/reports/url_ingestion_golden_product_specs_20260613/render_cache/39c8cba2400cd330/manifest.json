@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/chia-khoa-dien-tu-xe-may-chong-trom-xe-bang-thu-doan-tinh-vi",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/chia-khoa-dien-tu-xe-may-chong-trom-xe-bang-thu-doan-tinh-vi",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

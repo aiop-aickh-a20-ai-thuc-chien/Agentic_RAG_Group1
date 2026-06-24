@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/quy-dinh-phi-kiem-dinh-xe-o-to-moi-nhat",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/quy-dinh-phi-kiem-dinh-xe-o-to-moi-nhat",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

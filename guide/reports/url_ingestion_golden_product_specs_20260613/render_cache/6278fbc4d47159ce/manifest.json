@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-bao-hanh-chinh-hang-6-nam-cho-xe-8-nam-cho-pin-xe-may-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-bao-hanh-chinh-hang-6-nam-cho-xe-8-nam-cho-pin-xe-may-dien",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

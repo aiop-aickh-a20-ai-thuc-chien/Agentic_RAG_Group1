@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-06-13T04:30:10.679041+00:00",
+  "completed_at": "2026-06-13T04:33:06.076744+00:00",
+  "url_count": 12,
+  "processed_count": 12,
+  "passed_count": 2,
+  "failed_count": 10,
+  "error_count": 0,
+  "skipped_count": 0,
+  "output_dir": "guide\\reports\\url_ingestion_verification_subset_after_fixes",
+  "results_jsonl": "guide\\reports\\url_ingestion_verification_subset_after_fixes\\base_results.jsonl",
+  "summary_json": "guide\\reports\\url_ingestion_verification_subset_after_fixes\\base_summary.json",
+  "summary_markdown": "guide\\reports\\url_ingestion_verification_subset_after_fixes\\base_summary.md",
+  "use_browser_extractor": true,
+  "golden_path": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\src\\agentic_rag\\ingestion\\url\\golden_data\\vinfast_url_golden_samples.json",
+  "url_list_path": "guide\\reports\\url_ingestion_verification_subset\\verification_urls.txt"
+}

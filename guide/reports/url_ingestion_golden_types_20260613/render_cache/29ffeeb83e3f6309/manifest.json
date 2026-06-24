@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/dat-coc-VF8-va-VF9-nhan-uu-dai",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/dat-coc-VF8-va-VF9-nhan-uu-dai",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/bao-duong-dinh-ky",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/bao-duong-dinh-ky",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

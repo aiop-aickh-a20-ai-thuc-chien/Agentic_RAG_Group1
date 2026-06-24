@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/3-uu-diem-cua-xe-o-to-dien-phu-hop-voi-nguoi-moi-su-dung-o-to",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/3-uu-diem-cua-xe-o-to-dien-phu-hop-voi-nguoi-moi-su-dung-o-to",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

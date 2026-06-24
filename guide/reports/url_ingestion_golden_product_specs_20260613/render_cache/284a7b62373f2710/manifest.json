@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-3-mau-xe-may-dien-2-pin-nang-tam-trai-nghiem-di-chuyen-cho-nguoi-dung",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-3-mau-xe-may-dien-2-pin-nang-tam-trai-nghiem-di-chuyen-cho-nguoi-dung",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-xe-may-dien-evo-grand-voi-2-pin-co-the-thao-roi-di-duoc-toi-262-kmlan-sac",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-xe-may-dien-evo-grand-voi-2-pin-co-the-thao-roi-di-duoc-toi-262-kmlan-sac",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

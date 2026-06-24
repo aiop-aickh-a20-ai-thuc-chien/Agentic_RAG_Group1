@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-xe-may-dien-zgoo-flazz",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-xe-may-dien-zgoo-flazz",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

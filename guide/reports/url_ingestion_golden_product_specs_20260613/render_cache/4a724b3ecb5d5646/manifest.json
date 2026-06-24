@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-chinh-thuc-mo-dat-coc-tien-phong-3-mau-xe-may-dien-doi-pin-tai-indonesia",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-chinh-thuc-mo-dat-coc-tien-phong-3-mau-xe-may-dien-doi-pin-tai-indonesia",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

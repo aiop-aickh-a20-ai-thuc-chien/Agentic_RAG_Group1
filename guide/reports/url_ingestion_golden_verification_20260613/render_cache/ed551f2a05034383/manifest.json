@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/thong-bao-hoan-diem-vpoint-cho-khach-hang-mua-xe-may-dien-vinfast-tu-ngay-01012025-den-21052025-0",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/thong-bao-hoan-diem-vpoint-cho-khach-hang-mua-xe-may-dien-vinfast-tu-ngay-01012025-den-21052025-0",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

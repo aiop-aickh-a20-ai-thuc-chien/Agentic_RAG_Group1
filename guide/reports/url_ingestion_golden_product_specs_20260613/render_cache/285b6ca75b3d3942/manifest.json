@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/dat-coc-xe-vf8-the-all-new-2026",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/dat-coc-xe-vf8-the-all-new-2026",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

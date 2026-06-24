@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/nhung-kien-thuc-co-ban-ve-sac-xe-o-to-dien-can-biet",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/nhung-kien-thuc-co-ban-ve-sac-xe-o-to-dien-can-biet",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

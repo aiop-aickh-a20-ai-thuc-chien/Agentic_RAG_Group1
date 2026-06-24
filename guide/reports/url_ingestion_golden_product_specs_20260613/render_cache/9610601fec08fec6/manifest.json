@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/he-thong-canh-bao-o-va-nhung-dieu-can-biet",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/he-thong-canh-bao-o-va-nhung-dieu-can-biet",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

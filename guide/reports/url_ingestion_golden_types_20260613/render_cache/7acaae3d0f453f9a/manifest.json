@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-thuc-day-chien-luoc-hau-mai-toan-cau-mo-rong-mang-luoi-dich-vu-va-doi-tac-quoc-te",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-thuc-day-chien-luoc-hau-mai-toan-cau-mo-rong-mang-luoi-dich-vu-va-doi-tac-quoc-te",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

@@ -1,0 +1,442 @@
+{
+  "dataset": {
+    "dataset_id": "dat_coc_vinfast_state",
+    "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF3",
+    "ground_truth_file": "src/agentic_rag/ingestion/url/golden_data/vinfast_vf9_rolling_cost_ground_truth.json",
+    "judge_prompt_file": "src/agentic_rag/ingestion/url/golden_data/promt_judge_VF9_rolling_cost.txt",
+    "status": "state_only_not_yet_calculated",
+    "notes": [
+      "Tên file có VF9 nhưng dataset này được dùng làm ground truth trạng thái cho URL đặt cọc có modelId=Products-Car-VF3.",
+      "Ground truth hiện mô tả state/configurator và panel modelId; không coi các chi phí lăn bánh là kết quả tính toán cuối cùng cho VF3."
+    ]
+  },
+  "ground_truth_file": "src\\agentic_rag\\ingestion\\url\\golden_data\\vinfast_vf9_rolling_cost_ground_truth.json",
+  "markdown_file": "ground_truth.md",
+  "chunks_file": "chunks.jsonl",
+  "entity_chunks_file": "entity_chunks.jsonl",
+  "chunk_count": 10,
+  "entity_chunk_count": 17,
+  "missing_important_values": [],
+  "chunk_diagnostics": [
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c001",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 235,
+      "model_mentions": [
+        "VF3"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c002",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 416,
+      "model_mentions": [
+        "VF 9",
+        "VF3",
+        "VF9"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_phi-n-b-n-vf-9_c003",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state",
+        "Phiên bản VF 9"
+      ],
+      "review_role": null,
+      "chars": 490,
+      "model_mentions": [
+        "VF 9",
+        "VF 9 Plus"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c004",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 515,
+      "model_mentions": [
+        "VF9"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c005",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 525,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c006",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 586,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c007",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 484,
+      "model_mentions": [],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_ground-truth-t-c-c-vinfast-dat-coc-vinfast-state_c008",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state"
+      ],
+      "review_role": null,
+      "chars": 566,
+      "model_mentions": [],
+      "contains_price": true,
+      "contains_model_id": true,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_c-c-xe-vf-kh-c_c009",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state",
+        "Các xe VF khác"
+      ],
+      "review_role": null,
+      "chars": 518,
+      "model_mentions": [
+        "VF 5",
+        "VF 6",
+        "VF 7",
+        "VF 8",
+        "VF3",
+        "VF5",
+        "VF6",
+        "VF7",
+        "VF8"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth_11d4f182714b_c-c-xe-vf-kh-c_c010",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ground truth đặt cọc VinFast: dat_coc_vinfast_state",
+        "Các xe VF khác"
+      ],
+      "review_role": null,
+      "chars": 226,
+      "model_mentions": [
+        "MPV 7",
+        "MPV7",
+        "VF8"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    }
+  ],
+  "entity_chunk_diagnostics": [
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_dataset-state-dataset-state_c001",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Dataset state"
+      ],
+      "review_role": "dataset_state",
+      "chars": 514,
+      "model_mentions": [
+        "VF3",
+        "VF9"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_current-model-th-ng-tin-xe-hi-n-t-i_c002",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Thông tin xe hiện tại"
+      ],
+      "review_role": "current_model",
+      "chars": 211,
+      "model_mentions": [
+        "VF 9",
+        "VF3"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-version-vf-9-eco_c003",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 9 Eco"
+      ],
+      "review_role": "model_version",
+      "chars": 269,
+      "model_mentions": [
+        "VF 9"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-version-vf-9-plus-t-y-ch-n-7-ch_c004",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 9 Plus tùy chọn 7 chỗ"
+      ],
+      "review_role": "model_version",
+      "chars": 301,
+      "model_mentions": [
+        "VF 9",
+        "VF 9 Plus"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-version-vf-9-plus-t-y-ch-n-gh-c-tr-ng_c005",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 9 Plus tùy chọn ghế cơ trưởng"
+      ],
+      "review_role": "model_version",
+      "chars": 317,
+      "model_mentions": [
+        "VF 9",
+        "VF 9 Plus"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_choices-ngo-i-th-t-vf9_c006",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Ngoại thất VF9"
+      ],
+      "review_role": "choices",
+      "chars": 235,
+      "model_mentions": [
+        "VF9"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_choices-n-i-th-t-vf9_c007",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Nội thất VF9"
+      ],
+      "review_role": "choices",
+      "chars": 164,
+      "model_mentions": [
+        "VF9"
+      ],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_customer-choices-h-ng-th-nh-vi-n-v-u-i_c008",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Hạng thành viên và ưu đãi"
+      ],
+      "review_role": "customer_choices",
+      "chars": 309,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_customer-choices-t-nh-th-nh_c009",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Tỉnh thành"
+      ],
+      "review_role": "customer_choices",
+      "chars": 77,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_pricing-b-ng-t-nh-chi-ph-l-n-b-nh_c010",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "Bảng tính chi phí lăn bánh"
+      ],
+      "review_role": "pricing",
+      "chars": 440,
+      "model_mentions": [],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-3_c011",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 3"
+      ],
+      "review_role": "model_navigation",
+      "chars": 141,
+      "model_mentions": [
+        "VF 3",
+        "VF3"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-5_c012",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 5"
+      ],
+      "review_role": "model_navigation",
+      "chars": 141,
+      "model_mentions": [
+        "VF 5",
+        "VF5"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-6_c013",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 6"
+      ],
+      "review_role": "model_navigation",
+      "chars": 141,
+      "model_mentions": [
+        "VF 6",
+        "VF6"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-7_c014",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 7"
+      ],
+      "review_role": "model_navigation",
+      "chars": 141,
+      "model_mentions": [
+        "VF 7",
+        "VF7"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-8_c015",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 8"
+      ],
+      "review_role": "model_navigation",
+      "chars": 141,
+      "model_mentions": [
+        "VF 8",
+        "VF8"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-vf-8-the-all-new_c016",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "VF 8 The All New"
+      ],
+      "review_role": "model_navigation",
+      "chars": 177,
+      "model_mentions": [
+        "VF 8",
+        "VF8"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_11d4f182714b_model-navigation-mpv-7_c017",
+      "section_path": [
+        "dat_coc_vinfast_state",
+        "MPV 7"
+      ],
+      "review_role": "model_navigation",
+      "chars": 144,
+      "model_mentions": [
+        "MPV 7",
+        "MPV7"
+      ],
+      "contains_price": false,
+      "contains_model_id": true,
+      "contains_choices": false
+    }
+  ]
+}

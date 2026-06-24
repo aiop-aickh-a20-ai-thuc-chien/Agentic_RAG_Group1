@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/tim-hieu-ac-quy-chi-axit-cau-tao-cach-hoat-dong-va-su-dung-hieu-qua",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/tim-hieu-ac-quy-chi-axit-cau-tao-cach-hoat-dong-va-su-dung-hieu-qua",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

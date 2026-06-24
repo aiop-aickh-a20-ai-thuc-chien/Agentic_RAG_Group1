@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/chinh-sach-cho-thue-pin-va-doi-pin-o-to-dien-vinfast-nhieu-uu-dai",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/chinh-sach-cho-thue-pin-va-doi-pin-o-to-dien-vinfast-nhieu-uu-dai",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

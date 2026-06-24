@@ -1,0 +1,732 @@
+{
+  "status": "success",
+  "url": "https://vinfastauto.com/vn_vi",
+  "output_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi",
+  "markdown_char_count": 3561,
+  "markdown_word_count": 827,
+  "markdown_preview": "# VinFast - Website chính thức tại Việt Nam Dòng xe E-SUV Số chỗ ngồi 6-7 chỗ Quãng đường lên tới 626 km Giá bán từ 1.274.150.000 VNĐ* 1.499.000.000 VNĐ D-SUV 5 chỗ 480-500 km 849.150.000 VNĐ* 999.000.000 VNĐ MPV 7 chỗ 450 km (NEDC) 728.910.000 VNĐ* 819.000.000 VNĐ VAN 2 chỗ 150 km 253.650.000 VNĐ* 285.000.000 VNĐ MiniCar 4 chỗ 170 km (NEDC) 239.410.000 VNĐ* 269.000.000 VNĐ A-SUV 326 km (NEDC) 426.310.000 VNĐ* 479.000.000 VNĐ B-SUV 318,6 km (NEDC) Giá từ 668.000.000 VNĐ 666.610.000 VNĐ* 749.000.000 VNĐ 210 km (NEDC) 268.780.000 VNĐ* 302.000.000 VNĐ 326,4 km (NEDC) 470.810.000 VNĐ* 529.000.000 VNĐ 480 km (NEDC) 613.210.000 VNĐ* 689.000.000 VNĐ C-SUV 496 km 702.210.000 VNĐ* 789.000.000 VNĐ 471 km 866.150.000 VNĐ* 1.019.000.000 VNĐ (*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện. Tốc độ tối đa 49 km/h Quãng đường 1 lần sạc 78 km Cốp xe 17 lít 14.400.000 VNĐ ~87 km/lần sạc Công suất tối đa 1500 W 14.990.000 VNĐ MUA XE XEM CHI TIẾT 25 km/h ~65 km/lần sạc 800 W 13.900.000 VNĐ ~165 km/lần sạc 2300 W 17.000.000 VNĐ 30 km/h 70 km/h ~156 km/lần sạc 3000 W 39.900.000 VNĐ 24.900.000 VNĐ Quãng đường 1 lần sạc (2 pin) 12 lít 19.990.000 VNĐ 39 km/h...",
+  "chunk_count": 3,
+  "usable_chunk_count": 3,
+  "artifact_paths": {
+    "run_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo",
+    "markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed.md",
+    "chunks_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/chunks.jsonl",
+    "manifest_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/manifest.json",
+    "source_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/source.html",
+    "cleaned_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/cleaned.html",
+    "parsed_sections_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed_sections.txt",
+    "extracted_markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/extracted.md",
+    "quality_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/quality.json"
+  },
+  "manifest": {
+    "artifact_schema_version": 2,
+    "input_type": "url",
+    "input_source": "https://vinfastauto.com/vn_vi",
+    "input_url": "https://vinfastauto.com/vn_vi",
+    "original_url": "https://vinfastauto.com/vn_vi",
+    "final_url": "https://vinfastauto.com/vn_vi",
+    "canonical_url": "https://vinfastauto.com/vn_vi",
+    "parser": "crawl-link-playwright-dom-markdown+normalizer",
+    "run_id": "baseline_before_todo",
+    "created_at": "2026-06-16T07:34:55.937703+00:00",
+    "page_metadata": {
+      "canonical_url": "https://vinfastauto.com/vn_vi",
+      "og_url": null,
+      "og_title": "VinFast site",
+      "og_description": "VinFast là một Công ty khởi nghiệp trong lĩnh vực ô tô - xe máy với sự hậu thuẫn của Vingroup – doanh nghiệp tư nhân lớn nhất Việt Nam.",
+      "description": "VinFast - Cập nhật thông tin chính thức về ô tô & xe máy điện VinFast gồm thông số, giá bán, ưu đãi & hậu mãi, công cụ hỗ trợ mua xe, showroom & trạm sạc,...",
+      "published_at": null,
+      "modified_at": null,
+      "author": null,
+      "language": "vi"
+    },
+    "assets": [
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=1115480036516644&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://storage.googleapis.com/vinfast-data-01/VF_App_VN_User_Manual_231028.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://storage.googleapis.com/vinfast-data-01/VF_App_VN_User_Manual_231028.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf-mpv7-uu-dai-124-trieu-desktop.jpg",
+        "alt": "VinFast VF MPV 7 - Gia đình sum vầy hành trình trọn vẹn, tổng ưu đãi lên tới 124 triệu đồng",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VFMPV7&utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=Dat_Coc_VF_MPV_7"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf-mpv7-uu-dai-124-trieu-mobile.jpg",
+        "alt": "VinFast VF MPV 7 - Gia đình sum vầy hành trình trọn vẹn, tổng ưu đãi lên tới 124 triệu đồng",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VFMPV7&utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=Dat_Coc_VF_MPV_7"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-1-trieu-xe-may-dien-xuat-xuong-desktop.jpg",
+        "alt": "VinFast chính thức xuất xưởng 1 triệu xe máy điện - Mãnh liệt chuyển đổi xanh 12/06/2026",
+        "title": null,
+        "target_url": "https://vinfastauto.com/vn_vi/vinfast-xuat-xuong-chiec-xe-may-dien-thu-1-trieu"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-1-trieu-xe-may-dien-xuat-xuong-mobile.jpg",
+        "alt": "VinFast chính thức xuất xưởng 1 triệu xe máy điện - Mãnh liệt chuyển đổi xanh 12/06/2026",
+        "title": null,
+        "target_url": "https://vinfastauto.com/vn_vi/vinfast-xuat-xuong-chiec-xe-may-dien-thu-1-trieu"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-xe-may-dien-uu-dai-he-16-1-desktop.jpg",
+        "alt": "VinFast xe máy điện - Phố thêm xanh lướt hè phơi phới, tổng ưu đãi lên đến 16%",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_o_to_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-xe-may-dien-uu-dai-he-16-1-mobile.jpg",
+        "alt": "VinFast xe máy điện - Phố thêm xanh lướt hè phơi phới, tổng ưu đãi lên đến 16%",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_o_to_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-xe-may-dien-uu-dai-he-16-desktop.jpg",
+        "alt": "VinFast xe máy điện - Phố thêm xanh lướt hè phơi phới, tổng ưu đãi lên đến 16%",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast?utm_source=banner_XM%C4%90_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_xe_may_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-xe-may-dien-uu-dai-he-16-mobile.jpg",
+        "alt": "VinFast xe máy điện - Phố thêm xanh lướt hè phơi phới, tổng ưu đãi lên đến 16%",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast?utm_source=banner_XM%C4%90_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_xe_may_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vinfascination-uu-dai-3-vinpearl-desktop.jpg",
+        "alt": "VinFast Vinfascination đón hè rực rỡ - Ưu đãi giá bán lên đến 3%, tặng voucher Vinpearl",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_o_to_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vinfascination-uu-dai-3-vinpearl-mobile.jpg",
+        "alt": "VinFast Vinfascination đón hè rực rỡ - Ưu đãi giá bán lên đến 3%, tặng voucher Vinpearl",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_o_to_dien"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf3-uu-dai-he-vinpearl-desktop.jpg",
+        "alt": "VinFast VF 3 Vinfascination mùa hè rực rỡ - Tặng voucher Vinpearl hoặc ưu đãi 2% giá bán",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_VF_3"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf3-uu-dai-he-vinpearl-mobile.jpg",
+        "alt": "VinFast VF 3 Vinfascination mùa hè rực rỡ - Tặng voucher Vinpearl hoặc ưu đãi 2% giá bán",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html?utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=dat_coc_VF_3"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf-mpv7-uu-dai-124-trieu-desktop.jpg",
+        "alt": "VinFast VF MPV 7 - Gia đình sum vầy hành trình trọn vẹn, tổng ưu đãi lên tới 124 triệu đồng",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VFMPV7&utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=Dat_Coc_VF_MPV_7"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-vf-mpv7-uu-dai-124-trieu-mobile.jpg",
+        "alt": "VinFast VF MPV 7 - Gia đình sum vầy hành trình trọn vẹn, tổng ưu đãi lên tới 124 triệu đồng",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VFMPV7&utm_source=banner_Oto_website&utm_medium=MKT_O2O&utm_campaign=banner_T6&utm_content=Dat_Coc_VF_MPV_7"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-1-trieu-xe-may-dien-xuat-xuong-desktop.jpg",
+        "alt": "VinFast chính thức xuất xưởng 1 triệu xe máy điện - Mãnh liệt chuyển đổi xanh 12/06/2026",
+        "title": null,
+        "target_url": "https://vinfastauto.com/vn_vi/vinfast-xuat-xuong-chiec-xe-may-dien-thu-1-trieu"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vinfast-1-trieu-xe-may-dien-xuat-xuong-mobile.jpg",
+        "alt": "VinFast chính thức xuất xưởng 1 triệu xe máy điện - Mãnh liệt chuyển đổi xanh 12/06/2026",
+        "title": null,
+        "target_url": "https://vinfastauto.com/vn_vi/vinfast-xuat-xuong-chiec-xe-may-dien-thu-1-trieu"
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF9.webp",
+        "alt": "VF 9",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vf8-all-new.png",
+        "alt": "VF 8 All New",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://storage.googleapis.com/vinfast-data-01/pdp/vf_mpv_7/Homepage_MPV7.webp",
+        "alt": "VF MPV 7",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/ecvan-02.webp",
+        "alt": "EC VAN",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/MinioGreen.webp",
+        "alt": "Minio Green",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/he.png",
+        "alt": "Herio Green",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/NerioGreen.webp",
+        "alt": "Nerio Green",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/limo.png",
+        "alt": "Limo Green",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF3.webp",
+        "alt": "VF 3",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF5.webp",
+        "alt": "VF 5",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF6.webp",
+        "alt": "VF 6",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF7.webp",
+        "alt": "VF 7",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF8.webp",
+        "alt": "VF 8",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/car/VF9.webp",
+        "alt": "VF 9",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/vf8-all-new.png",
+        "alt": "VF 8 All New",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/EvoLiteNeo.webp",
+        "alt": "EVO Lite Neo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/FlazzMax.webp",
+        "alt": "FLAZZ MAX",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/AmioS.webp",
+        "alt": "AMIO S",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/evo-lite.png",
+        "alt": "EVO Lite",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://storage.googleapis.com/vinfast-data-01/pdp/amio/Amio.webp",
+        "alt": "Amio",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/bike/Viper.webp",
+        "alt": "Viper",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/bike/Feliz-II.webp",
+        "alt": "Feliz II",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/evo.webp",
+        "alt": "zgoo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/zgoo.webp",
+        "alt": "zgoo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/falzzz.webp",
+        "alt": "Flazz",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/verox_d.webp",
+        "alt": "Vero X",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/feliz2025_d.webp",
+        "alt": "Feliz 2025",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/evogrand.webp",
+        "alt": "Evo Grand",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/evogrand_lite.webp",
+        "alt": "Evo Grand",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/VfDrgnFly.webp",
+        "alt": "DrgnFly",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/EvoLiteNeo.webp",
+        "alt": "EVO Lite Neo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/escooter/FlazzMax.webp",
+        "alt": "FLAZZ MAX",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-dev.vinfastauto.com/vf3_mint.webp",
+        "alt": "Mô Hình Xe VinFast VF 3",
+        "title": "Mô Hình Xe VinFast VF 3",
+        "target_url": "https://shop.vinfastauto.com/vn_vi/VINFASTVF3SCALECARMODELS.html"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-dev.vinfastauto.com/sac_11kw.webp",
+        "alt": "Bộ Sạc Treo Tường AC 11 kW",
+        "title": "Bộ Sạc Treo Tường AC 11 kW",
+        "target_url": "https://shop.vinfastauto.com/vn_vi/EEP30000011.html"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-dev.vinfastauto.com/vf7_che_pin.webp",
+        "alt": "VF 7 Tấm Che Pin Cao Áp",
+        "title": "VF 7 Tấm Che Pin Cao Áp",
+        "target_url": "https://shop.vinfastauto.com/vn_vi/EEP71061000.html"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-dev.vinfastauto.com/o-golf.webp",
+        "alt": "Ô Golf 2 Tầng",
+        "title": "Ô Golf 2 Tầng",
+        "target_url": "https://shop.vinfastauto.com/vn_vi/ACS20000013.html"
+      },
+      {
+        "kind": "image",
+        "url": "https://vinfastauto.com/themes/porto/img/homepage-v2/mobile-charger.webp",
+        "alt": "Thiết bị sạc di động",
+        "title": null,
+        "target_url": "https://vinfastauto.com/vn_vi/dich-vu-pin-oto-dien#section-charge-device"
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/countdown-thu-xang-doi-dien.png",
+        "alt": "Thu xăng đổi điện",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=3568227166566518&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=851145492376959&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=475821503786290&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=946705219709290&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://static-cms-prod.vinfastauto.com/VF%20App_H%C6%B0%E1%BB%9Bng%20d%E1%BA%ABn%20s%E1%BB%AD%20d%E1%BB%A5ng_v.1.2_2022.05.18.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://static-cms-prod.vinfastauto.com/mlttvn_3_icon.webp",
+        "alt": "VinFast",
+        "title": null,
+        "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?utm_source=banner_website&utm_medium=MKT_O2O&utm_campaign=banner_T12&utm_content=MLTTVN3"
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.googletagmanager.com/ns.html?id=GTM-PFKP3SP",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://lg1.logging.admicro.vn/_tracking1.gif?dg=016a30fc9199931ab5b9c7644e7307fd&fl=-1.-1.&je=0&sr=1366x900&sc=24&hn=vinfastauto.com&cat=&g=0&i=s%3B1781595281931%3B0%3B0%3B1%3B0%3B0%3B1366x900%3B0%3B0%3Bc5a178d0012bdf89ed3f6a5c63b6ba9e%3B016a30fc9199931ab5b9c7644e7307fd%3BGA1.2.2056977930.1781595282%3B-1781595268208%3B61%3B63%3B329%3B16%3B4%3B-1781595268208%3B-1781595268208&rdm=0.6188024829702469&p=%2Fvn_vi&r=&ce=1&lc=&cr=&ui=&dg=016a30fc9199931ab5b9c7644e7307fd",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn.cookielaw.org/logos/bda4bf83-328f-41ea-8f94-ae440e873d60/01928f8f-350c-75f5-a2cb-08e912913efc/eb3fc599-e789-4947-8dfe-5b8e57b3822e/logo-vinfast-1.png",
+        "alt": "Logo công ty",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn.cookielaw.org/logos/static/powered_by_logo.svg",
+        "alt": "Powered by Onetrust",
+        "title": "Powered by OneTrust Mở trong Tab mới",
+        "target_url": "https://www.onetrust.com/products/cookie-consent/"
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Lcfbd4ZAAAAAN6cGzaskOw2AYFQPqxVlxHViEqv&co=aHR0cHM6Ly92aW5mYXN0YXV0by5jb206NDQz&hl=vi&v=MerVUtRoajKEbP7pLiGXkL28&size=invisible&anchor-ms=20000&execute-ms=30000&cb=tcms553yvds5",
+        "alt": null,
+        "title": "reCAPTCHA",
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Lcfbd4ZAAAAAN6cGzaskOw2AYFQPqxVlxHViEqv&co=aHR0cHM6Ly92aW5mYXN0YXV0by5jb206NDQz&hl=vi&v=MerVUtRoajKEbP7pLiGXkL28&size=invisible&anchor-ms=20000&execute-ms=30000&cb=315d9u41o0dt",
+        "alt": null,
+        "title": "reCAPTCHA",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn-media.vinbase.ai/avatar/20250313024710_4.png",
+        "alt": "avatar",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cloud.vinbase.ai/livechat/assets/svg/typing.svg",
+        "alt": "typing...",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cloud.vinbase.ai/livechat/assets/svg/typing.svg",
+        "alt": "typing...",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn-media.vinbase.ai/avatar/20250429074721_image (1).jpg",
+        "alt": "avatar",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://log.adtimaserver.vn/tracklp?type=viewable&value=view_area%3D30%3Bduration%3D12328&pId=7039488610764181504&adtid=null&curl=https%3A%2F%2Fvinfastauto.com%2Fvn_vi&uid=&ver=1.1.29&ref=&atmrk=0.5778125113684355",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://log.adtimaserver.vn/tracklp?type=viewable&value=view_area%3D60%3Bduration%3D12532&pId=7039488610764181504&adtid=null&curl=https%3A%2F%2Fvinfastauto.com%2Fvn_vi&uid=&ver=1.1.29&ref=&atmrk=0.19633414131562965",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://log.adtimaserver.vn/tracklp?type=viewable&value=view_area%3D90%3Bduration%3D12715&pId=7039488610764181504&adtid=null&curl=https%3A%2F%2Fvinfastauto.com%2Fvn_vi&uid=&ver=1.1.29&ref=&atmrk=0.3803087091966577",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      }
+    ],
+    "artifact_root": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts",
+    "run_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo",
+    "source_html_stage": "rendered_html",
+    "source_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/source.html",
+    "cleaned_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/cleaned.html",
+    "parsed_sections_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed_sections.txt",
+    "extracted_markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/extracted.md",
+    "markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed.md",
+    "chunks_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/chunks.jsonl",
+    "quality_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/quality.json",
+    "manifest_path": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/manifest.json",
+    "stage_paths": {
+      "source_html": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/source.html",
+      "cleaned_html": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/cleaned.html",
+      "parsed_sections": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed_sections.txt",
+      "extracted_markdown": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/extracted.md",
+      "cleaned_markdown": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/parsed.md",
+      "quality": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/quality.json",
+      "chunks": "guide/demo/url-baseline-before-todo/output/base_current/url_01_https-vinfastauto-com-vn-vi/artifacts/https-vinfastauto-com-vn-vi_b5ac0806a3af/baseline-before-todo/chunks.jsonl"
+    },
+    "chunk_count": 3
+  },
+  "asset_count": 76,
+  "pdf_asset_count": 3,
+  "metadata_summary": {
+    "first_chunk_source": "https://vinfastauto.com/vn_vi",
+    "first_chunk_source_type": "official",
+    "first_chunk_url": "https://vinfastauto.com/vn_vi",
+    "first_chunk_document_type": "homepage_product_listing",
+    "first_chunk_page_type": "homepage_product_listing",
+    "first_chunk_url_status": "accepted",
+    "first_chunk_render_required": true,
+    "first_chunk_quality_gate": {
+      "parser": "rendered",
+      "status": "accepted",
+      "accepted": true,
+      "score": 10,
+      "reason": "rendered_parser_satisfied_quality_gate",
+      "page_type": "homepage_product_listing",
+      "requires_rendered_parser": true,
+      "dynamic_signals": [],
+      "latency_budget_seconds": 25,
+      "browser_error": null
+    },
+    "document_type_counts": {
+      "homepage_product_listing": 3
+    },
+    "page_type_counts": {
+      "homepage_product_listing": 3
+    },
+    "source_type_counts": {
+      "official": 3
+    },
+    "section_kind_counts": {
+      "missing": 3
+    },
+    "section_origin_counts": {
+      "missing": 3
+    },
+    "has_product_specs": true,
+    "has_interaction_state": false
+  },
+  "todo_gap_summary": {
+    "has_section_kind": false,
+    "has_section_origin": false,
+    "has_evidence_source": false,
+    "has_interaction_state": false,
+    "has_pdf_assets": true,
+    "pdf_asset_count": 3,
+    "note": "These flags describe the current baseline before TODO.md changes. Expected future improvements include PDF-link routing and static/dynamic section provenance."
+  },
+  "chunk_previews": [
+    {
+      "chunk_id": "url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c001",
+      "is_usable": true,
+      "text_preview": "# VinFast - Website chính thức tại Việt Nam Dòng xe E-SUV Số chỗ ngồi 6-7 chỗ Quãng đường lên tới 626 km Giá bán từ 1.274.150.000 VNĐ* 1.499.000.000 VNĐ D-SUV 5 chỗ 480-500 km 849.150.000 VNĐ* 999.000.000 VNĐ MPV 7 chỗ 450 km (NEDC) 728.910.000 VNĐ* 819.000.000 VNĐ VAN 2 chỗ 150 km 253.650.000 VNĐ* 285.000.000 VNĐ MiniCar 4 chỗ 170 km (NEDC) 239.410.000 VNĐ* 269.000.000 VNĐ A-SUV 326 km (NEDC) 426.310.000 VNĐ* 479.000.000 VNĐ B-SUV 318,6 km (NEDC) Giá từ 668.000.000 VNĐ 666.610.000 VNĐ* 749.000.000 VNĐ 210 km (NEDC) 268.780.000 VNĐ* 302.000.000 VNĐ 326,4 km (NEDC) 470.810.000 VNĐ* 529.000.000 VNĐ 480 km (NEDC) 613.210.000 VNĐ* 689.000.000 VNĐ C-SUV 496 km 702.210.000 VNĐ* 789.000.000 VNĐ 471 km 866.150.000 VNĐ* 1.019.000.000 VNĐ (*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình ...",
+      "metadata": {
+        "source": "https://vinfastauto.com/vn_vi",
+        "source_type": "official",
+        "url": "https://vinfastauto.com/vn_vi",
+        "document_type": "homepage_product_listing",
+        "page_type": "homepage_product_listing",
+        "section": "VinFast - Website chính thức tại Việt Nam",
+        "heading": "VinFast - Website chính thức tại Việt Nam",
+        "breadcrumb": [
+          "VinFast - Website chính thức tại Việt Nam"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": "1.274.150.000 VNĐ",
+        "driving_range": "626 km",
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    },
+    {
+      "chunk_id": "url_b5ac0806a3af_404-000-vn_c001",
+      "is_usable": true,
+      "text_preview": "# 404.000 VNĐ 404.000 VNĐ Pin & Trạm sạc ô tô điện Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới. XEM CHI TIẾT Pin & Trạm sạc ô tô điện Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới. Pin & Trạm sạc xe máy điện Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới. XEM CHI TIẾT Pin & Trạm sạc xe máy điện Thiết bị sạc di động VinFast cung cấp đa dạng giải ph...",
+      "metadata": {
+        "source": "https://vinfastauto.com/vn_vi",
+        "source_type": "official",
+        "url": "https://vinfastauto.com/vn_vi",
+        "document_type": "homepage_product_listing",
+        "page_type": "homepage_product_listing",
+        "section": "404.000 VNĐ",
+        "heading": "404.000 VNĐ",
+        "breadcrumb": [
+          "VinFast - Website chính thức tại Việt Nam",
+          "404.000 VNĐ"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": null,
+        "driving_range": null,
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    },
+    {
+      "chunk_id": "url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c002",
+      "is_usable": true,
+      "text_preview": "# VinFast - Website chính thức tại Việt Nam TÌM HIỂU THÊM Cộng đồng VinFast Toàn cầu TÌM HIỂU THÊM Cộng đồng VinFast Toàn cầu *Hình ảnh chỉ mang tính chất minh họa ## CƠ HỘI CUỐI NHẬN ƯU ĐÃI 00 ngày 00 giờ (*) Chương trình áp dụng có điều kiện đến hết 31/05/2026 theo ngày xuất hóa đơn",
+      "metadata": {
+        "source": "https://vinfastauto.com/vn_vi",
+        "source_type": "official",
+        "url": "https://vinfastauto.com/vn_vi",
+        "document_type": "homepage_product_listing",
+        "page_type": "homepage_product_listing",
+        "section": "VinFast - Website chính thức tại Việt Nam",
+        "heading": "VinFast - Website chính thức tại Việt Nam",
+        "breadcrumb": [
+          "VinFast - Website chính thức tại Việt Nam"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": null,
+        "driving_range": null,
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    }
+  ]
+}

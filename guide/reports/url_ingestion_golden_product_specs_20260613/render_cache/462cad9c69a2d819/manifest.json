@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-trien-khai-chuong-trinh-cho-thue-xe-green-tai-indonesia-va-philippines-ho-tro-tai-xe-dich-vu-chuyen-doi-xanh",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-trien-khai-chuong-trinh-cho-thue-xe-green-tai-indonesia-va-philippines-ho-tro-tai-xe-dich-vu-chuyen-doi-xanh",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

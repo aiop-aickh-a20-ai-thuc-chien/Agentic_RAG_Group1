@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/thong-bao-chinh-sach-gia-ban-cac-dong-xe-may-dien-vinfast-2025-0",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/thong-bao-chinh-sach-gia-ban-cac-dong-xe-may-dien-vinfast-2025-0",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

@@ -1,0 +1,2159 @@
+# Readable URL Dedup Chunks
+
+Chunk count: 83
+
+## Index
+
+| # | Duplicate | Source | Section | Chunk ID |
+| ---: | --- | --- | --- | --- |
+| 1 | no | https://shop.vinfastauto.com/vn_vi/ACS10000002.html | Thảm Sàn Nhựa VinFast Nerio Green | url_87fd5ae10796_th-m-s-n-nh-a-vinfast-nerio-green_c001 |
+| 2 | no | https://shop.vinfastauto.com/vn_vi/ACS10000005.html | Thảm Sàn Nhựa 2D VF 5 | url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001 |
+| 3 | no | https://shop.vinfastauto.com/vn_vi/ACS10000005.html | Mô tả sản phẩm | url_14dca2f93906_m-t-s-n-ph-m_c001 |
+| 4 | no | https://shop.vinfastauto.com/vn_vi/ACS10000005.html | Thông tin chi tiết | url_14dca2f93906_th-ng-tin-chi-ti-t_c001 |
+| 5 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000005.html | Sản phẩm tương tự | url_14dca2f93906_s-n-ph-m-t-ng-t_c001 |
+| 6 | no | https://shop.vinfastauto.com/vn_vi/ACS10000006.html | Thảm Sàn Nhựa 2D VinFast Nerio Green | url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001 |
+| 7 | no | https://shop.vinfastauto.com/vn_vi/ACS10000006.html | Mô tả sản phẩm | url_3a5a8a334b10_m-t-s-n-ph-m_c001 |
+| 8 | no | https://shop.vinfastauto.com/vn_vi/ACS10000006.html | Thông tin chi tiết | url_3a5a8a334b10_th-ng-tin-chi-ti-t_c001 |
+| 9 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000006.html | Sản phẩm tương tự | url_3a5a8a334b10_s-n-ph-m-t-ng-t_c001 |
+| 10 | no | https://shop.vinfastauto.com/vn_vi/ACS10000007.html | Thảm Sàn Nhựa 2D VF 8 | url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001 |
+| 11 | no | https://shop.vinfastauto.com/vn_vi/ACS10000007.html | Mô tả sản phẩm | url_576c19489788_m-t-s-n-ph-m_c001 |
+| 12 | no | https://shop.vinfastauto.com/vn_vi/ACS10000007.html | Thông tin chi tiết | url_576c19489788_th-ng-tin-chi-ti-t_c001 |
+| 13 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000007.html | Sản phẩm tương tự | url_576c19489788_s-n-ph-m-t-ng-t_c001 |
+| 14 | no | https://shop.vinfastauto.com/vn_vi/ACS10000008.html | Thảm Cốp 3D VF 5 | url_41e129546ab4_th-m-c-p-3d-vf-5_c001 |
+| 15 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000008.html | Mô tả sản phẩm | url_41e129546ab4_m-t-s-n-ph-m_c001 |
+| 16 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000008.html | Thông tin chi tiết | url_41e129546ab4_th-ng-tin-chi-ti-t_c001 |
+| 17 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000008.html | Sản phẩm tương tự | url_41e129546ab4_s-n-ph-m-t-ng-t_c001 |
+| 18 | no | https://shop.vinfastauto.com/vn_vi/ACS10000009.html | Thảm Cốp 3D VinFast Nerio Green | url_9fefe496b741_th-m-c-p-3d-vinfast-nerio-green_c001 |
+| 19 | no | https://shop.vinfastauto.com/vn_vi/ACS10000009.html | Mô tả sản phẩm | url_9fefe496b741_m-t-s-n-ph-m_c001 |
+| 20 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000009.html | Thông tin chi tiết | url_9fefe496b741_th-ng-tin-chi-ti-t_c001 |
+| 21 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000009.html | Sản phẩm tương tự | url_9fefe496b741_s-n-ph-m-t-ng-t_c001 |
+| 22 | no | https://shop.vinfastauto.com/vn_vi/ACS10000010.html | Thảm Cốp 3D VF 8 | url_9ab039da74f7_th-m-c-p-3d-vf-8_c001 |
+| 23 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000010.html | Mô tả sản phẩm | url_9ab039da74f7_m-t-s-n-ph-m_c001 |
+| 24 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000010.html | Thông tin chi tiết | url_9ab039da74f7_th-ng-tin-chi-ti-t_c001 |
+| 25 | yes | https://shop.vinfastauto.com/vn_vi/ACS10000010.html | Sản phẩm tương tự | url_9ab039da74f7_s-n-ph-m-t-ng-t_c001 |
+| 26 | yes | https://shop.vinfastauto.com/vn_vi/5001 | DANH MỤC SẢN PHẨM | url_da089c213ff3_danh-m-c-s-n-ph-m_c001 |
+| 27 | yes | https://shop.vinfastauto.com/vn_vi/5002 | DANH MỤC SẢN PHẨM | url_263224b30384_danh-m-c-s-n-ph-m_c001 |
+| 28 | yes | https://shop.vinfastauto.com/vn_vi/5003 | DANH MỤC SẢN PHẨM | url_b2072da96c82_danh-m-c-s-n-ph-m_c001 |
+| 29 | no | https://shop.vinfastauto.com/vn_vi/5004 | DANH MỤC SẢN PHẨM | url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001 |
+| 30 | no | https://shop.vinfastauto.com/vn_vi/5005 | DANH MỤC SẢN PHẨM | url_98e6d571d228_danh-m-c-s-n-ph-m_c001 |
+| 31 | no | https://shop.vinfastauto.com/vn_vi/5006 | DANH MỤC SẢN PHẨM | url_e6d6418f6309_danh-m-c-s-n-ph-m_c001 |
+| 32 | yes | https://shop.vinfastauto.com/vn_vi/5007 | DANH MỤC SẢN PHẨM | url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001 |
+| 33 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 7 | url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001 |
+| 34 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html | Mô tả sản phẩm | url_af47f4447d39_m-t-s-n-ph-m_c001 |
+| 35 | no | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 7 | url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002 |
+| 36 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 8 | url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001 |
+| 37 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html | Mô tả sản phẩm | url_a6303bd62393_m-t-s-n-ph-m_c001 |
+| 38 | no | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 8 | url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c002 |
+| 39 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 9 | url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001 |
+| 40 | yes | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html | Mô tả sản phẩm | url_4b5932cf32dd_m-t-s-n-ph-m_c001 |
+| 41 | no | https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html | Gói Film Cách Nhiệt Dán Trần VinFast VF 9 | url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002 |
+| 42 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | Tùy chọn cho ngân sách của bạn. | url_a3bdef93d1e7_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001 |
+| 43 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | VinFast VF 3: Thông số, Giá bán & Ưu đãi mới nhất | url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001 |
+| 44 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | VinFast VF 3 - Tự do sáng tạo, toả sáng chất riêng! | url_a3bdef93d1e7_vinfast-vf-3-t-do-s-ng-t-o-to-s-ng-ch-t-ri-ng_c001 |
+| 45 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | VinFast VF 3 - Luôn đủ chỗ cho mọi người! | url_a3bdef93d1e7_vinfast-vf-3-lu-n-ch-cho-m-i-ng-i_c001 |
+| 46 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn | url_a3bdef93d1e7_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001 |
+| 47 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | Đăng ký thành công! | url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001 |
+| 48 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html | Thong so & Dac diem | url_a3bdef93d1e7_thong-so-dac-diem_c001 |
+| 49 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html | VinFast VF 5 Giá tốt | url_1c95c7bfe7c8_vinfast-vf-5-gi-t-t_c001 |
+| 50 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html | A-SUV | url_1c95c7bfe7c8_a-suv_c001 |
+| 51 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html | So sánh giữa xe VinFast VF 5 và xe động cơ đốt trong | url_1c95c7bfe7c8_so-s-nh-gi-a-xe-vinfast-vf-5-v-xe-ng-c-t-trong_c001 |
+| 52 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html | Giá bán VF 5 | url_1c95c7bfe7c8_gi-b-n-vf-5_c001 |
+| 53 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html | Đăng ký thành công! | url_1c95c7bfe7c8_ng-k-th-nh-c-ng_c001 |
+| 54 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html | Xe điện VinFast VF 6 | url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001 |
+| 55 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html | VF 6 Plus | url_97c0d5b92fd0_vf-6-plus_c001 |
+| 56 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html | Xe điện VinFast VF 6 | url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c002 |
+| 57 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html | 0VNĐ | url_97c0d5b92fd0_0vn_c001 |
+| 58 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html | Đăng ký thành công! | url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001 |
+| 59 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Xe điện VinFast VF 7 chính hãng | url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001 |
+| 60 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Tùy chọn cho ngân sách của bạn. | url_9dd8e94fee25_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001 |
+| 61 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | VF 7là một bước tiến đột phá trong thiết kế xe ô tô của VinFast. | url_9dd8e94fee25_vf-7l-m-t-b-c-ti-n-t-ph-trong-thi-t-k-xe-t-c-a-vinfast_c001 |
+| 62 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Ngoại thất kế thừa và đổi mới từ hơn trăm năm lịch sử của ngành ô tô. | url_9dd8e94fee25_ngo-i-th-t-k-th-a-v-i-m-i-t-h-n-tr-m-n-m-l-ch-s-c-a-ng-nh-t_c001 |
+| 63 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | VF 7không chỉ là một chiếc xe điện tiên tiến, mà còn là một tác phẩm nghệ thuật kết hợp giữa công nghệ và sự sáng tạo trong thiết kế. | url_9dd8e94fee25_vf-7kh-ng-ch-l-m-t-chi-c-xe-i-n-ti-n-ti-n-m-c-n-l-m-t-t-c-ph-m-ngh-thu-t-k-t-h-p-gi-a-c-ng-ngh-v-s-s-ng-t-o-trong-thi-t-k_c001 |
+| 64 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Kiến tạo không gian trải nghiệm phóng khoáng, tự do và tràn đầy năng lượng. | url_9dd8e94fee25_ki-n-t-o-kh-ng-gian-tr-i-nghi-m-ph-ng-kho-ng-t-do-v-tr-n-y-n-ng-l-ng_c001 |
+| 65 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Xe điện VinFast VF 7 chính hãng | url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c002 |
+| 66 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn. | url_9dd8e94fee25_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001 |
+| 67 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Đăng ký thành công! | url_9dd8e94fee25_ng-k-th-nh-c-ng_c001 |
+| 68 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html | Thong so & Dac diem | url_9dd8e94fee25_thong-so-dac-diem_c001 |
+| 69 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html | VinFast - Website chính thức tại Việt Nam | url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c001 |
+| 70 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html | 404.000 VNĐ | url_b5ac0806a3af_404-000-vn_c001 |
+| 71 | no | https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html | VinFast - Website chính thức tại Việt Nam | url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c002 |
+| 72 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-grand-lite | Evo Grand Lite | url_e0517c46570d_evo-grand-lite_c001 |
+| 73 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-grand-lite | Evo Grand Lite | url_e0517c46570d_evo-grand-lite_c002 |
+| 74 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-lite-neo | EVO LITE NEO | url_2fa17a703953_evo-lite-neo_c001 |
+| 75 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-2025 | Feliz 2025 | url_4eb918c78ee7_feliz-2025_c001 |
+| 76 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-2025 | Feliz 2025 | url_4eb918c78ee7_feliz-2025_c002 |
+| 77 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-lite | Feliz Lite | url_455927f6ba17_feliz-lite_c001 |
+| 78 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-lite | Feliz Lite | url_455927f6ba17_feliz-lite_c002 |
+| 79 | yes | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/klara-s | Câu hỏi thường gặp về xe máy điện VinFast Klara S | url_1bbafe5353e6_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-klara-s_c001 |
+| 80 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/klara-s | Hướng dẫn cách mở khoá hệ thống điện trên xe Klara S 2022 | url_1bbafe5353e6_h-ng-d-n-c-ch-m-kho-h-th-ng-i-n-tr-n-xe-klara-s-2022_c001 |
+| 81 | yes | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s | Câu hỏi thường gặp về xe máy điện VinFast Theon S | url_25169e5b4cf2_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-theon-s_c001 |
+| 82 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s | Cách sử dụng chìa khoá thông minh Smart Key như thế nào? | url_25169e5b4cf2_c-ch-s-d-ng-ch-a-kho-th-ng-minh-smart-key-nh-th-n-o_c001 |
+| 83 | no | https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s | Theon S | url_25169e5b4cf2_theon-s_c001 |
+
+## Chunks
+
+### Chunk 1
+
+- chunk_id: `url_87fd5ae10796_th-m-s-n-nh-a-vinfast-nerio-green_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000002.html
+- section: Thảm Sàn Nhựa VinFast Nerio Green
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Sàn Nhựa VinFast Nerio Green
+
+2.550.000 VNĐ
+
+### Mô tả sản phẩm
+Thảm lót sàn sử dụng hạt nhựa PVC với khả năng chống nước tốt, đặc biệt chống trượt, dễ vệ sinh, giúp cho khoang nội thất luôn sạch sẽ. Sản phẩm được may đo thiết kế vừa vặn cho xe VinFast Nerio Green, có nút cố định giúp dễ dàng lắp đặt và giữ cho thảm không di chuyển xô lệch, mất thẩm mỹ.
+
+### Thông tin chi tiết
+- Chất liệu: Nhựa nguyên sinh cao cấp, không độc hại. - Kích thước: + 1 miếng phụ: 719,5252 x 505,1932 mm. + 1 miếng lái: 725,3053 x 496,2708 mm. + 1 miếng hàng hai bên phụ: 485 x 504,4809 mm. + 1 miếng hàng hai bên lái: 485 x 504,4809 mm. + 1 miếng giữa hàng 2: 309,1855 x 502,4421mm. * Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+
+### Sản phẩm tương tự
+- Gói Dán Film Cách Nhiệt VinFast Nerio Green: Nhận tại showroom / Tạm hết hàng
+- Tấm Che Nắng Cửa VinFast Nerio Green: 540.000 VNĐ
+- Tấm Che Pin Cao Áp VinFast Nerio Green: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thảm Sàn Nhựa 2D VinFast Nerio Green: 1.969.000 VNĐ
+- Thảm Cốp 3D VinFast Nerio Green: 990.000 VNĐ
+```
+
+### Chunk 2
+
+- chunk_id: `url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000005.html
+- section: Thảm Sàn Nhựa 2D VF 5
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Sàn Nhựa 2D VF 5
+
+1.969.000 VNĐ
+```
+
+### Chunk 3
+
+- chunk_id: `url_14dca2f93906_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000005.html
+- section: Mô tả sản phẩm
+- duplicate: False
+- detected_layers: 
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót sàn VinFast VF 5 là dòng thảm khuôn đúc được sản xuất chính hãng tại Việt Nam, theo dây chuyền sản xuất Nhật Bản. Được làm từ vật liệu nhựa TPE cao cấp, không độc hại.
+```
+
+### Chunk 4
+
+- chunk_id: `url_14dca2f93906_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000005.html
+- section: Thông tin chi tiết
+- duplicate: False
+- detected_layers: 
+
+```text
+### Thông tin chi tiết
+
+Thảm lót sàn VinFast VF 5 được sản xuất từ công nghệ Nhật Bản hiện đại. Thảm chống bụi bẩn, chống thấm nước, ôm sát sàn xe, đảm bảo vừa vặn với kích thước sàn tuyệt đối. Chất liệu nhựa TPE có khả năng chống cháy, chống nước cao. Đây là loại nhựa tái chế được nên thân thiện với môi trường. Thảm không bị ăn mòn, oxy hóa sau thời gian dài sử dụng. Sử dụng máy scan 3D trong thiết kế, giúp ôm khít sàn xe. Thảm giúp giảm tiếng ồn động cơ hiệu quả. Sử dụng công nghệ Nhật Bản, đảm bảo độ chính xác đến từng mm cho xe VF 5. Đạt chứng nhận do Trung tâm Kỹ thuật Tiêu chuẩn Đo lường Chất lượng 3 (QUATEST 3 ). Thông qua các tiêu chí từ RoHS. Không có chất kim loại nặng, không mùi độc hại. Thiết kế thông minh, đảm bảo khả năng giữ bụi tối đa. Chống trơn trượt, bề mặt dưới bám dính vào sàn xe đảm bảo không xô lệch. Dễ dàng lắp đặt, dễ dàng vệ sinh. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất.
+```
+
+### Chunk 5
+
+- chunk_id: `url_14dca2f93906_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000005.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Sản phẩm tương tự
+
+- Thảm Cốp 3D VF 5: 990.000 VNĐ
+- Tấm Che Nắng Cửa VinFast VF 5: 495.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 5: Nhận tại showroom / Tạm hết hàng
+- VF 5 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+```
+
+### Chunk 6
+
+- chunk_id: `url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000006.html
+- section: Thảm Sàn Nhựa 2D VinFast Nerio Green
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Sàn Nhựa 2D VinFast Nerio Green
+
+1.969.000 VNĐ
+```
+
+### Chunk 7
+
+- chunk_id: `url_3a5a8a334b10_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000006.html
+- section: Mô tả sản phẩm
+- duplicate: False
+- detected_layers: 
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót sàn VinFast Nerio Green là dòng thảm khuôn đúc được sản xuất chính hãng tại Việt Nam, theo dây chuyền sản xuất Nhật Bản. Được làm từ vật liệu nhựa TPE cao cấp, không độc hại.
+```
+
+### Chunk 8
+
+- chunk_id: `url_3a5a8a334b10_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000006.html
+- section: Thông tin chi tiết
+- duplicate: False
+- detected_layers: 
+
+```text
+### Thông tin chi tiết
+
+Thảm lót sàn ô tô VinFast Nerio Green được sản xuất từ công nghệ Nhật Bản hiện đại. Thảm chống bụi bẩn, chống thấm nước, ôm sát sàn xe, đảm bảo vừa vặn với kích thước sàn tuyệt đối. Chất liệu nhựa TPE có khả năng chống cháy, chống nước cao. Sử dụng công nghệ Nhật Bản, đảm bảo độ chính xác đến từng mm cho xe VinFast Nerio Green. Đạt chứng nhận do Trung tâm Kỹ thuật Tiêu chuẩn Đo lường Chất lượng 3 (QUATEST 3 ). Thông qua các tiêu chí từ RoHS. Không có chất kim loại nặng, không mùi độc hại. Thiết kế thông minh, đảm bảo khả năng giữ bụi tối đa. Chống trơn trượt, bề mặt dưới bám dính vào sàn xe đảm bảo không xô lệch. Dễ dàng lắp đặt, dễ dàng vệ sinh. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất.
+```
+
+### Chunk 9
+
+- chunk_id: `url_3a5a8a334b10_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000006.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Sản phẩm tương tự
+
+- Thảm Sàn Nhựa VinFast Nerio Green: Tạm hết hàng
+- Gói Dán Film Cách Nhiệt VinFast Nerio Green: Nhận tại showroom Tạm hết hàng
+- Tấm Che Nắng Cửa VinFast Nerio Green: 540.000 VNĐ
+- Tấm Che Pin Cao Áp VinFast Nerio Green: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thảm Cốp 3D VinFast Nerio Green: 990.000 VNĐ
+```
+
+### Chunk 10
+
+- chunk_id: `url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000007.html
+- section: Thảm Sàn Nhựa 2D VF 8
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Sàn Nhựa 2D VF 8
+
+2.210.000 VNĐ
+```
+
+### Chunk 11
+
+- chunk_id: `url_576c19489788_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000007.html
+- section: Mô tả sản phẩm
+- duplicate: False
+- detected_layers: 
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót sàn VinFast VF 8 là dòng thảm khuôn đúc được sản xuất chính hãng tại Việt Nam, theo dây chuyền sản xuất Nhật Bản. Được làm từ vật liệu nhựa TPE cao cấp, không độc hại.
+```
+
+### Chunk 12
+
+- chunk_id: `url_576c19489788_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000007.html
+- section: Thông tin chi tiết
+- duplicate: False
+- detected_layers: 
+
+```text
+### Thông tin chi tiết
+
+Thảm lót sàn VinFast VF 8 được sản xuất từ công nghệ Nhật Bản hiện đại. Thảm chống bụi bẩn, chống thấm nước, ôm sát sàn xe, đảm bảo vừa vặn với kích thước sàn tuyệt đối. Chất liệu nhựa TPE có khả năng chống cháy, chống nước cao. Đây là loại nhựa tái chế được nên thân thiện với môi trường. Thảm không bị ăn mòn, oxy hóa sau thời gian dài sử dụng. Sử dụng máy scan 3D trong thiết kế, giúp ôm khít sàn xe. Thảm giúp giảm tiếng ồn động cơ hiệu quả. Sử dụng công nghệ Nhật Bản, đảm bảo độ chính xác đến từng mm cho xe VF 8. Đạt chứng nhận do Trung tâm Kỹ thuật Tiêu chuẩn Đo lường Chất lượng 3 (QUATEST 3 ). Thông qua các tiêu chí từ RoHS. Không có chất kim loại nặng, không mùi độc hại. Thiết kế thông minh, đảm bảo khả năng giữ bụi tối đa. Chống trơn trượt, bề mặt dưới bám dính vào sàn xe đảm bảo không xô lệch. Dễ dàng lắp đặt, dễ dàng vệ sinh. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất. Bộ thảm lót sàn VinFast VF 8 gồm 2 hàng ghế: 1 thảm lót sàn ghế lại (Khóa chống trượt cố định); 1 thảm lót sàn ghế phụ và 1 thảm lót sàn hàng ghế hai.
+```
+
+### Chunk 13
+
+- chunk_id: `url_576c19489788_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000007.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: simhash
+
+```text
+### Sản phẩm tương tự
+
+- Tấm Che Nắng Cửa VinFast VF 8: 540.000 VNĐ
+- Cốp Nóc Phi Thuyền ô tô VinFast VF 8: Tạm hết hàng
+- Gói Dán Film Cách Nhiệt VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- Gói Film Cách Nhiệt Dán Trần VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- VF 8 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thanh Ngang Giá Nóc VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- Thảm Cốp 3D VF 8: 1.100.001 VNĐ
+```
+
+### Chunk 14
+
+- chunk_id: `url_41e129546ab4_th-m-c-p-3d-vf-5_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000008.html
+- section: Thảm Cốp 3D VF 5
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Cốp 3D VF 5
+
+990.000 VNĐ
+```
+
+### Chunk 15
+
+- chunk_id: `url_41e129546ab4_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000008.html
+- section: Mô tả sản phẩm
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót cốp 3D VinFast VF 5 được sản xuất với chất liệu nhựa TPE cao cấp. Sản phẩm được thiết kế đặc biệt cho dòng xe VinFast VF 5. Thảm lót cốp thiết kế nguyên tấm để tạo phủ bề mặt hoàn hảo cho không gian cốp xe.
+```
+
+### Chunk 16
+
+- chunk_id: `url_41e129546ab4_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000008.html
+- section: Thông tin chi tiết
+- duplicate: True
+- detected_layers: embedding_similarity, simhash
+
+```text
+### Thông tin chi tiết
+
+Sản phẩm được làm từ nhựa TPE nguyên sinh cao cấp, không gây mùi hôi khó chịu và an toàn cho sức khỏe. Chất liệu nhựa TPE cao cấp giúp bảo vệ sàn cốp trước sự va đập, trầy xước và hạn chế bụi bẩn. Vách dựng 3-5cm, sản phẩm ngăn chặn nước và chất lỏng tràn ra khỏi không gian cốp, giữ cho cốp xe luôn khô ráo và sạch sẽ. Thảm lót cốp có bề mặt dễ lau chùi, giúp dễ dàng vệ sinh và duy trì sự sạch sẽ cho không gian cốp. Thiết kế thông minh và sử dụng công nghệ Nhật Bản giúp thảm lót ôm sát sàn xe và không xô lệch, đảm bảo độ chính xác đến từng mm cho xe VinFast VF 5. Sản phẩm có thiết kế tiện lợi, giúp Khách hàng có thể dễ dàng lắp đặt tại nhà nhanh chóng, thuận tiện. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất.
+```
+
+### Chunk 17
+
+- chunk_id: `url_41e129546ab4_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000008.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Sản phẩm tương tự
+
+- Thảm Sàn Nhựa 2D VF 5: 1.969.000 VNĐ
+- Tấm Che Nắng Cửa VinFast VF 5: 495.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 5: Nhận tại showroom / Tạm hết hàng
+- VF 5 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+```
+
+### Chunk 18
+
+- chunk_id: `url_9fefe496b741_th-m-c-p-3d-vinfast-nerio-green_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000009.html
+- section: Thảm Cốp 3D VinFast Nerio Green
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Cốp 3D VinFast Nerio Green
+
+990.000 VNĐ
+```
+
+### Chunk 19
+
+- chunk_id: `url_9fefe496b741_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000009.html
+- section: Mô tả sản phẩm
+- duplicate: False
+- detected_layers: 
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót cốp 3D VinFast Nerio Green được sản xuất với chất liệu nhựa TPE cao cấp. Sản phẩm được thiết kế đặc biệt cho dòng xe VinFast Nerio Green. Thảm lót cốp thiết kế nguyên tấm để tạo phủ bề mặt hoàn hảo cho không gian cốp xe.
+```
+
+### Chunk 20
+
+- chunk_id: `url_9fefe496b741_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000009.html
+- section: Thông tin chi tiết
+- duplicate: True
+- detected_layers: simhash
+
+```text
+### Thông tin chi tiết
+
+Sản phẩm được làm từ nhựa TPE nguyên sinh cao cấp, không gây mùi hôi khó chịu và an toàn cho sức khỏe. Chất liệu nhựa TPE cao cấp giúp bảo vệ sàn cốp trước sự va đập, trầy xước và hạn chế bụi bẩn. Vách dựng 3-5cm, sản phẩm ngăn chặn nước và chất lỏng tràn ra khỏi không gian cốp, giữ cho cốp xe luôn khô ráo và sạch sẽ. Thảm lót cốp có bề mặt dễ lau chùi, giúp dễ dàng vệ sinh và duy trì sự sạch sẽ cho không gian cốp. Thiết kế thông minh và sử dụng công nghệ Nhật Bản giúp thảm lót ôm sát sàn xe và không xô lệch, đảm bảo độ chính xác đến từng mm cho xe VinFast Nerio Green. Sản phẩm có thiết kế tiện lợi, giúp Khách hàng có thể dễ dàng lắp đặt tại nhà nhanh chóng, thuận tiện. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất.
+```
+
+### Chunk 21
+
+- chunk_id: `url_9fefe496b741_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000009.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Sản phẩm tương tự
+
+- Thảm Sàn Nhựa VinFast Nerio Green: Tạm hết hàng
+- Gói Dán Film Cách Nhiệt VinFast Nerio Green: Nhận tại showroom Tạm hết hàng
+- Tấm Che Nắng Cửa VinFast Nerio Green: 540.000 VNĐ
+- Tấm Che Pin Cao Áp VinFast Nerio Green: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thảm Sàn Nhựa 2D VinFast Nerio Green: 1.969.000 VNĐ
+```
+
+### Chunk 22
+
+- chunk_id: `url_9ab039da74f7_th-m-c-p-3d-vf-8_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000010.html
+- section: Thảm Cốp 3D VF 8
+- duplicate: False
+- detected_layers: 
+
+```text
+# Thảm Cốp 3D VF 8
+
+1.100.001 VNĐ
+```
+
+### Chunk 23
+
+- chunk_id: `url_9ab039da74f7_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000010.html
+- section: Mô tả sản phẩm
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### Mô tả sản phẩm
+
+Thảm lót cốp 3D VinFast VF 8 được sản xuất với chất liệu nhựa TPE cao cấp. Sản phẩm được thiết kế đặc biệt cho dòng xe VinFast VF 8. Thảm lót cốp thiết kế nguyên tấm để tạo phủ bề mặt hoàn hảo cho không gian cốp xe.
+```
+
+### Chunk 24
+
+- chunk_id: `url_9ab039da74f7_th-ng-tin-chi-ti-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000010.html
+- section: Thông tin chi tiết
+- duplicate: True
+- detected_layers: embedding_similarity, simhash
+
+```text
+### Thông tin chi tiết
+
+Sản phẩm được làm từ nhựa TPE nguyên sinh cao cấp, không gây mùi hôi khó chịu và an toàn cho sức khỏe. Chất liệu nhựa TPE cao cấp giúp bảo vệ sàn cốp trước sự va đập, trầy xước và hạn chế bụi bẩn. Vách dựng 3-5cm, sản phẩm ngăn chặn nước và chất lỏng tràn ra khỏi không gian cốp, giữ cho cốp xe luôn khô ráo và sạch sẽ. Thảm lót cốp có bề mặt dễ lau chùi, giúp dễ dàng vệ sinh và duy trì sự sạch sẽ cho không gian cốp. Thiết kế thông minh và sử dụng công nghệ Nhật Bản giúp thảm lót ôm sát sàn xe và không xô lệch, đảm bảo độ chính xác đến từng mm cho xe VinFast VF 8. Sản phẩm có thiết kế tiện lợi, giúp Khách hàng có thể dễ dàng lắp đặt tại nhà nhanh chóng, thuận tiện. Thời hạn bảo hành kéo dài 24 tháng tính từ ngày nhận hàng. Chính sách đổi trả sản phẩm lỗi trong vòng 3 ngày kể từ ngày nhận hàng áp dụng cho Khách hàng mua Online, chỉ áp dụng đối với các lỗi do nhà sản xuất.
+```
+
+### Chunk 25
+
+- chunk_id: `url_9ab039da74f7_s-n-ph-m-t-ng-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/ACS10000010.html
+- section: Sản phẩm tương tự
+- duplicate: True
+- detected_layers: simhash
+
+```text
+### Sản phẩm tương tự
+
+- Tấm Che Nắng Cửa VinFast VF 8: 540.000 VNĐ
+- Cốp Nóc Phi Thuyền ô tô VinFast VF 8: Tạm hết hàng
+- Thảm Sàn Nhựa 2D VF 8: 2.210.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- Gói Film Cách Nhiệt Dán Trần VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- VF 8 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thanh Ngang Giá Nóc VinFast VF 8: Nhận tại showroom Tạm hết hàng
+```
+
+### Chunk 26
+
+- chunk_id: `url_da089c213ff3_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5001
+- section: DANH MỤC SẢN PHẨM
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phụ kiện VF 8
+Sắp xếp Mới nhất Giá: Thấp - Cao Giá: Cao - Thấp Mới nhất
+Mới nhất
+Hiển thị 8/8
+Sắp xếp Mới nhất
+Hiển thị 8 /8
+VF 8 Tấm Che Pin Cao Áp
+8.140.001 VNĐ
+Thanh Ngang Giá Nóc VinFast VF 8
+18.360.000 VNĐ
+Cốp Nóc Phi Thuyền ô tô VinFast VF 8
+6.999.999 VNĐ
+Gói Dán Film Cách Nhiệt VinFast VF 8
+6.700.000 VNĐ
+Gói Film Cách Nhiệt Dán Trần VinFast VF 8
+5.625.000 VNĐ
+Tấm Che Nắng Cửa VinFast VF 8
+540.000 VNĐ
+Thảm Sàn Nhựa 2D VF 8
+2.210.000 VNĐ
+Thảm Cốp 3D VF 8
+```
+
+### Chunk 27
+
+- chunk_id: `url_263224b30384_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5002
+- section: DANH MỤC SẢN PHẨM
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phụ kiện VF 9
+Sắp xếp Mới nhất Giá: Thấp - Cao Giá: Cao - Thấp Mới nhất
+Mới nhất
+Hiển thị 7/7
+Sắp xếp Mới nhất
+Hiển thị 7 /7
+VF 9 Tấm Che Pin Cao Áp
+8.998.001 VNĐ
+Thảm Sàn 3D VF 9
+2.990.001 VNĐ
+Gói Film Cách Nhiệt Dán Trần VinFast VF 9
+7.875.000 VNĐ
+Gói Dán Film Cách Nhiệt VinFast VF 9
+6.700.000 VNĐ
+Thảm Cốp 3D VF 9
+1.190.000 VNĐ
+Tấm Rèm Trần Panorama VinFast VF 9
+4.000.000 VNĐ
+Tấm Che Nắng Cửa VinFast VF 9
+```
+
+### Chunk 28
+
+- chunk_id: `url_b2072da96c82_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5003
+- section: DANH MỤC SẢN PHẨM
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phong cách sống
+Sắp xếp Mới nhất
+Mới nhất
+Hiển thị 12 /23
+Mô Hình Xe VinFast VF 3
+2.074.000 VNĐ
+Mũ Lưỡi Trai Thêu Hoa VF 5
+330.999 VNĐ
+Áo Polo VinFast VF 5 Thêu Hoa
+533.001 VNĐ
+Áo Phông VinFast VF 5 Thêu Hoa
+478.000 VNĐ
+Khăn Lụa Cao Cấp VinFast
+3.489.999 VNĐ
+Bình Giữ Nhiệt VF 7
+698.000 VNĐ
+Áo Phông VF 7 Đặc Biệt
+663.000 VNĐ
+Áo Phông VF 7
+Mũ Lưỡi Trai VF 7
+294.000 VNĐ
+Lót Cốc Sơn Mài VinFast
+2.783.000 VNĐ
+Mô Hình Xe VinFast VF 8
+3.095.000 VNĐ
+Mô Hình Xe VinFast VF 9
+```
+
+### Chunk 29
+
+- chunk_id: `url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5004
+- section: DANH MỤC SẢN PHẨM
+- duplicate: False
+- detected_layers: 
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Sạc ô tô điện
+Sắp xếp Mới nhất Giá: Thấp - Cao Giá: Cao - Thấp Mới nhất
+Mới nhất
+Hiển thị 4/4
+Sắp xếp Mới nhất
+Hiển thị 4 /4
+Sạc Tại Nhà 3KW
+8.836.365 VNĐ
+Bộ Sạc Treo Tường AC 11 kW
+11.781.818 VNĐ
+Bộ Sạc Di Động Ô Tô Điện 2.2 kW
+3.927.273 VNĐ
+Bộ Sạc Treo Tường AC 7,4 kW
+```
+
+### Chunk 30
+
+- chunk_id: `url_98e6d571d228_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5005
+- section: DANH MỤC SẢN PHẨM
+- duplicate: False
+- detected_layers: 
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phụ kiện Nerio Green
+Sắp xếp Mới nhất Giá: Thấp - Cao Giá: Cao - Thấp Mới nhất
+Mới nhất
+Hiển thị 6/6
+Sắp xếp Mới nhất
+Hiển thị 6 /6
+Tấm Che Pin Cao Áp VinFast Nerio Green
+5.457.001 VNĐ
+Gói Dán Film Cách Nhiệt VinFast Nerio Green
+5.500.000 VNĐ
+Thảm Sàn Nhựa 2D VinFast Nerio Green
+1.969.000 VNĐ
+Thảm Cốp 3D VinFast Nerio Green
+990.000 VNĐ
+Tấm Che Nắng Cửa VinFast Nerio Green
+540.000 VNĐ
+Thảm Sàn Nhựa VinFast Nerio Green
+```
+
+### Chunk 31
+
+- chunk_id: `url_e6d6418f6309_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5006
+- section: DANH MỤC SẢN PHẨM
+- duplicate: False
+- detected_layers: 
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phụ kiện VF 5
+Sắp xếp Mới nhất Giá: Thấp - Cao Giá: Cao - Thấp Mới nhất
+Mới nhất
+Hiển thị 5/5
+Sắp xếp Mới nhất
+Hiển thị 5 /5
+VF 5 Tấm Che Pin Cao Áp
+4.947.002 VNĐ
+Gói Dán Film Cách Nhiệt VinFast VF 5
+5.500.000 VNĐ
+Thảm Cốp 3D VF 5
+990.000 VNĐ
+Tấm Che Nắng Cửa VinFast VF 5
+495.000 VNĐ
+Thảm Sàn Nhựa 2D VF 5
+```
+
+### Chunk 32
+
+- chunk_id: `url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/5007
+- section: DANH MỤC SẢN PHẨM
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+### DANH MỤC SẢN PHẨM
+
+- Sản phẩm mới
+- Phong cách sống
+Phụ kiện ô tô điện
+- Phụ kiện VF 9
+- Phụ kiện VF 8
+- Phụ kiện VF 7
+- Phụ kiện VF 6
+- Phụ kiện Nerio Green
+- Phụ kiện Limo Green
+- Phụ kiện VF 5
+- Phụ kiện VF 3
+- Sạc ô tô điện
+- Phụ kiện xe máy điện
+- Phụ kiện ô tô xăng
+Sản phẩm mới Phong cách sống Phụ kiện ô tô điện Phụ kiện VF 9 Phụ kiện VF 8 Phụ kiện VF 7 Phụ kiện VF 6 Phụ kiện Nerio Green Phụ kiện Limo Green Phụ kiện VF 5 Phụ kiện VF 3 Sạc ô tô điện Phụ kiện xe máy điện Phụ kiện ô tô xăng Phụ kiện VF 3
+Sắp xếp Mới nhất
+Mới nhất
+Hiển thị 12 /12
+Mô Hình Xe VinFast VF 3
+2.074.000 VNĐ
+Bộ Thanh Ngang Giá Nóc VF 3
+1.436.000 VNĐ
+Gói Dán Film Cách Nhiệt VinFast VF 3
+5.000.000 VNĐ
+Sạc Tại Nhà 3KW
+8.836.365 VNĐ
+Thảm Nhựa VF3
+1.668.000 VNĐ
+Camera Lùi VF 3
+2.671.656 VNĐ
+Bọc Vô Lăng VF 3
+837.000 VNĐ
+Bọc Ghế Da VF 3
+6.713.000 VNĐ
+Ốp La-zăng VF 3
+842.400 VNĐ
+Tấm Che Nắng Cửa VinFast VF 3
+431.001 VNĐ
+Ốp Lưng Ghế Sau VF 3
+832.001 VNĐ
+Thảm Cốp 3D VF 3
+```
+
+### Chunk 33
+
+- chunk_id: `url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 7
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+# Gói Film Cách Nhiệt Dán Trần VinFast VF 7
+
+5.625.000 VNĐ
+Chọn gói
+- Premium
+- First Royal
+Nhận tại showroom
+```
+
+### Chunk 34
+
+- chunk_id: `url_af47f4447d39_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html
+- section: Mô tả sản phẩm
+- duplicate: True
+- detected_layers: exact_sha256, simhash
+
+```text
+### Mô tả sản phẩm
+
+SẢN PHẨM GÓI DÁN FILM CÁCH NHIỆT VF x 3M Với triết lý “Đặt khách hàng làm trọng tâm”, VinFast không ngừng sáng tạo để tạo ra các sản phẩm đẳng cấp và trải nghiệm xuất sắc cho mọi người. Để triển khai gói dán film cách nhiệt cao cấp, VinFast lựa chọn thương hiệu 3M với lịch sử hơn 50 năm trong lĩnh vực sản xuất film cách nhiệt, đáp ứng 3 tiêu chí quan trọng: Nhà máy sản xuất hiện đại – năng lực toàn cầu – công nghệ dẫn đầu, mang đến cho khách hàng những dòng sản phẩm cao cấp, những trải nghiệm tiên tiến nhất. Các sản phẩm film cách nhiệt VF x 3M giúp cách nhiệt, ngăn bức xạ hồng ngoại, loại bỏ tia UV, giảm lóa hiệu quả giúp trải nghiệm khách hàng trong xe được cải thiện, bảo vệ khách hàng khỏi các tia có hại cũng như tăng độ bền cho nội thất xe. Bảo hành lên đến 15 năm: 3M bảo hành 10 năm đầu, VinFast bảo hành 5 năm tiếp theo. Thời gian bảo hành tính từ thời điểm 3M kích hoạt bảo hành.
+Lưu ý:
+Sản phẩm không được áp dụng chính sách VinClub.
+```
+
+### Chunk 35
+
+- chunk_id: `url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 7
+- duplicate: False
+- detected_layers: 
+
+```text
+### Gói Film Cách Nhiệt Dán Trần VinFast VF 7
+
+Quý khách chọn gói sản phẩm để biết thêm chi tiết.
+
+### Sản phẩm tương tự
+- Tấm Che Nắng Cửa VF 7: 540.000 VNĐ
+- Thảm Sàn 3D VF 7: 1.994.000 VNĐ
+- Thảm Cốp 3D VF 7: 990.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 7: Nhận tại showroom Tạm hết hàng
+- VF 7 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+```
+
+### Chunk 36
+
+- chunk_id: `url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 8
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+# Gói Film Cách Nhiệt Dán Trần VinFast VF 8
+
+5.625.000 VNĐ
+Chọn gói
+- Premium
+- First Royal
+Nhận tại showroom
+```
+
+### Chunk 37
+
+- chunk_id: `url_a6303bd62393_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html
+- section: Mô tả sản phẩm
+- duplicate: True
+- detected_layers: simhash
+
+```text
+### Mô tả sản phẩm
+
+SẢN PHẨM GÓI DÁN FILM CÁCH NHIỆT VF x 3M Với triết lý “Đặt khách hàng làm trọng tâm”, VinFast không ngừng sáng tạo để tạo ra các sản phẩm đẳng cấp và trải nghiệm xuất sắc cho mọi người. Để triển khai gói dán film cách nhiệt cao cấp, VinFast lựa chọn thương hiệu 3M với lịch sử hơn 50 năm trong lĩnh vực sản xuất film cách nhiệt, đáp ứng 3 tiêu chí quan trọng: Nhà máy sản xuất hiện đại – năng lực toàn cầu – công nghệ dẫn đầu, mang đến cho khách hàng những dòng sản phẩm cao cấp, những trải nghiệm tiên tiến nhất. Các sản phẩm film cách nhiệt VF x 3M giúp cách nhiệt, ngăn bức xạ hồng ngoại, loại bỏ tia UV, giảm loá hiệu quả giúp trải nghiệm khách hàng trong xe được cải thiện, bảo vệ khách hàng khỏi các tia có hại cũng như tăng độ bền cho nội thất xe. Bảo hành lên đến 15 năm: 3M bảo hành 10 năm đầu, VinFast bảo hành 5 năm tiếp theo. Thời gian bảo hành tính từ thời điểm 3M kích hoạt bảo hành.
+Lưu ý:
+Sản phẩm không được áp dụng chính sách VinClub.
+```
+
+### Chunk 38
+
+- chunk_id: `url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c002`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 8
+- duplicate: False
+- detected_layers: 
+
+```text
+### Gói Film Cách Nhiệt Dán Trần VinFast VF 8
+
+Quý khách chọn gói sản phẩm để biết thêm chi tiết.
+
+### Sản phẩm tương tự
+- Tấm Che Nắng Cửa VinFast VF 8: 540.000 VNĐ
+- Cốp Nóc Phi Thuyền ô tô VinFast VF 8: Tạm hết hàng
+- Thảm Sàn Nhựa 2D VF 8: 2.210.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- VF 8 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom Tạm hết hàng
+- Thanh Ngang Giá Nóc VinFast VF 8: Nhận tại showroom Tạm hết hàng
+- Thảm Cốp 3D VF 8: 1.100.001 VNĐ
+```
+
+### Chunk 39
+
+- chunk_id: `url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 9
+- duplicate: True
+- detected_layers: embedding_similarity
+
+```text
+# Gói Film Cách Nhiệt Dán Trần VinFast VF 9
+
+7.875.000 VNĐ
+Chọn gói
+- Premium
+- First Royal
+Nhận tại showroom
+```
+
+### Chunk 40
+
+- chunk_id: `url_4b5932cf32dd_m-t-s-n-ph-m_c001`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html
+- section: Mô tả sản phẩm
+- duplicate: True
+- detected_layers: exact_sha256, simhash
+
+```text
+### Mô tả sản phẩm
+
+SẢN PHẨM GÓI DÁN FILM CÁCH NHIỆT VF x 3M Với triết lý “Đặt khách hàng làm trọng tâm”, VinFast không ngừng sáng tạo để tạo ra các sản phẩm đẳng cấp và trải nghiệm xuất sắc cho mọi người. Để triển khai gói dán film cách nhiệt cao cấp, VinFast lựa chọn thương hiệu 3M với lịch sử hơn 50 năm trong lĩnh vực sản xuất film cách nhiệt, đáp ứng 3 tiêu chí quan trọng: Nhà máy sản xuất hiện đại – năng lực toàn cầu – công nghệ dẫn đầu, mang đến cho khách hàng những dòng sản phẩm cao cấp, những trải nghiệm tiên tiến nhất. Các sản phẩm film cách nhiệt VF x 3M giúp cách nhiệt, ngăn bức xạ hồng ngoại, loại bỏ tia UV, giảm lóa hiệu quả giúp trải nghiệm khách hàng trong xe được cải thiện, bảo vệ khách hàng khỏi các tia có hại cũng như tăng độ bền cho nội thất xe. Bảo hành lên đến 15 năm: 3M bảo hành 10 năm đầu, VinFast bảo hành 5 năm tiếp theo. Thời gian bảo hành tính từ thời điểm 3M kích hoạt bảo hành.
+Lưu ý:
+Sản phẩm không được áp dụng chính sách VinClub.
+```
+
+### Chunk 41
+
+- chunk_id: `url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002`
+- source: https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html
+- section: Gói Film Cách Nhiệt Dán Trần VinFast VF 9
+- duplicate: False
+- detected_layers: 
+
+```text
+### Gói Film Cách Nhiệt Dán Trần VinFast VF 9
+
+Quý khách chọn gói sản phẩm để biết thêm chi tiết.
+
+### Sản phẩm tương tự
+- VF 9 Tấm Che Pin Cao Áp: Có lắp đặt Nhận tại showroom / Tạm hết hàng
+- Thảm Sàn 3D VF 9: 2.990.000 VNĐ
+- Gói Dán Film Cách Nhiệt VinFast VF 9: Nhận tại showroom Tạm hết hàng
+- Thảm Cốp 3D VF 9: 1.190.000 VNĐ
+- Tấm Rèm Trần Panorama VinFast VF 9: 4.000.000 VNĐ
+```
+
+### Chunk 42
+
+- chunk_id: `url_a3bdef93d1e7_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: Tùy chọn cho ngân sách của bạn.
+- duplicate: False
+- detected_layers: 
+
+```text
+##### Tùy chọn cho ngân sách của bạn.
+
+Giá bán từ
+268.780.000 VNĐ*
+302.000.000 VNĐ
+
+##### VF 3 Plus
+280.350.000 VNĐ*
+315.000.000 VNĐ
+(*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện.
+```
+
+### Chunk 43
+
+- chunk_id: `url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: VinFast VF 3: Thông số, Giá bán & Ưu đãi mới nhất
+- duplicate: False
+- detected_layers: 
+
+```text
+### VinFast VF 3: Thông số, Giá bán & Ưu đãi mới nhất
+
+Với thiết kế tối giản, nhỏ gọn, cá tính và năng động, VinFast VF 3 sẽ luôn cùng bạn hoà nhịp với xu thế công nghệ di chuyển xanh toàn cầu, trải nghiệm giá trị trên mỗi hành trình, và tự do thể hiện phong cách sống.
+
+### VinFast VF 3 - Tự do sáng tạo, toả sáng chất riêng!
+Với dải màu ngoại thất đa dạng và độc đáo, bao gồm 7 tùy chọn màu sắc trẻ trung và thời thượng, VF 3 là sự lựa chọn hoàn hảo giúp bạn thoả sức thể hiện sự khác biệt và cá tính của riêng mình. Dù bạn là ai, hãy lựa chọn màu sắc và trang bị VF 3 theo sở thích của bạn, và cùng VinFast biến ước mơ của bạn thành hiện thực.
+Summer Yellow
+```
+
+### Chunk 44
+
+- chunk_id: `url_a3bdef93d1e7_vinfast-vf-3-t-do-s-ng-t-o-to-s-ng-ch-t-ri-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: VinFast VF 3 - Tự do sáng tạo, toả sáng chất riêng!
+- duplicate: False
+- detected_layers: 
+
+```text
+#### VinFast VF 3 - Tự do sáng tạo, toả sáng chất riêng!
+
+VF 3 là mẫu xe hiếm hoi trong phân khúc xe sở hữu la-zăng kích thước 16 inch, không chỉ tạo điểm nhấn về thiết kế mà còn góp phần gia tăng khả năng di chuyển trên địa hình đa dạng trong đô thị. Đặc biệt, để VF 3 tăng thêm vẻ cá tính, sự sang trọng cho chiếc xe Khách hàng có thể đặt mua ốp la -zăng tại đây.
+
+#### VinFast VF 3 - Biểu tượng mới của cuộc sống đô thị.
+Vượt lên trên một phương tiện di chuyển thông thường, VinFast VF 3 là biểu tượng mới mang tính cách mạng trong cuộc sống đô thị. Với thiết kế hiện đại, hiệu suất vận hành linh hoạt, tính năng an toàn tiên tiến, cùng chi phí vận hành siêu rẻ, VF 3 sẽ mở ra một cách tiếp cận hoàn toàn mới trong việc lựa chọn phương tiện di chuyển hàng ngày, mang lại sự thuận tiện, dễ dàng và đặc biệt thoải mái cho tất cả mọi người.
+
+#### VF 3 không chỉ là một chiếc xe điện tiên tiến.
+Mà còn là một tác phẩm nghệ thuật kết hợp giữa công nghệ và sự sáng tạo trong thiết kế.
+```
+
+### Chunk 45
+
+- chunk_id: `url_a3bdef93d1e7_vinfast-vf-3-lu-n-ch-cho-m-i-ng-i_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: VinFast VF 3 - Luôn đủ chỗ cho mọi người!
+- duplicate: False
+- detected_layers: 
+
+```text
+### VinFast VF 3 - Luôn đủ chỗ cho mọi người!
+
+Thiết kế thông minh và không gian nội thất tối ưu hóa của VF 3 mang lại trải nghiệm di chuyển tiện lợi, đảm bảo sự thoải mái và tiện nghi cho cả 4 chỗ ngồi. Màu sắc nội thất trang nhã, trẻ trung và cá tính, cùng chất liệu thân thiện tạo ra một không gian đặc biệt, nơi chứa đựng những kỷ niệm đáng nhớ trên mọi hành trình khám phá phong cách sống của riêng bạn!
+```
+
+### Chunk 46
+
+- chunk_id: `url_a3bdef93d1e7_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn
+- duplicate: False
+- detected_layers: 
+
+```text
+### 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn
+
+Định hình tiên phong thúc đẩy ngành công nghiệp xe điện, hướng tới một tương lai Xanh và Thông Minh, VinFast đã đầu tư hàng trăm triệu USD phát triển hạ tầng, từng bước "phủ rộng" trạm sạc xe điện:
+- Hệ thống trạm sạc xe điện VinFast trải dài 34 Tỉnh và Thành phố.
+- 106 tuyến quốc lộ quan trọng đều có trạm sạc.
+- 80/85 thành phố đã được lắp đặt hệ thống trạm sạc.
+- Khoảng cách ngắn 3,5 km giữa 2 trạm sạc trong thành phố.
+VinFast cam kết nỗ lực mang đến nhiều tiện ích, giúp hành trình lái xe điện của người Việt thật dễ dàng!
+
+#### Thông số kỹ thuật
+
+| Động cơ | 01 Motor |
+| --- | --- |
+| Công suất tối đa (kW) | 30 |
+| Mô men xoắn cực đại (Nm) | 110 |
+| Quãng đường chạy một lần sạc đầy (km) | 215 |
+| Thời gian nạp pin nhanh nhất | 36 phút (10% - 70%) |
+| Dẫn động | RWD/Cầu sau |
+```
+
+### Chunk 47
+
+- chunk_id: `url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: Đăng ký thành công!
+- duplicate: False
+- detected_layers: 
+
+```text
+### Đăng ký thành công!
+
+Những thông tin nóng hổi nhất về chiếc xe VF 3 sẽ được gửi tới hòm email của Quý khách. Hãy đón chờ!
+(*)Lưu ý:
+- Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+- Một số tính năng sẽ chưa có sẵn hoặc chưa được kích hoạt tại thời điểm giao xe cho Khách hàng. Những tính năng này sẽ được cập nhật sau thông qua phương thức cập nhật phần mềm từ xa hoặc qua kết nối không dây hoặc cập nhật tại xưởng dịch vụ VinFast.
+- Một số tính năng nâng cao có thể thuộc gói dịch vụ ADAS và Smart Services thu phí.
+- Quãng đường di chuyển được tính toán dựa trên kết quả kiểm định theo quy chuẩn toàn cầu (NEDC hoặc WLTP). Quãng đường di chuyển thực tế có thể giảm so với kết quả kiểm định, phụ thuộc vào tốc độ lái xe, nhiệt độ, địa hình, thói quen sử dụng của người lái, chế độ lái được cài đặt, số lượng hành khách, và các điều kiện giao thông khác.
+```
+
+### Chunk 48
+
+- chunk_id: `url_a3bdef93d1e7_thong-so-dac-diem_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html
+- section: Thong so & Dac diem
+- duplicate: False
+- detected_layers: 
+
+```text
+## Thong so & Dac diem
+
+- Động cơ: 01 Motor
+- Công suất tối đa (kW): 30
+- Mô men xoắn cực đại (Nm): 110
+- Quãng đường chạy một lần sạc đầy (km): 215
+- Thời gian nạp pin nhanh nhất: 36 phút (10% - 70%)
+- Dẫn động: RWD/Cầu sau
+```
+
+### Chunk 49
+
+- chunk_id: `url_1c95c7bfe7c8_vinfast-vf-5-gi-t-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html
+- section: VinFast VF 5 Giá tốt
+- duplicate: False
+- detected_layers: 
+
+```text
+### VinFast VF 5 Giá tốt
+
+Đồng hành hàng ngày
+Chọn màu chi tiết tại đây
+Zenith Grey
+Infinity Blanc
+Solar Ruby
+Summer Yellow Body - Jet Black Roof
+
+### Ngoại thất ấn tượng
+Phong cách trẻ trung, năng động, cá tính.
+
+### Nội thất tinh tế
+Không gian rộng rãi, phối màu sành điệu, cuốn hút với các đường viền bắt mắt.
+
+### Vận hành êm ái
+Công suất tối đa 134 mã lực, tương đương xe xăng 1,6L 4 xi lanh. Mạnh mẽ, linh hoạt. Sẵn sàng cho mọi hành trình.
+Dòng xe
+```
+
+### Chunk 50
+
+- chunk_id: `url_1c95c7bfe7c8_a-suv_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html
+- section: A-SUV
+- duplicate: False
+- detected_layers: 
+
+```text
+### A-SUV
+
+A-SUV
+Quãng đường di chuyển (chuẩn NEDC)*
+326,4 km/lần sạc
+Công suất tối đa
+134 hp
+Mô men xoắn cực đại
+135 Nm
+Dài x rộng x Cao (mm) 3.967 x 1.723 x 1.579
+Dung lượng pin khả dụng 37,23 Kwh
+Loại la-zăng Hợp kim 17 inch
+Mức tiêu thụ nhiên liệu công khai 13 kWh/100 km
+Số ghế ngồi 5 ghế
+Thời gian nạp pin nhanh nhất (10%-70%) 33 phút
+Túi khí 6 túi khí
+VF 5 Plus sở hữu thiết kế hiện đại, trẻ trung, cá tính và nổi bật với các lựa chọn phối màu nội ngoại thất, đảm bảo cá nhân hóa theo phong cách sống, cá tính và sở thích của mỗi khách hàng.
+VinFast VF 5 Plus được trang bị đầy đủ những công nghệ tiên tiến bậc nhất:
+- Giám sát hành trình cơ bản
+- Cảnh báo giao thông phía sau
+- Cảnh báo điểm mù
+- Hỗ trợ đỗ xe phía sau
+- Hỗ trợ phanh khẩn cấp...
+Tích hợp các ứng dụng, tiện ích thông minh như:
+- Mua sắm trực tuyến trên xe
+- Điều khiển các thiết bị smart home…
+Giúp nâng tầm trải nghiệm và kiến tạo một phong cách sống đẳng cấp, văn minh, hiện đại cho người sở hữu.
+(*)Lưu ý:
+- Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+- Một số tính năng sẽ chưa có sẵn hoặc chưa được kích hoạt tại thời điểm giao xe cho Khách hàng. Những tính năng này sẽ được cập nhật sau thông qua phương thức cập nhật phần mềm từ xa hoặc qua kết nối không dây hoặc cập nhật tại xưởng dịch vụ VinFast.
+- Một số tính năng nâng cao có thể thuộc gói dịch vụ ADAS và Smart Services thu phí.
+- Quãng đường di chuyển được tính toán dựa trên kết quả kiểm định theo quy chuẩn toàn cầu (NEDC hoặc WLTP). Quãng đường di chuyển thực tế có thể giảm so với kết quả kiểm định, phụ thuộc vào tốc độ lái xe, nhiệt độ, địa hình, thói quen sử dụng của người lái, chế độ lái được cài đặt, số lượng hành khách, và các điều kiện giao thông khác.
+```
+
+### Chunk 51
+
+- chunk_id: `url_1c95c7bfe7c8_so-s-nh-gi-a-xe-vinfast-vf-5-v-xe-ng-c-t-trong_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html
+- section: So sánh giữa xe VinFast VF 5 và xe động cơ đốt trong
+- duplicate: False
+- detected_layers: 
+
+```text
+### So sánh giữa xe VinFast VF 5 và xe động cơ đốt trong
+
+Vui lòng nhập thông tin xe động cơ đốt trong cần so sánh:
+Loại nhiên liệu sử dụng
+Xăng Dầu
+Mức tiêu thụ nhiên liệu/100km *
+lít
+Vui lòng nhập quãng đường di chuyển mỗi tháng:
+Quãng đường di chuyển/tháng *
+km
+(*) Nhập số (phân cách bằng dấu phẩy “,”). Ví dụ: 6,5 lít.
+0VNĐ
+(Theo chương trình miễn phí sạc từ V-Green, áp dụng kèm điều kiện và điều khoản. Vui lòng liên hệ đại lý để biết thông tin chi tiết)
+(*) Chưa có dữ liệu so sánh. Vui lòng nhập thông tin!
+(*) Lưu ý: Các thông số, đơn giá và giả định sử dụng để tính chi phí nhiên liệu có thể thay đổi. Công cụ trên dựa vào một số thông tin cập nhật sau:
+- Giá xăng RON 95-III vùng I cập nhật gần nhất ngày 24/03/2026: 33.840 VNĐ/lít
+- Giá dầu Diesel 0,001S-V vùng 1 cập nhật gần nhất ngày 24/03/2026: 39.860 VNĐ/lít
+```
+
+### Chunk 52
+
+- chunk_id: `url_1c95c7bfe7c8_gi-b-n-vf-5_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html
+- section: Giá bán VF 5
+- duplicate: False
+- detected_layers: 
+
+```text
+### Giá bán VF 5
+
+529.000.000 VNĐ
+(*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện.
+Bảo hành bảo dưỡng
+CHÍNH SÁCH BẢO HÀNH
+Bảo hành xe mới: 7 năm/160.000 km. Pin cao áp (Mua lần đầu theo xe mới): 8 năm/160.000 km.
+```
+
+### Chunk 53
+
+- chunk_id: `url_1c95c7bfe7c8_ng-k-th-nh-c-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html
+- section: Đăng ký thành công!
+- duplicate: False
+- detected_layers: 
+
+```text
+### Đăng ký thành công!
+
+Những thông tin nóng hổi nhất về chiếc xe VF 5 sẽ được gửi tới hòm email của Quý khách. Hãy đón chờ!
+Những thông tin nóng hổi nhất về chiếc xe VF 3 sẽ được gửi tới hòm email của Quý khách. Hãy đón chờ!
+```
+
+### Chunk 54
+
+- chunk_id: `url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html
+- section: Xe điện VinFast VF 6
+- duplicate: False
+- detected_layers: 
+
+```text
+# Xe điện VinFast VF 6
+
+59,6 kW Dung lượng pin
+485 km/lần sạc Quãng đường (NEDC)* VF 6 Eco
+150 kW/201 hp Công suất tối đa VF 6 Plus
+310 Nm Mô men xoắn cực đại VF 6 Plus
+```
+
+### Chunk 55
+
+- chunk_id: `url_97c0d5b92fd0_vf-6-plus_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html
+- section: VF 6 Plus
+- duplicate: False
+- detected_layers: 
+
+```text
+### VF 6 Plus
+
+Giá bán từ
+613.210.000 VNĐ*
+689.000.000 VNĐ*
+663.050.000 VNĐ*
+745.000.000 VNĐ
+(*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện.
+Cùng VF 6 ghi dấu từng khoảnh khắc, khởi đầu mọi hành trình.
+```
+
+### Chunk 56
+
+- chunk_id: `url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c002`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html
+- section: Xe điện VinFast VF 6
+- duplicate: False
+- detected_layers: 
+
+```text
+### Xe điện VinFast VF 6
+
+Thiết kế ngoại thất được khởi tạo từ những đường nét tinh tế đến từng chi tiết cùng vẻ ngoài năng động, ấn tượng ngay từ ánh nhìn đầu tiên.
+
+### Nội thất
+Thiết kế nội thất lấy cảm hứng từ ngôi nhà thứ hai của gia đình với không gian rộng rãi, thoải mái cùng hai màu nội thất và chất liệu tự nhiên, thân thiện với người dùng.
+
+### Công nghệ
+Dài x Rộng x Cao (mm): 4.241 x 1.834 x 1.580
+Chiều dài cơ sở
+2.730 mm
+Quãng đường di chuyển (NEDC)*
+485 km/lần sạc
+460 km/lần sạc
+Công suất tối đa
+130 kW/174 hp
+150 kW/201 hp
+Mô men xoắn cực đại
+250 Nm
+310 Nm
+Kích thước La-zăng
+17 inch
+18 inch
+### So sánh giữa xe VinFast VF 6 và xe động cơ đốt trong
+Vui lòng nhập thông tin xe động cơ đốt trong cần so sánh:
+Loại nhiên liệu sử dụng
+Xăng Dầu
+Mức tiêu thụ nhiên liệu/100km *
+lít
+Vui lòng nhập quãng đường di chuyển mỗi tháng:
+Quãng đường di chuyển/tháng *
+km
+(*) Nhập số (phân cách bằng dấu phẩy “,”). Ví dụ: 6,5 lít.
+```
+
+### Chunk 57
+
+- chunk_id: `url_97c0d5b92fd0_0vn_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html
+- section: 0VNĐ
+- duplicate: False
+- detected_layers: 
+
+```text
+### 0VNĐ
+
+0VNĐ
+(Theo chương trình miễn phí sạc từ V-Green, áp dụng kèm điều kiện và điều khoản. Vui lòng liên hệ đại lý để biết thông tin chi tiết)
+(*) Chưa có dữ liệu so sánh. Vui lòng nhập thông tin!
+(*) Lưu ý: Các thông số, đơn giá và giả định sử dụng để tính chi phí nhiên liệu có thể thay đổi. Công cụ trên dựa vào một số thông tin cập nhật sau:
+- Giá xăng RON 95-III vùng I cập nhật gần nhất ngày 24/03/2026: 33.840 VNĐ/lít
+- Giá dầu Diesel 0,001S-V vùng 1 cập nhật gần nhất ngày 24/03/2026: 39.860 VNĐ/lít
+(*)Lưu ý:
+- Một số tính năng sẽ chưa có sẵn hoặc chưa được kích hoạt tại thời điểm giao xe cho Khách hàng. Những tính năng này sẽ được cập nhật sau thông qua phương thức cập nhật phần mềm từ xa qua kết nối không dây hoặc cập nhật tại xưởng dịch vụ VinFast. Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+- Quãng đường di chuyển được tính toán dựa trên kết quả kiểm định theo quy chuẩn toàn cầu (NEDC hoặc WLTP). Quãng đường di chuyển thực tế có thể giảm so với kết quả kiểm định, phụ thuộc vào tốc độ lái xe, nhiệt độ, địa hình, thói quen sử dụng của người lái, chế độ lái được cài đặt, số lượng hành khách, và các điều kiện giao thông khác.
+```
+
+### Chunk 58
+
+- chunk_id: `url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html
+- section: Đăng ký thành công!
+- duplicate: False
+- detected_layers: 
+
+```text
+### Đăng ký thành công!
+
+Những thông tin nóng hổi nhất về chiếc xe VF 6 Plus sẽ được gửi tới hòm email của Quý khách. Hãy đón chờ!
+```
+
+### Chunk 59
+
+- chunk_id: `url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Xe điện VinFast VF 7 chính hãng
+- duplicate: False
+- detected_layers: 
+
+```text
+# Xe điện VinFast VF 7 chính hãng
+
+*Hình ảnh mang tính minh họa, sử dụng hình ảnh của sản phẩm trong giai đoạn tiền thương mại. Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+```
+
+### Chunk 60
+
+- chunk_id: `url_9dd8e94fee25_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Tùy chọn cho ngân sách của bạn.
+- duplicate: False
+- detected_layers: 
+
+```text
+### Tùy chọn cho ngân sách của bạn.
+
+VF 7 Eco
+Giá bán từ
+702.210.000 VNĐ*
+789.000.000 VNĐ
+VF 7 Plus
+791.210.000 VNĐ*
+889.000.000 VNĐ
+VF 7 PlusTrần kính toàn cảnh
+809.010.000 VNĐ*
+909.000.000 VNĐ
+(*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện.
+```
+
+### Chunk 61
+
+- chunk_id: `url_9dd8e94fee25_vf-7l-m-t-b-c-ti-n-t-ph-trong-thi-t-k-xe-t-c-a-vinfast_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: VF 7là một bước tiến đột phá trong thiết kế xe ô tô của VinFast.
+- duplicate: False
+- detected_layers: 
+
+```text
+### VF 7là một bước tiến đột phá trong thiết kế xe ô tô của VinFast.
+
+Hậu mãi cực tốt
+Bảo hành 10 năm/200.000 km (tùy điều kiện nào đến trước); Xưởng dịch vụ không ngày nghỉ, sửa chữa lưu động, cứu hộ 24/7...
+Triết lý thiết kế “Vũ Trụ Phi Đối Xứng“
+Thiết kế ngoại thất thể hiện sự tự do, cá tính, mạnh mẽ và thể thao, thoả mãn mọi tâm hồn đam mê thẩm mỹ và tốc độ.
+Trải nghiệm lái phấn khích
+Công suất tối đa 260 kW*, Mô men xoắn cực đại 500 Nm (* Thông số bản Plus tùy chọn AWD)
+Chi phí lăn bánh hấp dẫn
+Mức giá lăn bánh cạnh tranh (được miễn phí lệ phí trước bạ trong 2 năm từ 1/3/2025 theo Nghị định số 51/2025/NĐ - CP)
+Chi phí vận hành tối ưu
+Chương trình miễn phí sạc của VinFast
+```
+
+### Chunk 62
+
+- chunk_id: `url_9dd8e94fee25_ngo-i-th-t-k-th-a-v-i-m-i-t-h-n-tr-m-n-m-l-ch-s-c-a-ng-nh-t_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Ngoại thất kế thừa và đổi mới từ hơn trăm năm lịch sử của ngành ô tô.
+- duplicate: False
+- detected_layers: 
+
+```text
+### Ngoại thất kế thừa và đổi mới từ hơn trăm năm lịch sử của ngành ô tô.
+
+Solar Ruby
+Những đường nét và hình khối được sử dụng nhịp nhàng và tinh tế, mang đến cho chủ nhân VF 7không gian trải nghiệm đầy phóng khoáng và tràn đầy năng lượng; song vẫn không làm mất đi sự tối giản, tinh khiết và thời trang vốn có của mẫu xe đánh thức mọi đam mê.
+Thiết kế phần đầu xe thon gọn, dựa trên hình ảnh của chiếc phi thuyền không gian, với điểm nhấn là cụm đèn định vị cánh chim - chữ V đặc trưng kéo dài liên tưởng tới những pha bứt tốc mạnh mẽ vượt thời không và sự chuyển hướng linh hoạt trên không trung.
+```
+
+### Chunk 63
+
+- chunk_id: `url_9dd8e94fee25_vf-7kh-ng-ch-l-m-t-chi-c-xe-i-n-ti-n-ti-n-m-c-n-l-m-t-t-c-ph-m-ngh-thu-t-k-t-h-p-gi-a-c-ng-ngh-v-s-s-ng-t-o-trong-thi-t-k_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: VF 7không chỉ là một chiếc xe điện tiên tiến, mà còn là một tác phẩm nghệ thuật kết hợp giữa công nghệ và sự sáng tạo trong thiết kế.
+- duplicate: False
+- detected_layers: 
+
+```text
+### VF 7không chỉ là một chiếc xe điện tiên tiến, mà còn là một tác phẩm nghệ thuật kết hợp giữa công nghệ và sự sáng tạo trong thiết kế.
+
+Tối ưu tính khí động học
+Nắp capo thấp, trần xe và cửa sổ được vuốt thấp dần về phía sau, giúp tối tính khí động học, tạo sự đầm chắc và ổn định khi di chuyển tốc độ cao.
+Tay nắm cửa
+Tay nắm ẩn trong thân xe, tạo ra sự liền mạch cho không khí đi qua. Mở cửa với thao tác ấn và kéo mang lại trải nghiệm mới lạ, khác biệt với tay nắm cửa truyền thống.
+La-Zăng thể thao
+Kích thước 20 inch (bản Plus), khẳng định thêm vẻ mạnh mẽ và thể thao cho VF 7.
+Thân xe với đường gân dập nổi
+Đường gân dập nổi nối liền bên hông xe, tạo sự liền mạch thể thao, phần đuôi xe cơ bắp và góc cạnh tô điểm cho chiếc xe thêm phần mạnh mẽ.
+Gương chiếu hậu
+Gập điện, chỉnh điện, đặt dưới cửa xe giúp hạn chế điểm mù, mở rộng tầm nhìn cho người lái.
+```
+
+### Chunk 64
+
+- chunk_id: `url_9dd8e94fee25_ki-n-t-o-kh-ng-gian-tr-i-nghi-m-ph-ng-kho-ng-t-do-v-tr-n-y-n-ng-l-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Kiến tạo không gian trải nghiệm phóng khoáng, tự do và tràn đầy năng lượng.
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Kiến tạo không gian trải nghiệm phóng khoáng, tự do và tràn đầy năng lượng.
+
+Tận hưởng hành trình trong không gian riêng tư và rộng rãi của chiếc xe, nơi mỗi chi tiết mang đậm dấu ấn cá nhân tạo nên cuộc phiêu lưu độc đáo của riêng bạn.
+Tiện nghi hướng vào người lái
+Tất cả tiện nghi đều nằm trong tầm tay người lái, giúp mang tới kết nối liền mạch giữa người và xe.
+Trần kính toàn cảnh (tùy chọn)
+Mở rộng không gian, mang tới trải nghiệm cao cấp trên mỗi hành trình.
+```
+
+### Chunk 65
+
+- chunk_id: `url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c002`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Xe điện VinFast VF 7 chính hãng
+- duplicate: False
+- detected_layers: 
+
+```text
+### Xe điện VinFast VF 7 chính hãng
+
+Sở hữu 7 túi khí*.
+Mô men xoắn cực đại 500 Nm**.
+*Áp dụng cho bản VF 7 Plus. **Áp dụng phiên bản VF 7 Plus AWD.
+
+### Hệ thống trợ lái nâng cao.
+Hỗ trợ lái trên đường cao tốc.
+Ứng dụng công nghệ và trang thiết bị hiện đại nhất, hệ thống trợ lái nâng cao VinFast đem lại trải nghiệm lái thư thái, dễ dàng để bạn an tâm tận hưởng cuộc sống.
+```
+
+### Chunk 66
+
+- chunk_id: `url_9dd8e94fee25_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn.
+- duplicate: False
+- detected_layers: 
+
+```text
+### 3,5 km - Khoảng cách nhỏ cho mục tiêu lớn.
+
+Định hình tiên phong thúc đẩy ngành công nghiệp xe điện, hướng tới một tương lai Xanh và Thông Minh, VinFast đã đầu tư hàng trăm triệu USD phát triển hạ tầng, từng bước "phủ rộng" trạm sạc xe điện:
+Hệ thống trạm sạc xe điện VinFast trải dài 34 Tỉnh và Thành phố.
+106 tuyến quốc lộ quan trọng đều có trạm sạc.
+80/85 thành phố đã được lắp đặt hệ thống trạm sạc.
+Khoảng cách ngắn 3,5 km giữa 2 trạm sạc trong thành phố.
+VinFast cam kết nỗ lực mang đến nhiều tiện ích, giúp hành trình lái xe điện của người Việt thật dễ dàng!
+
+#### Tổng quan sự khác biệt.
+Chiều dài cơ sở (mm): 2.840
+Dài x Rộng x Cao (mm): 4.545 x 1.890 x 1.635,75
+Quãng đường chạy một lần sạc đầy (km)*: 440
+Cập nhật sau
+Công suất tối đa (kW): 130 / 150
+Mô men xoắn cực đại (Nm): 250 / 310
+Dung lượng pin khả dụng (kWh): 59,6 / 70
+- Giới thiệu
+- Ngoại thất
+- Nội thất
+- Thông số
+- Giá bán
+- Cam kết
+(*)Lưu ý:
+- Một số tính năng sẽ chưa có sẵn hoặc chưa được kích hoạt tại thời điểm giao xe cho Khách hàng. Những tính năng này sẽ được cập nhật sau thông qua phương thức cập nhật phần mềm từ xa qua kết nối không dây hoặc cập nhật tại xưởng dịch vụ VinFast. Các thông tin sản phẩm có thể thay đổi mà không cần báo trước.
+- Quãng đường di chuyển được tính toán dựa trên kết quả kiểm định theo quy chuẩn toàn cầu (NEDC hoặc WLTP). Quãng đường di chuyển thực tế có thể giảm so với kết quả kiểm định, phụ thuộc vào tốc độ lái xe, nhiệt độ, địa hình, thói quen sử dụng của người lái, chế độ lái được cài đặt, số lượng hành khách, và các điều kiện giao thông khác.
+```
+
+### Chunk 67
+
+- chunk_id: `url_9dd8e94fee25_ng-k-th-nh-c-ng_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Đăng ký thành công!
+- duplicate: False
+- detected_layers: 
+
+```text
+### Đăng ký thành công!
+
+Những thông tin nóng hổi nhất về chiếc xe VF 7 sẽ được gửi tới hòm email của Quý khách. Hãy đón chờ!
+```
+
+### Chunk 68
+
+- chunk_id: `url_9dd8e94fee25_thong-so-dac-diem_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html
+- section: Thong so & Dac diem
+- duplicate: False
+- detected_layers: 
+
+```text
+## Thong so & Dac diem
+
+- Giá bán từ: 702.210.000 VNĐ*
+- Hậu mãi cực tốt: Bảo hành 10 năm/200.000 km (tùy điều kiện nào đến trước); Xưởng dịch vụ không ngày nghỉ, sửa chữa lưu động, cứu hộ 24/7...
+- Triết lý thiết kế “Vũ Trụ Phi Đối Xứng“: Thiết kế ngoại thất thể hiện sự tự do, cá tính, mạnh mẽ và thể thao, thoả mãn mọi tâm hồn đam mê thẩm mỹ và tốc độ.
+- Trải nghiệm lái phấn khích: Công suất tối đa 260 kW*, Mô men xoắn cực đại 500 Nm (* Thông số bản Plus tùy chọn AWD)
+- Chi phí lăn bánh hấp dẫn: Mức giá lăn bánh cạnh tranh (được miễn phí lệ phí trước bạ trong 2 năm từ 1/3/2025 theo Nghị định số 51/2025/NĐ - CP)
+- Chi phí vận hành tối ưu: Chương trình miễn phí sạc của VinFast
+- Tối ưu tính khí động học: Nắp capo thấp, trần xe và cửa sổ được vuốt thấp dần về phía sau, giúp tối tính khí động học, tạo sự đầm chắc và ổn định khi di chuyển tốc độ cao.
+- Tay nắm cửa: Tay nắm ẩn trong thân xe, tạo ra sự liền mạch cho không khí đi qua. Mở cửa với thao tác ấn và kéo mang lại trải nghiệm mới lạ, khác biệt với tay nắm cửa truyền thống.
+- La-Zăng thể thao: Kích thước 20 inch (bản Plus), khẳng định thêm vẻ mạnh mẽ và thể thao cho VF 7.
+- Thân xe với đường gân dập nổi: Đường gân dập nổi nối liền bên hông xe, tạo sự liền mạch thể thao, phần đuôi xe cơ bắp và góc cạnh tô điểm cho chiếc xe thêm phần mạnh mẽ.
+- Gương chiếu hậu: Gập điện, chỉnh điện, đặt dưới cửa xe giúp hạn chế điểm mù, mở rộng tầm nhìn cho người lái.
+- Tiện nghi hướng vào người lái: Tất cả tiện nghi đều nằm trong tầm tay người lái, giúp mang tới kết nối liền mạch giữa người và xe.
+- Trần kính toàn cảnh (tùy chọn): Mở rộng không gian, mang tới trải nghiệm cao cấp trên mỗi hành trình.
+- Hỗ trợ lái trên đường cao tốc.: Ứng dụng công nghệ và trang thiết bị hiện đại nhất, hệ thống trợ lái nâng cao VinFast đem lại trải nghiệm lái thư thái, dễ dàng để bạn an tâm tận hưởng cuộc sống.
+```
+
+### Chunk 69
+
+- chunk_id: `url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html
+- section: VinFast - Website chính thức tại Việt Nam
+- duplicate: False
+- detected_layers: 
+
+```text
+# VinFast - Website chính thức tại Việt Nam
+
+Dòng xe
+E-SUV
+Số chỗ ngồi
+6-7 chỗ
+Quãng đường lên tới
+626 km
+Giá bán từ
+1.229.180.000 VNĐ
+1.499.000.000 VNĐ
+D-SUV
+5 chỗ
+480-500 km
+819.180.000 VNĐ
+999.000.000 VNĐ
+MPV
+7 chỗ
+450 km (NEDC)
+704.340.000 VNĐ
+819.000.000 VNĐ
+VAN
+2 chỗ
+150 km
+245.100.000 VNĐ
+285.000.000 VNĐ
+MiniCar
+4 chỗ
+170 km (NEDC)
+231.340.000 VNĐ
+269.000.000 VNĐ
+A-SUV
+326 km (NEDC)
+411.940.000 VNĐ
+479.000.000 VNĐ
+B-SUV
+318,6 km (NEDC)
+Giá từ
+668.000.000 VNĐ
+644.140.000 VNĐ
+749.000.000 VNĐ
+210 km (NEDC)
+262.100.700 VNĐ
+302.000.000 VNĐ
+326,4 km (NEDC)
+454.940.000 VNĐ
+529.000.000 VNĐ
+480 km (NEDC)
+592.540.000 VNĐ
+689.000.000 VNĐ
+C-SUV
+496 km
+678.540.000 VNĐ
+789.000.000 VNĐ
+471 km
+835.580.000 VNĐ
+1.019.000.000 VNĐ
+(*) Mức giá ưu đãi mang tính chất tham khảo. Chương trình áp dụng theo điều khoản & điều kiện.
+Tốc độ tối đa
+49 km/h
+Quãng đường 1 lần sạc
+78 km
+Cốp xe
+17 lít
+14.400.000 VNĐ
+~87 km/lần sạc
+Công suất tối đa
+1500 W
+14.990.000 VNĐ
+MUA XE XEM CHI TIẾT
+25 km/h
+~65 km/lần sạc
+800 W
+13.900.000 VNĐ
+~165 km/lần sạc
+2300 W
+17.000.000 VNĐ
+30 km/h
+70 km/h
+~156 km/lần sạc
+3000 W
+39.900.000 VNĐ
+24.900.000 VNĐ
+Quãng đường 1 lần sạc (2 pin)
+12 lít
+19.990.000 VNĐ
+39 km/h
+70 km
+14 lít
+15.900.000 VNĐ
+Quãng đường đi được 1 lần sạc (2 pin)
+135 km
+16.900.000 VNĐ
+262 km
+35 lít
+34.900.000 VNĐ
+34 lít
+27.900.000 VNĐ
+23.900.000 VNĐ
+48 km/h
+198 km
+19.900.000 VNĐ
+Công suất động cơ
+250 W
+110 km
+Pin Lithium Ion
+47,2V
+18.690.000 VNĐ
+Mô Hình Xe VinFast VF 3
+2.074.000 VNĐ
+Bộ Sạc Treo Tường AC 11 kW
+11.781.818 VNĐ
+VF 7 Tấm Che Pin Cao Áp
+6.881.000 VNĐ
+Ô Golf 2 Tầng
+```
+
+### Chunk 70
+
+- chunk_id: `url_b5ac0806a3af_404-000-vn_c001`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html
+- section: 404.000 VNĐ
+- duplicate: False
+- detected_layers: 
+
+```text
+# 404.000 VNĐ
+
+404.000 VNĐ
+Pin & Trạm sạc ô tô điện Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới. XEM CHI TIẾT
+Pin & Trạm sạc ô tô điện
+Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới.
+Pin & Trạm sạc xe máy điện Với phương châm luôn đặt lợi ích Khách hàng lên hàng đầu, VinFast áp dụng chính sách cho thuê pin độc đáo, ưu việt và khác biệt với tất cả các mô hình cho thuê pin từ trước tới nay trên thế giới. XEM CHI TIẾT
+Pin & Trạm sạc xe máy điện
+Thiết bị sạc di động VinFast cung cấp đa dạng giải pháp sạc để đáp ứng nhu cầu sử dụng của khách hàng một cách thuận tiện nhất. XEM CHI TIẾT
+Thiết bị sạc di động
+VinFast cung cấp đa dạng giải pháp sạc để đáp ứng nhu cầu sử dụng của khách hàng một cách thuận tiện nhất.
+Bảo hành & Dịch vụ
+VinFast đã đầu tư nghiêm túc và bài bản để phát triển hệ thống Showroom, Nhà phân phối và xưởng dịch vụ rộng khắp, đáp ứng tối đa nhu cầu của Khách hàng.
+Mãnh liệt Tinh thần Việt Nam - Vì Tương lai Xanh
+Chiến dịch Mãnh liệt Tinh thần Việt Nam - Vì Tương lai Xanh là lời khẳng định mạnh mẽ của VinFast trong hành trình thúc đẩy cuộc cách mạng xe điện và kiến tạo một tương lai bền vững. Chiến dịch không chỉ thể hiện tinh thần tiên phong của thương hiệu Việt trên bản đồ xe điện toàn cầu mà còn kêu gọi cộng đồng cùng chung tay chuyển đổi xanh, góp phần xây dựng một Việt Nam phát triển vững bền, nơi giao thông không chỉ hiện đại mà còn thân thiện với môi trường.
+Showroom & Trạm sạc TÌM HIỂU THÊM
+Showroom & Trạm sạc
+```
+
+### Chunk 71
+
+- chunk_id: `url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c002`
+- source: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html
+- section: VinFast - Website chính thức tại Việt Nam
+- duplicate: False
+- detected_layers: 
+
+```text
+# VinFast - Website chính thức tại Việt Nam
+
+TÌM HIỂU THÊM
+Cộng đồng VinFast Toàn cầu TÌM HIỂU THÊM
+Cộng đồng VinFast Toàn cầu
+*Hình ảnh chỉ mang tính chất minh họa
+
+## CƠ HỘI CUỐI NHẬN ƯU ĐÃI
+00 ngày
+00 giờ
+(*) Chương trình áp dụng có điều kiện đến hết 31/05/2026 theo ngày xuất hóa đơn
+```
+
+### Chunk 72
+
+- chunk_id: `url_e0517c46570d_evo-grand-lite_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-grand-lite
+- section: Evo Grand Lite
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Evo Grand Lite
+
+Dài x Rộng x Cao (mm): 1856 x 683 x 1133. Khoảng sáng gầm: 133mm. Chiều cao yên: 770 mm. Trọng lượng Xe và Pin: Khoảng 82 Kg (100 Kg khi lắp thêm pin phụ).
+
+#### Xe máy điện Evo Grand Lite có bao nhiêu tùy chọn màu sắc?
+4 màu: Trắng ngọc trai; Đen nhám; Lavender Sữa; Vàng.
+
+#### Xe máy điện Evo Grand Lite sử dụng pin hay ắc quy?
+Pin LFP.
+
+#### Xe máy điện Evo Grand Lite đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường đi được 1 lần sạc (theo điều kiện kiểm thử của VinFast tại 30 km/h): Khoảng 70 km (+ 128 km khi lắp thêm pin phụ). Quãng đường đi được 1 lần sạc (điều kiện hỗn hợp): Khoảng 50 km (+ 84 km khi lắp thêm pin phụ).
+
+#### Thời gian sạc đầy pin/ắc quy xe Evo Grand Lite là bao lâu?
+Khoảng 6h30 phút từ 0-100%.
+
+#### Pin Xe máy điện Evo Grand Lite có thể tháo rời không?
+Pin chính cố định dưới sàn để chân, pin phụ đặt ở cốp có thể tháo rời.
+
+#### Xe máy điện Evo Grand Lite có khả năng chống nước như thế nào?
+Tiêu chuẩn chống nước động cơ: IP67, Động cơ có thể chịu được mức nước ngập sâu 0,5m trong thời gian 30 phút.
+
+#### Tốc độ tối đa của Xe máy điện Evo Grand Lite là bao nhiêu?
+48 km/h.
+
+#### Khả năng leo dốc của Xe máy điện Evo Grand Lite thế nào?
+Khả năng leo dốc, 20% 2 người 65Kg: 4-5 km/h.
+
+#### Cốp của Xe máy điện Evo Grand Lite bao nhiêu lít? Có thể chứa được mũ bảo hiểm không?
+35L (16L khi lắp thêm Pin phụ). Có thể chứa mũ bảo hiểm.
+
+#### Xe máy điện Evo Grand Lite có những tính năng thông mình gì?
+Tìm xe trong bãi xe bằng Remote: Tùy chọn Hiển thị thông tin xe/Hiển thị trạng thái xe: Tùy chọn Tìm xe từ xa (qua APP): Tùy chọn Hiển thị thông tin Pin: Tùy chọn Định vị xe/Thống kế lịch sử hành trình/Thống kê quãng đường/Thiết lập vùng an toàn: Tùy chọn Sạc pin với trạm sạc Vinfast: Có Chẩn đoán lỗi: Tùy chọn
+
+#### Xe máy điện Evo Grand Lite có cần bằng lái không?
+Không.
+
+#### Xe máy điện Evo Grand Lite có thể trở được mấy người và tải trọng tối đa bao nhiêu?
+2 người, 130 kg.
+```
+
+### Chunk 73
+
+- chunk_id: `url_e0517c46570d_evo-grand-lite_c002`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-grand-lite
+- section: Evo Grand Lite
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Evo Grand Lite
+
+Thời hạn bảo hành đối với XMĐ VinFast là 6 năm tính từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng); Pin có thời hạn bảo hành 8 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng).
+
+#### Xe máy điện EVO Grand Lite sử dụng loại pin/ắc quy gì?
+Xe máy điện EVO Grand Lite của VinFast sử dụng loại pin/ắc quy phù hợp với phân khúc và mục đích sử dụng của dòng xe này, đảm bảo hiệu quả vận hành và độ bền lâu dài.
+Quãng đường di chuyển của xe máy điện EVO Grand Lite phụ thuộc vào dung lượng pin/ắc quy và điều kiện vận hành, đáp ứng tốt nhu cầu di chuyển hằng ngày trong đô thị.
+
+#### Thời gian sạc đầy pin/ắc quy xe EVO Grand Lite là có lâu không?
+Thời gian sạc đầy xe máy điện EVO Grand Lite dao động trong vài giờ, thuận tiện cho việc sạc tại nhà bằng nguồn điện dân dụng.
+Tùy cấu hình thiết kế của dòng EVO Grand Lite, pin có thể được tháo rời hoặc sạc trực tiếp trên xe để đảm bảo sự tiện lợi cho người dùng.
+
+#### Xe máy điện EVO Grand Lite có chống nước không?
+Xe máy điện EVO Grand Lite được thiết kế phù hợp điều kiện mưa tại Việt Nam, có khả năng vận hành an toàn khi đi mưa hoặc ngập nhẹ.
+Yêu cầu bằng lái đối với xe EVO Grand Lite phụ thuộc vào vận tốc thiết kế theo quy định pháp luật Việt Nam.
+
+#### Xe máy điện EVO Grand Lite phù hợp với đối tượng nào?
+Xe EVO Grand Lite phù hợp với người dùng đô thị, học sinh – sinh viên, nhân viên văn phòng hoặc khách hàng ưu tiên phương tiện tiết kiệm chi phí và thân thiện môi trường.
+Xe máy điện EVO Grand Lite được bảo hành theo chính sách chính hãng VinFast, áp dụng thống nhất trên toàn hệ thống đại lý.
+```
+
+### Chunk 74
+
+- chunk_id: `url_2fa17a703953_evo-lite-neo_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-lite-neo
+- section: EVO LITE NEO
+- duplicate: False
+- detected_layers: 
+
+```text
+#### EVO LITE NEO
+
+Dài x Rộng x Cao: 1806 x 678 x 1132 mm.
+
+#### Xe máy điện EVO LITE NEO có bao nhiêu tùy chọn màu sắc?
+05 màu sắc: Đen nhám, Đỏ tươi, Xanh tím than, Xanh rêu, Trắng ngọc trai.
+
+#### Xe máy điện EVO LITE NEO sử dụng pin hay ắc quy?
+Ắc-quy chì axit kín khí, 5 bình nối tiếp.
+
+#### Xe máy điện EVO LITE NEO đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường đi được 1 lần sạc (Theo điều kiện kiểm thử của VinFast tại 30 km/h): 78km. Quãng đường đi được 1 lần sạc(điều kiện hỗn hợp): 53km.
+
+#### Thời gian sạc đầy pin/ắc quy xe EVO LITE NEO là bao lâu?
+Thời gian sạc tiêu chuẩn: 8h đạt 80%, 10h đạt 100%.
+
+#### Pin Xe máy điện EVO LITE NEO có thể tháo rời không?
+Pin cố định dưới sàn để chân.
+
+#### Xe máy điện EVO LITE NEO có khả năng chống nước như thế nào?
+Tiêu chuẩn chống nước động cơ: IP67, Động cơ có thể chịu được mức nước ngập sâu 0,5m trong thời gian 30 phút.
+
+#### Tốc độ tối đa của Xe máy điện EVO LITE NEO là bao nhiêu?
+Tốc độ tối đa: 49 km/h.
+
+#### Khả năng leo dốc của Xe máy điện EVO LITE NEO thế nào?
+Khả năng leo dốc, 20% 2 người 65Kg- 4~5km/h.
+
+#### Cốp của Xe máy điện EVO LITE NEO bao nhiêu lít? Có thể chứa được mũ bảo hiểm không?
+Thể tích cốp: 17L. Có thể chứa mũ bảo hiểm.
+
+#### Xe máy điện EVO LITE NEO có những tính năng thông minh gì?
+Sạc pin với trạm sạc VinFast.
+
+#### Xe máy điện EVO LITE NEO có cần bằng lái không?
+Không yêu cầu bằng lái.
+
+#### Xe máy điện EVO LITE NEO có thể trở được mấy người và tải trọng tối đa bao nhiêu?
+Tải trọng tối đa: 130kg; Số người cho phép chở (người lái và người ngồi sau): 02 người.
+
+#### Chính sách bảo hành Xe máy điện EVO LITE NEO như thế nào?
+Thời hạn bảo hành đối với XMĐ của VinFast là 3 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng. Ắc quy 12V có thời hạn bảo hành 1 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng). Vui lòng xem đầy đủ Chính sách bảo hành trong Sổ bảo hành.
+```
+
+### Chunk 75
+
+- chunk_id: `url_4eb918c78ee7_feliz-2025_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-2025
+- section: Feliz 2025
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Feliz 2025
+
+Dài x Rộng x Cao (mm): 1920 x 694 x 1140 (mm) Khoảng sáng gầm: 141 (mm) Chiều cao yên: 780 mm Trọng lượng Xe và Pin: 102Kg (122Kg khi lắp thêm pin phụ)
+
+#### Xe máy điện FELIZ 2025 có bao nhiêu tùy chọn màu sắc?
+5 màu: Vàng cát, Xanh rêu, Đen bóng, Xanh Oliu, Trắng
+
+#### Xe máy điện FELIZ 2025 sử dụng pin hay ắc quy?
+Pin LFP.
+
+#### Xe máy điện FELIZ 2025 đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường đi được 1 lần sạc (Theo điều kiện kiểm thử của VinFast tại 30 km/h): Khoảng 134km ( + 128 km khi lắp thêm pin phụ) Quãng đường đi được 1 lần sạc (điều kiện hỗn hợp): Khoảng 89km (+ 84km khi lắp thêm pin phụ).
+
+#### Thời gian sạc đầy pin/ắc quy xe FELIZ 2025 là bao lâu?
+Khoảng 6h30 phút từ 0 - 100%.
+
+#### Pin Xe máy điện FELIZ 2025 có thể tháo rời không?
+Pin chính cố định dưới sàn để chân, pin phụ đặt ở cốp có thể tháo rời.
+
+#### Xe máy điện FELIZ 2025 có khả năng chống nước như thế nào?
+Tiêu chuẩn chống nước động cơ: IP67, Động cơ có thể chịu được mức nước ngập sâu 0,5m trong thời gian 30 phút.
+
+#### Tốc độ tối đa của Xe máy điện FELIZ 2025 là bao nhiêu?
+70 km/h.
+
+#### Khả năng leo dốc của Xe máy điện FELIZ 2025 thế nào?
+Khả năng leo dốc, 20% 2 người 65Kg: 10km/h.
+
+#### Cốp của Xe máy điện FELIZ 2025 bao nhiêu lít? Có thể chứa được mũ bảo hiểm không?
+34L (15L Khi lắp pin phụ). Có thể chứa mũ bảo hiểm.
+
+#### Xe máy điện FELIZ 2025 có những tính năng thông mình gì?
+Tìm xe trong bãi xe bằng Remote: Tùy chọn Hiển thị thông tin xe/Hiển thị trạng thái xe: Tùy chọn Tìm xe từ xa (qua APP): Tùy chọn Hiển thị thông tin Pin: Tùy chọn Định vị xe/Thống kế lịch sử hành trình/Thống kê quãng đường/Thiết lập vùng an toàn: Tùy chọn Sạc pin với trạm sạc VinFast: Có Chẩn đoán lỗi: Tùy chọn
+
+#### Xe máy điện FELIZ 2025 có cần bằng lái không?
+Có.
+
+#### Xe máy điện FELIZ 2025 có thể chở được mấy người và tải trọng tối đa bao nhiêu?
+2 người, 130 kg.
+```
+
+### Chunk 76
+
+- chunk_id: `url_4eb918c78ee7_feliz-2025_c002`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-2025
+- section: Feliz 2025
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Feliz 2025
+
+Thời hạn bảo hành đối với XMĐ VinFast là 6 năm tính từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng); Pin có thời hạn bảo hành 8 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng).
+
+#### Xe máy điện Feliz sử dụng loại pin/ắc quy gì?
+Xe máy điện Feliz của VinFast sử dụng loại pin/ắc quy phù hợp với phân khúc và mục đích sử dụng của dòng xe này, đảm bảo hiệu quả vận hành và độ bền lâu dài.
+
+#### Xe máy điện Feliz đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường di chuyển của xe máy điện Feliz phụ thuộc vào dung lượng pin/ắc quy và điều kiện vận hành, đáp ứng tốt nhu cầu di chuyển hằng ngày trong đô thị.
+
+#### Thời gian sạc đầy pin/ắc quy xe Feliz là bao lâu?
+Thời gian sạc đầy xe máy điện Feliz dao động trong vài giờ, thuận tiện cho việc sạc tại nhà bằng nguồn điện dân dụng.
+
+#### Pin xe máy điện Feliz có thể tháo rời không?
+Tùy cấu hình thiết kế của dòng Feliz, pin có thể được tháo rời hoặc sạc trực tiếp trên xe để đảm bảo sự tiện lợi cho người dùng.
+
+#### Xe máy điện Feliz có chống nước không?
+Xe máy điện Feliz được thiết kế phù hợp điều kiện mưa tại Việt Nam, có khả năng vận hành an toàn khi đi mưa hoặc ngập nhẹ.
+
+#### Xe máy điện Feliz có cần bằng lái không?
+Yêu cầu bằng lái đối với xe Feliz phụ thuộc vào vận tốc thiết kế theo quy định pháp luật Việt Nam.
+
+#### Xe máy điện Feliz phù hợp với đối tượng nào?
+Xe Feliz phù hợp với người dùng đô thị, học sinh – sinh viên, nhân viên văn phòng hoặc khách hàng ưu tiên phương tiện tiết kiệm chi phí và thân thiện môi trường.
+
+#### Chính sách bảo hành xe máy điện Feliz như thế nào?
+Xe máy điện Feliz được bảo hành theo chính sách chính hãng VinFast, áp dụng thống nhất trên toàn hệ thống đại lý.
+```
+
+### Chunk 77
+
+- chunk_id: `url_455927f6ba17_feliz-lite_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-lite
+- section: Feliz Lite
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Feliz Lite
+
+Dài x Rộng x Cao (mm): 1920 x 694 x 1140 (mm). Khoảng sáng gầm: 141 (mm). Chiều cao yên: 780 mm. Trọng lượng Xe và Pin: 102Kg (122Kg khi lắp thêm pin phụ).
+
+#### Xe máy điện FELIZ LITE có bao nhiêu tùy chọn màu sắc?
+5 màu: Vàng cát, Xanh rêu, Đen bóng, Xanh Oliu, Trắng.
+
+#### Xe máy điện FELIZ LITE sử dụng pin hay ắc quy?
+Pin LFP.
+
+#### Xe máy điện FELIZ LITE đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường đi được 1 lần sạc (theo điều kiện kiểm thử của VinFast tại 30 km/h): Khoảng 134km (+ 128 km khi lắp thêm pin phụ) Quãng đường đi được 1 lần sạc (điều kiện hỗn hợp): Khoảng 93km (+ 88km khi lắp thêm pin phụ).
+
+#### Thời gian sạc đầy pin/ắc quy xe FELIZ LITE là bao lâu?
+Khoảng 6h30 phút từ 0 - 100%.
+
+#### Pin Xe máy điện FELIZ LITE có thể tháo rời không?
+Pin chính cố định dưới sàn để chân, pin phụ đặt ở cốp có thể tháo rời.
+
+#### Xe máy điện FELIZ LITE có khả năng chống nước như thế nào?
+Tiêu chuẩn chống nước động cơ: IP67, Động cơ có thể chịu được mức nước ngập sâu 0,5m trong thời gian 30 phút.
+
+#### Tốc độ tối đa của Xe máy điện FELIZ LITE là bao nhiêu?
+48 km/h.
+
+#### Khả năng leo dốc của Xe máy điện FELIZ LITE thế nào?
+Khả năng leo dốc, 20% 2 người 65Kg: 10km/h.
+
+#### Cốp của Xe máy điện FELIZ LITE bao nhiêu lít? Có thể chứa được mũ bảo hiểm không?
+34L (15L Khi lắp pin phụ). Có thể chứa mũ bảo hiểm.
+
+#### Xe máy điện FELIZ LITE có những tính năng thông mình gì?
+Tìm xe trong bãi xe bằng Remote: Tùy chọn Hiển thị thông tin xe/Hiển thị trạng thái xe: Tùy chọn Tìm xe từ xa (qua APP): Tùy chọn Hiển thị thông tin Pin: Tùy chọn Định vị xe/Thống kế lịch sử hành trình/Thống kê quãng đường/Thiết lập vùng an toàn: Tùy chọn Sạc pin với trạm sạc VinFast: Có Chẩn đoán lỗi: Tùy chọn
+
+#### Xe máy điện FELIZ LITE có cần bằng lái không?
+Không.
+
+#### Xe máy điện FELIZ LITE có thể trở được mấy người và tải trọng tối đa bao nhiêu?
+2 người, 130 kg.
+```
+
+### Chunk 78
+
+- chunk_id: `url_455927f6ba17_feliz-lite_c002`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-lite
+- section: Feliz Lite
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Feliz Lite
+
+Thời hạn bảo hành đối với XMĐ VinFast là 6 năm tính từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng); Pin có thời hạn bảo hành 8 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng).
+
+#### Xe máy điện Feliz Lite sử dụng loại pin/ắc quy gì?
+Xe máy điện Feliz Lite của VinFast sử dụng loại pin/ắc quy phù hợp với phân khúc và mục đích sử dụng của dòng xe này, đảm bảo hiệu quả vận hành và độ bền lâu dài.
+Quãng đường di chuyển của xe máy điện Feliz Lite phụ thuộc vào dung lượng pin/ắc quy và điều kiện vận hành, đáp ứng tốt nhu cầu di chuyển hằng ngày trong đô thị.
+
+#### Thời gian sạc đầy pin/ắc quy xe Feliz Lite là có lâu không?
+Thời gian sạc đầy xe máy điện Feliz Lite dao động trong vài giờ, thuận tiện cho việc sạc tại nhà bằng nguồn điện dân dụng.
+Tùy cấu hình thiết kế của dòng Feliz Lite, pin có thể được tháo rời hoặc sạc trực tiếp trên xe để đảm bảo sự tiện lợi cho người dùng.
+
+#### Xe máy điện Feliz Lite có chống nước không?
+Xe máy điện Feliz Lite được thiết kế phù hợp điều kiện mưa tại Việt Nam, có khả năng vận hành an toàn khi đi mưa hoặc ngập nhẹ.
+Yêu cầu bằng lái đối với xe Feliz Lite phụ thuộc vào vận tốc thiết kế theo quy định pháp luật Việt Nam.
+
+#### Xe máy điện Feliz Lite phù hợp với đối tượng nào?
+Xe Feliz Lite phù hợp với người dùng đô thị, học sinh – sinh viên, nhân viên văn phòng hoặc khách hàng ưu tiên phương tiện tiết kiệm chi phí và thân thiện môi trường.
+Xe máy điện Feliz Lite được bảo hành theo chính sách chính hãng VinFast, áp dụng thống nhất trên toàn hệ thống đại lý.
+```
+
+### Chunk 79
+
+- chunk_id: `url_1bbafe5353e6_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-klara-s_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/klara-s
+- section: Câu hỏi thường gặp về xe máy điện VinFast Klara S
+- duplicate: True
+- detected_layers: simhash
+
+```text
+# Câu hỏi thường gặp về xe máy điện VinFast Klara S
+
+Câu hỏi thường gặp về xe máy điện & ô tô VinFast | VinFast
+```
+
+### Chunk 80
+
+- chunk_id: `url_1bbafe5353e6_h-ng-d-n-c-ch-m-kho-h-th-ng-i-n-tr-n-xe-klara-s-2022_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/klara-s
+- section: Hướng dẫn cách mở khoá hệ thống điện trên xe Klara S 2022
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Hướng dẫn cách mở khoá hệ thống điện trên xe Klara S 2022
+
+Để mở khóa hệ thống điện trên xe Klara S 2022, quý khách thực hiện theo các bước như sau:
+- Bước 1: Dùng chuôi chìa khóa để mở nắp bảo vệ bằng cách xoay chốt theo chiều kim đồng hồ.
+- Bước 2: Cắm chìa khóa vào khóa cổ và vặn theo chiều kim đồng hồ đến vị trí ON. Trong quá trình xe khởi động, quý khách sẽ nghe thấy tiếng tách khi pin được bật lên.
+- Bước 3: Sau khi mở khóa xe, cụm đồng hồ đa chức năng bật sáng, xe điện vào chế độ Parking.
+```
+
+### Chunk 81
+
+- chunk_id: `url_25169e5b4cf2_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-theon-s_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s
+- section: Câu hỏi thường gặp về xe máy điện VinFast Theon S
+- duplicate: True
+- detected_layers: simhash
+
+```text
+# Câu hỏi thường gặp về xe máy điện VinFast Theon S
+
+Câu hỏi thường gặp về xe máy điện & ô tô VinFast | VinFast
+```
+
+### Chunk 82
+
+- chunk_id: `url_25169e5b4cf2_c-ch-s-d-ng-ch-a-kho-th-ng-minh-smart-key-nh-th-n-o_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s
+- section: Cách sử dụng chìa khoá thông minh Smart Key như thế nào?
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Cách sử dụng chìa khoá thông minh Smart Key như thế nào?
+
+Nút bật/tắt tính năng tầm gần (nút thứ ba)
+- Khi nhấn phím một lần, Smart Key nhấp nháy đèn xanh nghĩa là chức năng tầm gần đang bật, Smart Key nhấp nháy đèn đỏ nghĩa là chức năng tầm gần đang tắt.
+- Khi nhấn giữ phím, Smart Key nhấp nháy đèn chỉ thị. Nếu lần cuối, đèn chỉ thị nháy đỏ, chức năng tầm gần bị tắt đi. Nếu lần cuối, đèn chỉ thị nháy xanh, chức năng tầm gần được bật lên.
+- Mở nguồn xe: Nhấn nút Nguồn 1 lần, khi đèn chỉ thị trên khóa thông minh nháy màu xanh có nghĩa khóa và xe đã kết nối với nhau. Để khởi động xe, người dùng nhấn nút P, lúc này màn hình đa chức năng HMI sẽ hiển thị các thông tin của xe.
+- Tắt nguồn xe: Nhấn và giữ nút Nguồn khoảng 2 giây, khi đèn chỉ thị trên khóa thông minh nháy màu đỏ có nghĩa đã ngắt kết nối giữa khóa và xe. Lúc này, sẽ không sử dụng được xe nữa.
+Đèn chỉ thị
+- Đèn chỉ thị là đèn nhỏ, chấm tròn ở cuối khóa xe. Mỗi khi người dùng bấm vào bất kỳ nút nào trên khóa thông minh, đèn chỉ thị sẽ nháy sáng màu xanh hoặc màu đỏ.
+```
+
+### Chunk 83
+
+- chunk_id: `url_25169e5b4cf2_theon-s_c001`
+- source: https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s
+- section: Theon S
+- duplicate: False
+- detected_layers: 
+
+```text
+#### Theon S
+
+Xe máy điện Theon S của VinFast sử dụng loại pin/ắc quy phù hợp với phân khúc và mục đích sử dụng của dòng xe này, đảm bảo hiệu quả vận hành và độ bền lâu dài.
+
+#### Xe máy điện Theon S đi được bao nhiêu km sau mỗi lần sạc?
+Quãng đường di chuyển của xe máy điện Theon S phụ thuộc vào dung lượng pin/ắc quy và điều kiện vận hành, đáp ứng tốt nhu cầu di chuyển hằng ngày trong đô thị.
+
+#### Thời gian sạc đầy pin/ắc quy xe Theon S là bao lâu?
+Thời gian sạc đầy xe máy điện Theon S dao động trong vài giờ, thuận tiện cho việc sạc tại nhà bằng nguồn điện dân dụng.
+
+#### Pin xe máy điện Theon S có thể tháo rời không?
+Tùy cấu hình thiết kế của dòng Theon S, pin có thể được tháo rời hoặc sạc trực tiếp trên xe để đảm bảo sự tiện lợi cho người dùng.
+
+#### Xe máy điện Theon S có chống nước không?
+Xe máy điện Theon S được thiết kế phù hợp điều kiện mưa tại Việt Nam, có khả năng vận hành an toàn khi đi mưa hoặc ngập nhẹ.
+
+#### Xe máy điện Theon S có cần bằng lái không?
+Yêu cầu bằng lái đối với xe Theon S phụ thuộc vào vận tốc thiết kế theo quy định pháp luật Việt Nam.
+
+#### Xe máy điện Theon S phù hợp với đối tượng nào?
+Xe Theon S phù hợp với người dùng đô thị, học sinh – sinh viên, nhân viên văn phòng hoặc khách hàng ưu tiên phương tiện tiết kiệm chi phí và thân thiện môi trường.
+
+#### Chính sách bảo hành xe máy điện Theon S như thế nào?
+Xe máy điện Theon S được bảo hành theo chính sách chính hãng VinFast, áp dụng thống nhất trên toàn hệ thống đại lý.
+```

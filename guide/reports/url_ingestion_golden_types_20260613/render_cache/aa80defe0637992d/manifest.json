@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/xe-may-dien-thong-minh-don-dau-xu-huong-song-xanh",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/xe-may-dien-thong-minh-don-dau-xu-huong-song-xanh",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

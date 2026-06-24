@@ -1,0 +1,557 @@
+{
+  "urls": [
+    {
+      "index": 1,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000002.html",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 1076,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000002-html_87fd5ae10796\\url-dedup-review-1",
+      "error": null
+    },
+    {
+      "index": 2,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000005.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1555,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000005-html_14dca2f93906\\url-dedup-review-2",
+      "error": null
+    },
+    {
+      "index": 3,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000006.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1479,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000006-html_3a5a8a334b10\\url-dedup-review-3",
+      "error": null
+    },
+    {
+      "index": 4,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000007.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1902,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000007-html_576c19489788\\url-dedup-review-4",
+      "error": null
+    },
+    {
+      "index": 5,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000008.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1421,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000008-html_41e129546ab4\\url-dedup-review-5",
+      "error": null
+    },
+    {
+      "index": 6,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000009.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1549,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000009-html_9fefe496b741\\url-dedup-review-6",
+      "error": null
+    },
+    {
+      "index": 7,
+      "url": "https://shop.vinfastauto.com/vn_vi/ACS10000010.html",
+      "ok": true,
+      "chunk_count": 4,
+      "markdown_chars": 1617,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-acs10000010-html_9ab039da74f7\\url-dedup-review-7",
+      "error": null
+    },
+    {
+      "index": 8,
+      "url": "https://shop.vinfastauto.com/vn_vi/5001",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 1000,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5001_da089c213ff3\\url-dedup-review-8",
+      "error": null
+    },
+    {
+      "index": 9,
+      "url": "https://shop.vinfastauto.com/vn_vi/5002",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 945,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5002_263224b30384\\url-dedup-review-9",
+      "error": null
+    },
+    {
+      "index": 10,
+      "url": "https://shop.vinfastauto.com/vn_vi/5003",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 1006,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5003_b2072da96c82\\url-dedup-review-10",
+      "error": null
+    },
+    {
+      "index": 11,
+      "url": "https://shop.vinfastauto.com/vn_vi/5004",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 808,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5004_923d04ebe1f0\\url-dedup-review-11",
+      "error": null
+    },
+    {
+      "index": 12,
+      "url": "https://shop.vinfastauto.com/vn_vi/5005",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 957,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5005_98e6d571d228\\url-dedup-review-12",
+      "error": null
+    },
+    {
+      "index": 13,
+      "url": "https://shop.vinfastauto.com/vn_vi/5006",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 843,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5006_e6d6418f6309\\url-dedup-review-13",
+      "error": null
+    },
+    {
+      "index": 14,
+      "url": "https://shop.vinfastauto.com/vn_vi/5007",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 988,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-5007_bb8316c78e8e\\url-dedup-review-14",
+      "error": null
+    },
+    {
+      "index": 15,
+      "url": "https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF7.html",
+      "ok": true,
+      "chunk_count": 3,
+      "markdown_chars": 1422,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-insulationfilmceilingvf7-html_af47f4447d39\\url-dedup-review-15",
+      "error": null
+    },
+    {
+      "index": 16,
+      "url": "https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF8.html",
+      "ok": true,
+      "chunk_count": 3,
+      "markdown_chars": 1557,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-insulationfilmceilingvf8-html_a6303bd62393\\url-dedup-review-16",
+      "error": null
+    },
+    {
+      "index": 17,
+      "url": "https://shop.vinfastauto.com/vn_vi/INSULATIONFILMCEILINGVF9.html",
+      "ok": true,
+      "chunk_count": 3,
+      "markdown_chars": 1441,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-insulationfilmceilingvf9-html_4b5932cf32dd\\url-dedup-review-17",
+      "error": null
+    },
+    {
+      "index": 18,
+      "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf3.html",
+      "ok": true,
+      "chunk_count": 7,
+      "markdown_chars": 4274,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-dat-coc-xe-dien-vf3-html_a3bdef93d1e7\\url-dedup-review-18",
+      "error": null
+    },
+    {
+      "index": 19,
+      "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf5.html",
+      "ok": true,
+      "chunk_count": 5,
+      "markdown_chars": 3547,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-dat-coc-xe-dien-vf5-html_1c95c7bfe7c8\\url-dedup-review-19",
+      "error": null
+    },
+    {
+      "index": 20,
+      "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf6.html",
+      "ok": true,
+      "chunk_count": 5,
+      "markdown_chars": 2664,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-dat-coc-xe-dien-vf6-html_97c0d5b92fd0\\url-dedup-review-20",
+      "error": null
+    },
+    {
+      "index": 21,
+      "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vf7.html",
+      "ok": true,
+      "chunk_count": 10,
+      "markdown_chars": 7060,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-shop-vinfastauto-com-vn-vi-dat-coc-xe-dien-vf7-html_9dd8e94fee25\\url-dedup-review-21",
+      "error": null
+    },
+    {
+      "index": 22,
+      "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-dien-vfe34.html",
+      "ok": true,
+      "chunk_count": 3,
+      "markdown_chars": 3549,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi_b5ac0806a3af\\url-dedup-review-22",
+      "error": null
+    },
+    {
+      "index": 23,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-grand-lite",
+      "ok": true,
+      "chunk_count": 2,
+      "markdown_chars": 3748,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-evo_e0517c46570d\\url-dedup-review-23",
+      "error": null
+    },
+    {
+      "index": 24,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/evo-lite-neo",
+      "ok": true,
+      "chunk_count": 1,
+      "markdown_chars": 2050,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-evo_2fa17a703953\\url-dedup-review-24",
+      "error": null
+    },
+    {
+      "index": 25,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-2025",
+      "ok": true,
+      "chunk_count": 2,
+      "markdown_chars": 3778,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-feli_4eb918c78ee7\\url-dedup-review-25",
+      "error": null
+    },
+    {
+      "index": 26,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/feliz-lite",
+      "ok": true,
+      "chunk_count": 2,
+      "markdown_chars": 3633,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-feli_455927f6ba17\\url-dedup-review-26",
+      "error": null
+    },
+    {
+      "index": 27,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/klara-s",
+      "ok": true,
+      "chunk_count": 2,
+      "markdown_chars": 675,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-klar_1bbafe5353e6\\url-dedup-review-27",
+      "error": null
+    },
+    {
+      "index": 28,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-may-dien/san-pham/theon-s",
+      "ok": true,
+      "chunk_count": 3,
+      "markdown_chars": 2720,
+      "parser": null,
+      "artifact_dir": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\guide\\demo\\dedup-detect-url-review\\output\\artifacts\\artifacts\\https-vinfastauto-com-vn-vi-cau-hoi-thuong-gap-cau-hoi-xe-may-dien-san-pham-theo_25169e5b4cf2\\url-dedup-review-28",
+      "error": null
+    }
+  ],
+  "config": {
+    "enable_exact": true,
+    "enable_simhash": true,
+    "enable_embedding": true,
+    "simhash_bits": 64,
+    "simhash_shingle_size": 4,
+    "simhash_hamming_threshold": 6,
+    "embedding_similarity_threshold": 0.92,
+    "embedding_method": "configured-project-embedding"
+  },
+  "dedup_report": {
+    "document_count": 83,
+    "exact_matches": [
+      {
+        "layer": "exact_sha256",
+        "document_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+        "duplicate_document_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+        "score": 1.0,
+        "distance": 0,
+        "fingerprint": "38517b67c26fc106038c52ec68531e9b14bcfb80655b835808c7fd1aed7e1f01",
+        "reason": "same normalized text SHA-256",
+        "metadata": {}
+      }
+    ],
+    "simhash_matches": [
+      {
+        "layer": "simhash",
+        "document_id": "url_576c19489788_s-n-ph-m-t-ng-t_c001",
+        "duplicate_document_id": "url_9ab039da74f7_s-n-ph-m-t-ng-t_c001",
+        "score": 0.9375,
+        "distance": 4,
+        "fingerprint": "4f3d5e84528ff10d:471d5e84520ff105",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      },
+      {
+        "layer": "simhash",
+        "document_id": "url_41e129546ab4_th-ng-tin-chi-ti-t_c001",
+        "duplicate_document_id": "url_9fefe496b741_th-ng-tin-chi-ti-t_c001",
+        "score": 0.953125,
+        "distance": 3,
+        "fingerprint": "f54bfcbde2da3a09:e54bfc3de2da3a0d",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      },
+      {
+        "layer": "simhash",
+        "document_id": "url_9fefe496b741_th-ng-tin-chi-ti-t_c001",
+        "duplicate_document_id": "url_9ab039da74f7_th-ng-tin-chi-ti-t_c001",
+        "score": 0.921875,
+        "distance": 5,
+        "fingerprint": "e54bfc3de2da3a0d:e74fec3da2da3a8d",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      },
+      {
+        "layer": "simhash",
+        "document_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+        "duplicate_document_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+        "score": 0.9375,
+        "distance": 4,
+        "fingerprint": "2d6e3bc07b933e6a:2dec3bc87b833e6a",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      },
+      {
+        "layer": "simhash",
+        "document_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+        "duplicate_document_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+        "score": 0.9375,
+        "distance": 4,
+        "fingerprint": "2dec3bc87b833e6a:2d6e3bc07b933e6a",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      },
+      {
+        "layer": "simhash",
+        "document_id": "url_1bbafe5353e6_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-klara-s_c001",
+        "duplicate_document_id": "url_25169e5b4cf2_c-u-h-i-th-ng-g-p-v-xe-m-y-i-n-vinfast-theon-s_c001",
+        "score": 0.90625,
+        "distance": 6,
+        "fingerprint": "6ecb853d7c069732:4ecf053d7c069b3a",
+        "reason": "SimHash Hamming distance within threshold",
+        "metadata": {
+          "bits": 64,
+          "shingle_size": 4,
+          "hamming_threshold": 6
+        }
+      }
+    ],
+    "embedding_matches": [
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_14dca2f93906_s-n-ph-m-t-ng-t_c001",
+        "duplicate_document_id": "url_41e129546ab4_s-n-ph-m-t-ng-t_c001",
+        "score": 0.959391,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_3a5a8a334b10_s-n-ph-m-t-ng-t_c001",
+        "duplicate_document_id": "url_9fefe496b741_s-n-ph-m-t-ng-t_c001",
+        "score": 0.994066,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_41e129546ab4_m-t-s-n-ph-m_c001",
+        "duplicate_document_id": "url_9ab039da74f7_m-t-s-n-ph-m_c001",
+        "score": 0.928486,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_41e129546ab4_th-ng-tin-chi-ti-t_c001",
+        "duplicate_document_id": "url_9ab039da74f7_th-ng-tin-chi-ti-t_c001",
+        "score": 0.976346,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+        "duplicate_document_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+        "score": 0.935457,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+        "duplicate_document_id": "url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001",
+        "score": 0.921509,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+        "duplicate_document_id": "url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001",
+        "score": 0.930789,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+        "duplicate_document_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+        "score": 0.973128,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+        "duplicate_document_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001",
+        "score": 0.970665,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      },
+      {
+        "layer": "embedding_similarity",
+        "document_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+        "duplicate_document_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001",
+        "score": 0.971365,
+        "distance": null,
+        "fingerprint": null,
+        "reason": "embedding cosine similarity above threshold",
+        "metadata": {
+          "similarity_threshold": 0.92,
+          "method": "configured-project-embedding",
+          "provider": "openai",
+          "model": "text-embedding-3-large",
+          "fallback_attempts": []
+        }
+      }
+    ]
+  }
+}

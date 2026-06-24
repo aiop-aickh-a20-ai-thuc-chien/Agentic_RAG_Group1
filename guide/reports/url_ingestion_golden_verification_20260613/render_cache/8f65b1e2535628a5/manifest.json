@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/dang-ky-lai-thu-xe-may-dien-vinfast",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/dang-ky-lai-thu-xe-may-dien-vinfast",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

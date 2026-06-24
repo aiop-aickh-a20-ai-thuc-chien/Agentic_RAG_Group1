@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-tri-an-khach-hang-mien-phi-sac-xe-may-dien-trong-1-nam",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-tri-an-khach-hang-mien-phi-sac-xe-may-dien-trong-1-nam",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-o-to/tro-ly-ao",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-o-to/tro-ly-ao",
+  "timeout_seconds": 10,
+  "wait_until": "load"
+}

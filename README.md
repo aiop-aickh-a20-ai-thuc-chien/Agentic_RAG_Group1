@@ -101,6 +101,29 @@ but can set `LOCAL_SOURCE_STORE=s3` and `VECTOR_STORE_PROVIDER=qdrant` so S3 sto
 raw source files, parsed Markdown, debug artifacts, and chunk manifests while
 Qdrant stores the persistent hybrid retrieval index.
 
+<!-- Neon is supported through the same pgvector boundary. Copy the Neon pooled
+PostgreSQL URL into the untracked `.env` file (never commit the real URL):
+
+```env
+VECTOR_STORE_PROVIDER=pgvector
+VECTOR_STORE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require
+VECTOR_STORE_COLLECTION=agentic_rag_chunks
+```
+
+The VinFast production crawler uses one dedicated scheduler worker, rather than
+starting a scheduler in every API replica. Configure `VINFAST_URLS` as a
+comma-separated URL list, then run:
+
+```powershell
+uv sync --extra vinfast-pipeline
+uv run playwright install chrome
+uv run vinfast-pipeline-worker
+```
+
+The default job keeps network interception, DOM extraction, and screenshot/VLM
+fallbacks on one Playwright page. It records hashes under `artifacts/vinfast`
+and sends only changed chunks to the configured vector store. -->
+
 ## Dense embedding providers
 
 `EMBEDDING_PROVIDER=sentence_transformers` runs the default in-process

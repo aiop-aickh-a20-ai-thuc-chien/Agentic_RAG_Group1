@@ -1,0 +1,9 @@
+{
+  "name": "url-crawl-review-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser demo for inspecting single-URL ingestion artifacts.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

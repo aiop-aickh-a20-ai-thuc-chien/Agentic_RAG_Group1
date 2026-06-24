@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/tim-hieu-sac-du-phong-di-dong-cho-o-to-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/tim-hieu-sac-du-phong-di-dong-cho-o-to-dien",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

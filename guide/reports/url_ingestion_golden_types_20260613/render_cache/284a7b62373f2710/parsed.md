@@ -1,0 +1,22 @@
+- Trang chủ
+- Xe máy điện
+
+# VINFAST RA MẮT 3 MẪU XE MÁY ĐIỆN 2 PIN - NÂNG TẦM TRẢI NGHIỆM DI CHUYỂN CHO NGƯỜI DÙNG
+Ngày 10/09/2025, VinFast công bố ra mắt 3 mẫu xe máy điện mới gồm Vero X, Feliz và Feliz Lite với thiết kế hỗ trợ hai pin, trong đó một pin có thể tháo rời, giúp tăng quãng đường di chuyển và nâng cao sự tiện lợi, linh hoạt cho người sử dụng. Cùng với bộ đôi Evo Grand và Evo Grand Lite đã ra mắt từ trước, ba mẫu xe mới giúp hoàn thiện bộ sưu tập xe máy điện hỗ trợ hai pin - tháo rời của VinFast, giúp hành trình chuyển đổi xanh trở nên dễ dàng hơn cho tất cả mọi người.
+Điểm chung của cả 3 mẫu xe mới là ngoài bộ pin cố định dung lượng 2,4 kWh đặt phía dưới sàn để chân, xe còn được trang bị thêm ngăn chứa pin thứ 2 với dung lượng tương đương ở trong cốp, giúp nâng quãng đường di chuyển ở điều kiện tiêu chuẩn sau mỗi lần sạc đầy từ 134 km (1 pin) lên đến 262 km (2 pin). Pin phụ được bán với giá 5 triệu đồng, có thể tháo lắp dễ dàng để sạc ngoài một cách tiện lợi.
+Nằm ở phân khúc xe cận cao cấp, VinFast Vero X nổi bật với thiết kế thời trang độc bản, cùng nhiều tiện ích công nghệ vượt trội. Được phát triển từ dòng xe Vento Neo, VinFast Vero X có thiết kế yên xe cải tiến giúp tối ưu dáng ngồi, tay dắt sau thuận tiện cho việc cầm nắm, ốp càng sau và chắn bùn trước có tính thẩm mỹ cao. Kích thước tổng thể dài, rộng, cao của xe lần lượt là 1.858 x 690 x 1.100 (mm), chiều cao yên 770 mm, trọng lượng 92 kg, phù hợp với vóc dáng và thói quen sử dụng của người Việt Nam.
+Vero X được trang bị màn hình màu TFT hiện đại, chìa khóa thông minh (Smart Key) một chạm tích hợp chức năng tìm xe trong bãi đỗ. Cốp xe tiêu chuẩn khi không lắp pin phụ có dung tích lên tới 35 lít, có thể để vừa hai mũ bảo hiểm và thêm các vật dụng cá nhân khác.
+Vero X sử dụng động cơ BLDC Inhub, công suất tối đa 2.250 W, có thể tăng tốc 0-50 km/h trong 15 giây và tốc độ tối đa đạt 70 km/h. Xe được trang bị phanh đĩa phía trước và phanh cơ phía sau, giảm xóc trước dạng ống lồng thuỷ lực và giảm xóc đôi phía sau.
+Vero X dùng hệ thống đèn full LED, đèn pha dạng LED Projector cho khả năng chiếu sáng vượt trội. Xe có 4 màu sơn tuỳ chọn gồm trắng ngọc trai, đen nhám, xanh rêu, xanh oliu.
+Giá bán lẻ đề xuất cho VinFast Vero X là 34,9 triệu đồng, dự kiến sẽ chính thức bán ra thị trường ngay trong tháng 9.
+Tiếp nối thành công của các thế hệ trước, VinFast Feliz và Feliz Lite phiên bản 2 pin thừa hưởng nguyên vẹn kiểu dáng hiện đại, mạnh mẽ của dòng xe Feliz được người dùng đặc biệt ưa chuộng. Điểm khác biệt cơ bản giữa hai mẫu xe là Feliz hướng đến khách hàng yêu cầu hiệu suất cao với tốc độ tối đa lên tới 70 km/h, trong khi Feliz Lite phù hợp với học sinh từ 16 tuổi trở lên hoặc những người chưa có bằng lái xe, với tốc độ tối đa được giới hạn ở mức 48 km/h.
+Feliz và Feliz Lite có kích thước tổng thể dài, rộng, cao lần lượt là 1.920 x 694 x 1.140 (mm), chiều cao yên 780 mm. Cốp xe tiêu chuẩn khi không lắp pin phụ có dung tích 34 lít, có thể để vừa 2 mũ bảo hiểm. Cả hai mẫu xe đều được trang bị động cơ BLDC Inhub công suất tối đa 2.800 W, có khả năng tăng tốc từ 0-50 km/h trong dưới 16 giây.
+Feliz và Feliz Lite có tổng cộng 5 lựa chọn màu sơn ngoại thất gồm đen bóng, xanh rêu, xanh oliu, trắng ngọc trai và vàng cát (chỉ có trên phiên bản Feliz). Giá bán lẻ đề xuất của Feliz và Feliz Lite là 25,9 triệu đồng, trong đó, phiên bản Feliz đã có mặt tại đại lý và sẵn sàng đến tay khách hàng, trong khi phiên bản Feliz Lite cũng sẽ được bán ra thị trường ngay trong tháng 9.
+VinFast đang triển khai chính sách hỗ trợ người dân chuyển đổi xanh trên quy mô toàn quốc, với ưu đãi đặc biệt 10% giá xe và miễn 100% lệ phí trước bạ đối với tất cả các dòng xe máy điện, áp dụng đến hết ngày 31/12/2025. Nhờ đó, khách hàng có thể sở hữu xe Feliz và Feliz Lite mới với chi phí chỉ từ 22.792.000 đồng, và Vero X với chỉ từ 30.712.000 đồng.
+Với chất lượng sản phẩm vượt trội, Vero X, Feliz, Feliz Lite cùng với các dòng xe máy điện sử dụng pin LFP của VinFast đều đang được áp dụng chính sách bảo hành tốt nhất thị trường, với thời hạn 6 năm dành cho xe và 8 năm dành cho pin, gấp đôi nhiều dòng xe máy điện và xăng trên thị trường. Toàn bộ xe máy điện VinFast cũng đang được miễn phí sạc pin tại các trạm sạc công cộng của V-Green trên toàn quốc đến hết tháng 5/2027./.
+Chia sẻ bài viết này
+
+## Tin tức liên quan
+LẮNG NGHE TẬN TÂM - NÂNG TẦM TRẢI NGHIỆM
+DI CHUYỂN KHÔNG GIỚI HẠN – CHI PHÍ CHỈ TỪ 6.000 ĐỒNG/NGÀY VỚI GÓI THUÊ PIN DÀNH CHO XE MÁY ĐIỆN VINFAST
+KIẾN TẠO DỊCH VỤ 5 SAO CÙNG VINFAST

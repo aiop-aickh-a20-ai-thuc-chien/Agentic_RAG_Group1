@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/limo-green",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/limo-green",
+  "timeout_seconds": 20,
+  "wait_until": "load"
+}

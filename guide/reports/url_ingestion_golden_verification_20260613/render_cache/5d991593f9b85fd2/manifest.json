@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/chuong-trinh-khuyen-mai-xe-may-dien-vinfast-8-3",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/chuong-trinh-khuyen-mai-xe-may-dien-vinfast-8-3",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

@@ -1,0 +1,23 @@
+- Trang chủ
+- Ô tô điện
+
+# VINFAST TRIỂN KHAI CHƯƠNG TRÌNH CHO THUÊ XE GREEN TẠI INDONESIA VÀ PHILIPPINES, HỖ TRỢ TÀI XẾ DỊCH VỤ CHUYỂN ĐỔI XANH
+Jakarta/Manila, ngày 08/04/2026 – VinFast công bố mở rộng mô hình tiếp cận xe điện dành cho tài xế kinh doanh dịch vụ tại Indonesia và Philippines, bổ sung lựa chọn thuê xe với nhiều hỗ trợ hấp dẫn. Chương trình hướng tới tạo điều kiện tối đa để tài xế dịch vụ dễ dàng chuyển đổi sang xe điện, qua đó thúc đẩy xanh hóa giao thông và khẳng định cam kết của VinFast với mục tiêu giảm phát thải tại Đông Nam Á.
+Trong khuôn khổ chương trình mới, khách hàng hiện có thêm lựa chọn thuê các mẫu xe điện dòng Green của VinFast thông qua hệ thống đại lý chính hãng tại Indonesia và Philippines, bên cạnh hình thức mua xe truyền thống.
+Được triển khai trong bối cảnh giá nhiên liệu toàn cầu biến động mạnh, chương trình cung cấp cho tài xế dịch vụ những mẫu xe điện đáng tin cậy, hiệu quả vận hành cao, cùng với mức đầu tư ban đầu thấp, tạo điều kiện nhanh chóng bắt đầu vận doanh mà không cần gánh toàn bộ chi phí sở hữu phương tiện. Với hình thức thuê, tài xế có thể sớm tiếp cận xe với mức đặt cọc thấp, hợp đồng dài hạn, và giá thuê cố định hấp dẫn, chỉ từ 312.500 IDR/ngày tại Indonesia và từ 1.000 PHP/ngày tại Philippines.
+Đối với khách hàng mua xe, VinFast cung cấp các gói vay tài chính được thiết kế riêng cho dịch vụ vận tải với phương án thanh toán phù hợp với dòng tiền của tài xế, qua đó giúp giảm áp lực chi phí ban đầu, tối ưu hiệu quả tài chính, và rút ngắn thời gian hoàn vốn.
+Hình thức thuê xe, kết hợp cùng hình thức mua xe truyền thống, mang lại sự linh hoạt cao độ, cho phép tài xế và đơn vị vận tải lựa chọn phương án tiếp cận phù hợp với năng lực tài chính và nhu cầu vận hành của mình.
+Chương trình áp dụng với dải sản phẩm Green của VinFast như Herio Green và Limo Green, vốn được phát triển chuyên biệt cho dịch vụ vận tải tần suất cao, có thể đáp ứng đa dạng nhu cầu từ vận hành cá nhân đến vận chuyển hành khách quy mô lớn. Các mẫu xe Green được tối ưu về độ bền, hiệu suất năng lượng và tổng chi phí sở hữu, đồng thời vẫn đảm bảo sự thoải mái trong quá trình vận hành hàng ngày.
+VinFast cung cấp đồng thời hai hình thức mua và thuê xe cho dải sản phẩm Green như Herio Green và Limo Green, giúp tài xế và doanh nghiệp linh hoạt lựa chọn theo nhu cầu và khả năng tài chính.
+Việc triển khai chương trình sẽ bắt đầu tại các khu vực đô thị quan trọng, bao gồm vùng đô thị Jakarta (Greater Jakarta, Indonesia) và Metro Manila (Philippines), và dự kiến sẽ mở rộng dần trên cả hai thị trường.
+Ngoài được tiếp cận các mẫu xe điện chuyên dụng, khách hàng là tài xế dịch vụ còn sở hữu lợi thế tới từ hệ sinh thái xe điện toàn diện của VinFast tại Đông Nam Á, bao gồm các chính sách hỗ trợ hấp dẫn như miễn phí sạc tại hệ thống trạm V-Green đến hết tháng 3/2029, góp phần giảm chi phí vận hành và nâng cao hiệu quả kinh doanh.
+Bà Dương Thị Thu Trang, Phó Tổng Giám đốc Kinh doanh Ô tô VinFast toàn cầu, cho biết: “Việc mở rộng mô hình tiếp cận xe điện tại Indonesia và Philippines là bước đi tiếp theo của VinFast trong chiến lược thúc đẩy xanh hóa ngành vận tải, lĩnh vực giữ vai trò then chốt trong quá trình chuyển đổi xanh của mỗi quốc gia. Sáng kiến này không chỉ cung cấp phương tiện tạo thu nhập ổn định, mà còn góp phần nâng cao chất lượng sống và giảm phát thải, đồng thời khẳng định cam kết đồng hành của VinFast với cộng đồng tài xế trên hành trình phát triển nghề nghiệp theo hướng xanh và bền vững”.
+VinFast đang mạnh mẽ xây dựng hệ sinh thái xe điện toàn diện tại các thị trường Đông Nam Á trọng điểm như Indonesia và Philippines, với danh mục sản phẩm đa dạng cho cả khách hàng cá nhân và vận tải dịch vụ, cùng mạng lưới đại lý, hậu mãi và hạ tầng trạm sạc liên tục được mở rộng.
+Song song đó, Vingroup, công ty mẹ của VinFast, đang triển khai nhiều giải pháp hỗ trợ chuyển đổi xanh, tiêu biểu như chương trình Thu xăng - Đổi điện với ưu đãi bổ sung 3% giá ô tô, áp dụng cộng dồn với các chính sách hiện hành tại Indonesia và Philippines, cùng ưu đãi giảm 10% giá cước dịch vụ di chuyển bằng xe điện Green SM tại Indonesia đến hết ngày 30/4/2026. Thông qua các giải pháp đồng bộ, VinFast từng bước thúc đẩy quá trình xanh hóa giao thông, đồng thời mang lại hiệu quả kinh tế thiết thực cho người dùng và cộng đồng trong khu vực.
+Chia sẻ bài viết này
+
+## Tin tức liên quan
+VINFAST TIẾP TỤC TRIỂN KHAI CHƯƠNG TRÌNH KIẾN TẠO DỊCH VỤ 5 SAO: ĐỒNG NHẤT CHUẨN DỊCH VỤ - NÂNG TẦM TRẢI NGHIỆM KHÁCH HÀNG
+VINFAST CHÍNH THỨC XUẤT XƯỞNG VF MPV 7 TẠI NHÀ MÁY SUBANG, ĐẨY NHANH CHIẾN LƯỢC NỘI ĐỊA HÓA Ở INDONESIA
+VINFAST RA MẮT VF 8 THẾ HỆ MỚI - NÂNG CẤP TRẢI NGHIỆM TOÀN DIỆN CHO NGƯỜI DÙNG
+TRẢI NGHIỆM VÀ SỞ HỮU Ô TÔ ĐIỆN VINFAST “MÃNH LIỆT VÌ TƯƠNG LAI XANH”

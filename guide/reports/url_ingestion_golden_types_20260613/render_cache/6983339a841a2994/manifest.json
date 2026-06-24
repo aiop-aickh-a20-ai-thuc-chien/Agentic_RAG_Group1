@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/he-sinh-thai-xanh-toan-dien-vinfast-tai-vietnam-mobility-show-2025",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/he-sinh-thai-xanh-toan-dien-vinfast-tai-vietnam-mobility-show-2025",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

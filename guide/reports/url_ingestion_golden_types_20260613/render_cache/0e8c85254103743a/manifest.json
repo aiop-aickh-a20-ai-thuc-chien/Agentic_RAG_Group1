@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/tim-hieu-he-sinh-thai-tram-sac-xe-dien-vinfast-tren-toan-quoc",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/tim-hieu-he-sinh-thai-tram-sac-xe-dien-vinfast-tren-toan-quoc",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

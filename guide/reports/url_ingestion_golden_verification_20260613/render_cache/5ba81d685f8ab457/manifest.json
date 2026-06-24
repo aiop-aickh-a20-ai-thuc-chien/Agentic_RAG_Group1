@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/hey-vinfast-tuong-tac-cung-tro-ly-ao",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/hey-vinfast-tuong-tac-cung-tro-ly-ao",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

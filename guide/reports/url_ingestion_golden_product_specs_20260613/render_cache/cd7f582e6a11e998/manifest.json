@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/he-thong-chong-trom-immobilizer-cau-tao-va-nguyen-ly-hoat-dong",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/he-thong-chong-trom-immobilizer-cau-tao-va-nguyen-ly-hoat-dong",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

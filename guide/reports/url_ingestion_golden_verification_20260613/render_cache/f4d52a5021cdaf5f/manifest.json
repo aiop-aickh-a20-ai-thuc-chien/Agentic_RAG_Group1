@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-tang-hon-30-ty-dong-cho-khach-hang-mua-xe-may-dien-co-hoi-trung-26-o-to-vf-3",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-tang-hon-30-ty-dong-cho-khach-hang-mua-xe-may-dien-co-hoi-trung-26-o-to-vf-3",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

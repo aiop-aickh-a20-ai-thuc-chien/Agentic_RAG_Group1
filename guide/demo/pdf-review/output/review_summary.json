@@ -1,0 +1,15 @@
+{
+  "review_status": "fail",
+  "created_at": "2026-06-16T03:51:05.329658+00:00",
+  "pdf_path": "src\\agentic_rag\\ingestion\\pdf\\.data\\VF3-ERG_VN_V4.pdf",
+  "error_type": "FileNotFoundError",
+  "error": "PDF file does not exist: src\\agentic_rag\\ingestion\\pdf\\.data\\VF3-ERG_VN_V4.pdf",
+  "checks": {
+    "has_markdown": false,
+    "has_chunks": false,
+    "metadata_contract_passed": false
+  },
+  "metadata_contract": {},
+  "artifacts": {},
+  "chunk_previews": []
+}

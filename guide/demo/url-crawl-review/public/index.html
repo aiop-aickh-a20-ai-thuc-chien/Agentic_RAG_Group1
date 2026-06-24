@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>URL Artifact Review</title>
+  <link rel="stylesheet" href="style.css?v=20260618-dedup">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>URL Artifact Review</h1>
+      <p>Run URL ingestion for one URL and inspect every staged artifact it extracted.</p>
+    </div>
+    <button id="run-btn" type="button">Run Review</button>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <label for="url-input">URL to inspect</label>
+      <textarea id="url-input" rows="5" spellcheck="false">https://vinfastauto.com/vn_vi/ve-chung-toi</textarea>
+
+      <label class="check-row">
+        <input id="no-browser" type="checkbox">
+        <span>Static fetch only</span>
+      </label>
+
+      <label class="check-row">
+        <input id="include-interactions" type="checkbox" checked>
+        <span>Capture dynamic interactions when needed</span>
+      </label>
+
+      <div class="status" id="status">Ready.</div>
+      <div class="report-link" id="report-link"></div>
+
+      <section class="hint-box">
+        <strong>No child pages</strong>
+        <p>This demo does not discover or crawl links. It checks only the URL above, then shows the HTML, parsed text, Markdown, quality, chunks, and manifest artifacts from that run.</p>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Run Summary</h2>
+          <span id="summary-status">not run</span>
+        </div>
+        <div class="metric-grid" id="summary-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Artifacts Extracted</h2>
+          <span id="artifact-count">0 files</span>
+        </div>
+        <div class="artifact-grid" id="artifact-grid"></div>
+      </section>
+
+      <section class="two-column">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Quality</h2>
+            <span id="quality-status">empty</span>
+          </div>
+          <pre class="json-block" id="quality-json">{}</pre>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Manifest</h2>
+            <span id="manifest-status">empty</span>
+          </div>
+          <pre class="json-block" id="manifest-json">{}</pre>
+        </section>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Deduplication</h2>
+          <span id="dedup-status">not run</span>
+        </div>
+        <div class="metric-grid" id="dedup-summary-grid"></div>
+        <div class="dedup-list" id="dedup-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Chunks</h2>
+          <span id="chunk-count">0 chunks</span>
+        </div>
+        <div class="chunk-grid" id="chunk-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Dynamic Interaction Debug</h2>
+          <span id="interaction-status">not run</span>
+        </div>
+        <div class="metric-grid" id="interaction-summary-grid"></div>
+        <div class="interaction-layout">
+          <section>
+            <h3>Left Controls</h3>
+            <div id="interaction-left-panel" class="panel-stack"></div>
+          </section>
+          <section>
+            <h3>Center Visual</h3>
+            <div id="interaction-center-panel" class="panel-stack"></div>
+          </section>
+          <section>
+            <h3>Right Summary</h3>
+            <div id="interaction-right-panel" class="panel-stack"></div>
+          </section>
+        </div>
+        <div id="interaction-diff-grid" class="diff-grid"></div>
+        <div class="artifact-grid" id="interaction-artifact-grid"></div>
+        <div class="chunk-section-label">Promoted semantic chunk, usable for RAG</div>
+        <div class="chunk-grid" id="interaction-promoted-chunk-grid"></div>
+        <div class="chunk-section-label">Debug only, filtered from RAG</div>
+        <div class="chunk-grid" id="interaction-chunk-grid"></div>
+      </section>
+    </section>
+  </main>
+
+  <template id="artifact-template">
+    <article class="artifact-card">
+      <header>
+        <div>
+          <h3 class="artifact-label"></h3>
+          <p class="artifact-description"></p>
+        </div>
+        <span class="artifact-status"></span>
+      </header>
+      <div class="artifact-meta"></div>
+      <details>
+        <summary>Preview</summary>
+        <pre class="artifact-preview"></pre>
+      </details>
+    </article>
+  </template>
+
+  <script src="app.js?v=20260618-dedup"></script>
+</body>
+</html>

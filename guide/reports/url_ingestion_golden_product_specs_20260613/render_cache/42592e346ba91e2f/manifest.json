@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/huong-dan-cach-dat-coc-xe-may-dien-vinfast-the-he-moi",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/huong-dan-cach-dat-coc-xe-may-dien-vinfast-the-he-moi",
+  "timeout_seconds": 35,
+  "wait_until": "load"
+}

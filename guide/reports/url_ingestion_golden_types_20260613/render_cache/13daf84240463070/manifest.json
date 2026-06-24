@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-trien-khai-dich-vu-sua-chua-luu-dong-chinh-hang-dau-tien-tai-viet-nam",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-trien-khai-dich-vu-sua-chua-luu-dong-chinh-hang-dau-tien-tai-viet-nam",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

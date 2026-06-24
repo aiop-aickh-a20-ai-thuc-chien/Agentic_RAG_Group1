@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-5-mau-xe-may-dien-co-kha-nang-di-chuyen-gan-200-kmlan-sac",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-ra-mat-5-mau-xe-may-dien-co-kha-nang-di-chuyen-gan-200-kmlan-sac",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

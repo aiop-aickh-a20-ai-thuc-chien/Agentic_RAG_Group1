@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/tuoi-tho-pin-o-to-dien-va-nhung-dieu-can-luu-y-de-keo-dai-tuoi-tho-pin",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/tuoi-tho-pin-o-to-dien-va-nhung-dieu-can-luu-y-de-keo-dai-tuoi-tho-pin",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

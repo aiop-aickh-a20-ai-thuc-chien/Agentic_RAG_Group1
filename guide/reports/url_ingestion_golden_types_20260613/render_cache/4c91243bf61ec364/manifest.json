@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/pin-lfp-uu-diem-va-ung-dung",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/pin-lfp-uu-diem-va-ung-dung",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

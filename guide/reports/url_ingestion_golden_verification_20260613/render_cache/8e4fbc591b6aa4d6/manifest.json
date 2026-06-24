@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-thang-lon-tai-cac-giai-thuong-o-to-hang-dau-an-do",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-thang-lon-tai-cac-giai-thuong-o-to-hang-dau-an-do",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

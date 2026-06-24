@@ -1,0 +1,72 @@
+{
+  "seed": 20260613,
+  "source_results": "guide\\reports\\url_ingestion_base_evaluation\\base_results.jsonl",
+  "failed_selected_count": 10,
+  "passed_selected_count": 2,
+  "total_selected_count": 12,
+  "failed_selected": [
+    {
+      "index": 54,
+      "url": "https://shop.vinfastauto.com/vn_vi/EEP73111000AA.html",
+      "score": 0.952381
+    },
+    {
+      "index": 261,
+      "url": "https://vinfastauto.com/vn_vi/thong-tin-bao-hanh",
+      "score": 0.894737
+    },
+    {
+      "index": 95,
+      "url": "https://shop.vinfastauto.com/vn_vi/car-vf8.html",
+      "score": 0.857143
+    },
+    {
+      "index": 11,
+      "url": "https://shop.vinfastauto.com/vn_vi/5010",
+      "score": 0.944444
+    },
+    {
+      "index": 75,
+      "url": "https://shop.vinfastauto.com/vn_vi/UltraLightSafetyHelmet.html",
+      "score": 0.952381
+    },
+    {
+      "index": 207,
+      "url": "https://vinfastauto.com/vn_vi/gia-cuu-ho-o-to-dien-vinfast",
+      "score": 0.736842
+    },
+    {
+      "index": 273,
+      "url": "https://vinfastauto.com/vn_vi/tong-quan-tram-sac-vinfast",
+      "score": 0.842105
+    },
+    {
+      "index": 244,
+      "url": "https://vinfastauto.com/vn_vi/o-to-dien-vinfast-mo-ban",
+      "score": 0.842105
+    },
+    {
+      "index": 143,
+      "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap-ve-he-thong-tram-sac-vinfast",
+      "score": 0.761905
+    },
+    {
+      "index": 217,
+      "url": "https://vinfastauto.com/vn_vi/hop-dong-va-chinh-sach/chinh-sach/cho-xe-may-dien",
+      "score": 0.85
+    }
+  ],
+  "passed_selected": [
+    {
+      "index": 232,
+      "url": "https://vinfastauto.com/vn_vi/limo-green",
+      "score": 1.0
+    },
+    {
+      "index": 283,
+      "url": "https://vinfastauto.com/vn_vi/vf-energy",
+      "score": 1.0
+    }
+  ],
+  "url_list_path": "guide\\reports\\url_ingestion_verification_subset\\verification_urls.txt"
+}

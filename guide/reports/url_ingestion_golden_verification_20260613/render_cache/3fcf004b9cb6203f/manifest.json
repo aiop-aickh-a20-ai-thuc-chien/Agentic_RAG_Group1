@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-chinh-thuc-cung-cap-bo-sac-o-to-dien-treo-tuong-7-4-kw",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-chinh-thuc-cung-cap-bo-sac-o-to-dien-treo-tuong-7-4-kw",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

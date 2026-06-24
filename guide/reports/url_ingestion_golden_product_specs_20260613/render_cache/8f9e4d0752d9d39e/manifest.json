@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/lam-chu-thoi-gian-cham-xe-chuan-hang-vinfast-thi-diem-dich-vu-valet-giao-nhan-xe-tai-nha",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/lam-chu-thoi-gian-cham-xe-chuan-hang-vinfast-thi-diem-dich-vu-valet-giao-nhan-xe-tai-nha",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

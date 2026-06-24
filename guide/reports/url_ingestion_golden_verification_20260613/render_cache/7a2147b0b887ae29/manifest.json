@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/mat-so-bao-hanh-xe-vf-e34-co-duoc-bao-hanh-khong",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/mat-so-bao-hanh-xe-vf-e34-co-duoc-bao-hanh-khong",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

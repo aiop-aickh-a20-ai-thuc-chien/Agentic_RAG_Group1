@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/bao-mat-du-lieu-tren-o-to-nen-tang-cong-nghe-tat-yeu-cua-thoi-dai",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/bao-mat-du-lieu-tren-o-to-nen-tang-cong-nghe-tat-yeu-cua-thoi-dai",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

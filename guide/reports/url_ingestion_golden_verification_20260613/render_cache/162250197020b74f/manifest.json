@@ -1,0 +1,7 @@
+{
+  "url": "https://shop.vinfastauto.com/vn_vi/bike-theon.html",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/",
+  "timeout_seconds": 25,
+  "wait_until": "load"
+}

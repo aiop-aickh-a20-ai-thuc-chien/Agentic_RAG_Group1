@@ -1,0 +1,22 @@
+{
+  "markdown": "The website encountered an unexpected error. Try again later.The website encountered an unexpected error. Try again later.",
+  "parser_name": "crawl-link-playwright-dom-markdown+normalizer",
+  "title": null,
+  "final_url": "https://vinfastauto.com/vn_vi/cong-nghe-nhan-dien-giong-noi-tren-xe-vf-e34",
+  "rendered_html": "<html><head></head><body>The website encountered an unexpected error. Try again later.The website encountered an unexpected error. Try again later.<br></body></html>",
+  "fetched_ok": false,
+  "product": null,
+  "normalize_stats": {
+    "content_type": "generic",
+    "removed": {
+      "breadcrumb": 0,
+      "ui_noise": 0,
+      "cookie_privacy": 0,
+      "nav_section": 0,
+      "aggregate": 0
+    },
+    "mapped_cards": 0,
+    "n_chars_before": 122,
+    "n_chars_after": 122
+  }
+}

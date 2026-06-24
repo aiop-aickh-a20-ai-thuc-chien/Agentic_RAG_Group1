@@ -1,0 +1,597 @@
+{
+  "status": "success",
+  "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+  "output_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast",
+  "markdown_char_count": 5028,
+  "markdown_word_count": 1089,
+  "markdown_preview": "# Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng ##### VIPER Vận tốc lên tới km/h Quãng đường đi được 1 lần sạc lên tới km Công suất tối đa ## Lựa chọn xe ## Nhập thông tin ## Thanh toán Xin mời Quý khách lựa chọn màu xe, dịch vụ (nếu có). ### Chọn màu xe ### Chọn dịch vụ Pin và Sạc ### Dịch vụ pin Kèm Pin Không kèm Pin Phí cọc Pin và thuê Pin Quý khách vui lòng thanh toán khi đến Showroom làm thủ tục hợp đồng và nhận xe. Phí thuê pin Quý khách vui lòng thanh toán khi đến Showroom làm thủ tục hợp đồng và nhận xe. - Giá xe 39.900.000 VNĐ - Giá xe đã bao gồm thuế VAT. - Mua pin 5.600.000 VNĐ Số tiền cọc 2.000.000 VNĐ Số tiền thanh toán Chưa có chi phí dịch vụ pin. 45.500.000 VNĐ ### Thông tin đơn hàng Chủ xe Số điện thoại Số CCCD Địa chỉ email Showroom VinFast Royal City, Hà Nội Nhân viên tư vấn ### Thông tin xuất hóa đơn Người mua hàng Địa chỉ ### Mã ưu đãi Tôi muốn chuyển số tiền còn lại sang trả góp. Tôi cam kết các thông tin đã cung cấp tại đây hoàn toàn chính xác. Tôi đã đọc, hiểu rõ và xác nhận đồng ý với toàn bộ nội dung Điều khoản trong Thỏa Thuận Đặt Cọc trên cũng như Chính Sách Ưu Đãi áp dụng tại thời điểm đặt mua đơn hàng này trên VinFast ...",
+  "chunk_count": 4,
+  "usable_chunk_count": 4,
+  "artifact_paths": {
+    "run_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo",
+    "markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed.md",
+    "chunks_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/chunks.jsonl",
+    "manifest_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/manifest.json",
+    "source_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/source.html",
+    "cleaned_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/cleaned.html",
+    "parsed_sections_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed_sections.txt",
+    "extracted_markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/extracted.md",
+    "quality_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/quality.json"
+  },
+  "manifest": {
+    "artifact_schema_version": 2,
+    "input_type": "url",
+    "input_source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "input_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "original_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "final_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "canonical_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "parser": "crawl-link-playwright-dom-markdown+normalizer",
+    "run_id": "baseline_before_todo",
+    "created_at": "2026-06-16T07:35:41.572667+00:00",
+    "page_metadata": {
+      "canonical_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+      "og_url": null,
+      "og_title": null,
+      "og_description": null,
+      "description": "Đặt mua xe máy điện VinFast chính hãng với giá tốt, thiết kế hiện đại, chi phí vận hành tiết kiệm và bảo hành uy tín. Hệ thống đại lý phân phối toàn quốc.",
+      "published_at": null,
+      "modified_at": null,
+      "author": null,
+      "language": "vi"
+    },
+    "assets": [
+      {
+        "kind": "pdf",
+        "url": "https://storage.googleapis.com/vinfast-data-01/VF%20App_H%C6%B0%E1%BB%9Bng%20d%E1%BA%ABn%20s%E1%BB%AD%20d%E1%BB%A5ng_v.1.2_2022.05.18.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://storage.googleapis.com/vinfast-data-01/VF%20App_H%C6%B0%E1%BB%9Bng%20d%E1%BA%ABn%20s%E1%BB%AD%20d%E1%BB%A5ng_v.1.2_2022.05.18.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw64b3fd5b/images/VIPER/REQ.png",
+        "alt": "Xe máy điện VinFast VIPER màu đỏ tươi",
+        "title": "Xe máy điện VinFast VIPER màu đỏ tươi",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw6a9b6df7/images/VIPER/YES.png",
+        "alt": "Xe máy điện VinFast VIPER màu vàng cát",
+        "title": "Xe máy điện VinFast VIPER màu vàng cát",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw54d11c00/images/VIPER/BAU.png",
+        "alt": "Xe máy điện VinFast VIPER màu đen bóng",
+        "title": "Xe máy điện VinFast VIPER màu đen bóng",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw3870f710/images/VIPER/WHR.png",
+        "alt": "Xe máy điện VinFast VIPER màu trắng ngọc trai",
+        "title": "Xe máy điện VinFast VIPER màu trắng ngọc trai",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dwa2a6e3a3/images/VIPER/GRC.png",
+        "alt": "Xe máy điện VinFast VIPER màu xám",
+        "title": "Xe máy điện VinFast VIPER màu xám",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw64b3fd5b/images/VIPER/REQ.png",
+        "alt": "Xe máy điện VinFast VIPER màu đỏ tươi",
+        "title": "Xe máy điện VinFast VIPER màu đỏ tươi",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw6a9b6df7/images/VIPER/YES.png",
+        "alt": "Xe máy điện VinFast VIPER màu vàng cát",
+        "title": "Xe máy điện VinFast VIPER màu vàng cát",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw54d11c00/images/VIPER/BAU.png",
+        "alt": "Xe máy điện VinFast VIPER màu đen bóng",
+        "title": "Xe máy điện VinFast VIPER màu đen bóng",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dw3870f710/images/VIPER/WHR.png",
+        "alt": "Xe máy điện VinFast VIPER màu trắng ngọc trai",
+        "title": "Xe máy điện VinFast VIPER màu trắng ngọc trai",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-vinfast_vn_master/default/dwa2a6e3a3/images/VIPER/GRC.png",
+        "alt": "Xe máy điện VinFast VIPER màu xám",
+        "title": "Xe máy điện VinFast VIPER màu xám",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw0a71f8b3/images/XMD/VIPER/REQ.png",
+        "alt": "Màu xe VinFast Đỏ Tươi",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw5af30945/images/XMD/VIPER/YES.png",
+        "alt": "Màu xe VinFast Vàng Cát",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw61e981c4/images/XMD/VIPER/BAU.png",
+        "alt": "Màu xe VinFast Đen Bóng",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw003be7a9/images/XMD/VIPER/WHR.png",
+        "alt": "Màu xe VinFast Trắng Ngọc Trai",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw0d2221f8/images/XMD/VIPER/GRC.png",
+        "alt": "Màu xe VinFast Xám",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw60310d72/images/after-order/icon-googleplay.jpg",
+        "alt": "icon googleplay",
+        "title": null,
+        "target_url": "https://vinclub.vn"
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw0bcd2707/images/after-order/icon-appstore.jpg",
+        "alt": "icon appstore",
+        "title": null,
+        "target_url": "https://vinclub.vn"
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw5d4c0e6e/images/XMD/logo/one-pay.png",
+        "alt": "OnePay",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw415c4c8f/images/XMD/logo/payoo-logo.png",
+        "alt": "Payoo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw5d4c0e6e/images/XMD/logo/one-pay.png",
+        "alt": "OnePay",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw415c4c8f/images/XMD/logo/payoo-logo.png",
+        "alt": "Payoo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites/default/dwfa0715b7/Documents/VF_PC01.120_T.C Dat coc mua xe XMD.XDD_12.03.2026.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "pdf",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/-/Sites/default/dw3e660cb5/Documents/VF_PC01.59_T.C Dat coc mua xe O to_12.03.2026.pdf",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dwc93b7754/images/vfast/show_detail_cart.png",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw3656cafd/images/vfast/book_cancel.png",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw7a04bc3f/images/warning-close-popup.png",
+        "alt": "Dang-ky-dat-tram-sac",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw6c8ae1f8/images/icon-otp.svg",
+        "alt": "OTP VinClub icon",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw7a04bc3f/images/warning-close-popup.png",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw7a04bc3f/images/warning-close-popup.png",
+        "alt": "warning",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://shop.vinfastauto.com/on/demandware.static/Sites-app_vinfast_vn-Site/-/default/dw983b99d4/images/vfast/header-logo-vf.png",
+        "alt": "Vinfast - Logo",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.googletagmanager.com/ns.html?id=GTM-PFKP3SP",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn.cookielaw.org/logos/bda4bf83-328f-41ea-8f94-ae440e873d60/01928f8f-350c-75f5-a2cb-08e912913efc/eb3fc599-e789-4947-8dfe-5b8e57b3822e/logo-vinfast-1.png",
+        "alt": "Logo công ty",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn.cookielaw.org/logos/static/powered_by_logo.svg",
+        "alt": "Powered by Onetrust",
+        "title": "Powered by OneTrust Mở trong Tab mới",
+        "target_url": "https://www.onetrust.com/products/cookie-consent/"
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn-media.vinbase.ai/avatar/20250313024710_4.png",
+        "alt": "avatar",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cloud.vinbase.ai/livechat/assets/svg/typing.svg",
+        "alt": "typing...",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cloud.vinbase.ai/livechat/assets/svg/typing.svg",
+        "alt": "typing...",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://cdn-media.vinbase.ai/avatar/20250429074721_image (1).jpg",
+        "alt": "avatar",
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=3568227166566518&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=851145492376959&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=475821503786290&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://www.facebook.com/tr?id=946705219709290&ev=PageView&noscript=1",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6LegHOIdAAAAAFtYw0xBXFSn_7WubdcqUv6z5Rhn&co=aHR0cHM6Ly9zaG9wLnZpbmZhc3RhdXRvLmNvbTo0NDM.&hl=vi&v=MerVUtRoajKEbP7pLiGXkL28&size=invisible&anchor-ms=20000&execute-ms=30000&cb=hiohprbnykc5",
+        "alt": null,
+        "title": "reCAPTCHA",
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6LegHOIdAAAAAFtYw0xBXFSn_7WubdcqUv6z5Rhn&co=aHR0cHM6Ly9zaG9wLnZpbmZhc3RhdXRvLmNvbTo0NDM.&hl=vi&v=MerVUtRoajKEbP7pLiGXkL28&size=invisible&anchor-ms=20000&execute-ms=30000&cb=weyjzwg1s59g",
+        "alt": null,
+        "title": "reCAPTCHA",
+        "target_url": null
+      },
+      {
+        "kind": "image",
+        "url": "https://log.adtimaserver.vn/tracklp?type=viewable&value=view_area%3D90%3Bduration%3D8585&pId=7039488610764181504&adtid=null&curl=https%3A%2F%2Fshop.vinfastauto.com%2Fvn_vi%2Fdat-mua-xe-may-dien-vinfast&uid=&ver=1.1.29&ref=&atmrk=0.27346872962888225",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      },
+      {
+        "kind": "iframe",
+        "url": "https://lg1.logging.admicro.vn/_tracking1.gif?dg=016a30fcc0658ce6db13912255ab4ae6&fl=-1.-1.&je=0&sr=1366x900&sc=24&hn=shop.vinfastauto.com&cat=&g=0&i=s%3B1781595328196%3B0%3B0%3B1%3B0%3B0%3B1366x900%3B0%3B0%3B108ea2f810bdc3a64077015fd9ff22d1%3B016a30fcc0658ce6db13912255ab4ae6%3B%3B-1781595320526%3B23%3B134%3B2209%3B234%3B0%3B3557%3B3609&rdm=0.3550764211603472&p=%2Fvn_vi%2Fdat-mua-xe-may-dien-vinfast&r=&ce=1&lc=&cr=&ui=&dg=016a30fcc0658ce6db13912255ab4ae6",
+        "alt": null,
+        "title": null,
+        "target_url": null
+      }
+    ],
+    "artifact_root": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts",
+    "run_dir": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo",
+    "source_html_stage": "rendered_html",
+    "source_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/source.html",
+    "cleaned_html_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/cleaned.html",
+    "parsed_sections_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed_sections.txt",
+    "extracted_markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/extracted.md",
+    "markdown_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed.md",
+    "chunks_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/chunks.jsonl",
+    "quality_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/quality.json",
+    "manifest_path": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/manifest.json",
+    "stage_paths": {
+      "source_html": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/source.html",
+      "cleaned_html": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/cleaned.html",
+      "parsed_sections": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed_sections.txt",
+      "extracted_markdown": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/extracted.md",
+      "cleaned_markdown": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/parsed.md",
+      "quality": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/quality.json",
+      "chunks": "guide/demo/url-baseline-before-todo/output/base_current/url_03_https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast/artifacts/https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94/baseline-before-todo/chunks.jsonl"
+    },
+    "chunk_count": 4
+  },
+  "asset_count": 52,
+  "pdf_asset_count": 4,
+  "metadata_summary": {
+    "first_chunk_source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "first_chunk_source_type": "official",
+    "first_chunk_url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+    "first_chunk_document_type": "product_listing",
+    "first_chunk_page_type": "product_listing",
+    "first_chunk_url_status": "accepted",
+    "first_chunk_render_required": true,
+    "first_chunk_quality_gate": {
+      "parser": "rendered",
+      "status": "accepted",
+      "accepted": true,
+      "score": 8,
+      "reason": "rendered_parser_satisfied_quality_gate",
+      "page_type": "product_listing",
+      "requires_rendered_parser": true,
+      "dynamic_signals": [],
+      "latency_budget_seconds": 25,
+      "browser_error": null
+    },
+    "document_type_counts": {
+      "product_listing": 4
+    },
+    "page_type_counts": {
+      "product_listing": 4
+    },
+    "source_type_counts": {
+      "official": 4
+    },
+    "section_kind_counts": {
+      "missing": 4
+    },
+    "section_origin_counts": {
+      "missing": 4
+    },
+    "has_product_specs": true,
+    "has_interaction_state": false
+  },
+  "todo_gap_summary": {
+    "has_section_kind": false,
+    "has_section_origin": false,
+    "has_evidence_source": false,
+    "has_interaction_state": false,
+    "has_pdf_assets": true,
+    "pdf_asset_count": 4,
+    "note": "These flags describe the current baseline before TODO.md changes. Expected future improvements include PDF-link routing and static/dynamic section provenance."
+  },
+  "chunk_previews": [
+    {
+      "chunk_id": "url_dd5430051b94_mua-xe-m-y-i-n-vinfast-c-h-tr-tr-g-p-thanh-to-n-d-d-ng-nhanh-ch-ng_c001",
+      "is_usable": true,
+      "text_preview": "##### Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng Vận tốc lên tới km/h Quãng đường đi được 1 lần sạc lên tới km Công suất tối đa ## Lựa chọn xe ## Nhập thông tin ## Thanh toán Xin mời Quý khách lựa chọn màu xe, dịch vụ (nếu có). ### Chọn màu xe ### Chọn dịch vụ Pin và Sạc ### Dịch vụ pin Kèm Pin Không kèm Pin Phí cọc Pin và thuê Pin Quý khách vui lòng thanh toán khi đến Showroom làm thủ tục hợp đồng và nhận xe. Phí thuê pin Quý khách vui lòng thanh toán khi đến Showroom làm thủ tục hợp đồng và nhận xe. - Giá xe 39.900.000 VNĐ - Giá xe đã bao gồm thuế VAT. - Mua pin 5.600.000 VNĐ Số tiền cọc 2.000.000 VNĐ Số tiền thanh toán Chưa có chi phí dịch vụ pin. 45.500.000 VNĐ ### Thông tin đơn hàng Chủ xe Số điện thoại Số CCCD Địa chỉ email Showroom VinFast Royal...",
+      "metadata": {
+        "source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "source_type": "official",
+        "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "document_type": "product_listing",
+        "page_type": "product_listing",
+        "section": "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+        "heading": "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+        "breadcrumb": [
+          "Đặt mua xe máy điện VinFast chính hãng, giá tốt",
+          "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": "39.900.000 VNĐ",
+        "driving_range": "500 km",
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    },
+    {
+      "chunk_id": "url_dd5430051b94_m-u-i_c001",
+      "is_usable": true,
+      "text_preview": "### Mã ưu đãi Tôi muốn chuyển số tiền còn lại sang trả góp. Tôi cam kết các thông tin đã cung cấp tại đây hoàn toàn chính xác. Tôi đã đọc, hiểu rõ và xác nhận đồng ý với toàn bộ nội dung Điều khoản trong Thỏa Thuận Đặt Cọc trên cũng như Chính Sách Ưu Đãi áp dụng tại thời điểm đặt mua đơn hàng này trên VinFast Online. Tôi đồng ý với các Điều kiện & Điều khoản của VinFast Online. Tôi đồng ý cho phép Công ty TNHH Kinh doanh Thương mại và Dịch vụ VinFast xử lý dữ liệu cá nhân của tôi và các thông tin khác do tôi cung cấp cho mục đích và theo phương thức được mô tả chi tiết tại Chính sách Bảo vệ Dữ liệu cá nhân. Quý khách vui lòng Tải lên ủy nhiệm chi/biên lai chuyển tiền để hoàn tất đơn hàng! Màu xe - Chọn dịch vụ Kèm Pin - Estimated Delivery - coupon.couponName coupon.couponValue VNĐ - Giá...",
+      "metadata": {
+        "source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "source_type": "official",
+        "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "document_type": "product_listing",
+        "page_type": "product_listing",
+        "section": "Mã ưu đãi",
+        "heading": "Mã ưu đãi",
+        "breadcrumb": [
+          "Đặt mua xe máy điện VinFast chính hãng, giá tốt",
+          "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+          "Thanh toán",
+          "Mã ưu đãi"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": "45.500.000 VNĐ",
+        "driving_range": "500 km",
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    },
+    {
+      "chunk_id": "url_dd5430051b94_thanh-to-n_c001",
+      "is_usable": true,
+      "text_preview": "### Thanh toán Quý khách sẽ không được áp dụng VPoints nếu tắt xác nhận OTP. Quý khách có đồng bỏ qua xác nhận OTP không? Quý Khách vui lòng kiểm tra và xác nhận lại toàn bộ thông tin đã cung cấp để xuất hóa đơn đăng ký xe. Thông tin sau khi xác nhận sẽ được sử dụng để phát hành hóa đơn và không thể thay đổi hoặc sẽ phát sinh thủ tục điều chỉnh phức tạp theo quy định. ### Gói cước thuê pin Khách Hàng lựa chọn một trong các gói cước: | Gói dịch vụ | Quãng đường di chuyển/tháng | Phí dịch vụ /tháng | | --- | --- | --- | | Gói 1 | nhỏ hơn hoặc bằng 500 km | 150.000 VNĐ | | Gói 2 | từ trên 500 km tới 1.000 km | 250.000 VNĐ | | Gói 3 | từ trên 1.000 km tới dưới 2.000 km | 350.000 VNĐ | | Gói 4 | từ 2.000 km | 990.000 VNĐ | | Quãng đường di chuyển/tháng | nhỏ hơn hoặc bằng 500 km | | --- | --...",
+      "metadata": {
+        "source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "source_type": "official",
+        "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "document_type": "product_listing",
+        "page_type": "product_listing",
+        "section": "Thanh toán",
+        "heading": "Thanh toán",
+        "breadcrumb": [
+          "Đặt mua xe máy điện VinFast chính hãng, giá tốt",
+          "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+          "Thanh toán"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": "150.000 VNĐ",
+        "driving_range": "500 km",
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    },
+    {
+      "chunk_id": "url_dd5430051b94_mua-xe-m-y-i-n-vinfast-c-h-tr-tr-g-p-thanh-to-n-d-d-ng-nhanh-ch-ng_c002",
+      "is_usable": true,
+      "text_preview": "#### Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng - Áp dụng cho tất cả Khách hàng. - Nếu thực tế trong tháng, Khách hàng di chuyển nhiều hơn số km trên gói đã đăng ký thì Khách hàng đồng ý và hệ thống tự động áp dụng mức phí ở gói tương ứng. Khách hàng không mất phí chuyển đổi nhưng không quá 02 lần/xe/năm. - Nếu trong 1 năm Khách hàng di chuyển nhiều hơn số km trên gói đã đăng ký 03 lần thì Khách hàng không được sử dụng gói đã đăng ký nữa mà phải chuyển lên sử dụng gói cao hơn. \"Gói có mức cao hơn\" được áp dụng là gói mà Khách hàng có từ 2 lần vượt trở lên trong 3 lần vượt, miễn phí chuyển đổi . Nguyên tắc này được tiếp tục tính cho quy trình 3 lần vượt tiếp theo, cho đến khi đạt gói tối đa là gói 4. - Khách hàng ký hợp đồng thuê pin trước ngày 10/04/20...",
+      "metadata": {
+        "source": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "source_type": "official",
+        "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+        "document_type": "product_listing",
+        "page_type": "product_listing",
+        "section": "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+        "heading": "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng",
+        "breadcrumb": [
+          "Đặt mua xe máy điện VinFast chính hãng, giá tốt",
+          "Mua xe máy điện VinFast - Có hỗ trợ trả góp - Thanh toán dễ dàng, nhanh chóng"
+        ],
+        "url_status": "accepted",
+        "render_required": true,
+        "section_kind": null,
+        "section_origin": null,
+        "evidence_source": null,
+        "product_model": null,
+        "product_price": "150.000 VNĐ",
+        "driving_range": "500 km",
+        "interaction_state": null,
+        "asset_ids": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/huong-dan-su-dung-tinh-nang-chong-trom-tren-xe-may-dien-vinfast",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/huong-dan-su-dung-tinh-nang-chong-trom-tren-xe-may-dien-vinfast",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

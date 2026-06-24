@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-gioi-thieu-dong-xe-sieu-sang-lac-hong-900s",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-gioi-thieu-dong-xe-sieu-sang-lac-hong-900s",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

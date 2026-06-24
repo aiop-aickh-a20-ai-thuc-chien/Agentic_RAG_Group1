@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-bo-sung-sac-pin-tai-nha-cho-xe-may-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-bo-sung-sac-pin-tai-nha-cho-xe-may-dien",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

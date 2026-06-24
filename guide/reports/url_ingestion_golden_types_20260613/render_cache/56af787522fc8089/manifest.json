@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/tram-sac-tieu-chuan-chau-au-cua-vinfast",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/tram-sac-tieu-chuan-chau-au-cua-vinfast",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

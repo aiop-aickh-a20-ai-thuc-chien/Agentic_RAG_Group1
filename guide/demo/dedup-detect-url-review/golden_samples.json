@@ -1,0 +1,779 @@
+{
+  "description": "Expanded golden labels for URL chunk duplicate threshold tuning. Includes positive duplicates, hard negatives, same-heading traps, and product-template edge cases.",
+  "source_chunks": "output/chunks_with_dedup.jsonl",
+  "source_review_files": [
+    "readable_url_dedup_chunks.md",
+    "readable_url_dedup_chunks.html",
+    "urls.txt"
+  ],
+  "labeling_policy": {
+    "duplicate_true": "Use true when chunks are repeated boilerplate, navigation, related-product blocks, or reusable template sections where merging would not lose important product-specific facts under the current dedup policy.",
+    "duplicate_false": "Use false when chunks share headings/templates/prices but contain different product, vehicle model, price, specs, page role, or retrieval-critical facts.",
+    "review_note": "Hard template-variant pairs should be reviewed if your downstream policy changes from conservative product-specific retrieval to aggressive boilerplate compression."
+  },
+  "stats": {
+    "total_labels": 92,
+    "duplicate_true": 22,
+    "duplicate_false": 70,
+    "by_category": {
+      "starter_manual": 16,
+      "product_detail_template": 3,
+      "instruction_template": 3,
+      "product_description_template": 1,
+      "navigation_boilerplate": 3,
+      "form_success_boilerplate": 3,
+      "title_price_hard_negative": 5,
+      "same_page_different_section": 15,
+      "template_variant_hard_negative": 9,
+      "category_page_hard_negative": 14,
+      "same_heading_different_facts": 2,
+      "same_title_different_content": 2,
+      "price_hard_negative": 2,
+      "landing_page_hard_negative": 6,
+      "easy_negative": 8
+    },
+    "by_difficulty": {
+      "medium": 37,
+      "hard": 41,
+      "easy": 14
+    }
+  },
+  "labels": [
+    {
+      "left_id": "url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_1c95c7bfe7c8_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are the same registration-success boilerplate section.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are the same registration-success boilerplate section.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_9dd8e94fee25_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are the same registration-success boilerplate section.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001",
+      "right_id": "url_9dd8e94fee25_3-5-km-kho-ng-c-ch-nh-cho-m-c-ti-u-l-n_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks describe the same 3.5 km campaign/content block.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_14dca2f93906_s-n-ph-m-t-ng-t_c001",
+      "right_id": "url_41e129546ab4_s-n-ph-m-t-ng-t_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are similar related-product list blocks for VF 5 accessory pages.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_s-n-ph-m-t-ng-t_c001",
+      "right_id": "url_9fefe496b741_s-n-ph-m-t-ng-t_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are similar related-product list blocks for Nerio Green accessory pages.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_576c19489788_s-n-ph-m-t-ng-t_c001",
+      "right_id": "url_9ab039da74f7_s-n-ph-m-t-ng-t_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are similar related-product list blocks for VF 8 accessory pages.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+      "right_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks describe the same insulation film package template for different vehicle variants.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+      "right_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks describe the same insulation film package template for different vehicle variants.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001",
+      "right_id": "url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Both are short product title/price chunks, but they refer to different products.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001",
+      "right_id": "url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001",
+      "is_duplicate": false,
+      "reason": "Same price and product family, but different product/vehicle variant.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-m-c-p-3d-vf-5_c001",
+      "right_id": "url_9fefe496b741_th-m-c-p-3d-vinfast-nerio-green_c001",
+      "is_duplicate": false,
+      "reason": "Same accessory type and price, but different product/vehicle variant.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+      "right_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Similar title/price chunks, but different vehicle variant products.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001",
+      "right_id": "url_1c95c7bfe7c8_vinfast-vf-5-gi-t-t_c001",
+      "is_duplicate": false,
+      "reason": "Different car model landing sections.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001",
+      "right_id": "url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001",
+      "is_duplicate": false,
+      "reason": "Different car model landing sections.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_1c95c7bfe7c8_gi-b-n-vf-5_c001",
+      "right_id": "url_97c0d5b92fd0_0vn_c001",
+      "is_duplicate": false,
+      "reason": "Both are price-related sections, but the facts and model context differ.",
+      "category": "starter_manual",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_9fefe496b741_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": true,
+      "reason": "Both describe the same 3D trunk mat detail template; only the vehicle variant name changes.",
+      "category": "product_detail_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_9ab039da74f7_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": true,
+      "reason": "Both describe the same 3D trunk mat technical/return-policy template with vehicle-name substitution.",
+      "category": "product_detail_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_9fefe496b741_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_9ab039da74f7_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": true,
+      "reason": "Both describe the same 3D trunk mat detail template; model names differ but core content is duplicated.",
+      "category": "product_detail_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002",
+      "right_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c002",
+      "is_duplicate": true,
+      "reason": "Both are the same package-selection instruction block for ceiling insulation film pages; vehicle model differs only in the heading.",
+      "category": "instruction_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c002",
+      "right_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002",
+      "is_duplicate": true,
+      "reason": "Both are the same package-selection instruction block for ceiling insulation film pages with only VF model substitution.",
+      "category": "instruction_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+      "right_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both use the same 3M insulation film description template across vehicle variants.",
+      "category": "product_description_template",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are the same product-category/navigation block from paginated category pages.",
+      "category": "navigation_boilerplate",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are repeated category/navigation content rather than unique product facts.",
+      "category": "navigation_boilerplate",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are repeated category/navigation content rather than unique product facts.",
+      "category": "navigation_boilerplate",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_1c95c7bfe7c8_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are registration-success boilerplate; only the referenced vehicle name changes.",
+      "category": "form_success_boilerplate",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_9dd8e94fee25_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Both chunks are registration-success boilerplate; only the referenced vehicle name changes.",
+      "category": "form_success_boilerplate",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-m-c-p-3d-vf-5_c001",
+      "right_id": "url_9ab039da74f7_th-m-c-p-3d-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Same accessory family but different vehicle model and price, so product title chunks must remain separate.",
+      "category": "title_price_hard_negative",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_9fefe496b741_th-m-c-p-3d-vinfast-nerio-green_c001",
+      "right_id": "url_9ab039da74f7_th-m-c-p-3d-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Both are 3D trunk mats, but they are for different vehicles and have different prices.",
+      "category": "title_price_hard_negative",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+      "right_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001",
+      "is_duplicate": false,
+      "reason": "Both are ceiling film title/price chunks, but VF 7 and VF 9 have different prices and should stay separate.",
+      "category": "title_price_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+      "right_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002",
+      "is_duplicate": false,
+      "reason": "Same source page and section family, but one chunk is title/price/package options while the other is package-selection instructions.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+      "right_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c002",
+      "is_duplicate": false,
+      "reason": "Same source page but different semantic roles: product description versus package-selection instruction.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_14dca2f93906_m-t-s-n-ph-m_c001",
+      "right_id": "url_14dca2f93906_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Same product page, but one is a short description and the other contains detailed specifications/policies.",
+      "category": "same_page_different_section",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_41e129546ab4_m-t-s-n-ph-m_c001",
+      "right_id": "url_41e129546ab4_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Same product page, but description and detailed technical/policy information are different chunks.",
+      "category": "same_page_different_section",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_14dca2f93906_m-t-s-n-ph-m_c001",
+      "right_id": "url_576c19489788_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Both are floor-mat description templates, but model-specific product descriptions should not be merged unless policy allows variant-template merging.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_576c19489788_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Both are floor-mat detail sections with overlapping boilerplate, but vehicle-specific wording/facts differ enough to keep separate.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Both are category pages, but page content can differ by listed products; this pair should test against over-merging paginated catalog content.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Both are category chunks but may represent different catalog pages/items; do not mark duplicate solely from the shared category heading.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001",
+      "right_id": "url_9dd8e94fee25_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001",
+      "is_duplicate": false,
+      "reason": "Same section heading on different car model pages, but the prices/options are model-specific and should remain separate.",
+      "category": "same_heading_different_facts",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_thong-so-dac-diem_c001",
+      "right_id": "url_9dd8e94fee25_thong-so-dac-diem_c001",
+      "is_duplicate": false,
+      "reason": "Same technical-spec heading, but the specs belong to different car models.",
+      "category": "same_heading_different_facts",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001",
+      "right_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c002",
+      "is_duplicate": false,
+      "reason": "Same page title appears twice, but one chunk is summary specs while the other is descriptive marketing copy.",
+      "category": "same_title_different_content",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c001",
+      "right_id": "url_b5ac0806a3af_vinfast-website-ch-nh-th-c-t-i-vi-t-nam_c002",
+      "is_duplicate": false,
+      "reason": "Same source/page title, but the chunks contain different content areas and should not be collapsed by title alone.",
+      "category": "same_title_different_content",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_b5ac0806a3af_404-000-vn_c001",
+      "right_id": "url_1c95c7bfe7c8_gi-b-n-vf-5_c001",
+      "is_duplicate": false,
+      "reason": "Both are price-looking chunks, but they refer to different pages/facts and should not be merged based on numeric content alone.",
+      "category": "price_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_0vn_c001",
+      "right_id": "url_b5ac0806a3af_404-000-vn_c001",
+      "is_duplicate": false,
+      "reason": "Both are short price-like chunks, but they refer to unrelated facts/pages.",
+      "category": "price_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_1c95c7bfe7c8_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_9dd8e94fee25_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": true,
+      "reason": "Missing transitive pair in the registration-success boilerplate cluster.",
+      "category": "form_success_boilerplate",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002",
+      "right_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002",
+      "is_duplicate": true,
+      "reason": "Both are the same film-ceiling instruction/specification template, with only the vehicle variant changed.",
+      "category": "instruction_template",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001",
+      "right_id": "url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: same accessory family, but different vehicle variant and price; keep as separate product/title chunks.",
+      "category": "title_price_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+      "right_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: same film package type, but different vehicle variant title; keep as separate product/title chunks.",
+      "category": "title_price_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_14dca2f93906_m-t-s-n-ph-m_c001",
+      "right_id": "url_3a5a8a334b10_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_m-t-s-n-ph-m_c001",
+      "right_id": "url_576c19489788_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_3a5a8a334b10_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-ng-tin-chi-ti-t_c001",
+      "right_id": "url_576c19489788_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_41e129546ab4_m-t-s-n-ph-m_c001",
+      "right_id": "url_9fefe496b741_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_41e129546ab4_m-t-s-n-ph-m_c001",
+      "right_id": "url_9ab039da74f7_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_9fefe496b741_m-t-s-n-ph-m_c001",
+      "right_id": "url_9ab039da74f7_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: text is highly templated, but the chunk is product-specific and should not be merged blindly.",
+      "category": "template_variant_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001",
+      "right_id": "url_14dca2f93906_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001",
+      "right_id": "url_3a5a8a334b10_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_m-t-s-n-ph-m_c001",
+      "right_id": "url_3a5a8a334b10_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001",
+      "right_id": "url_576c19489788_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_576c19489788_m-t-s-n-ph-m_c001",
+      "right_id": "url_576c19489788_th-ng-tin-chi-ti-t_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-m-c-p-3d-vf-5_c001",
+      "right_id": "url_41e129546ab4_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+      "right_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_af47f4447d39_m-t-s-n-ph-m_c001",
+      "right_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c002",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+      "right_id": "url_a6303bd62393_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c001",
+      "right_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_4b5932cf32dd_m-t-s-n-ph-m_c001",
+      "right_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002",
+      "is_duplicate": false,
+      "reason": "Same source page but different section roles; this should remain separate unless using parent-page aggregation.",
+      "category": "same_page_different_section",
+      "difficulty": "medium"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001",
+      "right_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001",
+      "right_id": "url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_1c95c7bfe7c8_vinfast-vf-5-gi-t-t_c001",
+      "right_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_1c95c7bfe7c8_vinfast-vf-5-gi-t-t_c001",
+      "right_id": "url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c001",
+      "right_id": "url_97c0d5b92fd0_vf-6-plus_c001",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_vf-6-plus_c001",
+      "right_id": "url_97c0d5b92fd0_xe-i-n-vinfast-vf-6_c002",
+      "is_duplicate": false,
+      "reason": "Hard negative: model/price/section context differs even when headings or short content look similar.",
+      "category": "landing_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_98e6d571d228_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_da089c213ff3_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_98e6d571d228_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_263224b30384_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_98e6d571d228_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_923d04ebe1f0_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_98e6d571d228_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_e6d6418f6309_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_bb8316c78e8e_danh-m-c-s-n-ph-m_c001",
+      "is_duplicate": false,
+      "reason": "Same “DANH MỤC SẢN PHẨM” heading, but the listed products/page context differ; do not deduplicate by heading only.",
+      "category": "category_page_hard_negative",
+      "difficulty": "hard"
+    },
+    {
+      "left_id": "url_14dca2f93906_th-m-s-n-nh-a-2d-vf-5_c001",
+      "right_id": "url_af47f4447d39_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-7_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_3a5a8a334b10_th-m-s-n-nh-a-2d-vinfast-nerio-green_c001",
+      "right_id": "url_a6303bd62393_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-8_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_576c19489788_th-m-s-n-nh-a-2d-vf-8_c001",
+      "right_id": "url_a3bdef93d1e7_vinfast-vf-3-th-ng-s-gi-b-n-u-i-m-i-nh-t_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_41e129546ab4_th-m-c-p-3d-vf-5_c001",
+      "right_id": "url_1c95c7bfe7c8_gi-b-n-vf-5_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_97c0d5b92fd0_0vn_c001",
+      "right_id": "url_97c0d5b92fd0_ng-k-th-nh-c-ng_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_a3bdef93d1e7_ng-k-th-nh-c-ng_c001",
+      "right_id": "url_a3bdef93d1e7_thong-so-dac-diem_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_b2072da96c82_danh-m-c-s-n-ph-m_c001",
+      "right_id": "url_9dd8e94fee25_xe-i-n-vinfast-vf-7-ch-nh-h-ng_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    },
+    {
+      "left_id": "url_4b5932cf32dd_g-i-film-c-ch-nhi-t-d-n-tr-n-vinfast-vf-9_c002",
+      "right_id": "url_9dd8e94fee25_t-y-ch-n-cho-ng-n-s-ch-c-a-b-n_c001",
+      "is_duplicate": false,
+      "reason": "Easy negative: different entity/section type; useful as a low-similarity calibration example.",
+      "category": "easy_negative",
+      "difficulty": "easy"
+    }
+  ]
+}

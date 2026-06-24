@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/mua-xe-truc-tuyen-bao-mat-toan-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/mua-xe-truc-tuyen-bao-mat-toan-dien",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/nhung-hang-muc-can-quan-tam-khi-bao-duong-o-to-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/nhung-hang-muc-can-quan-tam-khi-bao-duong-o-to-dien",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

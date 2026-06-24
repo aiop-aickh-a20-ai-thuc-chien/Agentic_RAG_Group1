@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-bo-nhiem-ong-pham-nhat-quan-anh-giu-chuc-chu-tich-hoi-dong-quan-tri",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-bo-nhiem-ong-pham-nhat-quan-anh-giu-chuc-chu-tich-hoi-dong-quan-tri",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

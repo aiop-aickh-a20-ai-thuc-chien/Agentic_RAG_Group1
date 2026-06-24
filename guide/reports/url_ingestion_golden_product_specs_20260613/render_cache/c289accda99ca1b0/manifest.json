@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/the-nao-la-pin-xe-may-dien-tot-thong-tin-chi-tiet-ve-pin-xe-may-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/the-nao-la-pin-xe-may-dien-tot-thong-tin-chi-tiet-ve-pin-xe-may-dien",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

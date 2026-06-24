@@ -1,0 +1,269 @@
+{
+  "dataset": {
+    "dataset_id": "vinfast_homepage_hidden_data",
+    "target_url": "https://vinfastauto.com/vn_vi",
+    "ground_truth_file": "src/agentic_rag/ingestion/url/golden_data/trang_vinfast_vn.json",
+    "judge_prompt_file": "src/agentic_rag/ingestion/url/golden_data/judge_prompt_trang_vinfast_vn.txt",
+    "status": "homepage_ground_truth_with_hidden_data",
+    "notes": [
+      "Ground truth này chứa dữ liệu ẩn/khó thấy trên trang chủ VinFast Việt Nam.",
+      "Judge prompt kiểm tra navigation, banner, hệ sinh thái, footer và phân biệt giá hiện tại với giá gốc bị gạch ngang."
+    ]
+  },
+  "ground_truth_file": "src\\agentic_rag\\ingestion\\url\\golden_data\\trang_vinfast_vn.json",
+  "markdown_file": "ground_truth.md",
+  "chunks_file": "chunks.jsonl",
+  "entity_chunks_file": "entity_chunks.jsonl",
+  "chunk_count": 4,
+  "entity_chunk_count": 12,
+  "missing_important_values": [],
+  "chunk_diagnostics": [
+    {
+      "chunk_id": "url-ground-truth_67c3a615d408_ground-truth-trang-ch-vinfast-vinfast-homepage-hidden-data_c001",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Ground truth trang chủ VinFast: vinfast_homepage_hidden_data"
+      ],
+      "review_role": null,
+      "chars": 420,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_67c3a615d408_ground-truth-trang-ch-vinfast-vinfast-homepage-hidden-data_c002",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Ground truth trang chủ VinFast: vinfast_homepage_hidden_data"
+      ],
+      "review_role": null,
+      "chars": 558,
+      "model_mentions": [
+        "Evo200",
+        "Feliz S",
+        "Klara S",
+        "Theon S",
+        "VF 3",
+        "VF 5 Plus",
+        "VF 6",
+        "VF 7",
+        "VF 8",
+        "VF 9",
+        "VF e34",
+        "Vento S"
+      ],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_67c3a615d408_o-to-dien_c003",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Ground truth trang chủ VinFast: vinfast_homepage_hidden_data",
+        "Sản phẩm nổi bật",
+        "O to dien"
+      ],
+      "review_role": null,
+      "chars": 422,
+      "model_mentions": [
+        "VF 9"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth_67c3a615d408_ground-truth-trang-ch-vinfast-vinfast-homepage-hidden-data_c004",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Ground truth trang chủ VinFast: vinfast_homepage_hidden_data"
+      ],
+      "review_role": null,
+      "chars": 550,
+      "model_mentions": [],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    }
+  ],
+  "entity_chunk_diagnostics": [
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_dataset-state-dataset-state_c001",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Dataset state"
+      ],
+      "review_role": "dataset_state",
+      "chars": 420,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_navigation-o-to-dien_c002",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "O to dien"
+      ],
+      "review_role": "navigation",
+      "chars": 69,
+      "model_mentions": [
+        "VF 3",
+        "VF 5 Plus",
+        "VF 6",
+        "VF 7",
+        "VF 8",
+        "VF 9",
+        "VF e34"
+      ],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_navigation-xe-may-dien_c003",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Xe may dien"
+      ],
+      "review_role": "navigation",
+      "chars": 64,
+      "model_mentions": [
+        "Evo200",
+        "Feliz S",
+        "Klara S",
+        "Theon S",
+        "Vento S"
+      ],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_navigation-dich-vu-hau-mai_c004",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Dich vu hau mai"
+      ],
+      "review_role": "navigation",
+      "chars": 69,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_navigation-pin-va-tram-sac_c005",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Pin va tram sac"
+      ],
+      "review_role": "navigation",
+      "chars": 60,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_navigation-cong-dong-vinclub_c006",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Cong dong vinclub"
+      ],
+      "review_role": "navigation",
+      "chars": 67,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_hero-banner-1-m-nh-li-t-tinh-th-n-vi-t-nam_c007",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Banner 1: Mãnh liệt tinh thần Việt Nam"
+      ],
+      "review_role": "hero",
+      "chars": 146,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_featured-product-vf-3_c008",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "VF 3"
+      ],
+      "review_role": "featured_product",
+      "chars": 227,
+      "model_mentions": [
+        "VF 3"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_featured-product-vf-9_c009",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "VF 9"
+      ],
+      "review_role": "featured_product",
+      "chars": 238,
+      "model_mentions": [
+        "VF 9"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_featured-product-evo200_c010",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Evo200"
+      ],
+      "review_role": "featured_product",
+      "chars": 207,
+      "model_mentions": [
+        "Evo200"
+      ],
+      "contains_price": true,
+      "contains_model_id": false,
+      "contains_choices": true
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_ecosystem-h-sinh-th-i-to-n-di-n_c011",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Hệ sinh thái toàn diện"
+      ],
+      "review_role": "ecosystem",
+      "chars": 166,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": false
+    },
+    {
+      "chunk_id": "url-ground-truth-entity_67c3a615d408_footer-footer_c012",
+      "section_path": [
+        "vinfast_homepage_hidden_data",
+        "Footer"
+      ],
+      "review_role": "footer",
+      "chars": 199,
+      "model_mentions": [],
+      "contains_price": false,
+      "contains_model_id": false,
+      "contains_choices": false
+    }
+  ]
+}

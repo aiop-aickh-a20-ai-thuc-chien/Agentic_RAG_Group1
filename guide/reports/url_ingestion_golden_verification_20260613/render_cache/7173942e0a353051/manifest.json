@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/chuong-trinh-kien-tao-dich-vu-5-sao-cung-vinfast",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/chuong-trinh-kien-tao-dich-vu-5-sao-cung-vinfast",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

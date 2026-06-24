@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/mo-rong-linh-vuc-phat-trien-cong-nghe-xe-tu-lai-tai-viet-nam",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/mo-rong-linh-vuc-phat-trien-cong-nghe-xe-tu-lai-tai-viet-nam",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

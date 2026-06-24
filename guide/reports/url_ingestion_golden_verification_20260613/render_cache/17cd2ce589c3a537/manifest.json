@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/trai-nghiem-va-so-huu-o-to-dien-vinfast-manh-liet-vi-tuong-lai-xanh",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/trai-nghiem-va-so-huu-o-to-dien-vinfast-manh-liet-vi-tuong-lai-xanh",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}

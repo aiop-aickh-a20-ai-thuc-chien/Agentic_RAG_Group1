@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-hop-tac-voi-cac-truong-dai-hoc-dao-tao-ky-su-o-to-dien",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-hop-tac-voi-cac-truong-dai-hoc-dao-tao-ky-su-o-to-dien",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

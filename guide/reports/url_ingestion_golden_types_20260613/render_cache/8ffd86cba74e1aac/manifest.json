@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/doanh-so-o-to-dien-vinfast-tang-truong-bung-no-trong-thang-3",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/doanh-so-o-to-dien-vinfast-tang-truong-bung-no-trong-thang-3",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

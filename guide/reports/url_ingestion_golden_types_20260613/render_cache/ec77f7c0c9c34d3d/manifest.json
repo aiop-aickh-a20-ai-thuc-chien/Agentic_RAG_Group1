@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/lam-gi-khi-o-to-dien-het-pin-giua-duong",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/lam-gi-khi-o-to-dien-het-pin-giua-duong",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

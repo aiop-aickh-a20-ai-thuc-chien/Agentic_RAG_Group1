@@ -1,0 +1,7 @@
+{
+  "url": "https://shop.vinfastauto.com/vn_vi/5004",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://shop.vinfastauto.com/vn_vi/5004",
+  "timeout_seconds": 25,
+  "wait_until": "load"
+}

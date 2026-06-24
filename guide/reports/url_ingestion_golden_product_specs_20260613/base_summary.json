@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-06-13T12:09:40.741456+00:00",
+  "completed_at": "2026-06-13T13:21:35.825922+00:00",
+  "url_count": 322,
+  "processed_count": 322,
+  "passed_count": 233,
+  "failed_count": 89,
+  "error_count": 0,
+  "skipped_count": 0,
+  "output_dir": "guide\\reports\\url_ingestion_golden_product_specs_20260613",
+  "results_jsonl": "guide\\reports\\url_ingestion_golden_product_specs_20260613\\base_results.jsonl",
+  "summary_json": "guide\\reports\\url_ingestion_golden_product_specs_20260613\\base_summary.json",
+  "summary_markdown": "guide\\reports\\url_ingestion_golden_product_specs_20260613\\base_summary.md",
+  "use_browser_extractor": true,
+  "golden_path": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\src\\agentic_rag\\ingestion\\url\\golden_data\\vinfast_url_golden_samples.json",
+  "url_list_path": "E:\\VINSMART_Future_Thuc_Tap\\Agentic_RAG_Project\\Agentic_RAG_Group1\\src\\agentic_rag\\ingestion\\url\\golden_data\\Link_data.txt"
+}

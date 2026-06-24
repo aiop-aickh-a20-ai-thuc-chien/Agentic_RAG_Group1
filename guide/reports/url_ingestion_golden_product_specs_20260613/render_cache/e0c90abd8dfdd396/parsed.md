@@ -1,0 +1,17 @@
+- Trang chủ
+- Công ty
+
+# VINFAST HỢP TÁC VỚI 30 TRƯỜNG ĐẠI HỌC, CAO ĐẲNG - CHUẨN HÓA CHƯƠNG TRÌNH VÀ CHẤT LƯỢNG ĐÀO TẠO KỸ SƯ Ô TÔ ĐIỆN
+VinFast và 30 trường Đại học, Cao đẳng chuyên ngành kỹ thuật trên cả nước đã ký kết thỏa thuận hợp tác nhằm chuẩn hóa chương trình, giáo trình, tài liệu, học liệu, hướng tới mục tiêu phát triển nguồn nhân lực chất lượng cao, đáp ứng nhu cầu thực tiễn trong lĩnh vực sản xuất và sửa chữa ô tô điện.
+Theo thỏa thuận hợp tác, VinFast và 30 trường Đại học, Cao đẳng hàng đầu có chuyên ngành đào tạo về kỹ thuật ô tô như Đại học Giao thông Vận tải, Đại học Bách Khoa TP.HCM, Đại học Công nghiệp Hà Nội, Đại học Sư phạm Kỹ thuật Hưng Yên… sẽ cùng triển khai mô hình đào tạo song hành “Thực học - Thực nghiệm”. Mục tiêu chung các bên cùng hướng đến là xây dựng nền móng nhân sự vững chắc cho ngành công nghiệp ô tô điện quốc gia.
+Để đảm bảo đồng bộ và nhất quán trong quá trình giảng dạy từ lý thuyết đến thực hành, VinFast sẽ tài trợ cho mỗi trường 02 xe ô tô điện, cùng với các thiết bị thực hành và giáo trình đào tạo kỹ thuật sửa chữa xe ô tô điện chuẩn chính hãng. VinFast cũng triển khai chương trình đào tạo chuyển giao “Train-the-Trainer” cho chính đội ngũ giảng viên của các trường để cập nhật các công nghệ pin, hệ thống truyền động và phần mềm chẩn đoán mới nhất.
+Trong quá trình hợp tác, VinFast sẽ hỗ trợ các trường xây dựng và đưa mô-đun “Kỹ thuật sửa chữa cơ bản xe ô tô điện VinFast” vào chương trình đào tạo chính quy (bắt buộc hoặc tự chọn). Các nội dung đào tạo bài bản, được thực hành thường xuyên trên những chiếc xe thật sẽ giúp sinh viên không chỉ nắm vững lý thuyết mà còn có kỹ năng “thực chiến” ngay trên ghế nhà trường, rút ngắn khoảng cách giữa đào tạo và nhu cầu thực tế của doanh nghiệp.
+Bên cạnh việc chuẩn hóa và nâng cao chất lượng đào tạo các ngành Công nghệ Kỹ thuật Ô tô, Điện - Điện tử, các trường tham gia hợp tác cùng VinFast còn được hỗ trợ cung cấp các vị trí thực tập/kiến tập tại các xưởng dịch vụ và nhà máy VinFast. Những sinh viên xuất sắc tham gia chương trình đào tạo hợp tác sẽ được VinFast ưu tiên tuyển dụng sau khi ra trường, đồng thời được tạo điều kiện tham gia các cuộc thi, các dự án nghiên cứu, sáng kiến liên quan đến công nghệ xe điện.
+Bà Dương Thị Thu Trang, Phó Tổng Giám đốc Kinh doanh Ô tô VinFast toàn cầu chia sẻ: “Thông qua hợp tác với 30 trường Đại học, Cao đẳng hàng đầu về kỹ thuật ô tô, VinFast mong muốn kiến tạo một hệ sinh thái đào tạo bài bản, nơi sinh viên được tiếp cận với những công nghệ xe điện tiên tiến nhất ngay từ trong giảng đường. Không chỉ đáp ứng nhu cầu đang tăng trưởng từng ngày tại thị trường trong nước, việc hợp tác đào tạo ra một thế hệ kỹ sư mới có trình độ, tay nghề cao cũng là cách VinFast chung tay tạo ra một nền móng vững chắc cho sự phát triển của ngành công nghiệp ô tô điện Việt Nam trong tương lai”.
+Thỏa thuận hợp tác giữa VinFast và 30 trường Đại học, Cao đẳng lớn sẽ mở ra cơ hội nghề nghiệp hấp dẫn cho hàng chục nghìn sinh viên chuyên ngành kỹ thuật trên toàn quốc. Các cơ sở sản xuất, dịch vụ hậu mãi của VinFast cũng hứa hẹn sẽ được bổ sung một lớp kỹ sư kế cận được đào tạo bài bản, chuyên nghiệp, góp phần nâng cao hơn nữa tiêu chuẩn, chất lượng dịch vụ của thương hiệu ô tô Việt Nam./.
+Chia sẻ bài viết này
+
+## Tin tức liên quan
+VINFAST XUẤT XƯỞNG CHIẾC XE MÁY ĐIỆN THỨ 1 TRIỆU
+DOANH THU TOÀN CẦU QUÝ I/2026 CỦA VINFAST TĂNG TRƯỞNG 42% SO VỚI CÙNG KỲ NĂM 2025
+VINFAST MANG ĐẾN HỆ SINH THÁI XE ĐIỆN TOÀN DIỆN TRONG LẦN ĐẦU THAM DỰ TRIỂN LÃM Ô TÔ QUỐC TẾ PHILIPPINES

@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-o-to/san-pham/vf-6",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/cau-hoi-thuong-gap/cau-hoi-xe-o-to/san-pham/vf-6",
+  "timeout_seconds": 10,
+  "wait_until": "domcontentloaded"
+}

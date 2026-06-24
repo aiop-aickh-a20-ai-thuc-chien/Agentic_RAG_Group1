@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/nguoi-dung-danh-gia-vinfast-vf-e34-sau-6-thang-em-muot-tang-toc-thuc-su-khac-biet",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/nguoi-dung-danh-gia-vinfast-vf-e34-sau-6-thang-em-muot-tang-toc-thuc-su-khac-biet",
+  "timeout_seconds": 8,
+  "wait_until": "load"
+}

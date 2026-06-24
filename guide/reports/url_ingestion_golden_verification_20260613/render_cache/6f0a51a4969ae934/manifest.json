@@ -1,0 +1,7 @@
+{
+  "url": "https://vinfastauto.com/vn_vi/vinfast-toi-uu-moc-bao-duong-giam-chi-phi-van-hanh-cho-khach-hang",
+  "parser": "crawl-link-playwright-dom-markdown+normalizer",
+  "final_url": "https://vinfastauto.com/vn_vi/vinfast-toi-uu-moc-bao-duong-giam-chi-phi-van-hanh-cho-khach-hang",
+  "timeout_seconds": 8,
+  "wait_until": "domcontentloaded"
+}
