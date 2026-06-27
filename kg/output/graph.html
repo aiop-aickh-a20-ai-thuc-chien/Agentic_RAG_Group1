@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Knowledge Graph — VinFast EV (demo)</title>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0f172a;color:#e2e8f0}
+  header{padding:12px 18px;background:#111827;border-bottom:1px solid #334155}
+  header h1{margin:0;font-size:16px}
+  header span{color:#94a3b8;font-size:12px}
+  #wrap{display:flex;height:calc(100vh - 52px)}
+  #graph{flex:1;background:#0b1220}
+  #side{width:320px;border-left:1px solid #334155;padding:14px;overflow:auto;background:#0f172a;font-size:13px}
+  .legend span{display:inline-block;margin:2px 8px 2px 0}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .ev{color:#94a3b8;border-left:2px solid #334155;padding-left:8px;margin:6px 0}
+  h3{margin:10px 0 4px;font-size:13px;color:#cbd5e1}
+  code{color:#38bdf8}
+</style>
+</head>
+<body>
+<header><h1>Knowledge Graph — VinFast EV (demo)</h1> <span>9 nodes · 9 edges — bấm vào một node để xem quan hệ & bằng chứng</span></header>
+<div id="wrap">
+  <div id="graph"></div>
+  <div id="side">
+    <div class="legend" id="legend"></div>
+    <div id="detail"><p style="color:#94a3b8">Chọn một node…</p></div>
+  </div>
+</div>
+<script>
+const NODES = [{"id": "ent_515d55587edf", "label": "chính sách thuê pin", "type": "policy", "aliases": ["chính sách thuê pin"], "freq": 1, "community": 0}, {"id": "ent_43e6a6c330f5", "label": "pin LFP", "type": "feature", "aliases": ["pin LFP", "pin lithium LFP"], "freq": 3, "community": 2}, {"id": "ent_c10e9dc3b0a7", "label": "VF 8", "type": "product", "aliases": ["VF 8", "VinFast VF8"], "freq": 5, "community": 0}, {"id": "ent_d6e874bb2622", "label": "chính sách bảo hành 10 năm", "type": "policy", "aliases": ["chính sách bảo hành 10 năm"], "freq": 1, "community": 1}, {"id": "ent_885ecf5f4607", "label": "VF 5", "type": "product", "aliases": ["VF 5", "vf5"], "freq": 4, "community": 1}, {"id": "ent_124abc4f01a0", "label": "VF 3", "type": "product", "aliases": ["VF 3"], "freq": 2, "community": 2}, {"id": "ent_75104dd75021", "label": "bộ sạc V-Green", "type": "feature", "aliases": ["bộ sạc V-Green"], "freq": 2, "community": 0}, {"id": "ent_de0ebaefb289", "label": "1.2 tỷ", "type": "value", "aliases": ["1.2 tỷ"], "freq": 1, "community": 0}, {"id": "ent_5a12a187229a", "label": "VinFast", "type": "org", "aliases": ["VinFast"], "freq": 3, "community": 1}];
+const EDGES = [{"source": "ent_c10e9dc3b0a7", "target": "ent_5a12a187229a", "predicate": "made_by", "weight": 1, "docs": ["d_catalogue"], "chunks": ["d_catalogue::c1"], "evidence": ["VinFast sản xuất VF 8"]}, {"source": "ent_c10e9dc3b0a7", "target": "ent_43e6a6c330f5", "predicate": "has_feature", "weight": 1, "docs": ["d_catalogue"], "chunks": ["d_catalogue::c1"], "evidence": ["VF 8 được trang bị pin LFP"]}, {"source": "ent_c10e9dc3b0a7", "target": "ent_515d55587edf", "predicate": "applies_policy", "weight": 1, "docs": ["d_catalogue"], "chunks": ["d_catalogue::c1"], "evidence": ["VF 8 áp dụng chính sách thuê pin"]}, {"source": "ent_c10e9dc3b0a7", "target": "ent_de0ebaefb289", "predicate": "has_price", "weight": 1, "docs": ["d_catalogue"], "chunks": ["d_catalogue::c2"], "evidence": ["VinFast VF8 có giá 1.2 tỷ"]}, {"source": "ent_885ecf5f4607", "target": "ent_5a12a187229a", "predicate": "made_by", "weight": 2, "docs": ["d_vf5"], "chunks": ["d_vf5::c3", "d_vf5::c4"], "evidence": ["VF 5 được sản xuất bởi VinFast", "vf5 made by VinFast"]}, {"source": "ent_885ecf5f4607", "target": "ent_43e6a6c330f5", "predicate": "has_feature", "weight": 1, "docs": ["d_vf5"], "chunks": ["d_vf5::c3"], "evidence": ["VF 5 trang bị pin lithium LFP"]}, {"source": "ent_885ecf5f4607", "target": "ent_d6e874bb2622", "predicate": "applies_policy", "weight": 1, "docs": ["d_vf5"], "chunks": ["d_vf5::c4"], "evidence": ["VF 5 áp dụng chính sách bảo hành 10 năm"]}, {"source": "ent_124abc4f01a0", "target": "ent_43e6a6c330f5", "predicate": "has_feature", "weight": 1, "docs": ["d_misc"], "chunks": ["d_misc::c6"], "evidence": ["VF 3 được trang bị pin LFP"]}, {"source": "ent_75104dd75021", "target": "ent_c10e9dc3b0a7", "predicate": "compatible_with", "weight": 1, "docs": ["d_misc"], "chunks": ["d_misc::c5"], "evidence": ["Bộ sạc V-Green tương thích với VF 8"]}];
+const COLORS = {"product": "#2563eb", "org": "#dc2626", "feature": "#16a34a", "policy": "#9333ea", "value": "#d97706", "location": "#0891b2", "": "#64748b"};
+const visNodes = NODES.map(n => ({
+  id:n.id, label:n.label, group:n.type,
+  color:{background:COLORS[n.type]||COLORS[""],border:"#0b1220"},
+  font:{color:"#e2e8f0"}, value:1+(n.freq||1), shape:"dot"
+}));
+const visEdges = EDGES.map((e,i) => ({
+  id:i, from:e.source, to:e.target, label:e.predicate, arrows:"to",
+  color:{color:"#475569"}, font:{color:"#94a3b8",size:11,strokeWidth:0}, width:1+(e.weight||1)*0.6
+}));
+const nodeById = Object.fromEntries(NODES.map(n=>[n.id,n]));
+const network = new vis.Network(document.getElementById("graph"),
+  {nodes:new vis.DataSet(visNodes), edges:new vis.DataSet(visEdges)},
+  {physics:{stabilization:true,barnesHut:{springLength:140}},interaction:{hover:true}});
+// legend
+const seen=[...new Set(NODES.map(n=>n.type))];
+document.getElementById("legend").innerHTML = "<h3>Loại node</h3>" + seen.map(t=>
+  `<span><i class="dot" style="background:${COLORS[t]||COLORS[""]}"></i>${t||"(none)"}</span>`).join("");
+// click detail
+network.on("click", p => {
+  if(!p.nodes.length){return;}
+  const id=p.nodes[0], n=nodeById[id];
+  const rel = EDGES.filter(e=>e.source===id||e.target===id).map(e=>{
+    const dir = e.source===id ? "→" : "←";
+    const other = e.source===id ? e.target : e.source;
+    const on = nodeById[other];
+    const ev = (e.evidence||[]).map(x=>`<div class="ev">“${x}”</div>`).join("");
+    return `<div><code>${n.label}</code> ${dir} <b>${e.predicate}</b> ${dir} <code>${on?on.label:other}</code>${ev}</div>`;
+  }).join("");
+  document.getElementById("detail").innerHTML =
+    `<h3>${n.label}</h3><div>type: <b>${n.type||"-"}</b> · aliases: ${(n.aliases||[]).join(", ")}</div><h3>Quan hệ</h3>${rel||"(không có)"}`;
+});
+</script>
+</body>
+</html>

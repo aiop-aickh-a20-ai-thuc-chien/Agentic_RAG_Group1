@@ -21,7 +21,7 @@ function collectFlaggedChunkIds(layers: Set<string>, flaggedByLayer: FlaggedMap)
   return out;
 }
 
-type Dataset  = { id: string; name: string; description: string | null; is_benchmark: boolean; created_at: string };
+type Dataset  = { id: string; name: string; description: string | null; is_benchmark: boolean; is_multihop?: boolean; created_at: string };
 type Question = {
   id: string; question: string; ground_truth: string; section: string | null;
   document_id: string; source_chunk_ids: string[] | null;
@@ -39,6 +39,7 @@ export default function DatasetsPage() {
   const [newName,     setNewName]     = useState("");
   const [newDesc,     setNewDesc]     = useState("");
   const [isBenchmark, setIsBenchmark] = useState(true);
+  const [isMultihop, setIsMultihop] = useState(false);
   const [creating,    setCreating]    = useState(false);
 
   // Import from approved pool
@@ -113,7 +114,7 @@ export default function DatasetsPage() {
     setCreating(true);
     const r = await fetch(`${API}/internal/datasets`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim(), description: newDesc.trim() || null, is_benchmark: isBenchmark }),
+      body: JSON.stringify({ name: newName.trim(), description: newDesc.trim() || null, is_benchmark: isBenchmark, is_multihop: isMultihop }),
     });
     const d: Dataset = await r.json();
     setDatasets((prev) => [d, ...prev]);
@@ -270,10 +271,16 @@ export default function DatasetsPage() {
             </div>
           </div>
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input type="checkbox" checked={isBenchmark} onChange={(e) => setIsBenchmark(e.target.checked)} className="accent-emerald-600" />
-              Đánh dấu là benchmark ★
-            </label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={isBenchmark} onChange={(e) => setIsBenchmark(e.target.checked)} className="accent-emerald-600" />
+                Đánh dấu là benchmark ★
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={isMultihop} onChange={(e) => setIsMultihop(e.target.checked)} className="accent-teal-600" />
+                Multi-hop (coverage@5)
+              </label>
+            </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setShowCreate(false)} className="px-3 py-1.5 text-sm rounded-lg border border-black/12 text-gray-500 hover:bg-gray-50">Huỷ</button>
               <button type="submit" disabled={creating || !newName.trim()} className="px-4 py-1.5 text-sm rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40 flex items-center gap-1.5">
@@ -312,6 +319,7 @@ export default function DatasetsPage() {
                   <span className="text-sm font-medium text-gray-800 truncate flex-1">
                     {d.name}
                     {d.is_benchmark && <span className="ml-1 text-amber-500">★</span>}
+                    {d.is_multihop && <span className="ml-1 text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full align-middle">multi-hop</span>}
                   </span>
                   {activeId === d.id && <ChevronRight size={13} className="text-emerald-600 shrink-0" />}
                 </div>
@@ -473,7 +481,10 @@ export default function DatasetsPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                   {activeDataset?.name} — {filtered.length} câu hỏi
                 </p>
-                {activeDataset?.is_benchmark && <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Benchmark ★</span>}
+                <div className="flex items-center gap-1.5">
+                  {activeDataset?.is_multihop && <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">Multi-hop · coverage@5</span>}
+                  {activeDataset?.is_benchmark && <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Benchmark ★</span>}
+                </div>
               </div>
               {qLoading ? (
                 <div className="py-12 flex items-center justify-center gap-2 text-sm text-gray-400">

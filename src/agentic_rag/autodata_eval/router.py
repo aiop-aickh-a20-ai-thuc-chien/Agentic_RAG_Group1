@@ -88,10 +88,10 @@ def create_dataset(body: DatasetCreate) -> dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO eval_datasets (name, description, is_benchmark)
-                VALUES (%s, %s, %s) RETURNING *
+                INSERT INTO eval_datasets (name, description, is_benchmark, is_multihop)
+                VALUES (%s, %s, %s, %s) RETURNING *
                 """,
-                (body.name, body.description, body.is_benchmark),
+                (body.name, body.description, body.is_benchmark, body.is_multihop),
             )
             row = cur.fetchone()
         conn.commit()
@@ -1140,6 +1140,7 @@ def run_metrics(run_id: UUID) -> dict[str, Any]:
               SELECT
                   COUNT(*)                                               AS total,
                   AVG(recall_at_5)                                       AS recall,
+                  AVG(coverage_at_5)                                     AS coverage_at_5,
                   AVG(mrr_at_5)                                          AS mrr,
                   AVG(citation_chunk_match)                              AS citation,
                   AVG(CASE WHEN guardrail_pass THEN 1.0 ELSE 0.0 END)   AS guardrail,
@@ -1169,7 +1170,7 @@ def list_results(
         columns = (
             "id, question_id, run_id, NULL AS rag_context, bot_response, "
             "NULL AS bot_citations, trace_url, retrieved_top5_ids, ground_truth_rank, "
-            "recall_at_5, mrr_at_5, citation_chunk_match, guardrail_pass, "
+            "recall_at_5, coverage_at_5, mrr_at_5, citation_chunk_match, guardrail_pass, "
             "ragas_faithfulness, ragas_answer_relevancy, ragas_context_precision, "
             "ragas_context_recall, eval_error, ran_at"
         )
@@ -1194,6 +1195,7 @@ class ResultImport(BaseModel):
     retrieved_top5_ids: str | None = None
     ground_truth_rank: int | None = None
     recall_at_5: float | None = None
+    coverage_at_5: float | None = None
     mrr_at_5: float | None = None
     citation_chunk_match: float | None = None
     guardrail_pass: bool | None = None
@@ -1212,10 +1214,10 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
                 INSERT INTO eval_results (
                     question_id, run_id, rag_context, bot_response, bot_citations,
                     trace_url, retrieved_top5_ids, ground_truth_rank,
-                    recall_at_5, mrr_at_5, citation_chunk_match, guardrail_pass,
-                    ragas_faithfulness, ragas_answer_relevancy,
+                    recall_at_5, coverage_at_5, mrr_at_5, citation_chunk_match,
+                    guardrail_pass, ragas_faithfulness, ragas_answer_relevancy,
                     ragas_context_precision, ragas_context_recall
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT DO NOTHING
                 RETURNING id
                 """,
@@ -1229,6 +1231,7 @@ def import_single_result(run_id: UUID, body: ResultImport) -> dict[str, Any]:
                     body.retrieved_top5_ids,
                     body.ground_truth_rank,
                     body.recall_at_5,
+                    body.coverage_at_5,
                     body.mrr_at_5,
                     body.citation_chunk_match,
                     body.guardrail_pass,
@@ -1259,6 +1262,7 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                   r.config,
                   COUNT(res.id)                                           AS total_questions,
                   AVG(res.recall_at_5)                                    AS avg_recall,
+                  AVG(res.coverage_at_5)                                  AS avg_coverage_at_5,
                   AVG(res.mrr_at_5)                                       AS avg_mrr,
                   AVG(res.citation_chunk_match)                           AS avg_citation,
                   AVG(CASE WHEN res.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,
@@ -1303,6 +1307,7 @@ def compare_runs(dataset_id: UUID) -> list[dict[str, Any]]:
                   r.config,
                   COUNT(er.id)                                            AS total_questions,
                   AVG(er.recall_at_5)                                     AS avg_recall,
+                  AVG(er.coverage_at_5)                                   AS avg_coverage_at_5,
                   AVG(er.mrr_at_5)                                        AS avg_mrr,
                   AVG(er.citation_chunk_match)                            AS avg_citation,
                   AVG(CASE WHEN er.guardrail_pass THEN 1.0 ELSE 0.0 END) AS guardrail_rate,

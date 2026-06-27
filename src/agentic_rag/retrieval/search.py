@@ -105,6 +105,139 @@ def _question_index_enabled() -> bool:
     return os.getenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false").lower() == "true"
 
 
+def _graph_retrieval_enabled() -> bool:
+    """Master toggle for the knowledge-graph retriever (default OFF → baseline)."""
+    return os.getenv("GRAPH_RETRIEVAL_ENABLED", "false").lower() == "true"
+
+
+_KG_RETRIEVER: Any = None
+
+
+def _kg_retriever() -> Any:
+    """Cached KGRetriever over the Neo4j graph (loaded once; reused per query). Returns
+    None if the kg package / Neo4j is unavailable so the graph channel degrades quietly."""
+    global _KG_RETRIEVER
+    if _KG_RETRIEVER is None:
+        try:
+            from kg.retrieve import KGRetriever
+            from kg.store_neo4j import Neo4jStore
+
+            _KG_RETRIEVER = KGRetriever.from_store(Neo4jStore())
+        except Exception:
+            _KG_RETRIEVER = False
+    return _KG_RETRIEVER or None
+
+
+_CHUNK_ID_INDEXED: set[str] = set()
+
+
+def _ensure_chunk_id_index(client: Any, collection: str) -> None:
+    """A MatchAny filter on chunk_id needs a keyword payload index — create it once
+    (idempotent, best-effort) so graph-channel hydration can fetch chunks by id."""
+    if collection in _CHUNK_ID_INDEXED:
+        return
+    import contextlib
+
+    from qdrant_client import models
+
+    with contextlib.suppress(Exception):
+        client.create_payload_index(
+            collection_name=collection,
+            field_name="chunk_id",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+    _CHUNK_ID_INDEXED.add(collection)
+
+
+def _fetch_chunks_by_id(client: Any, collection: str, chunk_ids: list[str]) -> dict[str, Chunk]:
+    """Hydrate ONLY the given chunk_ids straight from Qdrant (server-side filter), far
+    lighter than scrolling + embedding the whole question store just to map ids→chunks."""
+    if not chunk_ids:
+        return {}
+    from qdrant_client import models
+
+    _ensure_chunk_id_index(client, collection)
+    flt = models.Filter(
+        must=[models.FieldCondition(key="chunk_id", match=models.MatchAny(any=list(chunk_ids)))]
+    )
+    found: dict[str, Chunk] = {}
+    offset = None
+    while len(found) < len(chunk_ids):
+        batch, offset = client.scroll(
+            collection_name=collection,
+            scroll_filter=flt,
+            limit=len(chunk_ids),
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for point in batch:
+            payload = getattr(point, "payload", None)
+            if isinstance(payload, dict):
+                cid = str(payload.get("chunk_id") or "")
+                if cid and cid not in found:
+                    found[cid] = _chunk_from_qdrant_payload(payload)
+        if offset is None or not batch:
+            break
+    return found
+
+
+def _graph_search(
+    query: str, client: Any, collection: str, top_k: int
+) -> tuple[list[SearchResult], int]:
+    """KG retrieval as a retriever channel: link query→entities, traverse, hydrate the
+    provenance chunks (fetched by id from Qdrant) as SearchResults. Returns
+    (results, anchor_count) so the caller can trace linking even on a miss."""
+    retriever = _kg_retriever()
+    if retriever is None or top_k <= 0:
+        return [], 0
+    hit = retriever.retrieve(query, hops=1)
+    if not hit.chunk_scores:
+        return [], len(hit.anchors)
+    top = hit.ranked_chunks[:top_k]
+    by_id = _fetch_chunks_by_id(client, collection, [chunk_id for chunk_id, _ in top])
+    out: list[SearchResult] = []
+    for rank, (chunk_id, gscore) in enumerate(top, start=1):
+        chunk = by_id.get(chunk_id)
+        if chunk is not None:
+            out.append(SearchResult(chunk=chunk, score=float(gscore), rank=rank, retriever="graph"))
+    return out, len(hit.anchors)
+
+
+@_ls_traceable(name="graph-retrieval", run_type="retriever")
+def _trace_graph_retrieval(summary: dict[str, object]) -> dict[str, object]:
+    """Emit the knowledge-graph retriever decision to LangSmith (anchors, hits, fusion).
+    A span only appears when GRAPH_RETRIEVAL_ENABLED is on, so absent span = feature off."""
+    return summary
+
+
+_TRACE_CHUNK_TEXT_CHARS = int(os.getenv("TRACE_CHUNK_TEXT_CHARS", "400"))
+
+
+def _trace_chunks(results: list[SearchResult]) -> list[dict[str, object]]:
+    """Per-chunk view for a retriever's span: id + score + source channel + a text
+    preview so the trace shows WHAT each retriever pulled, not just ids."""
+    return [
+        {
+            "chunk_id": r.chunk.chunk_id,
+            "score": round(float(r.score), 4),
+            "retriever": r.retriever,
+            "text": (r.chunk.text or "")[:_TRACE_CHUNK_TEXT_CHARS],
+        }
+        for r in results
+    ]
+
+
+@_ls_traceable(name="retrieval-fusion", run_type="tool")
+def _trace_fusion(summary: dict[str, object]) -> dict[str, object]:
+    """Full INPUT→OUTPUT view of the RRF fusion node in one span:
+    INPUT  = every channel's chunk list feeding RRF (hybrid dense+sparse, question-index,
+             graph) + per-channel counts;
+    OUTPUT = the final fused ranked list, each chunk tagged with the channels that
+             produced it — so one span answers 'what went in and what came out of RRF'."""
+    return summary
+
+
 def _question_index_collection() -> str:
     """Name of the auxiliary Qdrant collection holding per-question embeddings.
 
@@ -1003,9 +1136,12 @@ def qdrant_hybrid_search(
     # hybrid results. Only under classic RRF, mirroring the linear path. Emits a
     # "question-index" span to LangSmith whenever the toggle is on.
     fusion_method = _fusion_method()
+    hybrid_results = list(results)  # dense+sparse, captured before question/graph fusion
+    question_results: list[SearchResult] = []  # filled if question-index channel runs
+    graph_results: list[SearchResult] = []  # filled if graph channel runs
     if _question_index_enabled() and fusion_method == "rrf":
         hybrid_count = len(results)
-        question_results: list[SearchResult] = []
+        question_results = []
         store_chunks = 0
         source = "qdrant_native"
         error: str | None = None
@@ -1038,7 +1174,56 @@ def qdrant_hybrid_search(
                 "question_hits": len(question_results),
                 "hybrid_count": hybrid_count,
                 "fused_count": len(results),
+                "chunks": _trace_chunks(question_results),
                 "error": error,
+            }
+        )
+    # Knowledge-graph retriever as a 4th RRF path (off by default). Links the query to
+    # graph entities, traverses, and fuses the provenance chunks with the rest. Emits a
+    # "graph-retrieval" span to LangSmith whenever the toggle is on.
+    if _graph_retrieval_enabled() and fusion_method == "rrf":
+        hybrid_count = len(results)
+        graph_results = []
+        anchors = 0
+        error = None  # type reuses the str|None annotation from the question-index block
+        try:
+            graph_results, anchors = _graph_search(query, client, collection, top_k)
+            if graph_results:
+                from agentic_rag.retrieval.fusion_strategies import rrf_fusion_nway
+
+                results = rrf_fusion_nway([results, graph_results], top_k=top_k)
+        except Exception as exc:
+            error = repr(exc)
+        _trace_graph_retrieval(
+            {
+                "query": query,
+                "enabled": True,
+                "fusion_method": fusion_method,
+                "anchors": anchors,
+                "graph_hits": len(graph_results),
+                "hybrid_count": hybrid_count,
+                "fused_count": len(results),
+                "chunks": _trace_chunks(graph_results),
+                "error": error,
+            }
+        )
+    # One span listing every channel's chunks + the final fused list (with source tags).
+    if fusion_method == "rrf" and (_question_index_enabled() or _graph_retrieval_enabled()):
+        _trace_fusion(
+            {
+                "query": query,
+                # ── INPUT: chunks from each channel that feeds RRF ──
+                "input_counts": {
+                    "hybrid_dense_sparse": len(hybrid_results),
+                    "question_index": len(question_results),
+                    "graph": len(graph_results),
+                },
+                "hybrid_chunks": _trace_chunks(hybrid_results),
+                "question_chunks": _trace_chunks(question_results),
+                "graph_chunks": _trace_chunks(graph_results),
+                # ── OUTPUT: the fused ranked list (each chunk tagged w/ its source channels) ──
+                "final_chunks": _trace_chunks(results),
+                "final_count": len(results),
             }
         )
     return results

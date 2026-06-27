@@ -116,7 +116,8 @@ class LiteLLMReranker(BaseModel):
                 chunk=request.candidates[index].chunk,
                 score=score,
                 rank=rank,
-                retriever="rerank",
+                # keep the source channel(s) visible after rerank (e.g. "dense+graph")
+                retriever=request.candidates[index].retriever,
             )
             for rank, (index, score) in enumerate(indexed_scores[: request.top_k], start=1)
         ]
@@ -200,7 +201,7 @@ def _score_based_rerank(candidates: list[SearchResult], *, top_k: int) -> list[S
             chunk=candidate.chunk,
             score=candidate.score,
             rank=rank,
-            retriever="rerank",
+            retriever=candidate.retriever,  # keep source channel visible after rerank
         )
         for rank, candidate in enumerate(ranked_candidates[:top_k], start=1)
     ]
@@ -225,7 +226,7 @@ def _rank_by_scores(
             chunk=candidate.chunk,
             score=score,
             rank=rank,
-            retriever="rerank",
+            retriever=candidate.retriever,  # keep source channel visible after rerank
         )
         for rank, (candidate, score) in enumerate(scored_candidates[:top_k], start=1)
     ]

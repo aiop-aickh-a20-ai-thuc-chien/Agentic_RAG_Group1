@@ -14,6 +14,7 @@ export interface Row {
   retrieved_top5_ids: string | null;
   mrr_at_5: number | null;
   recall_at_5: number | null;
+  coverage_at_5: number | null;
   ragas_faithfulness: number | null;
   ragas_answer_relevancy: number | null;
   ragas_context_precision: number | null;

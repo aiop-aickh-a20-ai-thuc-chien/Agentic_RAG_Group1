@@ -13,7 +13,7 @@ type Dataset  = { id: string; name: string; is_benchmark: boolean };
 type Run      = { id: string; name: string; status: string; total: number; success: number; failed: number; created_at: string };
 type Metrics  = {
   total: number;
-  recall: number | null; mrr: number | null; citation: number | null; guardrail: number | null;
+  recall: number | null; coverage_at_5: number | null; mrr: number | null; citation: number | null; guardrail: number | null;
   faithfulness: number | null; relevancy: number | null; ctx_precision: number | null; ctx_recall: number | null;
 };
 type Result   = {
@@ -21,7 +21,7 @@ type Result   = {
   rag_context: string | null; bot_response: string | null;
   bot_citations: unknown; trace_url: string | null;
   retrieved_top5_ids: string[] | null; ground_truth_rank: number | null;
-  recall_at_5: number | null; mrr_at_5: number | null;
+  recall_at_5: number | null; coverage_at_5: number | null; mrr_at_5: number | null;
   citation_chunk_match: number | null; guardrail_pass: boolean | null;
   ragas_faithfulness: number | null; ragas_answer_relevancy: number | null;
   ragas_context_precision: number | null; ragas_context_recall: number | null;
@@ -115,6 +115,7 @@ export default function EvalResultsPage() {
 
   const SUMMARY = metrics ? [
     { label: "Recall@5",      v: metrics.recall },
+    { label: "Coverage@5",    v: metrics.coverage_at_5 },
     { label: "MRR@5",         v: metrics.mrr },
     { label: "Citation",      v: metrics.citation },
     { label: "Faithfulness",  v: metrics.faithfulness },
@@ -230,6 +231,7 @@ export default function EvalResultsPage() {
                 <tr className="border-b border-black/6 bg-gray-50/60 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <th className="px-4 py-3 text-left">Câu hỏi</th>
                   <th className="px-3 py-3 text-center w-20">Recall</th>
+                  <th className="px-3 py-3 text-center w-20 text-teal-600" title="Lấy ĐỦ tất cả chunk GT trong top-5 — metric multi-hop">Cover</th>
                   <th className="px-3 py-3 text-center w-20">MRR</th>
                   <th className="px-3 py-3 text-center w-20">Citation</th>
                   <th className="px-3 py-3 text-center w-20">Faith</th>
@@ -256,6 +258,7 @@ export default function EvalResultsPage() {
                           )}
                         </td>
                         <MetricCell v={r.recall_at_5} />
+                        <MetricCell v={r.coverage_at_5} />
                         <MetricCell v={r.mrr_at_5} />
                         <MetricCell v={r.citation_chunk_match} />
                         <MetricCell v={r.ragas_faithfulness} />
@@ -271,7 +274,7 @@ export default function EvalResultsPage() {
 
                       {isExp && (
                         <tr className="bg-gray-50/40">
-                          <td colSpan={9} className="px-6 py-5">
+                          <td colSpan={10} className="px-6 py-5">
                             <div className="space-y-4 text-sm">
                               <div className="grid grid-cols-2 gap-5">
                                 <div>
@@ -324,6 +327,7 @@ export default function EvalResultsPage() {
                                   <div className="space-y-1">
                                     {[
                                       ["Recall@5",            fmt(r.recall_at_5)],
+                                      ["Coverage@5",          fmt(r.coverage_at_5)],
                                       ["MRR@5",               fmt(r.mrr_at_5)],
                                       ["Citation match",      fmt(r.citation_chunk_match)],
                                       ["RAGAS Faithfulness",  fmt(r.ragas_faithfulness)],

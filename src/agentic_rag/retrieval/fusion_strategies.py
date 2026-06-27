@@ -26,6 +26,12 @@ class FusedCandidate(BaseModel):
     representative: SearchResult
     score: float
     best_rank: int
+    sources: tuple[str, ...] = ()  # channels that contributed (bm25/dense/question/graph)
+
+
+def _channels(retriever: str) -> tuple[str, ...]:
+    """Split a (possibly already-fused) retriever tag into its individual channels."""
+    return tuple(part for part in str(retriever).split("+") if part)
 
 
 def rrf_fusion_nway(
@@ -157,6 +163,7 @@ def accumulate_rrf_scores(
                 representative=result,
                 score=contribution,
                 best_rank=result.rank,
+                sources=_channels(result.retriever),
             )
             continue
 
@@ -186,6 +193,7 @@ def accumulate_weighted_rrf_scores(
                 representative=result,
                 score=contribution,
                 best_rank=result.rank,
+                sources=_channels(result.retriever),
             )
             continue
 
@@ -214,7 +222,8 @@ def rank_fused_candidates(
             chunk=candidate.representative.chunk,
             score=candidate.score,
             rank=rank,
-            retriever="hybrid",
+            # show the real contributing channels (e.g. "dense+graph") instead of "hybrid"
+            retriever="+".join(candidate.sources) or "hybrid",
         )
         for rank, candidate in enumerate(ranked_candidates[:top_k], start=1)
     ]
@@ -226,7 +235,10 @@ def _updated_candidate(
     *,
     additional_score: float,
 ) -> FusedCandidate:
-    updates: dict[str, object] = {"score": candidate.score + additional_score}
+    updates: dict[str, object] = {
+        "score": candidate.score + additional_score,
+        "sources": tuple(sorted(set(candidate.sources) | set(_channels(result.retriever)))),
+    }
     if result.rank < candidate.best_rank or (
         result.rank == candidate.best_rank and result.score > candidate.representative.score
     ):

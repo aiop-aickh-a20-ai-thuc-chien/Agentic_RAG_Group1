@@ -1,0 +1,162 @@
+"""Render a self-contained HTML diagram of the pipeline + integration points.
+
+Shows the 6 stages, what each does, WHERE it runs (INGEST per-document vs BATCH
+worker), the data shape at each boundary, and live counts from the demo run.
+"""
+
+from __future__ import annotations
+
+import json
+
+_STAGES = [
+    {
+        "id": "1",
+        "name": "EXTRACT (open)",
+        "lane": "INGEST",
+        "does": "LLM trích triple MỞ mỗi chunk (predicate/type free-form) + gleanings. Giữ nguyên cách diễn đạt.",
+        "method": "LLM multilingual · prompt đa tầng · evidence nguyên văn",
+        "out": "OpenTriple[]  (subject, predicate, object, types, evidence)",
+        "badge": "staged_triples",
+    },
+    {
+        "id": "2",
+        "name": "STAGE",
+        "lane": "INGEST",
+        "does": "Ghi triple thô (append-only) + provenance (doc_id, chunk_id). Tách trích khỏi chuẩn hoá.",
+        "method": "SQLite/Neon table (demo: in-memory) · per-doc delete",
+        "out": "StagedTriple[]  (+ triple_id, doc_id, chunk_id)",
+        "badge": "staged_triples",
+    },
+    {
+        "id": "3a",
+        "name": "ENTITY RESOLUTION",
+        "lane": "BATCH",
+        "does": "Gộp biến thể bề mặt → entity chuẩn. Blocking embedding → vùng xám LLM-judge → canonical id content-addressed.",
+        "method": "embedding kNN + LLM-judge · union-find",
+        "out": "CanonicalEntity{id,name,type,aliases}",
+        "badge": "entities",
+    },
+    {
+        "id": "3b",
+        "name": "PREDICATE CANONICALIZE",
+        "lane": "BATCH",
+        "does": "EDC Define→Canonicalize: định nghĩa predicate → cluster → gộp đồng nghĩa + hướng chuẩn.",
+        "method": "LLM define + judge · min-support",
+        "out": "CanonicalPredicate{canonical,direction,members}",
+        "badge": "canonical_predicates",
+    },
+    {
+        "id": "3c",
+        "name": "QUALITY GATES",
+        "lane": "BATCH",
+        "does": "Drop endpoint là đại từ; drop edge cả 2 đầu generic; verify evidence là substring của chunk.",
+        "method": "stoplist + type-gate + evidence-substring",
+        "out": "(loại bỏ triple rác)",
+        "badge": "dropped_triples",
+    },
+    {
+        "id": "4",
+        "name": "MERGE",
+        "lane": "BATCH",
+        "does": "Map surface→canonical, ĐẢO HƯỚNG theo direction+type (bị động VN), gộp cạnh (weight+evidence+docs).",
+        "method": "direction-aware merge",
+        "out": "CleanTriple[] → edges",
+        "badge": "clean_triples",
+    },
+    {
+        "id": "5",
+        "name": "ENRICH (opt.)",
+        "lane": "BATCH",
+        "does": "Community detection (Leiden/greedy) cho câu hỏi tổng hợp. Tuỳ chọn ở v1.",
+        "method": "community detection",
+        "out": "node.community",
+        "badge": "nodes",
+    },
+    {
+        "id": "6",
+        "name": "STORE",
+        "lane": "BATCH",
+        "does": "Lưu graph + version + provenance. Query: find_node / k-hop / edges. Lifecycle: delete_document.",
+        "method": "Neo4j (GDS+Cypher) / networkx+SQLite",
+        "out": "GraphStore (nodes + edges)",
+        "badge": "edges",
+    },
+]
+
+_TEMPLATE = """<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KG Pipeline — kiến trúc</title>
+<style>
+ body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
+ h1{font-size:20px;margin:0 0 4px} .sub{color:#94a3b8;margin-bottom:18px;font-size:13px}
+ .lanes{display:flex;gap:10px;margin-bottom:14px}
+ .lane{padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600}
+ .ingest{background:#1e3a5f;color:#93c5fd} .batch{background:#3b2f5f;color:#d8b4fe}
+ .flow{display:flex;flex-wrap:wrap;gap:0;align-items:stretch}
+ .card{flex:1 1 230px;min-width:230px;background:#111827;border:1px solid #334155;border-radius:10px;padding:12px;margin:6px;position:relative}
+ .card.b{border-left:4px solid #9333ea} .card.i{border-left:4px solid #3b82f6}
+ .num{position:absolute;top:-10px;left:-10px;background:#0b1220;border:1px solid #334155;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#38bdf8;font-weight:700}
+ .card h3{margin:2px 0 6px;font-size:14px}
+ .tag{font-size:10px;padding:2px 6px;border-radius:4px;float:right}
+ .tag.i{background:#1e3a5f;color:#93c5fd}.tag.b{background:#3b2f5f;color:#d8b4fe}
+ .does{font-size:12px;color:#cbd5e1;margin:4px 0}
+ .method{font-size:11px;color:#7dd3fc;margin:4px 0}
+ .out{font-size:11px;color:#94a3b8;font-family:ui-monospace,Consolas,monospace;background:#0b1220;padding:4px 6px;border-radius:4px;margin-top:6px;overflow:auto}
+ .badge{display:inline-block;margin-top:6px;background:#064e3b;color:#6ee7b7;font-size:11px;padding:2px 8px;border-radius:10px}
+ .stats{margin-top:18px;background:#111827;border:1px solid #334155;border-radius:10px;padding:12px;font-size:13px}
+ .stats b{color:#6ee7b7} .arrow{align-self:center;color:#475569;font-size:20px;padding:0 2px}
+ code{color:#38bdf8}
+</style></head>
+<body>
+<h1>Knowledge-Graph Construction — Pipeline (greenfield)</h1>
+<div class="sub">EDC backbone: Extract → Define → Canonicalize · Mở trước → chuẩn hoá sau · adapter, không thay vector store</div>
+<div class="lanes">
+  <div class="lane ingest">INGEST · per-document, incremental (chạy lúc upload / out-of-band)</div>
+  <div class="lane batch">BATCH · view toàn cục (chạy định kỳ — tái lập, A/B được)</div>
+</div>
+<div class="flow" id="flow"></div>
+<div class="stats" id="stats"></div>
+<script>
+const STAGES = /*STAGES*/;
+const STATS = /*STATS*/;
+function badgeVal(key){
+  if(key in STATS) return STATS[key];
+  if(STATS.resolution && key in STATS.resolution) return STATS.resolution[key];
+  if(STATS.predicates && key in STATS.predicates) return STATS.predicates[key];
+  if(STATS.graph && key in STATS.graph) return STATS.graph[key];
+  return null;
+}
+const flow=document.getElementById("flow");
+STAGES.forEach((s,i)=>{
+  const lane = s.lane==="INGEST" ? "i":"b";
+  const v = badgeVal(s.badge);
+  const card=document.createElement("div");
+  card.className="card "+lane;
+  card.innerHTML=`<div class="num">${s.id}</div>
+    <span class="tag ${lane}">${s.lane}</span><h3>${s.name}</h3>
+    <div class="does">${s.does}</div>
+    <div class="method">⚙ ${s.method}</div>
+    <div class="out">${s.out}</div>
+    ${v!==null?`<span class="badge">${s.badge}: ${v}</span>`:""}`;
+  flow.appendChild(card);
+  if(i<STAGES.length-1){const a=document.createElement("div");a.className="arrow";a.textContent="▸";flow.appendChild(a);}
+});
+const g=STATS.graph||{};
+document.getElementById("stats").innerHTML =
+ `<b>Kết quả chạy demo:</b> ${STATS.staged_triples} staged → `+
+ `${STATS.clean_triples} clean (drop ${STATS.dropped_triples}, đảo hướng ${STATS.flips}) → `+
+ `graph <b>${g.nodes}</b> nodes / <b>${g.edges}</b> edges · `+
+ `entity resolution: ${ (STATS.resolution||{}).mentions } mentions → <b>${(STATS.resolution||{}).entities}</b> entities · `+
+ `predicate: ${(STATS.predicates||{}).surface_predicates} → <b>${(STATS.predicates||{}).canonical_predicates}</b> canonical`;
+</script>
+</body></html>
+"""
+
+
+def render_architecture_html(stats: dict, path: str) -> None:
+    html = _TEMPLATE.replace("/*STAGES*/", json.dumps(_STAGES, ensure_ascii=False)).replace(
+        "/*STATS*/", json.dumps(stats, ensure_ascii=False)
+    )
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(html)

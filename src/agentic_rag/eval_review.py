@@ -205,6 +205,7 @@ class RunConfig(BaseModel):
     metadata_boosting_enabled: bool | None = None
     question_index_enabled: bool | None = None
     entity_prefilter_llm: bool | None = None
+    graph_retrieval_enabled: bool | None = None
 
 
 # Maps a RunConfig field → the env var the retrieval code reads.
@@ -213,6 +214,7 @@ _RUN_TOGGLE_ENV = {
     "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
     "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
     "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+    "graph_retrieval_enabled": "GRAPH_RETRIEVAL_ENABLED",
 }
 
 # Default each flag reverts to when its env var is unset (mirrors the retrieval code).
@@ -221,6 +223,7 @@ _RUN_TOGGLE_DEFAULTS = {
     "metadata_boosting_enabled": True,
     "question_index_enabled": False,
     "entity_prefilter_llm": False,
+    "graph_retrieval_enabled": False,
 }
 
 
@@ -235,6 +238,7 @@ class EvalFlags(BaseModel):
     metadata_boosting_enabled: bool
     question_index_enabled: bool
     entity_prefilter_llm: bool
+    graph_retrieval_enabled: bool
 
 
 class JobStatus(BaseModel):

@@ -31,7 +31,12 @@ from agentic_rag.agent.node_contracts import (
 from agentic_rag.agent.state import AgentState
 from agentic_rag.core.contracts import Answer, RetrievalInput, SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
-from agentic_rag.generation.answering import generate_answer_with_trace
+from agentic_rag.generation.answering import (
+    AnswerDelta,
+    AnswerDone,
+    generate_answer_with_trace,
+    stream_answer,
+)
 from agentic_rag.ingestion.metadata import filter_coverage
 from agentic_rag.ingestion.metadata.entity_normalizer import detect_in_query
 from agentic_rag.language import detect_language
@@ -488,6 +493,42 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
     )
 
 
+def _stream_writer() -> Any:
+    """The active LangGraph custom-stream writer, or None outside a streaming run."""
+    try:
+        from langgraph.config import get_stream_writer
+
+        return get_stream_writer()
+    except Exception:
+        return None
+
+
+def _generate_streamed(
+    writer: Callable[[dict[str, Any]], None],
+    question: str,
+    evidence_context: str,
+    docs: list[SearchResult],
+    *,
+    history: list[dict[str, str]],
+    lang: str,
+) -> AnswerDone | None:
+    """Run the same generation but emit token deltas to the LangGraph stream writer.
+    Returns the AnswerDone (has .answer + .trace, like _generate's result)."""
+    final = None
+    for ev in stream_answer(
+        question=question,
+        evidence_context=evidence_context,
+        evidence_chunks=docs,
+        lang=lang,
+        history=history,
+    ):
+        if isinstance(ev, AnswerDelta):
+            writer({"answer_delta": ev.text})
+        elif isinstance(ev, AnswerDone):
+            final = ev
+    return final
+
+
 def generate_node(state: AgentState) -> GenerateNodeOutput:
     """Generate grounded answer from reranked docs + pinned docs from previous loops."""
     relevant = state.get("relevant_docs") or _deduped(state.get("fused_results", []))
@@ -500,14 +541,25 @@ def generate_node(state: AgentState) -> GenerateNodeOutput:
     )
 
     evidence_context = build_evidence_context(docs)
-    result = _generate(
-        _effective_question(state),
-        evidence_context,
-        docs,
-        original_question=state["question"],
-        history=state.get("history", []),
-        lang=state.get("detected_language", "vi"),
-    )
+    question = _effective_question(state)
+    history = state.get("history", [])
+    lang = state.get("detected_language", "vi")
+    # Real token streaming: when invoked via run_agent_stream, push deltas to the writer.
+    writer = _stream_writer() if state.get("stream") else None
+    result = None
+    if writer is not None:
+        result = _generate_streamed(
+            writer, question, evidence_context, docs, history=history, lang=lang
+        )
+    if result is None:  # non-streaming path (invoke / eval / tests) or stream produced nothing
+        result = _generate(
+            question,
+            evidence_context,
+            docs,
+            original_question=state["question"],
+            history=history,
+            lang=lang,
+        )
 
     return GenerateNodeOutput(
         answer=result.answer,

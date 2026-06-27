@@ -66,7 +66,8 @@ def test_score_reranker_preserves_current_fallback_ordering_and_dedup() -> None:
 
     assert [result.chunk.chunk_id for result in output.results] == ["chunk-b", "chunk-a"]
     assert [result.rank for result in output.results] == [1, 2]
-    assert [result.retriever for result in output.results] == ["rerank", "rerank"]
+    # reranker preserves the candidate's source channel (was overwritten to "rerank")
+    assert [result.retriever for result in output.results] == ["hybrid", "hybrid"]
     assert output.results[1].score == 0.4
     assert output.metadata["used_provider"] == "score"
     assert output.metadata["method"] == "score_based_sort"

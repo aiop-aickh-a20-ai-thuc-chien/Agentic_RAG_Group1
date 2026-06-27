@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS eval_datasets (
   name         TEXT NOT NULL,
   description  TEXT,
   is_benchmark BOOLEAN DEFAULT FALSE,
+  -- Dataset multi-hop: câu hỏi cần ghép ≥2 chunk. Tách riêng để báo cáo so với single-hop.
+  is_multihop  BOOLEAN DEFAULT FALSE,
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -88,6 +90,9 @@ CREATE TABLE IF NOT EXISTS eval_results (
   ground_truth_rank        INTEGER,
   recall_at_5              FLOAT,
   mrr_at_5                 FLOAT,
+  -- Coverage@5: 1.0 khi LẤY ĐỦ tất cả chunk ground-truth trong top-5, ngược lại 0.0.
+  -- Metric retrieval cho multi-hop (recall_at_5 chỉ tính điểm một phần).
+  coverage_at_5            FLOAT,
   citation_chunk_match     FLOAT,
   guardrail_pass           BOOLEAN,
   -- RAGAS (nullable, chạy riêng)

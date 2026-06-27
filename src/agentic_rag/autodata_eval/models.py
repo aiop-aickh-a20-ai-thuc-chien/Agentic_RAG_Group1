@@ -15,6 +15,7 @@ class DatasetCreate(BaseModel):
     name: str
     description: str | None = None
     is_benchmark: bool = False
+    is_multihop: bool = False
 
 
 class Dataset(BaseModel):
@@ -22,6 +23,7 @@ class Dataset(BaseModel):
     name: str
     description: str | None
     is_benchmark: bool
+    is_multihop: bool = False
     created_at: datetime
 
 
@@ -122,6 +124,7 @@ class EvalResult(BaseModel):
     retrieved_top5_ids: list[str] | None
     ground_truth_rank: int | None
     recall_at_5: float | None
+    coverage_at_5: float | None = None
     mrr_at_5: float | None
     citation_chunk_match: float | None
     guardrail_pass: bool | None
@@ -176,6 +179,7 @@ class RunSummary(BaseModel):
     config: dict[str, Any]
     total_questions: int
     avg_recall: float | None
+    avg_coverage_at_5: float | None = None
     avg_mrr: float | None
     avg_citation: float | None
     guardrail_rate: float | None

@@ -25,6 +25,7 @@ _TOGGLE_ENV = {
     "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
     "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
     "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+    "graph_retrieval_enabled": "GRAPH_RETRIEVAL_ENABLED",
     "question_min_score": "QUESTION_MIN_SCORE",
 }
 
@@ -95,6 +96,7 @@ def run_pipeline_for_question(
 
         ground_truth_rank = _compute_rank(source_chunk_ids, retrieved_ids)
         recall = _recall_at_k(source_chunk_ids, retrieved_ids, k=5)
+        coverage = _coverage_at_k(source_chunk_ids, retrieved_ids, k=5)
         mrr = _mrr_at_k(source_chunk_ids, retrieved_ids, k=5)
         citation_match = _citation_match(source_chunk_ids, bot_citations)
         guardrail = result.answer.status == "answered"
@@ -107,6 +109,7 @@ def run_pipeline_for_question(
             "retrieved_top5_ids": retrieved_ids,
             "ground_truth_rank": ground_truth_rank,
             "recall_at_5": recall,
+            "coverage_at_5": coverage,
             "mrr_at_5": mrr,
             "citation_chunk_match": citation_match,
             "guardrail_pass": guardrail,
@@ -129,6 +132,16 @@ def _recall_at_k(ground_truth_ids: list[str], retrieved_ids: list[str], k: int) 
         return 0.0
     hits = len(set(retrieved_ids[:k]) & set(ground_truth_ids))
     return hits / len(ground_truth_ids)
+
+
+def _coverage_at_k(ground_truth_ids: list[str], retrieved_ids: list[str], k: int) -> float:
+    """1.0 nếu LẤY ĐỦ tất cả chunk ground-truth trong top-k, ngược lại 0.0.
+
+    Khác recall_at_k (tính điểm một phần): câu multi-hop cần ghép ≥2 chunk, thiếu 1
+    chunk là không trả lời được — coverage phạt nguyên câu, phản ánh đúng multi-hop."""
+    if not ground_truth_ids:
+        return 0.0
+    return 1.0 if set(ground_truth_ids) <= set(retrieved_ids[:k]) else 0.0
 
 
 def _mrr_at_k(ground_truth_ids: list[str], retrieved_ids: list[str], k: int) -> float:
@@ -162,10 +175,10 @@ def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> Non
                   question_id, run_id,
                   rag_context, bot_response, bot_citations, trace_url,
                   retrieved_top5_ids, ground_truth_rank,
-                  recall_at_5, mrr_at_5, citation_chunk_match, guardrail_pass,
-                  eval_error
+                  recall_at_5, coverage_at_5, mrr_at_5, citation_chunk_match,
+                  guardrail_pass, eval_error
                 ) VALUES (
-                  %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                  %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 ON CONFLICT (question_id, run_id) DO UPDATE SET
                   rag_context = EXCLUDED.rag_context,
@@ -175,6 +188,7 @@ def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> Non
                   retrieved_top5_ids = EXCLUDED.retrieved_top5_ids,
                   ground_truth_rank = EXCLUDED.ground_truth_rank,
                   recall_at_5 = EXCLUDED.recall_at_5,
+                  coverage_at_5 = EXCLUDED.coverage_at_5,
                   mrr_at_5 = EXCLUDED.mrr_at_5,
                   citation_chunk_match = EXCLUDED.citation_chunk_match,
                   guardrail_pass = EXCLUDED.guardrail_pass,
@@ -194,6 +208,7 @@ def _write_result(run_id: str, question_id: str, payload: dict[str, Any]) -> Non
                     payload.get("retrieved_top5_ids"),
                     payload.get("ground_truth_rank"),
                     payload.get("recall_at_5"),
+                    payload.get("coverage_at_5"),
                     payload.get("mrr_at_5"),
                     payload.get("citation_chunk_match"),
                     payload.get("guardrail_pass"),

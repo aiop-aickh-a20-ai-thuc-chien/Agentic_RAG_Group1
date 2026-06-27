@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GraphRAG — Offline & Online · Agentic RAG</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css" />
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+<style>
+  :root{
+    --bg:#0a0e1a; --bg2:#0d1430;
+    --teal:#2dd4bf; --cyan:#22d3ee; --violet:#a78bfa; --amber:#fbbf24;
+    --rose:#fb7185; --ink:#e7ecf5; --muted:#93a0bd; --line:rgba(255,255,255,.10);
+  }
+  .reveal{ font-family:"Segoe UI","Inter",system-ui,sans-serif; color:var(--ink);
+           font-size:30px; }
+  .reveal .slides section{ text-align:left; }
+  body{ background:
+        radial-gradient(1200px 700px at 12% -10%, rgba(45,212,191,.14), transparent 60%),
+        radial-gradient(1100px 700px at 110% 20%, rgba(167,139,250,.14), transparent 55%),
+        var(--bg); }
+
+  .reveal h1,.reveal h2,.reveal h3{ color:#fff; text-transform:none; letter-spacing:-.01em; font-weight:800; }
+  .reveal h1{ font-size:2.0em; line-height:1.05; }
+  .reveal h2{ font-size:1.5em; }
+  .reveal h3{ font-size:1.0em; }
+  .reveal a{ color:var(--cyan); }
+  .reveal strong{ color:#fff; }
+  .reveal em{ color:var(--teal); font-style:normal; }
+
+  .grad{ background:linear-gradient(100deg,var(--teal),var(--cyan) 40%,var(--violet));
+         -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  .kicker{ display:inline-block; font-size:.5em; font-weight:700; letter-spacing:.22em;
+           text-transform:uppercase; color:var(--teal);
+           border:1px solid rgba(45,212,191,.4); border-radius:999px; padding:.35em 1em;
+           background:rgba(45,212,191,.07); }
+  .muted{ color:var(--muted); }
+  .small{ font-size:.62em; } .tiny{ font-size:.5em; }
+  .center{ text-align:center; }
+
+  /* step pill list */
+  .steps{ list-style:none; margin:0; padding:0; }
+  .steps li{ display:flex; align-items:flex-start; gap:.7em; padding:.42em .7em; margin:.32em 0;
+             border:1px solid var(--line); border-radius:14px;
+             background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015)); }
+  .steps .n{ flex:0 0 auto; width:1.7em; height:1.7em; border-radius:10px; display:grid; place-items:center;
+             font-weight:800; font-size:.8em; color:#04121a;
+             background:linear-gradient(135deg,var(--teal),var(--cyan)); box-shadow:0 6px 18px rgba(34,211,238,.25); }
+  .steps.v .n{ background:linear-gradient(135deg,var(--violet),#c4b5fd); box-shadow:0 6px 18px rgba(167,139,250,.25); color:#160a2b; }
+  .steps .t{ font-weight:700; color:#fff; }
+  .steps .d{ color:var(--muted); font-size:.78em; }
+
+  .why{ border-left:3px solid var(--amber); background:rgba(251,191,36,.08);
+        padding:.5em .8em; border-radius:0 12px 12px 0; margin-top:.5em; font-size:.82em; }
+  .why b{ color:var(--amber); }
+
+  .card{ border:1px solid var(--line); border-radius:16px; padding:.9em 1.05em;
+         background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02)); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:.8em; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:.7em; }
+
+  .stat{ text-align:center; }
+  .stat .big{ font-size:1.7em; font-weight:800; line-height:1; }
+  .stat .lab{ color:var(--muted); font-size:.62em; margin-top:.25em; }
+
+  table.cmp{ font-size:.52em; border-collapse:collapse; width:100%; }
+  table.cmp th,table.cmp td{ border:1px solid var(--line); padding:.5em .65em; text-align:left; vertical-align:top; }
+  table.cmp thead th{ background:rgba(45,212,191,.10); color:#fff; }
+  table.cmp tbody tr:nth-child(odd){ background:rgba(255,255,255,.025); }
+  table.cmp code{ color:var(--cyan); font-size:.95em; }
+  .tag{ display:inline-block; font-size:.85em; padding:.1em .55em; border-radius:999px; border:1px solid var(--line); }
+  .tag.kg{ color:var(--teal); border-color:rgba(45,212,191,.45); background:rgba(45,212,191,.08); }
+  .tag.chat{ color:var(--violet); border-color:rgba(167,139,250,.45); background:rgba(167,139,250,.08); }
+
+  .plot{ width:100%; height:560px; }
+  .flow{ display:flex; align-items:center; gap:.5em; flex-wrap:wrap; justify-content:center; font-size:.7em; }
+  .flow .node{ border:1px solid var(--line); border-radius:12px; padding:.5em .8em; background:rgba(255,255,255,.04); font-weight:700; }
+  .flow .arrow{ color:var(--teal); font-size:1.3em; }
+  .flow .kgc{ border-color:rgba(45,212,191,.5); color:var(--teal); }
+  .flow .vec{ border-color:rgba(167,139,250,.5); color:var(--violet); }
+
+  #bg-canvas{ position:fixed; inset:0; z-index:0; opacity:.55; }
+  .reveal .slides{ z-index:1; }
+  .reveal .progress{ color:var(--teal); }
+  .footer{ position:fixed; bottom:10px; right:16px; font-size:13px; color:var(--muted); z-index:3; }
+
+  /* animated pipeline */
+  #pipe{ overflow:visible; }
+  #pipe text{ font-family:"Segoe UI",system-ui,sans-serif; }
+  @keyframes nodePulse{ 0%,100%{opacity:0} 50%{opacity:.20} }
+  #pipe .pulse{ animation:nodePulse 3s ease-in-out infinite; }
+  #pipe .track{ animation:dash 1.4s linear infinite; }
+  @keyframes dash{ to{ stroke-dashoffset:-28; } }
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="footer">Agentic RAG · GraphRAG (branch <code>nguyen/graph</code>)</div>
+
+<div class="reveal"><div class="slides">
+
+<!-- ───────────────── TITLE ───────────────── -->
+<section data-transition="zoom">
+  <span class="kicker">Knowledge Graph · Self-RAG</span>
+  <h1 style="margin:.35em 0 .2em"><span class="grad">GraphRAG</span><br/>cho hệ Agentic RAG</h1>
+  <p class="muted" style="font-size:.8em; max-width:18em">
+    Dựng tri thức <em>trước (offline)</em> → <em>lúc hỏi</em> góp thêm như kênh thứ tư,
+    nhắm vào câu cần <em>ghép nhiều đoạn</em> mà vector đơn lẻ bỏ sót.
+  </p>
+  <p class="small muted" style="margin-top:1.4em">Dữ liệu thật: xe điện VinFast · Neo4j Aura · Qdrant · Neon</p>
+</section>
+
+<!-- ───────────────── WHY ───────────────── -->
+<section data-transition="slide">
+  <span class="kicker">Động lực</span>
+  <h2 style="margin:.2em 0 .5em">Vì sao thêm Graph?</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>❌ Vector đơn lẻ</h3>
+      <p class="small muted">Tìm theo độ giống về nghĩa của <b>một</b> đoạn. Câu cần ghép
+      thông tin từ <b>nhiều đoạn khác nhau</b> (so sánh, tổng hợp, bắc cầu) thì dễ thiếu mắt xích.</p>
+    </div>
+    <div class="card">
+      <h3>✅ Knowledge Graph</h3>
+      <p class="small muted">Các thực thể nối nhau bằng quan hệ, mỗi quan hệ <b>nhớ đoạn gốc</b>.
+      Đi qua các liên kết kéo về <em>cùng lúc</em> các đoạn liên quan — đúng nhu cầu ghép-nhiều-đoạn.</p>
+    </div>
+  </div>
+  <div class="why" style="margin-top:.8em">
+    <b>Luận điểm cốt lõi:</b> Graph <u>không thay</u> vector — nó là <b>kênh bổ sung</b>.
+    Thắng rõ ở câu <em>ghép nhiều đoạn</em>, hoà ở câu đơn. (Đang đo bằng <code>coverage@5</code>.)
+  </div>
+</section>
+
+<!-- ───────────────── LANDSCAPE: provider extraction ───────────────── -->
+<section data-transition="slide">
+  <span class="kicker">Bối cảnh</span>
+  <h2 style="margin:.1em 0 .25em">GraphRAG ngoài thực tế — họ trích xuất thế nào</h2>
+  <table class="cmp" style="font-size:.44em">
+    <thead><tr><th>Hệ</th><th>Cách trích xuất graph</th><th>Lưu trữ</th><th>Truy hồi</th></tr></thead>
+    <tbody>
+      <tr><td><b>Microsoft</b><br/>graphrag</td><td>LLM đọc từng đoạn → rút thực thể + quan hệ, quét nhiều lượt vét sót, gộp + tóm tắt; không ép khuôn quan hệ định sẵn</td><td>File Parquet + kho vector LanceDB; tuỳ chọn nạp Neo4j</td><td><b>TỔNG QUAN</b> (tóm tắt từng cụm rồi gộp) + <b>CỤC BỘ</b> (vector → lan ra láng giềng)</td></tr>
+      <tr><td><b>AWS</b><br/>Bedrock KB + toolkit</td><td>LLM (Claude) rút đồ thị; bản toolkit nâng đơn vị ngữ cảnh lên "mệnh đề/chủ đề"; không gom cụm</td><td>Neptune — đồ thị + vector <b>CHUNG</b> 1 kho</td><td>Vector top-k → mở rộng sang láng giềng; toolkit: đi đồ thị + theo nghĩa</td></tr>
+      <tr><td><b>Neo4j</b><br/>KG Builder</td><td>LLM rút bộ ba (nguồn, quan hệ, đích); có/không khuôn định sẵn; có bước gộp tên trùng</td><td>Neo4j: đồ thị thực thể, mỗi thực thể nối về đoạn gốc</td><td>Vector / Vector→đi 2–3 bước / lai / sinh truy vấn từ câu hỏi</td></tr>
+      <tr><td><b>LangChain /<br/>LlamaIndex</b></td><td>LLM rút bộ ba (chủ thể, quan hệ, đối tượng) từng đoạn; khuôn quan hệ tuỳ chọn</td><td>Neo4j/Kuzu/Nebula… (một số có vector sẵn)</td><td>Đồng nghĩa + vector mặc định; + sinh truy vấn</td></tr>
+      <tr><td><b>EDC</b><br/>(bài báo gốc)</td><td>3 pha, không huấn luyện lại mô hình: rút tự do → định nghĩa quan hệ → gom về một mối bằng vector+LLM</td><td>Không DB riêng; so khớp vector trong bộ nhớ</td><td>Truy hồi để phục vụ TRÍCH XUẤT, không phải để hỏi đồ thị</td></tr>
+    </tbody>
+  </table>
+  <div class="why" style="margin-top:.45em"><b>Điểm chung:</b> tất cả <b>dùng LLM đọc từng đoạn để rút fact</b> + <b>lai vector ↔ đồ thị</b>.
+  Khác nhau ở: có/không <b>gom cụm + tóm tắt</b>, đơn vị ngữ cảnh, và kho gộp hay tách.</div>
+</section>
+
+<!-- ───────────────── OUR METHOD: inherit / combine / differ ───────────────── -->
+<section>
+  <section data-transition="slide">
+    <span class="kicker" style="color:var(--teal);border-color:rgba(45,212,191,.4)">Phương pháp của mình</span>
+    <h2 style="margin:.1em 0 .35em">Kế thừa · Kết hợp · Khác</h2>
+    <div class="grid3" style="font-size:.56em">
+      <div class="card">
+        <h3 class="small" style="color:var(--cyan)">↺ Kế thừa</h3>
+        <p class="muted" style="line-height:1.55">
+        • Khung <b>EDC</b> (rút tự do → dọn dẹp sau, không huấn luyện lại)<br/>
+        • <b>LLM đọc từng đoạn → bộ ba</b> — như cả 5 hệ<br/>
+        • Lai <b>vector → đồ thị</b> + mỗi quan hệ nhớ <b>đoạn gốc</b></p>
+      </div>
+      <div class="card">
+        <h3 class="small" style="color:var(--teal)">⊕ Kết hợp</h3>
+        <p class="muted" style="line-height:1.55">
+        • EDC + kho đồ thị <b>Neo4j</b> (nạp theo lô, giữ đoạn gốc)<br/>
+        • Thêm <b>kho tạm Neon nhớ-đã-làm</b> (chạy lại không làm lại) — không hệ nào có<br/>
+        • Graph = <b>kênh thứ 4</b> trộn vào tìm-kiếm-vector sẵn có<br/>
+        • Lúc hỏi dùng <b>LẠI đúng cách chuẩn hoá</b> của lúc dựng</p>
+      </div>
+      <div class="card">
+        <h3 class="small" style="color:var(--amber)">✦ Khác</h3>
+        <p class="muted" style="line-height:1.55">
+        • <b>KHÔNG gom cụm + tóm tắt</b> (khác Microsoft)<br/>
+        • <b>CHỈ THÊM</b> — không thay vector (khác AWS gộp 1 kho)<br/>
+        • Gộp thực thể trùng <b>theo chữ</b>, không dùng vector<br/>
+        • Gom quan hệ <b>theo độ phổ biến</b><br/>
+        • Ép chủ thể là <b>thực thể chính</b> (chống node mồ côi)</p>
+      </div>
+    </div>
+    <p class="tiny muted center" style="margin-top:.4em">↓ bấm xuống xem “vì sao chọn”</p>
+  </section>
+
+  <section data-transition="fade">
+    <h3 class="center" style="margin:.1em 0 .35em"><span class="grad">Vì sao chọn như vậy</span></h3>
+    <div class="grid2" style="font-size:.58em; gap:.45em">
+      <div class="card"><b style="color:var(--amber)">Bỏ gom-cụm + tóm-tắt</b> — lĩnh vực hẹp (xe điện), chủ yếu câu cục bộ/ghép-nhiều-đoạn; tóm tắt toàn bộ vừa đắt vừa thừa.</div>
+      <div class="card"><b style="color:var(--amber)">Chỉ thêm, không thay</b> — vector vốn đã tốt; rủi ro thấp, <b>dễ bật/tắt graph để so sánh</b>, tái dùng sẵn.</div>
+      <div class="card"><b style="color:var(--amber)">Gộp tên theo chữ</b> — mặc định không vector/LLM (rẻ, chạy lại y hệt); tên xe khớp tốt chỉ bằng chuẩn hoá chữ.</div>
+      <div class="card"><b style="color:var(--amber)">Gom quan hệ theo độ phổ biến</b> — giữ số loại quan hệ gọn/ổn định, rẻ hơn so từng cặp.</div>
+      <div class="card"><b style="color:var(--amber)">Ép chủ thể = thực thể chính</b> — diệt node mồ côi ngay từ lúc rút = đòn bẩy chất lượng lớn nhất.</div>
+      <div class="card"><b style="color:var(--amber)">Kho tạm Neon</b> — S3 chỉ-đọc + tiết kiệm: chạy lại không trả tiền LLM 2 lần cho cùng một đoạn.</div>
+    </div>
+  </section>
+</section>
+
+<!-- ───────────────── PROVIDER (early overview) ───────────────── -->
+<section data-transition="slide">
+  <span class="kicker">Tech stack</span>
+  <h2 style="margin:.1em 0 .45em">Provider — bức tranh tổng</h2>
+  <div class="grid3">
+    <div class="card">
+      <h3 class="small" style="color:var(--teal)">▦ Graph <span class="tiny muted">(thêm vào)</span></h3>
+      <p class="small muted" style="line-height:1.75">
+        <b style="color:#fff">OpenAI SDK</b> · <code>gpt-4o-mini</code><br/>
+        <b style="color:#fff">Neo4j Aura</b> — kho đồ thị<br/>
+        Gộp tên <b style="color:#fff">theo chữ</b> (không vector)</p>
+    </div>
+    <div class="card">
+      <h3 class="small" style="color:var(--violet)">▦ Truy hồi &amp; Chat</h3>
+      <p class="small muted" style="line-height:1.75">
+        <b style="color:#fff">OpenAI</b> <code>gpt-4o-mini</code> <br/>
+        <b style="color:#fff">OpenAI</b> text-embedding-3-small<br/>
+        <b style="color:#fff">Qdrant</b> + reranker</p>
+    </div>
+    <div class="card">
+      <h3 class="small" style="color:var(--amber)">▦ Hạ tầng</h3>
+      <p class="small muted" style="line-height:1.75">
+        <b style="color:#fff">AWS S3</b> — chunk (read-only)<br/>
+        <b style="color:#fff">Neon</b> Postgres<br/>
+        staging + eval DB</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────── ARCHITECTURE ───────────────── -->
+<section data-transition="slide">
+  <span class="kicker">Kiến trúc</span>
+  <h2 style="margin:.15em 0 .1em">Hai pha — luồng dữ liệu <em>động</em></h2>
+  <svg id="pipe" viewBox="0 0 1240 520" preserveAspectRatio="xMidYMid meet"
+       style="width:100%;height:52vh;display:block;margin:.1em 0"></svg>
+  <div class="why" style="margin-top:.2em">
+    <b>Vì sao tách 2 pha:</b> việc rút fact bằng LLM vừa tốn vừa chậm → làm <b>trước (offline)</b>, lưu lại;
+    lúc hỏi chỉ <b>đọc</b> đồ thị (mili-giây) rồi góp vào danh sách ứng viên. Không làm chậm đường chat.
+  </div>
+</section>
+
+<!-- ───────────────── 3D MAIN FLOW (draggable) ───────────────── -->
+<section data-transition="zoom">
+  <span class="kicker">Luồng chính · 3D</span>
+  <h2 style="margin:.1em 0 .12em">Graph ghép vào pipeline <span class="muted small">— kéo chuột để xoay</span></h2>
+  <div id="flow3d" class="plot" style="height:540px"></div>
+  <p class="tiny muted center">Mặt phẳng = hệ tìm-kiếm <span style="color:var(--violet)">sẵn có</span> ·
+  các node <span style="color:var(--teal)">teal nhô lên</span> = phần Graph thêm vào (dựng offline + kênh thứ 4 lúc hỏi).</p>
+</section>
+
+<!-- ───────────────── OFFLINE OVERVIEW ───────────────── -->
+<section>
+  <section data-transition="slide">
+    <span class="kicker" style="color:var(--cyan);border-color:rgba(34,211,238,.4)">Pha 1 · OFFLINE</span>
+    <h2 style="margin:.2em 0 .5em">Dựng đồ thị — 7 bước (EDC)</h2>
+    <ul class="steps small">
+      <li><span class="n">1</span><span><span class="t">Lấy đoạn (chunk) từ S3 + lọc trùng</span> <span class="d">chỉ đọc · bỏ đoạn trùng y hệt</span></span></li>
+      <li><span class="n">2</span><span><span class="t">Rút fact (E)</span> <span class="d">LLM → bộ ba (chủ thể, quan hệ, đối tượng), ép chủ thể là thực thể chính</span></span></li>
+      <li><span class="n">3</span><span><span class="t">Gom quan hệ (D·C)</span> <span class="d">quan hệ hiếm → gộp về "liên quan"</span></span></li>
+      <li><span class="n">4</span><span><span class="t">Gộp thực thể trùng</span> <span class="d">dấu vân tay tên + gộp nhóm</span></span></li>
+      <li><span class="n">5</span><span><span class="t">Lọc rác</span> <span class="d">bỏ fact dài bất thường (cả mệnh đề)</span></span></li>
+      <li><span class="n">6</span><span><span class="t">Lưu tạm Neon</span> <span class="d">nhớ đoạn đã làm, chạy lại không làm lại</span></span></li>
+      <li><span class="n">7</span><span><span class="t">Ghi vào Neo4j</span> <span class="d">nạp theo lô + giữ đoạn gốc</span></span></li>
+    </ul>
+    <p class="tiny muted center">EDC = Rút tự do → Định nghĩa → Gom về một mối · ↓ bấm xuống xem chi tiết + lý do</p>
+  </section>
+
+  <section data-transition="fade">
+    <h3 class="center" style="margin:.1em 0 .35em"><span class="grad">7 bước — làm gì cụ thể</span></h3>
+    <div class="grid2" style="font-size:.6em; gap:.45em">
+      <div class="card"><b style="color:var(--teal)">1 · Lấy đoạn + lọc trùng</b><br/><span class="muted">đọc các đoạn từ S3 (chỉ đọc); bỏ đoạn <b>trùng y hệt</b> → giữ bản đại diện</span></div>
+      <div class="card"><b style="color:var(--teal)">2 · Rút fact</b><br/><span class="muted">LLM đọc mỗi đoạn → các bộ ba <b>(chủ thể, quan hệ, đối tượng)</b>; ép chủ thể = thực thể chính</span></div>
+      <div class="card"><b style="color:var(--teal)">3 · Gom quan hệ</b><br/><span class="muted">gộp các cách-nói-trùng; quan hệ xuất hiện &lt; 3 lần → gộp về "<b>liên quan</b>"</span></div>
+      <div class="card"><b style="color:var(--teal)">4 · Gộp thực thể trùng</b><br/><span class="muted">tính <b>dấu vân tay tên</b> → tên cùng vân tay gộp thành 1 node</span></div>
+      <div class="card"><b style="color:var(--teal)">5 · Lọc rác</b><br/><span class="muted">bỏ fact mà chủ thể/đối tượng <b>dài bất thường</b> (là cả câu, không phải thực thể)</span></div>
+      <div class="card"><b style="color:var(--teal)">6 · Lưu tạm Neon</b><br/><span class="muted">lưu fact + đánh dấu đoạn đã làm → lần sau <b>bỏ qua</b> đoạn cũ, chỉ làm phần mới</span></div>
+      <div class="card" style="grid-column:1 / -1"><b style="color:var(--teal)">7 · Ghi vào Neo4j</b><br/><span class="muted">nạp node + cạnh <b>theo lô</b>; mỗi cạnh <b>nhớ đoạn gốc</b> để lúc hỏi lần ngược về Qdrant lấy nội dung</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 1 —</span> Lấy đoạn từ S3 + lọc trùng</h3>
+    <p class="small muted">Đọc các đoạn từ S3 (<b>chỉ đọc</b>, không ghi). Bỏ đoạn bị đánh dấu <b>trùng y hệt</b>.
+    Kết quả thật: <b>195/1488</b> đoạn trùng bị loại → còn <b>1293</b> đoạn.</p>
+    <div class="why"><b>Vì sao:</b> S3 chỉ cho đọc. Chỉ giữ bản <b>đại diện</b> để đồ thị không phình vì trùng y hệt;
+    còn đoạn <b>gần giống</b> thì vẫn giữ vì có thể mang thông tin riêng.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 2 —</span> Rút fact bằng LLM</h3>
+    <p class="small muted">Mỗi đoạn → LLM trả các bộ ba <b>(chủ thể — quan hệ → đối tượng)</b> + câu gốc. Prompt
+    <b>ép chủ thể là thực thể chính</b> của đoạn.</p>
+    <div class="why"><b>Vì sao ép:</b> nếu để LLM tự do, nó hay lấy <i>tên thuộc tính</i> làm chủ thể →
+    sinh <b>node mồ côi</b> ("Công suất tối đa" thành một thực thể). Ép vào thực thể chính = đồ thị bám sản phẩm thật.
+    Đây là <b>đòn bẩy chất lượng lớn nhất</b>.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 3 —</span> Gom quan hệ về một mối</h3>
+    <div class="grid2" style="align-items:center">
+      <p class="small muted">Gộp các quan hệ <b>cùng nghĩa</b> (so theo tập từ nội dung), rồi theo <b>độ phổ biến</b>:
+      quan hệ xuất hiện <b>&lt; 3 lần</b> → gộp về "<b>liên quan</b>".</p>
+      <div class="grid2">
+        <div class="stat"><div class="big" style="color:var(--rose)">4952</div><div class="lab">quan hệ thô</div></div>
+        <div class="stat"><div class="big" style="color:var(--teal)">675</div><div class="lab">sau khi gom</div></div>
+      </div>
+    </div>
+    <div class="why"><b>Vì sao:</b> 4952 loại quan hệ = nhiễu, không tra cứu được. Gộp về số ít
+    giúp việc <b>đi trên đồ thị</b> có nghĩa.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 4 —</span> Gộp thực thể trùng — <em>theo chữ</em></h3>
+    <p class="small muted">Tính <b>dấu vân tay tên</b> (bỏ dấu cách + bỏ chữ thương hiệu) → tên cùng vân tay là ứng viên gộp
+    → <b>gộp nhóm</b> các biến thể thành 1 node. ("VF3", "VF 3", "VinFast VF 3" → cùng vân tay <code>vf3</code>.)</p>
+    <div class="why"><b>Vì sao mặc định KHÔNG dùng vector:</b> so từng cặp thực thể bằng vector/LLM vừa tốn vừa
+    <b>kéo nhầm</b> thực thể gần-nghĩa. Mặc định <b>theo chữ</b> (rẻ, chạy lại y hệt); khi cần bật so-nghĩa thì
+    chặn lại (chỉ so vài ứng viên gần nhất) cho khỏi bùng nổ.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 5 —</span> Lọc rác</h3>
+    <p class="small muted">Đặt <b>ngưỡng độ dài tự tính từ dữ liệu</b>: bỏ những fact mà chủ thể/đối tượng/quan hệ
+    <b>dài bất thường</b> (thường là cả một câu, không phải thực thể).</p>
+    <div class="why"><b>Vì sao:</b> LLM đôi khi nhả cả <b>câu</b> làm thực thể. Ngưỡng <b>tự suy từ phân phối dữ liệu</b>
+    (không gõ cứng) nên cắt rác được mà không phụ thuộc con số cố định theo lĩnh vực.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 6 —</span> Lưu tạm Neon (chạy lại không làm lại)</h3>
+    <p class="small muted">Lưu các fact + <b>đánh dấu đoạn đã làm</b> vào Neon. Chạy lại thì
+    <b>không rút lại</b> đoạn cũ; thêm tài liệu mới chỉ làm phần mới.</p>
+    <div class="why"><b>Vì sao:</b> rút cả kho (~1300 đoạn) tốn tiền LLM. Nhớ đoạn đã làm → đổi 1 tài liệu chỉ tốn cho phần đổi,
+    không làm lại từ đầu. Đây là cách chạy thật, không giữ tạm trên RAM.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 7 —</span> Ghi vào Neo4j</h3>
+    <div class="grid2" style="align-items:center">
+      <p class="small muted">Nạp node + cạnh <b>theo lô</b>; tên loại quan hệ <b>sinh động</b> theo từng quan hệ;
+      mỗi cạnh <b>nhớ đoạn gốc</b> (đoạn nào + tài liệu nào).</p>
+      <div class="grid2">
+        <div class="stat"><div class="big" style="color:var(--teal)">5919</div><div class="lab">node (thực thể)</div></div>
+        <div class="stat"><div class="big" style="color:var(--cyan)">7298</div><div class="lab">cạnh (quan hệ)</div></div>
+      </div>
+    </div>
+    <div class="why"><b>Vì sao nhớ đoạn gốc:</b> lúc hỏi cần lần từ quan hệ về <b>đoạn gốc</b> để lấy nội dung từ Qdrant.
+    Không nhớ đoạn gốc thì graph chỉ nói "sự thật" mà không chỉ ra được bằng chứng.</div>
+  </section>
+</section>
+
+<!-- ───────────────── ONLINE OVERVIEW ───────────────── -->
+<section>
+  <section data-transition="slide">
+    <span class="kicker" style="color:var(--violet);border-color:rgba(167,139,250,.4)">Pha 2 · ONLINE</span>
+    <h2 style="margin:.2em 0 .5em">Lúc hỏi — 5 bước</h2>
+    <ul class="steps v small">
+      <li><span class="n">1</span><span><span class="t">Nạp đồ thị vào bộ nhớ</span> <span class="d">chuẩn hoá giống hệt lúc dựng</span></span></li>
+      <li><span class="n">2</span><span><span class="t">Nhận diện thực thể trong câu</span> <span class="d">dò cụm từ → ra "điểm vào" đồ thị</span></span></li>
+      <li><span class="n">3</span><span><span class="t">Đi trên đồ thị + chấm điểm theo câu hỏi</span> <span class="d">gần hơn nặng điểm + khớp câu hỏi</span></span></li>
+      <li><span class="n">4</span><span><span class="t">Trộn vào — kênh thứ 4</span> <span class="d">+ lấy nội dung đoạn từ Qdrant</span></span></li>
+      <li><span class="n">5</span><span><span class="t">Generator dùng các đoạn đã trộn</span> <span class="d">graph đã góp đoạn vào danh sách</span></span></li>
+    </ul>
+  </section>
+
+  <section data-transition="fade">
+    <h3 class="center" style="margin:.1em 0 .35em"><span class="grad">5 bước — bước MỚI làm gì</span></h3>
+    <div class="grid2" style="font-size:.6em; gap:.45em">
+      <div class="card"><b style="color:var(--violet)">1 · Nạp đồ thị vào bộ nhớ</b> <span class="tag kg">mới</span><br/><span class="muted">đọc đồ thị từ Neo4j → đánh "dấu vân tay" cho thực thể, <b>đúng cách chuẩn hoá lúc dựng</b></span></div>
+      <div class="card"><b style="color:var(--violet)">2 · Nhận diện thực thể</b> <span class="tag kg">mới</span><br/><span class="muted">dò các cụm từ trong câu hỏi → tính vân tay → tra xem trùng node nào → ra "điểm vào"</span></div>
+      <div class="card"><b style="color:var(--violet)">3 · Đi đồ thị + chấm điểm theo câu hỏi</b> <span class="tag kg">mới</span><br/><span class="muted">từ điểm vào đi qua các liên kết; đoạn nào <b>khớp đúng ý câu hỏi</b> được điểm cao → nổi lên top</span></div>
+      <div class="card"><b style="color:var(--violet)">4 · Trộn — kênh thứ 4</b> <span class="tag kg">chèn vào</span><br/><span class="muted">trộn đoạn của graph cùng 3 kênh vector sẵn có; <b>lấy nội dung text từ Qdrant</b></span></div>
+      <div class="card" style="grid-column:1 / -1"><b style="color:var(--violet)">5 · Generator dùng các đoạn đã trộn</b><br/><span class="muted">trả lời dựa trên danh sách đoạn sau khi trộn (graph đã góp đoạn). Các "fact dạng bộ ba" <b>có sẵn nhưng chưa nối vào prompt</b> — hướng mở rộng.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 1 —</span> Nạp đồ thị + chuẩn hoá <em>giống lúc dựng</em></h3>
+    <p class="small muted">Đánh "dấu vân tay" cho mỗi thực thể — <b>dùng lại đúng cách của lúc dựng</b>
+    (bỏ dấu cách + bỏ chữ thương hiệu): "VF3" / "VF 3" / "VinFast VF 3" → cùng vân tay <code>vf3</code>.</p>
+    <div class="why"><b>Vì sao phải giống nhau:</b> nếu lúc hỏi chuẩn hoá khác lúc dựng → tìm trượt, không khớp node.
+    Một lỗi từng gặp ("VF3" vs "VF 3") đã sửa bằng cách <b>dùng lại</b> đúng hàm của lúc dựng.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 2 —</span> Nhận diện thực thể trong câu</h3>
+    <p class="small muted">Dò các cụm từ liên tiếp trong câu hỏi, tính vân tay từng cụm, tra xem trùng node nào.
+    Xếp ưu tiên theo (loại thực thể, độ dài tên).</p>
+    <div class="why"><b>Vì sao dò cụm + ưu tiên:</b> tránh bắt nhầm phần con ("pin" trong "pin LFP"),
+    và ưu tiên thực thể thật (sản phẩm/hãng/chính sách) hơn các node thuộc-tính bị rút lẫn.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 3 —</span> Đi đồ thị + chấm điểm <em>theo câu hỏi</em></h3>
+    <p class="small muted">Từ điểm vào, đi qua các liên kết (càng xa càng nhẹ điểm). Mỗi đoạn được chấm =
+    <b>độ gần × độ-khớp-câu-hỏi</b> — độ khớp = đếm số từ chung giữa câu hỏi và câu gốc của liên kết.</p>
+    <div class="why"><b>Vì sao chấm theo câu hỏi:</b> nếu chỉ tính độ gần thì thực thể có quá nhiều liên kết sẽ
+    <b>pha loãng</b> đoạn đúng; liên kết nói đúng thứ câu hỏi hỏi mới được đẩy lên top. (Bỏ chữ tên thực thể · tối đa 2 điểm-vào.)</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 4 —</span> Trộn vào · kênh thứ tư</h3>
+    <p class="small muted">Đoạn của graph được <b>trộn</b> cùng 3 kênh vector sẵn có (ngữ nghĩa + từ khoá + câu-hỏi-mẫu)
+    bằng cách <b>gộp xếp hạng (RRF)</b>. Graph chỉ có mã đoạn → <b>lấy nội dung text từ Qdrant</b>.</p>
+    <div class="why"><b>Vì sao trộn, không thay vector:</b> giữ thế mạnh của vector, chỉ <b>thêm một lá phiếu</b>.
+    Mỗi đoạn giữ nhãn "do kênh nào kéo về" để dễ kiểm ai tìm được gì.</div>
+  </section>
+
+  <section>
+    <h3><span class="grad">Bước 5 —</span> Generator dùng các đoạn đã trộn</h3>
+    <p class="small muted">Generator nhận danh sách đoạn <b>sau khi trộn 4 kênh</b> — graph đã góp đoạn của nó vào —
+    rồi viết câu trả lời dựa trên các đoạn này.</p>
+    <div class="why"><b>Mở rộng (chưa nối):</b> graph còn dựng sẵn các <b>fact dạng bộ ba</b> (chủ thể — quan hệ → đối tượng)
+    đã đi qua liên kết; đưa thẳng vào prompt là bước nâng cấp tiếp theo (hiện <b>chưa</b> nối vào generator).</div>
+  </section>
+</section>
+
+<!-- ───────────────── 3D KNOWLEDGE GRAPH ───────────────── -->
+<section data-transition="zoom">
+  <span class="kicker">Trực quan</span>
+  <h2 style="margin:.1em 0 .2em">Knowledge Graph 3D <span class="muted small">(xoay / zoom được)</span></h2>
+  <div id="kg3d" class="plot"></div>
+  <p class="tiny muted center">Mô phỏng cấu trúc thật: VinFast → sản phẩm → thông số/chính sách; mỗi cạnh nhớ đoạn gốc.</p>
+</section>
+
+<!-- ───────────────── METRIC ───────────────── -->
+<section data-transition="slide">
+  <span class="kicker" style="color:var(--amber);border-color:rgba(251,191,36,.4)">Đo lường</span>
+  <h2 style="margin:.1em 0 .4em">Metric mới: <span class="grad">coverage@5</span></h2>
+  <div class="grid2">
+    <div class="card">
+      <h3 class="small">Vì sao recall@5 chưa đủ</h3>
+      <p class="small muted">Câu cần 3 đoạn, lấy được 2/3 → recall = <b>0.67</b> trông "ổn" —
+      nhưng <b>không trả lời được</b> vì thiếu mắt xích.</p>
+    </div>
+    <div class="card">
+      <h3 class="small">coverage@5 = 1 ⇔ lấy ĐỦ</h3>
+      <p class="small muted">Bằng 1 chỉ khi lấy được <b>TẤT CẢ</b> đoạn cần trong 5 đoạn đầu, thiếu 1 cũng = 0.
+      Phạt nguyên câu → đúng kiểu câu <b>ghép nhiều đoạn</b>, <b>lộ lợi thế graph</b>.</p>
+    </div>
+  </div>
+  <div class="why" style="margin-top:.7em"><b>Bộ kiểm tra:</b> 50 câu ghép-nhiều-đoạn sinh <b>từ đoạn thật</b> (công bằng, không từ graph),
+  đã kiểm <b>đều có trong Qdrant</b>. So <b>Graph TẮT vs BẬT</b> trên coverage@5.</div>
+</section>
+
+<!-- ───────────────── FINDINGS: A/B + diagnosis + fix ───────────────── -->
+<section>
+  <section data-transition="slide">
+    <span class="kicker" style="color:var(--rose);border-color:rgba(251,113,133,.4)">Kết quả &amp; chẩn đoán</span>
+    <h2 style="margin:.1em 0 .35em">Graph chưa thắng — vì sao?</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="small" style="color:var(--rose)">Chạy thử (TẮT vs BẬT graph)</h3>
+        <p class="small muted">coverage@5 <b>0.24 → 0.24</b> (không đổi), recall −1.3%, trích dẫn −8.3%.
+        Graph chen đoạn mới (68% câu) nhưng <b>đa số sai</b>.</p>
+      </div>
+      <div class="card">
+        <h3 class="small" style="color:var(--teal)">Đối chứng: câu sinh-từ-graph</h3>
+        <p class="small muted">Graph <b>TÌM ĐÚNG</b> đoạn cần (77–91% có trong số trả về) nhưng <b>XẾP HẠNG</b>
+        chôn xuống dưới (chỉ 7% có đủ đoạn cần trong 5 đoạn đầu).</p>
+      </div>
+    </div>
+    <div class="why" style="margin-top:.55em"><b>Thủ phạm:</b> cách chấm điểm đoạn <b>không nhìn câu hỏi</b> (cộng đều mọi liên kết)
+    → thực thể có quá nhiều liên kết làm <b>pha loãng</b> đoạn cần. KHÔNG phải lỗi câu hỏi, KHÔNG phải nhận-diện-thực-thể (0 trượt).</div>
+    <p class="tiny muted center" style="margin-top:.3em">↓ cách sửa</p>
+  </section>
+
+  <section data-transition="fade">
+    <h3 class="center" style="margin:.1em 0 .35em"><span class="grad">Cách sửa: chấm điểm theo câu hỏi</span></h3>
+    <div class="grid2" style="font-size:.62em; gap:.5em">
+      <div class="card"><b style="color:var(--rose)">Trước</b><br/><span class="muted">điểm = <b>chỉ tính độ gần</b><br/>mọi liên kết cộng đều → đoạn cần bị pha loãng</span></div>
+      <div class="card"><b style="color:var(--teal)">Sau</b><br/><span class="muted">điểm = <b>độ gần × độ-khớp-câu-hỏi</b><br/>khớp = số từ chung giữa câu hỏi và câu gốc của liên kết</span></div>
+    </div>
+    <div class="why" style="margin-top:.5em"><b>Thêm:</b> bỏ chữ tên thực thể (có trong mọi liên kết → nhiễu) ·
+    giảm số điểm-vào 3→2 · các mức này chỉnh được qua cấu hình.<br/>
+    <b>Sơ bộ (đo offline):</b> graph đưa ≥1 đoạn cần vào 5 đoạn đầu <b>23% → 44%</b>; số chạy cả pipeline <b>đang chạy lại</b>.</div>
+  </section>
+</section>
+
+<!-- ───────────────── CLOSE ───────────────── -->
+<section data-transition="zoom" class="center">
+  <h2 class="grad" style="font-size:1.8em">Tóm lại</h2>
+  <div class="grid3" style="margin-top:.6em">
+    <div class="card"><div class="stat"><div class="big grad">2 pha</div></div><p class="tiny muted">Dựng trước (lưu lại) · Lúc hỏi đọc mili-giây</p></div>
+    <div class="card"><div class="stat"><div class="big grad">kênh #4</div></div><p class="tiny muted">Trộn thêm — không thay vector</p></div>
+    <div class="card"><div class="stat"><div class="big grad">ghép-nhiều-đoạn</div></div><p class="tiny muted">đo bằng coverage@5</p></div>
+  </div>
+  <p class="small muted" style="margin-top:1.2em">Mọi lựa chọn <b>suy từ dữ liệu</b>, không gõ cứng theo lĩnh vực ·
+  gộp tên theo chữ thay vì vector · <b>nhớ đoạn gốc</b> là chìa khoá nối graph ↔ vector.</p>
+  <p class="muted tiny" style="margin-top:1.4em">Cảm ơn — Q&amp;A</p>
+</section>
+
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  const deck = new Reveal({
+    hash:true, transition:'slide', transitionSpeed:'default',
+    backgroundTransition:'fade', controls:true, progress:true, center:true,
+    plugins:[ RevealHighlight, RevealNotes ],
+  });
+  deck.initialize().then(() => { drawCharts(); drawPipeline(); });
+  deck.on('slidechanged', () => {
+    if(typeof Plotly==='undefined') return;
+    ['kg3d','flow3d'].forEach(id=>{ const el=document.getElementById(id);
+      if(el && el.data) Plotly.Plots.resize(el); });
+  });
+
+  // ── animated knowledge-graph background (canvas) ──────────────────────────
+  (function(){
+    const c=document.getElementById('bg-canvas'), x=c.getContext('2d');
+    let W,H,P=[]; const N=70;
+    function rs(){ W=c.width=innerWidth; H=c.height=innerHeight; }
+    rs(); addEventListener('resize',rs);
+    for(let i=0;i<N;i++) P.push({x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*.35, vy:(Math.random()-.5)*.35});
+    function loop(){
+      x.clearRect(0,0,W,H);
+      for(const p of P){ p.x+=p.vx; p.y+=p.vy;
+        if(p.x<0||p.x>W)p.vx*=-1; if(p.y<0||p.y>H)p.vy*=-1; }
+      for(let i=0;i<N;i++){ for(let j=i+1;j<N;j++){
+        const a=P[i],b=P[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+        if(d<140){ x.strokeStyle='rgba(45,212,191,'+(0.16*(1-d/140))+')';
+          x.lineWidth=1; x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(b.x,b.y); x.stroke(); } } }
+      for(const p of P){ x.fillStyle='rgba(34,211,238,.55)';
+        x.beginPath(); x.arc(p.x,p.y,1.7,0,7); x.fill(); }
+      requestAnimationFrame(loop);
+    } loop();
+  })();
+
+  // ── Plotly: 3D knowledge graph + 3D bars ──────────────────────────────────
+  function drawCharts(){
+    if(typeof Plotly==='undefined') return;
+    // representative graph: org -> products -> attributes/policies
+    const products=['VF 3','Minio Green','Herio Green','Limo Green','Klara','Vento','Feliz'];
+    const attrs=['range','công suất','pin','giá','bảo hành','sạc DC'];
+    const nx=[],ny=[],nz=[],ntext=[],ncol=[],nsize=[];
+    const ex=[],ey=[],ez=[];
+    // center org
+    nx.push(0);ny.push(0);nz.push(0);ntext.push('VinFast');ncol.push('#fbbf24');nsize.push(11);
+    const R=6;
+    products.forEach((p,i)=>{
+      const a=i/products.length*Math.PI*2, px=R*Math.cos(a), py=R*Math.sin(a), pz=(i%2?2.2:-2.2);
+      nx.push(px);ny.push(py);nz.push(pz);ntext.push(p);ncol.push('#2dd4bf');nsize.push(8);
+      ex.push(0,px,null); ey.push(0,py,null); ez.push(0,pz,null);            // org->product
+      // each product gets 3 attribute leaves
+      for(let k=0;k<3;k++){
+        const aa=attrs[(i+k)%attrs.length];
+        const ang=a+(k-1)*0.42, rr=R+3.4;
+        const axp=rr*Math.cos(ang), ayp=rr*Math.sin(ang), azp=pz+(k-1)*1.7;
+        nx.push(axp);ny.push(ayp);nz.push(azp);ntext.push(p+' · '+aa);ncol.push('#a78bfa');nsize.push(5);
+        ex.push(px,axp,null); ey.push(py,ayp,null); ez.push(pz,azp,null);    // product->attr
+      }
+    });
+    const edges={type:'scatter3d',mode:'lines',x:ex,y:ey,z:ez,
+      line:{color:'rgba(150,170,210,.35)',width:2},hoverinfo:'none'};
+    const nodes={type:'scatter3d',mode:'markers',x:nx,y:ny,z:nz,text:ntext,
+      hoverinfo:'text',marker:{size:nsize,color:ncol,opacity:.95,
+      line:{color:'rgba(255,255,255,.25)',width:.5}}};
+    const layout3d={ paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+      showlegend:false, margin:{l:0,r:0,t:0,b:0},
+      scene:{ xaxis:hideAx(), yaxis:hideAx(), zaxis:hideAx(),
+        camera:{eye:{x:1.5,y:1.5,z:1.1}}, bgcolor:'rgba(0,0,0,0)' } };
+    Plotly.newPlot('kg3d',[edges,nodes],layout3d,{displayModeBar:false,responsive:true});
+    mainFlow3D();
+  }
+  function hideAx(){ return {showgrid:false,zeroline:false,showticklabels:false,title:'',
+    showbackground:false,showspikes:false}; }
+
+  // ── animated MAIN pipeline with graph additions highlighted ───────────────
+  let pipeBuilt=false;
+  function drawPipeline(){
+    const svg=document.getElementById('pipe'); if(!svg || pipeBuilt) return; pipeBuilt=true;
+    const NS='http://www.w3.org/2000/svg';
+    const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+    const VO='#a78bfa', TE='#2dd4bf', TC='#22d3ee';   // VO=sẵn có · TE/TC=thêm vào
+    // k: 'x' existing pipeline · 'a' added graph
+    const N=[
+      {x:110,y:74, ic:'🪣',l:'S3 chunks',  k:'x'},                          //0
+      {x:345,y:74, ic:'🧹',l:'Dedup L1–3', k:'x'},                          //1
+      {x:580,y:74, ic:'🔢',l:'Embedding',  k:'x'},                          //2
+      {x:815,y:74, ic:'📦',l:'Qdrant',     k:'x'},                          //3
+      {x:370,y:190,ic:'🧠',l:'Extract',    k:'a', badge:'＋ KG offline'},   //4
+      {x:612,y:190,ic:'🔗',l:'Resolve·Canon',k:'a'},                        //5
+      {x:850,y:190,ic:'💾',l:'Neon cache', k:'a'},                          //6
+      {x:1092,y:190,ic:'🕸️',l:'Neo4j Aura',k:'a'},                         //7
+      {x:110,y:452,ic:'❓',l:'Query',      k:'x'},                          //8
+      {x:362,y:452,ic:'🔎',l:'Hybrid d+s+Qidx',k:'x'},                      //9
+      {x:632,y:452,ic:'⚗️',l:'RRF fuse',   k:'x'},                          //10
+      {x:888,y:452,ic:'🎚️',l:'Rerank',     k:'x'},                          //11
+      {x:1120,y:452,ic:'✍️',l:'Generator', k:'x'},                          //12
+      {x:632,y:322,ic:'🧭',l:'Link·Traverse',k:'a', badge:'＋ kênh #4'},    //13
+    ];
+    // edge kind: 'x' existing(violet) · 'a' added(teal) · 'b' bridge offline→online(cyan)
+    const E=[
+      [0,1,'x'],[1,2,'x'],[2,3,'x'],[3,9,'x'],
+      [8,9,'x'],[9,10,'x'],[10,11,'x'],[11,12,'x'],
+      [1,4,'a'],[4,5,'a'],[5,6,'a'],[6,7,'a'],
+      [8,13,'a'],[7,13,'b'],[13,10,'a'],
+    ];
+    const COL={x:VO,b:TC,a:TE}, col=k=>COL[k]||TE;
+
+    const parts=[];
+    E.forEach(([i,j,k])=>{
+      const a=N[i],b=N[j], mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1;
+      const bend=(k==='x'?26:60)*(((i+j)%2)?1:-1);
+      const c={x:mx+(-dy/L)*bend, y:my+(dx/L)*bend};
+      const d=`M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`, color=col(k), add=k!=='x';
+      svg.appendChild(mk('path',{d,fill:'none',stroke:color,'stroke-width':add?3.5:3,
+        'stroke-opacity':add?.45:.2,'stroke-linecap':'round'}));
+      const fl=mk('path',{d,fill:'none',stroke:color,'stroke-width':add?3.5:3,
+        'stroke-opacity':add?.7:.4,'stroke-dasharray':'2 26','stroke-linecap':'round'});
+      fl.setAttribute('class','track'); svg.appendChild(fl);
+      const n=add?4:3; for(let p=0;p<n;p++) parts.push({a,c,b,el:null,ph:p/n,add,color});
+    });
+    parts.forEach(p=>{ const ci=mk('circle',{r:p.add?4.6:3.6,fill:p.color});
+      ci.style.filter='drop-shadow(0 0 7px '+p.color+')'; svg.appendChild(ci); p.el=ci; });
+
+    // nodes
+    N.forEach(p=>{
+      const color=col(p.k), w=176,h=48, add=p.k==='a', g=mk('g',{});
+      g.appendChild(mk('circle',{cx:p.x,cy:p.y,r:34,fill:color,class:'pulse'}));
+      if(add) g.appendChild(mk('rect',{x:p.x-w/2-5,y:p.y-h/2-5,width:w+10,height:h+10,rx:18,
+        fill:'none',stroke:color,'stroke-opacity':.55,'stroke-dasharray':'4 5','stroke-width':1.4}));
+      const r=mk('rect',{x:p.x-w/2,y:p.y-h/2,width:w,height:h,rx:14,
+        fill:add?'rgba(8,28,28,.95)':'rgba(11,17,40,.95)',stroke:color,'stroke-width':add?2.2:1.4});
+      r.style.filter='drop-shadow(0 10px 18px rgba(0,0,0,.55))'; g.appendChild(r);
+      const tx=mk('text',{x:p.x,y:p.y+6,'text-anchor':'middle',fill:'#eef2fb','font-size':16,'font-weight':700});
+      tx.textContent=p.ic+'  '+p.l; g.appendChild(tx);
+      if(p.badge){ const by=p.y-h/2-20;
+        g.appendChild(mk('rect',{x:p.x-64,y:by-14,width:128,height:22,rx:11,fill:color}));
+        const bt=mk('text',{x:p.x,y:by+2,'text-anchor':'middle',fill:'#04121a','font-size':12.5,'font-weight':800});
+        bt.textContent=p.badge; g.appendChild(bt); }
+      svg.appendChild(g);
+    });
+
+    // lane labels
+    const lbl=(x,y,t,c,sz,an)=>{const e=mk('text',{x,y,fill:c,'font-size':sz||14,'font-weight':800,
+      'letter-spacing':'.1em','text-anchor':an||'start'}); e.textContent=t; svg.appendChild(e);};
+    lbl(16,26,'INGESTION (offline)',VO,14);
+    lbl(16,510,'TRUY HỒI (online)',VO,14);
+    lbl(1228,26,'■ teal = phần GRAPH thêm vào',TE,13,'end');
+
+    // animate
+    const B=(t,a,c,b)=>{const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};};
+    const t0=performance.now();
+    (function loop(now){ const s=(now-t0)/1000;
+      parts.forEach(p=>{ const sp=p.add?.2:.26, t=((s*sp)+p.ph)%1, q=B(t,p.a,p.c,p.b);
+        p.el.setAttribute('cx',q.x); p.el.setAttribute('cy',q.y);
+        p.el.setAttribute('opacity',.35+.65*Math.sin(t*Math.PI)); });
+      requestAnimationFrame(loop);
+    })(performance.now());
+  }
+
+  // ── 3D draggable main-flow (graph additions lifted above the plane) ───────
+  function mainFlow3D(){
+    if(typeof Plotly==='undefined' || !document.getElementById('flow3d')) return;
+    const P={
+      S3:[0,1,0],Dedup:[1.4,1,0],Embed:[2.8,1,0],Qdrant:[4.2,1,0],
+      Query:[0,-1,0],Hybrid:[1.4,-1,0],RRF:[2.8,-1,0],Rerank:[4.2,-1,0],Gen:[5.6,-1,0],
+      Extract:[1.4,1,1.3],Resolve:[2.3,1,1.55],Neon:[3.2,1,1.3],Neo4j:[4.2,1,1.65],Link:[2.8,0,1.05],
+    };
+    const exL={S3:'S3',Dedup:'Dedup',Embed:'Embed',Qdrant:'Qdrant',Query:'Query',
+      Hybrid:'Hybrid',RRF:'RRF',Rerank:'Rerank',Gen:'Generator'};
+    const adL={Extract:'Extract',Resolve:'Resolve·Canon',Neon:'Neon',Neo4j:'Neo4j',Link:'Link·Traverse'};
+    const pack=(keys,L)=>{const o={x:[],y:[],z:[],t:[]};keys.forEach(k=>{o.x.push(P[k][0]);o.y.push(P[k][1]);
+      o.z.push(P[k][2]);o.t.push(L[k]);});return o;};
+    const ex=pack(Object.keys(exL),exL), ad=pack(Object.keys(adL),adL);
+    const seg=arr=>{const x=[],y=[],z=[];arr.forEach(([a,b])=>{x.push(P[a][0],P[b][0],null);
+      y.push(P[a][1],P[b][1],null);z.push(P[a][2],P[b][2],null);});return{x,y,z};};
+    const Ex=seg([['S3','Dedup'],['Dedup','Embed'],['Embed','Qdrant'],['Qdrant','Hybrid'],
+      ['Query','Hybrid'],['Hybrid','RRF'],['RRF','Rerank'],['Rerank','Gen']]);
+    const Ad=seg([['Dedup','Extract'],['Extract','Resolve'],['Resolve','Neon'],['Neon','Neo4j'],
+      ['Query','Link'],['Neo4j','Link'],['Link','RRF']]);
+    const traces=[
+      {type:'scatter3d',mode:'lines',x:Ex.x,y:Ex.y,z:Ex.z,line:{color:'rgba(167,139,250,.55)',width:4},hoverinfo:'none'},
+      {type:'scatter3d',mode:'lines',x:Ad.x,y:Ad.y,z:Ad.z,line:{color:'#2dd4bf',width:7},hoverinfo:'none'},
+      {type:'scatter3d',mode:'markers+text',x:ex.x,y:ex.y,z:ex.z,text:ex.t,textposition:'bottom center',
+        textfont:{color:'#c9d3ea',size:12},name:'pipeline sẵn có',
+        marker:{size:6,color:'#a78bfa',opacity:.95,line:{color:'#fff',width:.5}},hoverinfo:'text'},
+      {type:'scatter3d',mode:'markers+text',x:ad.x,y:ad.y,z:ad.z,text:ad.t,textposition:'top center',
+        textfont:{color:'#7df3df',size:13},name:'＋ phần Graph',
+        marker:{size:11,color:'#2dd4bf',symbol:'diamond',opacity:1,line:{color:'#fff',width:1}},hoverinfo:'text'},
+    ];
+    Plotly.newPlot('flow3d',traces,{paper_bgcolor:'rgba(0,0,0,0)',showlegend:true,
+      legend:{font:{color:'#cdd6ee'},x:.02,y:.98},margin:{l:0,r:0,t:0,b:0},
+      scene:{xaxis:hideAx(),yaxis:hideAx(),zaxis:hideAx(),bgcolor:'rgba(0,0,0,0)',
+        camera:{eye:{x:1.7,y:1.7,z:.9}}}},{displayModeBar:false,responsive:true});
+  }
+</script>
+</body>
+</html>
