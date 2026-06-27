@@ -13,6 +13,7 @@ type RetrievalConfig = {
   metadata_boosting_enabled: boolean;
   question_index_enabled: boolean;
   entity_prefilter_llm: boolean;
+  graph_retrieval_enabled: boolean;
   question_min_score: number | null;
   exclude_dedup_layers: string[];
 };
@@ -39,6 +40,7 @@ const TOGGLES: { key: keyof RetrievalConfig; label: string; hint: string }[] = [
   { key: "metadata_boosting_enabled", label: "Metadata boosting", hint: "Tăng/giảm điểm theo document_type × độ mới × dedup." },
   { key: "question_index_enabled", label: "Question-index retriever", hint: "Đường thứ 3 (RRF): khớp câu hỏi người dùng với câu hỏi của chunk." },
   { key: "entity_prefilter_llm", label: "LLM map entity", hint: "Khi từ điển không bắt được, dùng LLM đoán entity. Chỉ tác dụng khi hard filter bật." },
+  { key: "graph_retrieval_enabled", label: "Graph retrieval (KG)", hint: "Đường RRF: liên kết câu hỏi với thực thể trong knowledge-graph (Neo4j), đi quan hệ và trộn chunk dẫn chứng." },
 ];
 
 function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {

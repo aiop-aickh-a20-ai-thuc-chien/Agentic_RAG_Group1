@@ -115,7 +115,8 @@ def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
 
     assert [result.chunk.chunk_id for result in fused] == ["chunk-b", "chunk-a", "chunk-c"]
     assert fused[0].score > fused[1].score
-    assert fused[0].retriever == "hybrid"
+    # fused chunk now carries the source channels that produced it (was generic "hybrid")
+    assert fused[0].retriever == "bm25+dense"
 
 
 def test_rrf_fusion_deduplicates_duplicate_chunk_ids_within_one_retriever() -> None:
@@ -158,7 +159,8 @@ def test_rrf_fusion_respects_top_k_and_reassigns_hybrid_ranks() -> None:
     )
 
     assert [result.rank for result in fused] == [1, 2]
-    assert [result.retriever for result in fused] == ["hybrid", "hybrid"]
+    # single-channel chunks keep their source label (was generic "hybrid")
+    assert [result.retriever for result in fused] == ["bm25", "bm25"]
     assert [result.chunk.chunk_id for result in fused] == ["chunk-a", "chunk-b"]
 
 
@@ -327,7 +329,8 @@ def test_rerank_orders_by_candidate_score_and_reassigns_rerank_ranks(
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-b", "chunk-c"]
     assert [result.rank for result in reranked] == [1, 2]
-    assert [result.retriever for result in reranked] == ["rerank", "rerank"]
+    # rerank now preserves each candidate's source channel (was overwritten to "rerank")
+    assert [result.retriever for result in reranked] == ["hybrid", "hybrid"]
 
 
 def test_rerank_deduplicates_candidates_by_best_rank(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -373,7 +376,8 @@ def test_rerank_uses_sentence_transformers_when_configured(monkeypatch: pytest.M
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-b", "chunk-c"]
     assert [result.score for result in reranked] == [0.95, 0.4]
-    assert [result.retriever for result in reranked] == ["rerank", "rerank"]
+    # rerank now preserves each candidate's source channel (was overwritten to "rerank")
+    assert [result.retriever for result in reranked] == ["hybrid", "hybrid"]
 
 
 def test_rerank_with_metadata_reports_actual_sentence_transformers_provider(

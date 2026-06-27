@@ -10,11 +10,11 @@ import { cn } from "@/lib/utils";
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const DETAIL_PAGE_SIZE = 50;
 
-type Dataset = { id: string; name: string; is_benchmark: boolean };
+type Dataset = { id: string; name: string; is_benchmark: boolean; is_multihop?: boolean };
 type RunSummary = {
   run_id: string; name: string; config: Record<string, unknown>;
   total_questions: number;
-  avg_recall: number | null; avg_mrr: number | null;
+  avg_recall: number | null; avg_coverage_at_5: number | null; avg_mrr: number | null;
   avg_citation: number | null; guardrail_rate: number | null;
   has_ragas: boolean;
   avg_ragas_faithfulness: number | null; avg_ragas_relevancy: number | null;
@@ -29,7 +29,7 @@ type Result = {
   rag_context: string | null; bot_response: string | null;
   bot_citations: unknown; trace_url: string | null;
   retrieved_top5_ids: string[] | null; ground_truth_rank: number | null;
-  recall_at_5: number | null; mrr_at_5: number | null;
+  recall_at_5: number | null; coverage_at_5: number | null; mrr_at_5: number | null;
   citation_chunk_match: number | null; guardrail_pass: boolean | null;
   ragas_faithfulness: number | null; ragas_answer_relevancy: number | null;
   ragas_context_precision: number | null; ragas_context_recall: number | null;
@@ -103,7 +103,7 @@ function ResultDetail({ r, label, accent }: { r: Result | null; label: string; a
       {r.bot_response && (
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Bot response</p>
-          <div className="bg-white border border-black/8 rounded-lg px-3 py-2 text-gray-700 leading-relaxed max-h-36 overflow-y-auto text-xs">
+          <div className="bg-white border border-black/8 rounded-lg px-3 py-2 text-gray-700 leading-relaxed text-xs">
             {r.bot_response}
           </div>
         </div>
@@ -128,6 +128,7 @@ function ResultDetail({ r, label, accent }: { r: Result | null; label: string; a
         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
           {[
             ["Recall@5",     fmtPct(r.recall_at_5)],
+            ["Coverage@5",   fmtPct(r.coverage_at_5)],
             ["MRR@5",        fmtPct(r.mrr_at_5)],
             ["Citation",     fmtPct(r.citation_chunk_match)],
             ["Faithfulness", fmtPct(r.ragas_faithfulness)],
@@ -191,6 +192,7 @@ function ConfigDiff({ a, b, nameA, nameB }: {
 // ── Chart xu hướng metric qua các run (cũ → mới) ─────────────────────────────
 const TREND_LINES = [
   { key: "recall",       label: "Recall@5",     color: "#059669" },
+  { key: "coverage5",    label: "Coverage@5",   color: "#0d9488" },
   { key: "mrr",          label: "MRR@5",        color: "#2563eb" },
   { key: "citation",     label: "Citation",     color: "#7c3aed" },
   { key: "guardrail",    label: "Guardrail",    color: "#6b7280" },
@@ -204,6 +206,7 @@ function TrendChart({ runs }: Readonly<{ runs: RunSummary[] }>) {
   const data = runs.map((r) => ({
     name: r.name,
     recall: r.avg_recall,
+    coverage5: r.avg_coverage_at_5,
     mrr: r.avg_mrr,
     citation: r.avg_citation,
     guardrail: r.guardrail_rate,
@@ -433,6 +436,7 @@ export default function EvalComparePage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Version</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-24">Câu chạy</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Recall@5</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-teal-600 w-28" title="Lấy ĐỦ tất cả chunk ground-truth trong top-5 — metric multi-hop">Coverage@5</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">MRR@5</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Citation</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 w-28">Guardrail</th>
@@ -464,6 +468,7 @@ export default function EvalComparePage() {
                       <span className="text-gray-600 tabular-nums">{run.total_questions.toLocaleString()}</span>
                     </td>
                     <MetricCell v={run.avg_recall}    prev={prev?.avg_recall} />
+                    <MetricCell v={run.avg_coverage_at_5} prev={prev?.avg_coverage_at_5} />
                     <MetricCell v={run.avg_mrr}       prev={prev?.avg_mrr} />
                     <MetricCell v={run.avg_citation}  prev={prev?.avg_citation} />
                     <MetricCell v={run.guardrail_rate} prev={prev?.guardrail_rate} />
@@ -477,7 +482,7 @@ export default function EvalComparePage() {
               {/* Run kế thừa từ dataset khác — hiển thị phân cách + badge coverage */}
               {inheritedRuns.length > 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-2 bg-gray-50/80 border-t border-dashed border-black/10">
+                  <td colSpan={11} className="px-4 py-2 bg-gray-50/80 border-t border-dashed border-black/10">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                       Run kế thừa từ dataset khác — điểm tính trên {runs[0]?.coverage_total ?? "?"} câu chung
                     </span>
@@ -504,6 +509,7 @@ export default function EvalComparePage() {
                     <span className="text-gray-400 tabular-nums">{run.coverage.toLocaleString()}</span>
                   </td>
                   <MetricCell v={run.avg_recall} />
+                  <MetricCell v={run.avg_coverage_at_5} />
                   <MetricCell v={run.avg_mrr} />
                   <MetricCell v={run.avg_citation} />
                   <MetricCell v={run.guardrail_rate} />
@@ -655,6 +661,7 @@ export default function EvalComparePage() {
                   <tr className="border-b border-black/6 bg-gray-50/40 text-xs font-semibold uppercase tracking-wider text-gray-500">
                     <th className="px-4 py-3 text-left">Câu hỏi</th>
                     <th className="px-2 py-3 text-center">Recall</th>
+                    <th className="px-2 py-3 text-center text-teal-600">Cover</th>
                     <th className="px-2 py-3 text-center">MRR</th>
                     <th className="px-2 py-3 text-center">Citation</th>
                     <th className="px-2 py-3 text-center">Faith</th>
@@ -670,12 +677,13 @@ export default function EvalComparePage() {
                     const isExp = expanded === questionId;
                     return (
                       <React.Fragment key={questionId}>
-                        <tr className="hover:bg-gray-50/40 transition-colors">
+                        <tr onClick={() => setExpanded(isExp ? null : questionId)} className="hover:bg-gray-50/40 transition-colors cursor-pointer">
                           <td className="px-4 py-2.5 max-w-xs">
                             <p className="text-gray-800 line-clamp-1 text-sm">{q?.question ?? questionId}</p>
                             {q?.section && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 inline-block truncate max-w-[200px]">{q.section}</span>}
                           </td>
                           <CmpCell a={a?.recall_at_5 ?? null}             b={b?.recall_at_5 ?? null} />
+                          <CmpCell a={a?.coverage_at_5 ?? null}           b={b?.coverage_at_5 ?? null} good={1} bad={1} />
                           <CmpCell a={a?.mrr_at_5 ?? null}                b={b?.mrr_at_5 ?? null} />
                           <CmpCell a={a?.citation_chunk_match ?? null}    b={b?.citation_chunk_match ?? null} />
                           <CmpCell a={a?.ragas_faithfulness ?? null}      b={b?.ragas_faithfulness ?? null} />
@@ -683,7 +691,7 @@ export default function EvalComparePage() {
                           <CmpCell a={a?.ragas_context_precision ?? null} b={b?.ragas_context_precision ?? null} />
                           <CmpCell a={a?.ragas_context_recall ?? null}    b={b?.ragas_context_recall ?? null} />
                           <td className="px-2 py-2.5">
-                            <button onClick={() => setExpanded(isExp ? null : questionId)} className="text-gray-400 hover:text-gray-600 p-1 transition-colors">
+                            <button onClick={(e) => { e.stopPropagation(); setExpanded(isExp ? null : questionId); }} className="text-gray-400 hover:text-gray-600 p-1 transition-colors">
                               {isExp ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                             </button>
                           </td>
@@ -691,8 +699,8 @@ export default function EvalComparePage() {
 
                         {isExp && (
                           <tr className="bg-gray-50/30">
-                            <td colSpan={9} className="px-6 py-5">
-                              <div className="space-y-4">
+                            <td colSpan={10} className="px-6 py-5">
+                              <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
                                 {/* Shared context */}
                                 <div className="grid grid-cols-2 gap-5 text-sm">
                                   <div>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
@@ -113,4 +114,60 @@ def run_agent(
         evidence_chunks=final_state.get("relevant_docs", []),
         queries_tried=final_state.get("queries_tried", [request.question]),
         steps=final_state.get("trace", []),
+    )
+
+
+def run_agent_stream(
+    *, provider: SourceEvidenceProvider, request: WorkflowRunInput
+) -> Iterator[tuple[str, str | WorkflowRunOutput]]:
+    """Like :func:`run_agent`, but a generator: yields ``("delta", text)`` as the
+    generate node streams tokens, then a final ``("final", WorkflowRunOutput)``.
+    Uses LangGraph's custom+values stream so the Self-RAG flow is unchanged."""
+    agent = build_agent(provider)
+    history = [message.model_dump(mode="python") for message in request.history]
+    initial: AgentState = {
+        "single_turn": request.single_turn,
+        "question": request.question,
+        "rewritten_question": request.question,
+        "history": history,
+        "pending_queries": [],
+        "fused_results": [],
+        "relevant_docs": [],
+        "pinned_docs": [],
+        "missing_entities": [],
+        "rejected_chunk_ids": [],
+        "queries_tried": [request.question],
+        "step_count": 0,
+        "retrieval_exhausted": False,
+        "document_ids": request.document_ids,
+        "exclude_dedup_layers": request.exclude_dedup_layers,
+        "trace": [],
+        "needs_clarification": False,
+        "pending_clarification": None,
+        "stream": True,
+    }
+    final_state: dict[str, Any] = {}
+    for mode, chunk in agent.stream(initial, stream_mode=["custom", "values"]):
+        if mode == "custom" and isinstance(chunk, dict):
+            text = chunk.get("answer_delta")
+            if text:
+                yield ("delta", text)
+        elif mode == "values" and isinstance(chunk, dict):
+            final_state = chunk
+
+    answer = final_state.get("answer")
+    if not isinstance(answer, Answer):
+        answer = Answer(
+            answer="Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp.",
+            status="not_found",
+            citations=[],
+        )
+    yield (
+        "final",
+        WorkflowRunOutput(
+            answer=answer,
+            evidence_chunks=final_state.get("relevant_docs", []),
+            queries_tried=final_state.get("queries_tried", [request.question]),
+            steps=final_state.get("trace", []),
+        ),
     )

@@ -99,6 +99,11 @@ select = [
 ]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+# greenfield kg/: relax line-length + ambiguous-unicode only (Vietnamese text, intentional
+# '×' signs, inline HTML/viz string generators). Correctness rules (B, SIM, UP) still enforced.
+"kg/**/*.py" = ["E501", "RUF002", "RUF003"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests", "src/agentic_rag/ingestion/pdf/tests"]
@@ -133,3 +138,10 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["lingua", "lingua.*"]
 ignore_missing_imports = true
+
+# kg/ is a greenfield knowledge-graph package under validation — not yet held to full
+# strict typing. src is still type-checked against its public signatures; only kg's own
+# internal type issues are suppressed here.
+[[tool.mypy.overrides]]
+module = ["kg.*"]
+ignore_errors = true

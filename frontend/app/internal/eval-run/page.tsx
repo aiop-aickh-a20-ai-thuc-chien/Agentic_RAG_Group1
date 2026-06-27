@@ -9,7 +9,7 @@ import { CountUp, Spotlight } from "../_components/fx";
 
 const API = process.env.NEXT_PUBLIC_AGENTIC_RAG_API_URL ?? "http://localhost:8000";
 
-type Dataset    = { id: string; name: string; is_benchmark: boolean };
+type Dataset    = { id: string; name: string; is_benchmark: boolean; is_multihop?: boolean };
 type Run        = { id: string; name: string; status: string; total: number; success: number; failed: number; created_at: string };
 type Progress   = { run_id: string; status: string; total: number; success: number; failed: number; not_started: number; ragas_done: number };
 type DedupStats = { corpus_chunks: number; exact_chunks: number; simhash_chunks: number; embedding_chunks: number };
@@ -25,6 +25,7 @@ type RetrievalFlags = {
   metadata_boosting_enabled: boolean;
   question_index_enabled: boolean;
   entity_prefilter_llm: boolean;
+  graph_retrieval_enabled: boolean;
 };
 type QIStatus = {
   exists: boolean;
@@ -37,6 +38,7 @@ const RETRIEVAL_TOGGLES: { key: keyof RetrievalFlags; label: string; hint: strin
   { key: "metadata_boosting_enabled", label: "Metadata boosting",    hint: "document_type × recency × dedup" },
   { key: "question_index_enabled",    label: "Question-index",       hint: "Đường thứ 3 RRF: query ↔ câu hỏi" },
   { key: "entity_prefilter_llm",      label: "LLM map entity",       hint: "LLM đoán entity khi từ điển trượt" },
+  { key: "graph_retrieval_enabled",   label: "Graph retrieval (KG)", hint: "Đường RRF: liên kết câu hỏi với knowledge-graph (Neo4j)" },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
@@ -320,7 +322,7 @@ export default function EvalRunPage() {
             <select value={datasetId} onChange={(e) => setDatasetId(e.target.value)}
               className="w-full text-sm border border-black/12 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
               {datasets.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}</option>
+                <option key={d.id} value={d.id}>{d.name}{d.is_benchmark ? " ★" : ""}{d.is_multihop ? " · multi-hop" : ""}</option>
               ))}
             </select>
           </div>

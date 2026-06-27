@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from agentic_rag.agent.graph import run_agent
+from agentic_rag.agent.graph import run_agent, run_agent_stream
 from agentic_rag.autodata_eval.router import router as autodata_eval_router
 from agentic_rag.core.contracts import (
     Answer,
@@ -36,6 +36,7 @@ from agentic_rag.core.contracts import (
     SearchResult,
     SourceDocumentChunks,
     WorkflowRunInput,
+    WorkflowRunOutput,
 )
 from agentic_rag.core.ports import SourceEvidenceProvider
 from agentic_rag.eval_review import router as eval_review_router
@@ -83,12 +84,32 @@ UPLOAD_FILE = File(...)
 LOGGER = logging.getLogger(__name__)
 
 
+def _prewarm_graph_retriever() -> None:
+    """Load the KG graph snapshot in a BACKGROUND thread so the first graph-enabled
+    query doesn't pay the one-time ~7s Neo4j-Aura load (cached after the first load).
+    Best-effort + non-blocking — never delays startup or breaks if the graph is down."""
+    if os.getenv("GRAPH_RETRIEVAL_ENABLED", "false").lower() != "true":
+        return
+    import threading
+
+    def _load() -> None:
+        try:
+            from agentic_rag.retrieval.search import _kg_retriever
+
+            _kg_retriever()
+        except Exception:
+            pass
+
+    threading.Thread(target=_load, daemon=True).start()
+
+
 @asynccontextmanager
 async def _api_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Warm optional heavyweight models before the first user request."""
     from agentic_rag.autodata_eval.router import recover_stuck_runs
 
     _preload_configured_models()
+    _prewarm_graph_retriever()
     recover_stuck_runs()
     yield
 
@@ -386,12 +407,14 @@ _RETRIEVAL_FLAG_ENV = {
     "metadata_boosting_enabled": "METADATA_BOOSTING_ENABLED",
     "question_index_enabled": "RETRIEVAL_QUESTION_INDEX_ENABLED",
     "entity_prefilter_llm": "ENTITY_PREFILTER_LLM",
+    "graph_retrieval_enabled": "GRAPH_RETRIEVAL_ENABLED",
 }
 _RETRIEVAL_FLAG_DEFAULTS = {
     "hard_filter_enabled": True,
     "metadata_boosting_enabled": True,
     "question_index_enabled": False,
     "entity_prefilter_llm": False,
+    "graph_retrieval_enabled": False,
 }
 
 
@@ -430,6 +453,7 @@ class RetrievalConfig(BaseModel):
     metadata_boosting_enabled: bool
     question_index_enabled: bool
     entity_prefilter_llm: bool
+    graph_retrieval_enabled: bool = False
     question_min_score: float | None = None
     exclude_dedup_layers: list[str] = Field(default_factory=list)
 
@@ -472,6 +496,7 @@ def set_retrieval_config(config: RetrievalConfig) -> RetrievalConfig:
     os.environ["RETRIEVAL_EXCLUDE_DEDUP_LAYERS"] = dedup
     updates["RETRIEVAL_EXCLUDE_DEDUP_LAYERS"] = dedup
     _write_env_file(updates)
+    _prewarm_graph_retriever()  # toggling graph ON pre-loads the snapshot (no restart)
     return _current_retrieval_config()
 
 
@@ -529,26 +554,18 @@ def stream_answer_question(request: AnswerRequest) -> StreamingResponse:
 
     if _agent_mode_enabled():
         provider = source_provider_from_env()
-        result = run_agent(
-            provider=provider,
-            request=WorkflowRunInput(
-                question=request.question,
-                document_ids=request.document_ids,
-                exclude_dedup_layers=request.exclude_dedup_layers,
-                history=request.history or [],
-                single_turn=_single_turn_mode(),
-            ),
+        run_input = WorkflowRunInput(
+            question=request.question,
+            document_ids=request.document_ids,
+            exclude_dedup_layers=request.exclude_dedup_layers,
+            history=request.history or [],
+            single_turn=_single_turn_mode(),
         )
         return StreamingResponse(
-            _stream_direct_answer_events(
+            _stream_agent_events(
                 question=request.question,
-                answer=result.answer,
-                provider="agentic",
-                evidence_chunks=result.evidence_chunks,
-                generation_trace={
-                    "queries_tried": result.queries_tried,
-                    "agent_steps": result.steps,
-                },
+                provider=provider,
+                run_input=run_input,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache"},
@@ -1515,6 +1532,51 @@ def _stream_direct_answer_events(
         answer=answer,
         latency_ms=_latency_ms(started_at),
         generation_trace=generation_trace,
+    )
+
+
+def _stream_agent_events(
+    *,
+    question: str,
+    provider: SourceEvidenceProvider,
+    run_input: WorkflowRunInput,
+) -> Iterator[str]:
+    """Agent-mode SSE: stream the generate node's tokens as answer_delta (real token
+    streaming through LangGraph), then citations + done with the final agent answer."""
+    started_at = time.perf_counter()
+    run_id = new_run_id()
+    result: WorkflowRunOutput | None = None
+    for kind, payload in run_agent_stream(provider=provider, request=run_input):
+        if kind == "delta":
+            yield _sse_event("answer_delta", {"text": payload})
+        elif isinstance(payload, WorkflowRunOutput):
+            result = payload
+    if result is None:
+        return
+    answer = result.answer
+    for index, citation in enumerate(answer.citations, start=1):
+        citation_payload = citation.model_dump()
+        citation_payload["index"] = index
+        yield _sse_event("citation", citation_payload)
+    yield _sse_event(
+        "done",
+        {
+            **answer.model_dump(),
+            "evidence_chunks": [chunk.model_dump(mode="json") for chunk in result.evidence_chunks],
+        },
+    )
+    write_rag_trace(
+        run_id=run_id,
+        provider="agentic",
+        question=question,
+        evidence_chunks=result.evidence_chunks,
+        evidence_context=_build_evidence_context(result.evidence_chunks),
+        answer=answer,
+        latency_ms=_latency_ms(started_at),
+        generation_trace={
+            "queries_tried": result.queries_tried,
+            "agent_steps": result.steps,
+        },
     )
 
 

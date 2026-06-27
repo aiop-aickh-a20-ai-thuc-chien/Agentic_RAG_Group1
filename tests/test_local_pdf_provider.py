@@ -960,6 +960,10 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
     monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
     monkeypatch.setenv("EMBEDDING_API_KEY", "test-key")
+    # Chặn mọi lần nạp .env cục bộ (CI không có file này). Nếu để .env nạp giữa
+    # chừng, các biến DENSE_VECTOR_STORE/QDRANT_* sẽ suy ra provider=qdrant khiến
+    # retrieve đi đường Qdrant (embed query thật) thay vì Store.dense_search đã mock.
+    monkeypatch.setattr("agentic_rag.runtime_env._LOADED", True)
     _mock_openai_client(monkeypatch)
     monkeypatch.setattr(
         "agentic_rag.integrations.local_pdf.providers.load_pdf_with_markdown",
@@ -1007,7 +1011,8 @@ def test_local_pdf_provider_retrieves_matching_chunks(
 
     assert len(results) >= 1
     assert results[0].chunk.chunk_id == "pdf_doc_c0001"
-    assert results[0].retriever == "hybrid"
+    # top chunk was found by BOTH bm25 + dense → carries both source channels (was "hybrid")
+    assert results[0].retriever == "bm25+dense"
     assert results[0].rank == 1
     assert (
         results[0].chunk.metadata["retrieval_pipeline"] == "source_ingestion -> bm25 + dense -> rrf"
@@ -1027,7 +1032,7 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert pipeline_trace["rrf_fusion"]["tech"]["method"] == "reciprocal_rank_fusion"
     assert pipeline_trace["rrf_fusion"]["tech"]["rrf_k"] == 60
     assert pipeline_trace["rrf_fusion"]["input"]["bm25_results"][0]["retriever"] == "bm25"
-    assert pipeline_trace["rrf_fusion"]["output"][0]["retriever"] == "hybrid"
+    assert pipeline_trace["rrf_fusion"]["output"][0]["retriever"] == "bm25+dense"
     rrf_contributions = pipeline_trace["rrf_fusion"]["output"][0]["contributions"]
     assert rrf_contributions["bm25"]["retriever"] == "bm25"
     assert rrf_contributions["dense"]["retriever"] == "dense"
@@ -1038,8 +1043,8 @@ def test_local_pdf_provider_retrieves_matching_chunks(
     assert results[0].chunk.metadata["rrf_contributions"]["total_rrf_score"] > 0
     assert pipeline_trace["rerank"]["tech"]["provider"] == "skipped"
     assert pipeline_trace["rerank"]["tech"]["reason"] == "agent_reranks"
-    assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "hybrid"
-    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "hybrid"
+    assert pipeline_trace["rerank"]["input"]["candidates"][0]["retriever"] == "bm25+dense"
+    assert pipeline_trace["rerank"]["output"][0]["retriever"] == "bm25+dense"
 
 
 def test_local_pdf_provider_uses_qdrant_retrieval_without_loading_source_chunks(
