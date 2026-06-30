@@ -8,6 +8,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import QDRANT_INDEX_FIELDS
 from agentic_rag.retrieval.search import (
     Store,
     _qdrant_client_from_env,
@@ -572,11 +573,7 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
 
     dense_config = seen["create_collection"]["vectors_config"]["dense"]
     assert dense_config.size == 3
-    assert [index["field_name"] for index in seen["payload_indexes"]] == [
-        "document_id",
-        "metadata.deduplication.primary_layer",
-        "metadata.entities_canonical",
-    ]
+    assert [index["field_name"] for index in seen["payload_indexes"]] == list(QDRANT_INDEX_FIELDS)
     assert seen["upsert"]["collection_name"] == "agentic_chunks"
 
 
@@ -663,16 +660,14 @@ def test_qdrant_hybrid_search_filters_out_excluded_dedup_layers(
         exclude_dedup_layers=["exact_sha256", "simhash", "embedding"],
     )
 
-    assert [index["field_name"] for index in seen["payload_indexes"]] == [
-        "document_id",
-        "metadata.deduplication.primary_layer",
-        "metadata.entities_canonical",
-    ]
+    assert [index["field_name"] for index in seen["payload_indexes"]] == list(QDRANT_INDEX_FIELDS)
     query_filter = seen["query_points"]["prefetch"][0].filter
     assert query_filter.must[0].key == "document_id"
     assert query_filter.must[0].match.value == "doc-1"
     assert query_filter.must_not[0].key == "metadata.deduplication.primary_layer"
     assert query_filter.must_not[0].match.any == ["exact_sha256", "simhash", "embedding"]
+    assert query_filter.must_not[1].key == "metadata.metadata_prefilter_exclude"
+    assert query_filter.must_not[1].match.value is True
     assert results[0].chunk.chunk_id == "c1"
 
 

@@ -1,0 +1,366 @@
+=== Range 1340 to 1480 ===
+Line 1340: 
+Line 1341: 
+Line 1342: 
+Line 1343: 
+Line 1344: 
+Line 1345: 
+Line 1346: <input id="FindStoreUrl" value="/on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-FindStore" type="hidden">
+Line 1347: <input id="productID" value="VF-ZFG-ESNEALHH-BAU" type="hidden">
+Line 1348: <input id="leas" value="VF-ZFG-ESNEALHH-BAU" type="hidden">
+Line 1349: 
+Line 1350: 
+Line 1351: 
+Line 1352: 
+Line 1353: 
+Line 1354: 
+Line 1355: 
+Line 1356: 
+Line 1357: 
+Line 1358: 
+Line 1359: 
+Line 1360: 
+Line 1361: 
+Line 1362: 
+Line 1363: 
+Line 1364: <div class="cart deposit-mode" id="bookingModal" data-pid="VF-ZFG-ESNEALHH-BAU" data-modelid="Products-Scooter-VIPER" data-again="">
+Line 1365:     <div class="cart-bike" role="document">
+Line 1366:         <input type="hidden" class="add-to-cart-url" value="/on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-AddProduct">
+Line 1367:         
+Line 1368:             <input type="hidden" name="cart-show-url" value="https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast">
+Line 1369:         
+Line 1370:         <input type="hidden" class="remove-cart-url" value="/on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-RemoveProductLineItem">
+Line 1371:         <input type="hidden" id="orderID" value="">
+Line 1372:         <input type="hidden" name="bankDepositAmount" id="bankDepositAmount" value="2000000">
+Line 1373:         <div class="cart-bike-content">
+Line 1374:             
+Line 1375:             <div class="tab-left">
+Line 1376:                 <div class="content-asset">
+Line 1377:     
+Line 1378:     
+Line 1379:     
+Line 1380:     
+Line 1381:     <!-- dwMarker="content" dwID="vinfast-bikes-list" dwContentID="079b0ff4ca59126853c9deda48" -->
+Line 1382:     
+Line 1383:         <div class="content-asset">
+Line 1384:     
+Line 1385:     <nav class="vf-bike-order__product-list">
+Line 1386:     <div class="bike-slider swiper-container swiper-container-initialized swiper-container-vertical">
+Line 1387:         <ul class="vf-bike-order__container swiper-wrapper" style="transform: translate3d(0px, 0px, 0px);">
+Line 1388:             <!-- <li data-id="Products-Scooter-VEROX" data-pid="VF-ZFG-ESNE7LHH-BAR"
+Line 1389:                 class="add-to-cart-v3s swiper-slide">
+Line 1390:                 <figure>
+Line 1391:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw885c1f85/images/productScooter/Products-Scooter-VEROX.png"
+Line 1392:                         alt="Xe máy điện VinFast Vero X" />
+Line 1393:                     <figcaption>Vero X</figcaption>
+Line 1394:                 </figure>
+Line 1395:             </li> -->
+Line 1396:             <li data-id="Products-Scooter-VIPER" data-pid="VF-ZFG-ESNEALHH-BAU" class="add-to-cart-v3s swiper-slide active swiper-slide-active" style="height: 168.6px; margin-bottom: 20px;">
+Line 1397:                 <figure>
+Line 1398:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw56cbdc62/images/productScooter/Products-Scooter-VIPER.png" alt="Xe máy điện VinFast Viper">
+Line 1399:                     <figcaption>Viper</figcaption>
+Line 1400:                 </figure>
+Line 1401:             </li>
+Line 1402:             <li data-id="Products-Scooter-FELIZII" data-pid="VF-ZFG-ESNEFLHHHT-REQ" class="add-to-cart-v3s swiper-slide swiper-slide-next" style="height: 168.6px; margin-bottom: 20px;">
+Line 1403:                 <figure>
+Line 1404:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwbb4f83a6/images/productScooter/Products-Scooter-FELIZII.png" alt="Xe máy điện VinFast Feliz II">
+Line 1405:                     <figcaption>Feliz II</figcaption>
+Line 1406:                 </figure>
+Line 1407:             </li>
+Line 1408:             <li data-id="Products-Scooter-FELIZ" data-pid="VF-ZFG-ESNE6LHH-BAU" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1409:                 <figure>
+Line 1410:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw4641bf17/images/productScooter/Products-Scooter-FELIZ.png" alt="Xe máy điện VinFast Feliz">
+Line 1411:                     <figcaption>Feliz 2025</figcaption>
+Line 1412:                 </figure>
+Line 1413:             </li>
+Line 1414:             <li data-id="Products-Scooter-EVO" data-pid="VF-ZFG-ESNE9LHH-WHR1" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1415:                 <figure>
+Line 1416:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw92508659/images/productScooter/Products-Scooter-EVO.png" alt="Xe máy điện VinFast Evo">
+Line 1417:                     <figcaption>Evo</figcaption>
+Line 1418:                 </figure>
+Line 1419:             </li>
+Line 1420:             <li data-id="Products-Scooter-EVOLITE" data-pid="VF-ZFG-ESNE9LHL-GNV" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1421:                 <figure>
+Line 1422:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwff3f2362/images/productScooter/Products-Scooter-EVOLITE.png" alt="Xe máy điện VinFast Evo Lite">
+Line 1423:                     <figcaption>Evo Lite</figcaption>
+Line 1424:                 </figure>
+Line 1425:             </li>
+Line 1426:             <li data-id="Products-Scooter-EVOGRAND" data-pid="VF-ZFG-ESNE2LHH-GNV1" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1427:                 <figure>
+Line 1428:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwd624f266/images/productScooter/Products-Scooter-EVOGRAND.png" alt="Xe máy điện VinFast Evo Grand">
+Line 1429:                     <figcaption>Evo Grand</figcaption>
+Line 1430:                 </figure>
+Line 1431:             </li>
+Line 1432:             <li data-id="Products-Scooter-EVOGRANDLITE" data-pid="VF-ZFG-ESNE2LHL-PUL1" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1433:                 <figure>
+Line 1434:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw1bcc3e26/images/productScooter/Products-Scooter-EVOGRANDLITE.png" alt="Xe máy điện VinFast Evo Grand Lite">
+Line 1435:                     <figcaption>Evo Grand Lite</figcaption>
+Line 1436:                 </figure>
+Line 1437:             </li>
+Line 1438:             <li data-id="Products-Scooter-FLAZZMAX" data-pid="VF-ZFG-ESNF2LHLHT-WHRVN" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1439:                 <figure>
+Line 1440:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwbd9e1743/images/productScooter/Products-Scooter-FLAZZMAX.png" alt="Xe máy điện VinFast Flazz Max">
+Line 1441:                     <figcaption>Flazz Max</figcaption>
+Line 1442:                 </figure>
+Line 1443:             </li>
+Line 1444: 			<li data-id="Products-Scooter-FLAZZ" data-pid="VF-ZFG-ESNEDLHLHT-REQ" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1445:                 <figure>
+Line 1446:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa5219164/images/productScooter/Products-Scooter-FLAZZ.png" alt="Xe máy điện VinFast Flazz">
+Line 1447:                     <figcaption>Flazz</figcaption>
+Line 1448:                 </figure>
+Line 1449:             </li>
+Line 1450:             <li data-id="Products-Scooter-ZGOO" data-pid="VF-ZFG-ESNECLHLHT-REQ" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1451:                 <figure>
+Line 1452:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw000d3589/images/productScooter/Products-Scooter-ZGOO.png" alt="Xe máy điện VinFast ZGoo">
+Line 1453:                     <figcaption>ZGoo</figcaption>
+Line 1454:                 </figure>
+Line 1455:             </li>
+Line 1456:             <li data-id="Products-Scooter-AMIOS" data-pid="VF-ZFG-EBNF1LHLHP-WHR" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1457:                 <figure>
+Line 1458:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwac576e41/images/productScooter/Products-Scooter-AMIOS.png" alt="Xe máy điện VinFast Amio S">
+Line 1459:                     <figcaption>Amio S</figcaption>
+Line 1460:                 </figure>
+Line 1461:             </li>
+Line 1462: 			<li data-id="Products-Scooter-AMIO" data-pid="VF-ZFG-EBNF1LHBHP-REQ" class="add-to-cart-v3s swiper-slide" style="height: 168.6px; margin-bottom: 20px;">
+Line 1463:                 <figure>
+Line 1464:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw3f470297/images/productScooter/Products-Scooter-AMIO.png" alt="Xe máy điện VinFast Amio">
+Line 1465:                     <figcaption>Amio</figcaption>
+Line 1466:                 </figure>
+Line 1467:             </li>
+Line 1468:         </ul>
+Line 1469:         <div class="swiper-button-next" tabindex="0" role="button" aria-label="Next slide" aria-disabled="false"></div>
+Line 1470:         <div class="swiper-button-prev swiper-button-disabled" tabindex="0" role="button" aria-label="Previous slide" aria-disabled="true"></div>
+Line 1471:     <span class="swiper-notification" aria-live="assertive" aria-atomic="true"></span></div>
+Line 1472: </nav>
+Line 1473:     
+Line 1474:         </div>
+Line 1475:     
+Line 1476:      <!-- End content-asset -->
+Line 1477: 
+Line 1478: 
+Line 1479: 
+Line 1480: 
+========================================
+
+=== Range 1580 to 1680 ===
+Line 1580:         <div class="content-asset">
+Line 1581:     
+Line 1582:     <nav class="vf-bike-order__product-list">
+Line 1583:     <div class="bike-slider swiper-container swiper-container-initialized swiper-container-vertical">
+Line 1584:         <ul class="vf-bike-order__container swiper-wrapper" style="transition-duration: 0ms;">
+Line 1585:             <!-- <li data-id="Products-Scooter-VEROX" data-pid="VF-ZFG-ESNE7LHH-BAR"
+Line 1586:                 class="add-to-cart-v3s swiper-slide">
+Line 1587:                 <figure>
+Line 1588:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw885c1f85/images/productScooter/Products-Scooter-VEROX.png"
+Line 1589:                         alt="Xe máy điện VinFast Vero X" />
+Line 1590:                     <figcaption>Vero X</figcaption>
+Line 1591:                 </figure>
+Line 1592:             </li> -->
+Line 1593:             <li data-id="Products-Scooter-VIPER" data-pid="VF-ZFG-ESNEALHH-BAU" class="add-to-cart-v3s swiper-slide active">
+Line 1594:                 <figure>
+Line 1595:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw56cbdc62/images/productScooter/Products-Scooter-VIPER.png" alt="Xe máy điện VinFast Viper">
+Line 1596:                     <figcaption>Viper</figcaption>
+Line 1597:                 </figure>
+Line 1598:             </li>
+Line 1599:             <li data-id="Products-Scooter-FELIZII" data-pid="VF-ZFG-ESNEFLHHHT-REQ" class="add-to-cart-v3s swiper-slide">
+Line 1600:                 <figure>
+Line 1601:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwbb4f83a6/images/productScooter/Products-Scooter-FELIZII.png" alt="Xe máy điện VinFast Feliz II">
+Line 1602:                     <figcaption>Feliz II</figcaption>
+Line 1603:                 </figure>
+Line 1604:             </li>
+Line 1605:             <li data-id="Products-Scooter-FELIZ" data-pid="VF-ZFG-ESNE6LHH-BAU" class="add-to-cart-v3s swiper-slide">
+Line 1606:                 <figure>
+Line 1607:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw4641bf17/images/productScooter/Products-Scooter-FELIZ.png" alt="Xe máy điện VinFast Feliz">
+Line 1608:                     <figcaption>Feliz 2025</figcaption>
+Line 1609:                 </figure>
+Line 1610:             </li>
+Line 1611:             <li data-id="Products-Scooter-EVO" data-pid="VF-ZFG-ESNE9LHH-WHR1" class="add-to-cart-v3s swiper-slide">
+Line 1612:                 <figure>
+Line 1613:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw92508659/images/productScooter/Products-Scooter-EVO.png" alt="Xe máy điện VinFast Evo">
+Line 1614:                     <figcaption>Evo</figcaption>
+Line 1615:                 </figure>
+Line 1616:             </li>
+Line 1617:             <li data-id="Products-Scooter-EVOLITE" data-pid="VF-ZFG-ESNE9LHL-GNV" class="add-to-cart-v3s swiper-slide">
+Line 1618:                 <figure>
+Line 1619:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwff3f2362/images/productScooter/Products-Scooter-EVOLITE.png" alt="Xe máy điện VinFast Evo Lite">
+Line 1620:                     <figcaption>Evo Lite</figcaption>
+Line 1621:                 </figure>
+Line 1622:             </li>
+Line 1623:             <li data-id="Products-Scooter-EVOGRAND" data-pid="VF-ZFG-ESNE2LHH-GNV1" class="add-to-cart-v3s swiper-slide">
+Line 1624:                 <figure>
+Line 1625:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwd624f266/images/productScooter/Products-Scooter-EVOGRAND.png" alt="Xe máy điện VinFast Evo Grand">
+Line 1626:                     <figcaption>Evo Grand</figcaption>
+Line 1627:                 </figure>
+Line 1628:             </li>
+Line 1629:             <li data-id="Products-Scooter-EVOGRANDLITE" data-pid="VF-ZFG-ESNE2LHL-PUL1" class="add-to-cart-v3s swiper-slide">
+Line 1630:                 <figure>
+Line 1631:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw1bcc3e26/images/productScooter/Products-Scooter-EVOGRANDLITE.png" alt="Xe máy điện VinFast Evo Grand Lite">
+Line 1632:                     <figcaption>Evo Grand Lite</figcaption>
+Line 1633:                 </figure>
+Line 1634:             </li>
+Line 1635:             <li data-id="Products-Scooter-FLAZZMAX" data-pid="VF-ZFG-ESNF2LHLHT-WHRVN" class="add-to-cart-v3s swiper-slide">
+Line 1636:                 <figure>
+Line 1637:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwbd9e1743/images/productScooter/Products-Scooter-FLAZZMAX.png" alt="Xe máy điện VinFast Flazz Max">
+Line 1638:                     <figcaption>Flazz Max</figcaption>
+Line 1639:                 </figure>
+Line 1640:             </li>
+Line 1641: 			<li data-id="Products-Scooter-FLAZZ" data-pid="VF-ZFG-ESNEDLHLHT-REQ" class="add-to-cart-v3s swiper-slide">
+Line 1642:                 <figure>
+Line 1643:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa5219164/images/productScooter/Products-Scooter-FLAZZ.png" alt="Xe máy điện VinFast Flazz">
+Line 1644:                     <figcaption>Flazz</figcaption>
+Line 1645:                 </figure>
+Line 1646:             </li>
+Line 1647:             <li data-id="Products-Scooter-ZGOO" data-pid="VF-ZFG-ESNECLHLHT-REQ" class="add-to-cart-v3s swiper-slide">
+Line 1648:                 <figure>
+Line 1649:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw000d3589/images/productScooter/Products-Scooter-ZGOO.png" alt="Xe máy điện VinFast ZGoo">
+Line 1650:                     <figcaption>ZGoo</figcaption>
+Line 1651:                 </figure>
+Line 1652:             </li>
+Line 1653:             <li data-id="Products-Scooter-AMIOS" data-pid="VF-ZFG-EBNF1LHLHP-WHR" class="add-to-cart-v3s swiper-slide">
+Line 1654:                 <figure>
+Line 1655:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwac576e41/images/productScooter/Products-Scooter-AMIOS.png" alt="Xe máy điện VinFast Amio S">
+Line 1656:                     <figcaption>Amio S</figcaption>
+Line 1657:                 </figure>
+Line 1658:             </li>
+Line 1659: 			<li data-id="Products-Scooter-AMIO" data-pid="VF-ZFG-EBNF1LHBHP-REQ" class="add-to-cart-v3s swiper-slide">
+Line 1660:                 <figure>
+Line 1661:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw3f470297/images/productScooter/Products-Scooter-AMIO.png" alt="Xe máy điện VinFast Amio">
+Line 1662:                     <figcaption>Amio</figcaption>
+Line 1663:                 </figure>
+Line 1664:             </li>
+Line 1665:         </ul>
+Line 1666:         <div class="swiper-button-next" tabindex="0" role="button" aria-label="Next slide" aria-disabled="false"></div>
+Line 1667:         <div class="swiper-button-prev" tabindex="0" role="button" aria-label="Previous slide" aria-disabled="false"></div>
+Line 1668:     <span class="swiper-notification" aria-live="assertive" aria-atomic="true"></span></div>
+Line 1669: </nav>
+Line 1670:     
+Line 1671:         </div>
+Line 1672:     
+Line 1673:      <!-- End content-asset -->
+Line 1674: 
+Line 1675: 
+Line 1676: 
+Line 1677: 
+Line 1678: </div>
+Line 1679: 
+Line 1680: <div class="tab-left-box">
+========================================
+
+=== Range 1770 to 1810 ===
+Line 1770:         <div class="d-flex justify-content-between align-items-center mb-4">
+Line 1771:             <h3 class="font-18">Chọn màu xe</h3>
+Line 1772:             <span class="v3s-product--color-name"></span>
+Line 1773:         </div>
+Line 1774:         <ul class="colorItemList bike slides">
+Line 1775:             
+Line 1776:                 
+Line 1777:                 <li class="slide-item " data-name="Đỏ Tươi" data-item="REQ" data-pid="VF-ZFG-ESNEALHH-REQ">
+Line 1778:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw0a71f8b3/images/XMD/VIPER/REQ.png" alt="Màu xe VinFast Đỏ Tươi">
+Line 1779:                 </li>
+Line 1780:             
+Line 1781:                 
+Line 1782:                 <li class="slide-item " data-name="Vàng Cát" data-item="YES" data-pid="VF-ZFG-ESNEALHH-YES">
+Line 1783:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw5af30945/images/XMD/VIPER/YES.png" alt="Màu xe VinFast Vàng Cát">
+Line 1784:                 </li>
+Line 1785:             
+Line 1786:                 
+Line 1787:                 <li class="slide-item " data-name="Đen Bóng" data-item="BAU" data-pid="VF-ZFG-ESNEALHH-BAU">
+Line 1788:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw61e981c4/images/XMD/VIPER/BAU.png" alt="Màu xe VinFast Đen Bóng">
+Line 1789:                 </li>
+Line 1790:             
+Line 1791:                 
+Line 1792:                 <li class="slide-item " data-name="Trắng Ngọc Trai" data-item="WHR" data-pid="VF-ZFG-ESNEALHH-WHR">
+Line 1793:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw003be7a9/images/XMD/VIPER/WHR.png" alt="Màu xe VinFast Trắng Ngọc Trai">
+Line 1794:                 </li>
+Line 1795:             
+Line 1796:                 
+Line 1797:                 <li class="slide-item " data-name="Xám" data-item="GRC" data-pid="VF-ZFG-ESNEALHH-GRC">
+Line 1798:                     <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw0d2221f8/images/XMD/VIPER/GRC.png" alt="Màu xe VinFast Xám">
+Line 1799:                 </li>
+Line 1800:             
+Line 1801:         </ul>
+Line 1802:     </div>
+Line 1803:     
+Line 1804:     
+Line 1805:         <h3 class="mb-4 ">Chọn dịch vụ Pin và Sạc</h3>
+Line 1806:         <div class="properties mb-0 pb-0 ">
+Line 1807:             <h3 class="battery-service">Dịch vụ pin</h3>
+Line 1808:             <div class="service-list">
+Line 1809:                 
+Line 1810:                     
+========================================
+
+=== Range 20480 to 20550 ===
+Line 20480:       "position": "7",
+Line 20481:       "name": "Klara S",
+Line 20482:       "brand": {
+Line 20483:         "@type": "Brand",
+Line 20484:         "name": "VinFast"
+Line 20485:       },
+Line 20486:       "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwdc4f06e6/images/productScooter/Products-Scooter-KLARA-S.png",
+Line 20487:       "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#klara-s",
+Line 20488:       "offers": {
+Line 20489:         "@type": "Offer",
+Line 20490:         "priceCurrency": "VND",
+Line 20491:         "price": "39900000.",
+Line 20492:         "itemCondition": "https://schema.org/NewCondition",
+Line 20493:         "availability": "Instock"
+Line 20494:       }
+Line 20495:     },
+Line 20496:     {
+Line 20497:       "@type": "Product",
+Line 20498:       "position": "8",
+Line 20499:       "name": "Evo 200",
+Line 20500:       "brand": {
+Line 20501:         "@type": "Brand",
+Line 20502:         "name": "VinFast"
+Line 20503:       },
+Line 20504:       "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw747ef047/images/productScooter/Products-Scooter-EVO200.png",
+Line 20505:       "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#evo-200",
+Line 20506:       "offers": {
+Line 20507:         "@type": "Offer",
+Line 20508:         "priceCurrency": "VND",
+Line 20509:         "price": "22000000.",
+Line 20510:         "itemCondition": "https://schema.org/NewCondition",
+Line 20511:         "availability": "Instock"
+Line 20512:       }
+Line 20513:     },
+Line 20514:     {
+Line 20515:       "@type": "Product",
+Line 20516:       "position": "9",
+Line 20517:       "name": "Evo 200 Lite",
+Line 20518:       "brand": {
+Line 20519:         "@type": "Brand",
+Line 20520:         "name": "VinFast"
+Line 20521:       },
+Line 20522:       "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa5b930c1/images/productScooter/Products-Scooter-EVO200-LITE.png",
+Line 20523:       "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#evo-200-lite",
+Line 20524:       "offers": {
+Line 20525:         "@type": "Offer",
+Line 20526:         "priceCurrency": "VND",
+Line 20527:         "price": "22000000.",
+Line 20528:         "itemCondition": "https://schema.org/NewCondition",
+Line 20529:         "availability": "Instock"
+Line 20530:       }
+Line 20531:     }
+Line 20532:   ]
+Line 20533: }
+Line 20534: </script>
+Line 20535: <script type="application/ld+json">
+Line 20536:     {
+Line 20537:         "@context": "https://schema.org/",
+Line 20538:         "@type": "BreadcrumbList",
+Line 20539:         "itemListElement": [{
+Line 20540:             "@type": "ListItem",
+Line 20541:             "position": 1,
+Line 20542:             "name": "Trang chủ",
+Line 20543:             "item": "https://vinfastauto.com/"
+Line 20544:         },{
+Line 20545:             "@type": "ListItem",
+Line 20546:             "position": 2,
+Line 20547:             "name": "Đặt Mua Xe Máy Điện VinFast",
+Line 20548:             "item": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast"
+Line 20549:         }]
+Line 20550:     }
+========================================
+

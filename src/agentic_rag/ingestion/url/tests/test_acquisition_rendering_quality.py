@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from http.client import IncompleteRead
+
 import pytest
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.url.acquisition import (
+    fetch_url,
     reject_pdf_content_type,
     reject_pdf_url,
     validate_http_url,
 )
+from agentic_rag.ingestion.url.acquisition import fetcher as fetcher_module
 from agentic_rag.ingestion.url.extractor import ExtractedMarkdown
 from agentic_rag.ingestion.url.quality import (
     analyze_url_quality,
@@ -29,6 +33,18 @@ def test_acquisition_rejects_pdf_inputs() -> None:
         reject_pdf_url("https://example.com/file.pdf")
     with pytest.raises(ValueError, match="PDF response"):
         reject_pdf_content_type("application/pdf")
+
+
+def test_fetch_url_wraps_incomplete_reads_for_rendered_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_urlopen(*_args: object, **_kwargs: object) -> object:
+        raise IncompleteRead(b"")
+
+    monkeypatch.setattr(fetcher_module, "urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match="IncompleteRead"):
+        fetch_url("https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html")
 
 
 def test_render_url_markdown_returns_diagnostics_from_injected_extractor() -> None:
@@ -80,6 +96,25 @@ def test_render_url_markdown_passes_render_options_to_extractor() -> None:
     assert captured_options["wait_until"] == "domcontentloaded"
     assert captured_options["settle_after_scroll_ms"] == 800
     assert captured_options["settle_after_expand_ms"] == 400
+
+
+def test_render_url_markdown_allows_unbounded_timeout_for_crawlee_mode() -> None:
+    captured_options: dict[str, object] = {}
+
+    def fake_extractor(url: str, **kwargs: object) -> ExtractedMarkdown:
+        assert url == "https://example.com"
+        captured_options.update(kwargs)
+        return ExtractedMarkdown(markdown="# Title", parser_name="fake-crawlee")
+
+    attempt = render_url_markdown(
+        "https://example.com",
+        extractor=fake_extractor,
+        options=RenderOptions(timeout_seconds=None, retry_on_failure=False),
+    )
+
+    assert attempt.recovered is True
+    assert captured_options["timeout_seconds"] is None
+    assert attempt.attempt_count == 1
 
 
 def test_render_url_markdown_retries_with_lightweight_wait_strategy() -> None:

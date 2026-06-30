@@ -6,6 +6,8 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 
+from pydantic import BaseModel
+
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.ingestion.dedup_detect.models import DedupReport, DuplicateMatch
 from agentic_rag.ingestion.metadata import REQUIRED_METADATA_FIELDS, missing_required_metadata
@@ -20,15 +22,16 @@ def chunk_metadata_contract_issues(chunks: Sequence[Chunk]) -> list[dict[str, An
 
     issues: list[dict[str, Any]] = []
     for chunk in chunks:
-        missing = missing_required_metadata(chunk.metadata)
+        metadata = _chunk_metadata_dict(chunk)
+        missing = missing_required_metadata(metadata)
         if not missing:
             continue
         issues.append(
             {
                 "chunk_id": chunk.chunk_id,
                 "missing_required": list(missing),
-                "source": chunk.metadata.get("source"),
-                "source_type": chunk.metadata.get("source_type"),
+                "source": metadata.get("source"),
+                "source_type": metadata.get("source_type"),
             }
         )
     return issues
@@ -40,8 +43,9 @@ def chunk_metadata_contract_summary(chunks: Sequence[Chunk]) -> dict[str, Any]:
     source_type_counts: dict[str, int] = defaultdict(int)
     document_type_counts: dict[str, int] = defaultdict(int)
     for chunk in chunks:
-        source_type = str(chunk.metadata.get("source_type") or "missing")
-        document_type = str(chunk.metadata.get("document_type") or "missing")
+        metadata = _chunk_metadata_dict(chunk)
+        source_type = str(metadata.get("source_type") or "missing")
+        document_type = str(metadata.get("document_type") or "missing")
         source_type_counts[source_type] += 1
         document_type_counts[document_type] += 1
     issues = chunk_metadata_contract_issues(chunks)
@@ -83,7 +87,12 @@ def duplicate_metadata_by_document(
             chunk_by_id=chunk_by_id,
         )
 
-    _LAYER_RANK = {"exact_sha256": 0, "simhash": 1, "embedding_similarity": 2}
+    _LAYER_RANK = {
+        "exact_sha256": 0,
+        "metadata_llm": 1,
+        "simhash": 2,
+        "embedding_similarity": 3,
+    }
 
     metadata: dict[str, dict[str, Any]] = {}
     for candidate_chunk_id, matches in matches_by_candidate.items():
@@ -120,6 +129,21 @@ def add_duplicate_metadata_to_chunks(
     reference_chunks: Sequence[Chunk] = (),
 ) -> list[Chunk]:
     """Return chunks with candidate-only duplicate metadata attached."""
+
+    # TODO [url/TODO_dedup.md §4 – Variant merge guard]:
+    # Before marking two chunks as duplicates, verify they are not different
+    # product variants (e.g. VF 9 Eco vs VF 9 Plus) that merely share the same
+    # model family or page template. Check `product_model`, `variant_id`, and
+    # `battery_option` in both chunks' metadata. If these differ, downgrade the
+    # match to `needs_review` instead of `duplicate_candidate`.
+    # Reference: url/TODO_dedup.md §4
+    #
+    # TODO [url/TODO_dedup.md §5 – Stale/conflicting facts → knowledge_quality]:
+    # If two chunks share the same entity but have conflicting product facts
+    # (e.g. different prices for the same model+variant), do NOT resolve the
+    # conflict here. Instead, route the conflict to `knowledge_quality` for
+    # human or LLM review. This layer only reports duplicates, not resolves them.
+    # Reference: url/TODO_dedup.md §5
 
     by_document = duplicate_metadata_by_document(
         report,
@@ -176,7 +200,7 @@ def _append_match_metadata(
 
 
 def _metadata_without_dedup(chunk: Chunk) -> dict[str, Any]:
-    metadata = dict(chunk.metadata)
+    metadata = _chunk_metadata_dict(chunk)
     metadata.pop(DEDUP_METADATA_KEY, None)
     return metadata
 
@@ -184,8 +208,15 @@ def _metadata_without_dedup(chunk: Chunk) -> dict[str, Any]:
 def _chunk_document_id(chunk: Chunk | None) -> str | None:
     if chunk is None:
         return None
-    raw_document_id = chunk.metadata.get("document_id")
+    raw_document_id = _chunk_metadata_dict(chunk).get("document_id")
     return str(raw_document_id) if raw_document_id not in {None, ""} else None
+
+
+def _chunk_metadata_dict(chunk: Chunk) -> dict[str, Any]:
+    metadata = chunk.metadata
+    if isinstance(metadata, BaseModel):
+        return metadata.model_dump(mode="json", exclude_none=True)
+    return dict(metadata)
 
 
 def _group_id(canonical_chunk_id: str, candidate_chunk_id: str) -> str:
@@ -197,4 +228,6 @@ def _detection_summary(match: DuplicateMatch) -> str:
         return "candidate side: exact normalized text duplicate detected."
     if match.layer == "simhash":
         return "candidate side: near-duplicate detected by SimHash distance."
+    if match.layer == "metadata_llm":
+        return "candidate side: duplicate confirmed by metadata-blocked review."
     return "candidate side: near-duplicate detected by embedding cosine similarity."

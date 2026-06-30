@@ -1,0 +1,54 @@
+{
+  "sample_id": "template",
+  "description": "Template expectations for a deterministic URL ingestion fixture.",
+  "input": {
+    "source_file": "source.html",
+    "source": "https://example.com/sample-fixture"
+  },
+  "expectations": {
+    "min_chunk_count": 1,
+    "max_chunk_count": 4,
+    "required_metadata_keys": [
+      "source",
+      "source_type",
+      "title",
+      "section",
+      "section_path",
+      "content_hash"
+    ],
+    "required_text_snippets": [
+      "Sample Entity Listing",
+      "Entity A",
+      "Entity B"
+    ],
+    "forbidden_text_snippets": [
+      "Copyright Example Company."
+    ],
+    "product_spec_checks": [
+      {
+        "name": "Model name is present when this fixture is a product page.",
+        "field": "model_name",
+        "expected_value": "Entity A",
+        "required": false
+      },
+      {
+        "name": "Driving range is captured when visible.",
+        "field": "driving_range",
+        "expected_contains": "km",
+        "required": false
+      }
+    ],
+    "entity_boundary_checks": [
+      {
+        "name": "Entity A and Entity B should not be merged when DOM-aware card chunking is enabled.",
+        "enabled": false,
+        "entity_names": ["Entity A", "Entity B"],
+        "expected_same_chunk": false
+      }
+    ]
+  },
+  "notes": [
+    "Copy this file into a scenario folder and replace the snippets with sample-specific checks.",
+    "Use broad snippet and metadata assertions unless the fixture is intentionally tiny."
+  ]
+}

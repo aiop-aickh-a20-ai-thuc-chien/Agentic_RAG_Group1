@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,7 +33,28 @@ class ChunkCandidate(_IngestionChunkingModel):
     section_level: int = 0
     section_path: tuple[str, ...] = ()
     chunk_token_count: int | None = None
-    semantic_unit: str | None = None
+    semantic_unit: Literal[
+        "hierarchical_markdown_subsection",
+        "state_scope",
+        "product_variant",
+        "interaction_state",
+        "pricing_table_row",
+    ] | str | None = None
+
+
+class StateScope(_IngestionChunkingModel):
+    """Source-neutral text captured for one stable dynamic state scope."""
+
+    scope_type: str
+    state_id: str
+    stable_id: str
+    label: str
+    text: str
+    parent_state_id: str | None = None
+    parent_labels: tuple[str, ...] = ()
+    sibling_index: int = 0
+    role: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 MarkdownChunk = ChunkCandidate

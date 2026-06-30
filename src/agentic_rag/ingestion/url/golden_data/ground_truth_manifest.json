@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "created_at": "2026-06-18T00:00:00+07:00",
+  "language": "vi",
+  "datasets": [
+    {
+      "dataset_id": "dat_coc_vinfast_state",
+      "target_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF3",
+      "ground_truth_file": "src/agentic_rag/ingestion/url/golden_data/vinfast_vf9_rolling_cost_ground_truth.json",
+      "judge_prompt_file": "src/agentic_rag/ingestion/url/golden_data/promt_judge_VF9_rolling_cost.txt",
+      "status": "state_only_not_yet_calculated",
+      "notes": [
+        "Tên file có VF9 nhưng dataset này được dùng làm ground truth trạng thái cho URL đặt cọc có modelId=Products-Car-VF3.",
+        "Ground truth hiện mô tả state/configurator và panel modelId; không coi các chi phí lăn bánh là kết quả tính toán cuối cùng cho VF3."
+      ]
+    },
+    {
+      "dataset_id": "vinfast_homepage_hidden_data",
+      "target_url": "https://vinfastauto.com/vn_vi",
+      "ground_truth_file": "src/agentic_rag/ingestion/url/golden_data/trang_vinfast_vn.json",
+      "judge_prompt_file": "src/agentic_rag/ingestion/url/golden_data/judge_prompt_trang_vinfast_vn.txt",
+      "status": "homepage_ground_truth_with_hidden_data",
+      "notes": [
+        "Ground truth này chứa dữ liệu ẩn/khó thấy trên trang chủ VinFast Việt Nam.",
+        "Judge prompt kiểm tra navigation, banner, hệ sinh thái, footer và phân biệt giá hiện tại với giá gốc bị gạch ngang."
+      ]
+    }
+  ],
+  "usage": {
+    "ground_truth_placeholder": "Thay nội dung file ground_truth_file vào placeholder <GROUND_TRUTH> trong judge_prompt_file.",
+    "model_output_placeholder": "Thay JSON trích xuất của pipeline vào placeholder <MODEL_OUTPUT> trong judge_prompt_file.",
+    "markdown_output_placeholder": "Thay Markdown dựng từ JSON/state của pipeline vào placeholder <MARKDOWN_OUTPUT> trong judge_prompt_file.",
+    "judge_output": {
+      "required_format": "json",
+      "required_keys": [
+        "reasoning",
+        "missing_or_hallucinated_keys",
+        "json_score",
+        "markdown_score",
+        "score",
+        "final_verdict"
+      ]
+    }
+  }
+}

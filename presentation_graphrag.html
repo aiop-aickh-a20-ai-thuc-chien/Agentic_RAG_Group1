@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphRAG Implementation Showcase — Group 1</title>
+<style>
+/* ─── Premium Dark Cyber Design System ──────────────────────── */
+:root {
+  --bg-gradient: radial-gradient(circle at 50% 50%, #0c1020 0%, #05070f 100%);
+  --surface: rgba(13, 19, 36, 0.75);
+  --surface-hover: rgba(20, 28, 52, 0.85);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-active: rgba(0, 213, 108, 0.4);
+  
+  /* Accent Colors */
+  --neon-green: #00d56c;
+  --neon-blue: #00c0ff;
+  --neon-purple: #a855f7;
+  --neon-amber: #f59e0b;
+  
+  /* Dim/Glow versions */
+  --green-glow: rgba(0, 213, 108, 0.15);
+  --blue-glow: rgba(0, 192, 255, 0.15);
+  --purple-glow: rgba(168, 85, 247, 0.15);
+  
+  /* Typography */
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  
+  /* Radius */
+  --r-card: 16px;
+  --r-sm: 8px;
+  --r-pill: 999px;
+}
+
+/* ─── Base Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden;
+  background: #05070f; background-image: var(--bg-gradient);
+  color: var(--text-primary);
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ─── Grid Backdrop ──────────────────────────────────────── */
+.cyber-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  mask-image: radial-gradient(circle at 50% 50%, black 30%, transparent 90%);
+  z-index: 1;
+}
+
+/* ─── Slide System ──────────────────────────────────────── */
+.deck { width: 100%; height: 100vh; position: relative; z-index: 2; }
+.slide {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: 60px 80px;
+  opacity: 0; pointer-events: none;
+  transform: translateY(30px) scale(0.98);
+  transition: opacity .6s cubic-bezier(.25,1,.5,1),
+              transform .6s cubic-bezier(.25,1,.5,1);
+  overflow: hidden;
+}
+.slide.active {
+  opacity: 1; pointer-events: all; transform: translateY(0) scale(1);
+}
+.slide.prev {
+  opacity: 0; transform: translateY(-30px) scale(0.98);
+}
+
+/* ─── Navigation ────────────────────────────────────────── */
+.nav-bar {
+  position: fixed; bottom: 30px; left: 50%;
+  transform: translateX(-50%); z-index: 99;
+  display: flex; align-items: center; gap: 16px;
+  background: rgba(10, 15, 30, 0.85);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
+  border-radius: var(--r-pill); padding: 10px 24px;
+}
+.nav-bar button {
+  background: none; border: none; color: var(--text-secondary);
+  font-size: 22px; cursor: pointer; padding: 4px 10px;
+  border-radius: var(--r-sm); line-height: 1;
+  transition: color .2s, background .2s, transform .1s;
+}
+.nav-bar button:hover { color: var(--neon-green); background: rgba(255, 255, 255, 0.05); }
+.nav-bar button:active { transform: scale(0.9); }
+.nav-bar button.off { opacity: .2; pointer-events: none; }
+.dots { display: flex; gap: 8px; }
+.dot {
+  width: 8px; height: 8px; border-radius: var(--r-pill);
+  background: var(--text-muted); cursor: pointer;
+  transition: all .3s cubic-bezier(.25,1,.5,1);
+}
+.dot.on { background: var(--neon-green); width: 24px; box-shadow: 0 0 8px var(--neon-green); }
+.slide-count { font-size: 12px; color: var(--text-secondary); min-width: 45px; text-align: center; font-weight: 500; }
+
+/* ─── Typography ────────────────────────────────────────── */
+.kicker {
+  font-size: 12px; font-weight: 800; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--neon-green); margin-bottom: 16px;
+  text-shadow: 0 0 10px rgba(0,213,108,0.3);
+}
+.display {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 800; letter-spacing: -.03em; line-height: 1.1;
+  margin-bottom: 8px;
+}
+.title {
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 800; letter-spacing: -.02em; line-height: 1.2;
+}
+.heading { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.body { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+.mono {
+  font-family: "SF Mono", "Fira Code", monospace; font-size: .8rem;
+}
+
+/* ─── Custom Gradients ──────────────────────────────────── */
+.grad-green {
+  background: linear-gradient(120deg, var(--neon-green) 0%, var(--neon-blue) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.grad-purple {
+  background: linear-gradient(120deg, var(--neon-blue) 0%, var(--neon-purple) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* ─── Cards & Containers ────────────────────────────────── */
+.w-full { width: 100%; max-width: 1200px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.col { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; align-items: center; gap: 12px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-card); padding: 24px;
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s ease;
+}
+.card:hover {
+  background: var(--surface-hover); border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+.card-accent-green { border-left: 4px solid var(--neon-green); }
+.card-accent-blue { border-left: 4px solid var(--neon-blue); }
+.card-accent-purple { border-left: 4px solid var(--neon-purple); }
+
+/* ─── Badges ────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .75rem; font-weight: 600; padding: 4px 12px;
+  border-radius: var(--r-pill); border: 1px solid transparent;
+}
+.badge-green { background: var(--green-glow); color: var(--neon-green); border-color: rgba(0, 213, 108, 0.3); }
+.badge-blue { background: var(--blue-glow); color: var(--neon-blue); border-color: rgba(0, 192, 255, 0.3); }
+.badge-purple { background: var(--purple-glow); color: var(--neon-purple); border-color: rgba(168, 85, 247, 0.3); }
+.badge-amber { background: rgba(245, 158, 11, 0.1); color: var(--neon-amber); border-color: rgba(245, 158, 11, 0.3); }
+
+/* ─── Animations ────────────────────────────────────────── */
+.slide.active .s { animation: upIn .6s cubic-bezier(.25,1,.5,1) both; }
+.slide.active .s1 { animation-delay: .05s; }
+.slide.active .s2 { animation-delay: .12s; }
+.slide.active .s3 { animation-delay: .20s; }
+.slide.active .s4 { animation-delay: .28s; }
+.slide.active .s5 { animation-delay: .35s; }
+.slide.active .s6 { animation-delay: .42s; }
+
+@keyframes upIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Interactive Graph Simulation ─────────────────────── */
+.graph-container {
+  position: relative; width: 100%; height: 320px;
+  background: rgba(5, 7, 15, 0.6); border: 1px solid var(--border);
+  border-radius: var(--r-card); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.node-circle {
+  position: absolute; width: 54px; height: 54px; border-radius: 50%;
+  background: #111827; border: 2px solid var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: var(--text-secondary);
+  cursor: pointer; z-index: 10; transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  text-align: center; padding: 2px;
+}
+.node-circle.seed {
+  border-color: var(--neon-blue); color: var(--neon-blue);
+  box-shadow: 0 0 15px rgba(0, 192, 255, 0.4);
+}
+.node-circle.hop-1 {
+  border-color: var(--neon-green); color: var(--neon-green);
+  box-shadow: 0 0 15px rgba(0, 213, 108, 0.3);
+}
+.node-circle.hop-2 {
+  border-color: var(--neon-purple); color: var(--neon-purple);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+.node-circle span { font-size: 8px; opacity: 0.7; font-weight: normal; margin-top: 1px; }
+
+/* ─── Comparison Table ──────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+th { font-weight: 700; color: var(--text-primary); background: rgba(255,255,255,0.02); }
+td { color: var(--text-secondary); }
+tr:hover td { color: var(--text-primary); background: rgba(255, 255, 255, 0.01); }
+
+/* Code Blocks */
+pre {
+  background: rgba(5, 7, 15, 0.8); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 16px; overflow-x: auto;
+  font-family: "SF Mono", "Fira Code", monospace; font-size: 0.75rem; line-height: 1.5;
+  color: #e5e7eb;
+}
+.keyword { color: #f472b6; }
+.builtin { color: #93c5fd; }
+.string { color: #34d399; }
+.comment { color: #6b7280; }
+.func { color: #fbbf24; }
+
+</style>
+</head>
+<body>
+
+<div class="cyber-grid"></div>
+
+<div class="deck">
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 1 — COVER
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide active" id="s1">
+    <div style="text-align: center; max-width: 900px; position: relative; z-index: 10;">
+      <div class="kicker s s1">GraphRAG Technology Showcase</div>
+      <h1 class="display s s2" style="margin-bottom: 16px;">
+        Triển Khai <span class="grad-green">GraphRAG</span> Trong Hệ Thống Agentic RAG
+      </h1>
+      <p class="body s s3" style="font-size: 1.2rem; color: var(--text-secondary); margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto;">
+        Xây dựng đồ thị tri thức (Knowledge Graph) phục vụ tìm kiếm ngữ nghĩa nâng cao cho miền nghiệp vụ xe điện VinFast.
+      </p>
+      
+      <div style="width: 80px; height: 3px; background: linear-gradient(90deg, var(--neon-green), var(--neon-blue)); margin: 0 auto 36px;" class="s s4"></div>
+      
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;" class="s s5">
+        <span class="badge badge-green">Offline KG Construction</span>
+        <span class="badge badge-blue">Online Multi-Hop Expansion</span>
+        <span class="badge badge-purple">Neo4j & Local JSON Engine</span>
+        <span class="badge badge-amber">RRF Hybrid Fusion</span>
+      </div>
+      
+      <div style="margin-top: 48px; font-size: 0.8rem; color: var(--text-muted);" class="s s6">
+        Nhóm 1 · Dự Án Agentic RAG Xe Điện VinFast · 2026
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 2 — ARCHITECTURE OVERVIEW
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s2">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 24px;">
+        <h2 class="title">Kiến Trúc Tổng Quan GraphRAG</h2>
+        <span class="badge badge-green">Pipeline End-to-End</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="card card-accent-green col">
+          <div class="heading" style="color: var(--neon-green);">
+            <span>📁</span> 1. Offline Ingestion (KG Construction)
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Phân tích tài liệu PDF & URL, trích xuất thực thể (Entities) và mối quan hệ (Relationships) để lưu trữ vào Đồ thị tri thức.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-green);">Parsing & Chunking:</strong> Sử dụng Docling & OCR phân nhỏ văn bản thành các chunks có cấu trúc.
+            </div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-green);">Entity Normalization:</strong> Chuẩn hóa thực thể qua file <code style="color: var(--neon-blue);">entity_map.json</code> để gộp thực thể đồng nghĩa (ví dụ: VF8, VF 8, VinFast VF 8).
+            </div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-green);">Relation Mapping:</strong> Sử dụng LLM trích xuất triple <code style="color: var(--neon-purple);">(head, relation, tail)</code> hoặc tự động fallback sang đồ thị Co-occurrence.
+            </div>
+          </div>
+        </div>
+        
+        <div class="card card-accent-blue col">
+          <div class="heading" style="color: var(--neon-blue);">
+            <span>⚡</span> 2. Online Graph-Enhanced Retrieval & RAG
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Tại runtime, câu hỏi của người dùng được phân tích thực thể để tra cứu liên kết, mở rộng ngữ cảnh tìm kiếm từ Vector Store.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-blue);">Entity Detection:</strong> Nhận diện thực thể trong câu hỏi truy vấn (sử dụng Dictionary Lookup kết hợp LLM).
+            </div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-blue);">BFS Traversal (K-hops):</strong> Dùng thuật toán duyệt đồ thị (BFS) tìm các thực thể lân cận trong bán kính K-hop.
+            </div>
+            <div style="padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.8rem;">
+              <strong style="color: var(--neon-blue);">Hybrid Fusion (RRF):</strong> Gộp kết quả truy vấn đồ thị với BM25 & Dense Search trong Qdrant/pgvector, sau đó Rerank qua Cross-Encoder.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 3 — INGESTION: KNOWLEDGE GRAPH CONSTRUCTION
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s3">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 16px;">
+        <h2 class="title">Xây Dựng Knowledge Graph Offline</h2>
+        <span class="badge badge-green">Data Ingestion</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="col">
+          <div class="card col">
+            <div class="heading" style="color: var(--neon-green);">
+              <span>🔗</span> Dual-Strategy Extraction
+            </div>
+            <p class="body" style="font-size: 0.85rem;">
+              Hệ thống kết hợp hai phương pháp xây dựng mối quan hệ trên đồ thị tri thức để cân bằng giữa độ chính xác và chi phí:
+            </p>
+            <ul class="body" style="font-size: 0.8rem; padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+              <li>
+                <strong style="color: var(--neon-blue);">Chiến lược 1: LLM-Extracted Relations (Mặc định)</strong><br>
+                LLM đọc chunk và trích xuất danh sách các quan hệ rõ ràng có nhãn và độ tin cậy <code style="color: var(--neon-purple);">(head, relation, tail, strength)</code>.
+              </li>
+              <li>
+                <strong style="color: var(--neon-amber);">Chiến lược 2: Co-occurrence Fallback (Dự phòng)</strong><br>
+                Nếu chunk không chứa thông tin quan hệ rõ ràng, hệ thống tự động liên kết các thực thể cùng xuất hiện trong một chunk (<code style="color: var(--neon-amber);">relation: "cooccur"</code>).
+              </li>
+            </ul>
+          </div>
+          
+          <div class="card col">
+            <div class="heading" style="color: var(--neon-blue);">
+              <span>💾</span> Lớp Lưu Trữ Kép (Storage Layer)
+            </div>
+            <p class="body" style="font-size: 0.8rem;">
+              GraphStore hỗ trợ song song hai loại database thông qua master toggle cấu hình:
+            </p>
+            <div class="row" style="gap: 10px; margin-top: 5px;">
+              <span class="badge badge-purple" style="flex: 1; justify-content: center;">Neo4j (Production-ready Cypher)</span>
+              <span class="badge badge-blue" style="flex: 1; justify-content: center;">Local JSON (Lightweight in-memory)</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col">
+          <div class="card col" style="height: 100%;">
+            <div class="heading" style="color: var(--neon-purple);">
+              <span>📝</span> Class GraphStore Implementation
+            </div>
+            <pre style="height: 260px; font-size: 0.7rem; overflow-y: auto;">
+<span class="keyword">class</span> <span class="func">GraphStore</span>:
+    <span class="keyword">def</span> <span class="func">add_relation</span>(<span class="builtin">self</span>, head: <span class="builtin">str</span>, relation: <span class="builtin">str</span>, tail: <span class="builtin">str</span>, strength: <span class="builtin">float</span> = 1.0) -> <span class="builtin">None</span>:
+        norm_head = normalize_entity(head).strip().upper()
+        norm_tail = normalize_entity(tail).strip().upper()
+        
+        <span class="keyword">if</span> <span class="builtin">self</span>.use_neo4j:
+            <span class="comment"># Lưu trữ vào Neo4j bằng câu lệnh Cypher MERGE</span>
+            query = (
+                <span class="string">"MERGE (h:Entity {name: $head_name}) "</span>
+                <span class="string">"MERGE (t:Entity {name: $tail_name}) "</span>
+                <span class="string">"MERGE (h)-[r:RELATION {type: $relation_type}]->(t) "</span>
+                <span class="string">"ON CREATE SET r.strength = $strength "</span>
+                <span class="string">"ON MATCH SET r.strength = CASE WHEN $strength > r.strength THEN $strength ELSE r.strength END"</span>
+            )
+            <span class="comment"># Thực thi Cypher session...</span>
+        <span class="keyword">else</span>:
+            <span class="comment"># Fallback sang cấu trúc Adjacency List cục bộ</span>
+            <span class="builtin">self</span>.adj[norm_head].append({
+                <span class="string">"neighbor"</span>: norm_tail, <span class="string">"relation"</span>: relation.lower(), <span class="string">"strength"</span>: strength
+            })
+            <span class="builtin">self</span>.save()
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 4 — ONLINE RETRIEVAL: GRAPH NEIGHBORHOOD EXPANSION
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s4">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 12px;">
+        <h2 class="title">Online Retrieval: Mở Rộng Tập Thực Thể (BFS)</h2>
+        <span class="badge badge-blue">Graph Traversal</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="col">
+          <div class="card col">
+            <div class="heading" style="color: var(--neon-blue);">
+              <span>🔍</span> Cơ Chế BFS Expansion
+            </div>
+            <p class="body" style="font-size: 0.85rem;">
+              Khi người dùng hỏi một câu truy vấn có liên quan đến thực thể (ví dụ: <code style="color: var(--neon-blue);">"VF 8"</code>), hệ thống sẽ:
+            </p>
+            <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px;" class="body">
+              <div>
+                <strong style="color: var(--neon-blue);">Bước 1:</strong> Trích xuất thực thể gốc (Seed) từ câu hỏi: <code style="color: var(--neon-blue);">["VF 8"]</code>.
+              </div>
+              <div>
+                <strong style="color: var(--neon-green);">Bước 2:</strong> Duyệt đồ thị theo thuật toán Breadth-First Search (BFS) để tìm các thực thể liên quan trực tiếp hoặc gián tiếp trong bán kính $K$-hops.
+              </div>
+              <div>
+                <strong style="color: var(--neon-purple);">Bước 3:</strong> Gộp thực thể gốc với thực thể mở rộng để làm bộ lọc <code style="color: var(--neon-purple);">entity_filter</code> trong Qdrant/pgvector, đảm bảo lấy đầy đủ các chunks thông tin liên quan.
+              </div>
+            </div>
+            <div style="margin-top: 10px; padding: 10px; background: rgba(0, 192, 255, 0.05); border: 1px solid rgba(0, 192, 255, 0.2); border-radius: var(--r-sm);">
+              <span class="body" style="font-size: 0.75rem; font-weight: 600; color: var(--neon-blue);">
+                💡 Giải quyết triệt để bài toán multi-hop: Tìm được thông tin về "bộ sạc" hoặc "pin" của "VF 8" dù câu hỏi ban đầu chỉ nhắc tới tên xe.
+              </span>
+            </div>
+          </div>
+          
+          <div class="row" style="gap: 12px;">
+            <button onclick="simulateGraph(1)" class="badge badge-green" style="flex: 1; justify-content: center; height: 36px; cursor: pointer; border: 1px solid var(--neon-green);">
+              Mô phỏng 1-Hop Expansion (Lân cận trực tiếp)
+            </button>
+            <button onclick="simulateGraph(2)" class="badge badge-purple" style="flex: 1; justify-content: center; height: 36px; cursor: pointer; border: 1px solid var(--neon-purple);">
+              Mô phỏng 2-Hop Expansion (Liên kết gián tiếp)
+            </button>
+          </div>
+        </div>
+        
+        <div class="col">
+          <div class="graph-container" id="interactive-graph">
+            <!-- Graph Nodes will render here via JS -->
+            <div class="node-circle seed" style="top: 130px; left: 180px;" id="node-vf8">
+              VF 8
+              <span>(Seed Node)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 40px; left: 60px;" id="node-pin">
+              PIN LFP
+              <span>(Relation)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 40px; left: 300px;" id="node-sac">
+              SẠC 7.4KW
+              <span>(Relation)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 220px; left: 100px;" id="node-thue">
+              THUÊ PIN
+              <span>(Relation)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 220px; left: 260px;" id="node-gia">
+              BẢNG GIÁ
+              <span>(Relation)</span>
+            </div>
+            
+            <!-- Hop 2 Nodes -->
+            <div class="node-circle" style="top: 40px; left: 180px; display: none;" id="node-catl">
+              CATL
+              <span>(Vendor)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 130px; left: 40px; display: none;" id="node-home">
+              SẠC TẠI NHÀ
+              <span>(Usage)</span>
+            </div>
+            
+            <div class="node-circle" style="top: 130px; left: 320px; display: none;" id="node-deposit">
+              ĐẶT CỌC
+              <span>(Policy)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 5 — RETRIEVAL INTEGRATION: HYBRID FUSION
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s5">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 24px;">
+        <h2 class="title">Tích Hợp Hybrid Search & RRF Fusion</h2>
+        <span class="badge badge-purple">Reciprocal Rank Fusion</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="card col card-accent-purple">
+          <div class="heading" style="color: var(--neon-purple);">
+            <span>🧬</span> Mô Hình Hybrid Search N-Way
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Đồ thị tri thức (Graph path) được tích hợp trực tiếp như một luồng dữ liệu song song với các phương thức tìm kiếm truyền thống:
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 5px;">
+            <div class="row" style="justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+              <span class="body" style="font-weight: 600;">Luồng 1: BM25 Sparse Search</span>
+              <span class="badge badge-blue">PostgreSQL Fulltext</span>
+            </div>
+            <div class="row" style="justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+              <span class="body" style="font-weight: 600;">Luồng 2: Dense Semantic Search</span>
+              <span class="badge badge-green">pgvector / Qdrant</span>
+            </div>
+            <div class="row" style="justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+              <span class="body" style="font-weight: 600;">Luồng 3: Graph-Expanded Search</span>
+              <span class="badge badge-purple">BFS Entity Filter</span>
+            </div>
+          </div>
+          <p class="body" style="font-size: 0.8rem; margin-top: 5px;">
+            Cả 3 nguồn kết quả được xếp hạng và hợp nhất bằng giải thuật <strong style="color: var(--neon-purple);">RRF (Reciprocal Rank Fusion)</strong> với tham số mặc định $k=60$.
+          </p>
+        </div>
+        
+        <div class="card col">
+          <div class="heading" style="color: var(--neon-blue);">
+            <span>⚡</span> Cấu Hình Runtime & Toggle Env
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Tính năng GraphRAG được quản lý linh hoạt bằng các biến môi trường cấu hình tại runtime mà không cần khởi động lại hệ thống:
+          </p>
+          <pre style="font-size: 0.72rem;">
+<span class="comment"># Kích hoạt Graph-enhanced retrieval</span>
+RETRIEVAL_GRAPH_ENABLED=<span class="keyword">true</span>
+
+<span class="comment"># Số hop tối đa duyệt trên đồ thị</span>
+RETRIEVAL_GRAPH_HOPS=2
+
+<span class="comment"># Neo4j Database Connection</span>
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=your_password
+          </pre>
+          <p class="body" style="font-size: 0.8rem; color: var(--text-muted);">
+            Lớp tích hợp API cho phép thay đổi cấu hình trực tiếp từ giao diện admin frontend.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 6 — RAG & GUARDRAILS
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s6">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 24px;">
+        <h2 class="title">RAG Engine: Trích Dẫn Nguồn & Guardrails</h2>
+        <span class="badge badge-amber">Self-Correction</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="card col card-accent-blue">
+          <div class="heading" style="color: var(--neon-blue);">
+            <span>🛡️</span> Citation Validation
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Để ngăn chặn hiện tượng ảo tưởng (Hallucination) từ mô hình ngôn ngữ lớn, hệ thống áp dụng các quy tắc kiểm soát nghiêm ngặt:
+          </p>
+          <ul class="body" style="font-size: 0.8rem; padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+            <li>
+              <strong style="color: var(--neon-green);">Bắt buộc khớp nguồn:</strong> Mọi thông tin trả về bắt buộc phải có trích dẫn liên kết trực tiếp tới <code style="color: var(--neon-blue);">storage_chunk_id</code> hoặc <code style="color: var(--neon-blue);">source_url</code> tồn tại trong hệ thống.
+            </li>
+            <li>
+              <strong style="color: var(--neon-purple);">Strict Citation Filtering:</strong> Sau khi LLM sinh câu trả lời kèm citation dạng JSON, hệ thống sẽ lọc bỏ các citation không hợp lệ hoặc trỏ sai tài liệu.
+            </li>
+            <li>
+              <strong style="color: var(--neon-amber);">Not Found Fallback:</strong> Nếu câu trả lời không có bất kỳ nguồn tham chiếu hợp lệ nào, hệ thống tự động trả về thông báo <code style="color: var(--neon-amber);">not_found</code> thay vì cố giải thích sai lệch.
+            </li>
+          </ul>
+        </div>
+        
+        <div class="card col card-accent-purple">
+          <div class="heading" style="color: var(--neon-purple);">
+            <span>🔄</span> Tích hợp LangGraph & Self-RAG
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Luồng xử lý Agentic RAG thông qua LangGraph được nâng cấp nhờ Graph-enhanced context:
+          </p>
+          <div style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;" class="body">
+            <div class="row">
+              <span style="color: var(--neon-purple); font-weight: bold;">1. Preprocess:</span> LLM phân tách câu hỏi phức tạp thành các ý định đơn lẻ.
+            </div>
+            <div class="row">
+              <span style="color: var(--neon-purple); font-weight: bold;">2. Retrieve:</span> Thực hiện tìm kiếm Graph + Vector song song qua ThreadPoolExecutor.
+            </div>
+            <div class="row">
+              <span style="color: var(--neon-purple); font-weight: bold;">3. Evaluate:</span> Hệ thống kiểm tra chất lượng kết quả. Nếu thiếu dữ liệu, thực hiện <strong style="color: var(--neon-amber);">Transform Query</strong> và truy vấn lại.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 7 — COMPARISON: TRADITIONAL VS GRAPHRAG
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s7">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 16px;">
+        <h2 class="title">So Sánh: Traditional RAG vs GraphRAG</h2>
+        <span class="badge badge-amber">Evaluation & Benchmarks</span>
+      </div>
+      
+      <div class="card s s2" style="padding: 10px; overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Tiêu chí so sánh</th>
+              <th>Traditional RAG (Vector / Hybrid)</th>
+              <th>GraphRAG (Integrated Knowledge Graph)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Câu hỏi tra cứu trực tiếp</strong> (Single-Fact)</td>
+              <td style="color: var(--neon-green);">Tốt, chi phí rẻ & phản hồi nhanh</td>
+              <td>Ngang bằng, nhưng có thể gây thừa thông tin</td>
+            </tr>
+            <tr>
+              <td><strong>Câu hỏi nhiều bước liên kết</strong> (Multi-Hop)</td>
+              <td style="color: #ef4444;">Kém (thường bị bỏ sót do thiếu liên kết từ khóa)</td>
+              <td style="color: var(--neon-green);">Xuất sắc (Tăng tới 20% Recall thông qua BFS/PPR expansion)</td>
+            </tr>
+            <tr>
+              <td><strong>Tính giải thích được</strong> (Explainability)</td>
+              <td>Trung bình (chỉ trả về danh sách chunks độc lập)</td>
+              <td style="color: var(--neon-green);">Tốt (hiển thị đường đi mối quan hệ của thực thể)</td>
+            </tr>
+            <tr>
+              <td><strong>Chi phí Indexing</strong> (Offline)</td>
+              <td style="color: var(--neon-green);">Thấp (chỉ cần sinh dense embeddings)</td>
+              <td>Trung bình-Cao (Cần LLM trích xuất quan hệ + Neo4j)</td>
+            </tr>
+            <tr>
+              <td><strong>Thời gian phản hồi</strong> (Latency)</td>
+              <td style="color: var(--neon-green);">Rất nhanh (&lt; 1 giây)</td>
+              <td>Nhanh (Local JSON) / Trung bình (Neo4j Network Hop)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="margin-top: 15px; font-size: 0.78rem; color: var(--text-muted); text-align: center;" class="s s3">
+        * Số liệu dựa trên nghiên cứu thử nghiệm nội bộ của Group 1 trên bộ dataset cẩm nang vận hành xe điện VinFast.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 8 — EVALUATION & METRICS
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s8">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 24px;">
+        <h2 class="title">Đánh Giá Hiệu Năng & Kết Quả Thử Nghiệm</h2>
+        <span class="badge badge-green">RAGAS Framework</span>
+      </div>
+      
+      <div class="grid-3 s s2">
+        <div class="card col text-center" style="align-items: center;">
+          <div style="font-size: 2.8rem; font-weight: 800; color: var(--neon-green); text-shadow: 0 0 15px var(--green-glow);">
+            71.3%
+          </div>
+          <div class="heading" style="font-size: 0.95rem; justify-content: center;">Faithfulness</div>
+          <p class="body" style="font-size: 0.78rem;">
+            Độ trung thực của câu trả lời bám sát theo ngữ cảnh (evidence), hạn chế tối đa việc sinh từ tự do.
+          </p>
+        </div>
+        
+        <div class="card col text-center" style="align-items: center;">
+          <div style="font-size: 2.8rem; font-weight: 800; color: var(--neon-blue); text-shadow: 0 0 15px var(--blue-glow);">
+            55.0%
+          </div>
+          <div class="heading" style="font-size: 0.95rem; justify-content: center;">Context Recall</div>
+          <p class="body" style="font-size: 0.78rem;">
+            Mức độ bao phủ ngữ cảnh thu hồi từ GraphRAG so với câu trả lời chuẩn (Ground Truth).
+          </p>
+        </div>
+        
+        <div class="card col text-center" style="align-items: center;">
+          <div style="font-size: 2.8rem; font-weight: 800; color: var(--neon-purple); text-shadow: 0 0 15px var(--purple-glow);">
+            47.6%
+          </div>
+          <div class="heading" style="font-size: 0.95rem; justify-content: center;">Context Precision</div>
+          <p class="body" style="font-size: 0.78rem;">
+            Mật độ thông tin hữu ích thu hồi được, lọc bỏ tối đa các chunks nhiễu không liên quan.
+          </p>
+        </div>
+      </div>
+      
+      <div class="card s s3" style="margin-top: 20px;">
+        <div class="heading" style="color: var(--neon-amber); font-size: 0.9rem; margin-bottom: 8px;">
+          <span>📈</span> Nhận xét từ đợt chạy thử nghiệm (Evaluation Run):
+        </div>
+        <p class="body" style="font-size: 0.8rem;">
+          Tích hợp GraphRAG cải thiện đáng kể điểm số <strong style="color: var(--neon-green);">Faithfulness (71.3%)</strong> nhờ các quy tắc trích dẫn nguồn citation nghiêm ngặt. Chỉ số Context Recall đang tiếp tục được tối ưu hóa bằng cách tăng cường mật độ liên kết các thực thể trong cơ sở dữ liệu graph.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 9 — FUTURE ROADMAP
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s9">
+    <div class="w-full">
+      <div class="row s s1" style="justify-content: space-between; margin-bottom: 24px;">
+        <h2 class="title">Định Hướng Phát Triển Tiếp Theo</h2>
+        <span class="badge badge-purple">Roadmap</span>
+      </div>
+      
+      <div class="grid-2 s s2">
+        <div class="card card-accent-purple col">
+          <div class="heading" style="color: var(--neon-purple);">
+            <span>🚀</span> 1. HippoRAG Integration (PPR Search)
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Áp dụng thuật toán <strong style="color: var(--neon-blue);">Personalized PageRank (PPR)</strong> từ nghiên cứu HippoRAG (NeurIPS 2024) để duyệt đồ thị hiệu quả.
+          </p>
+          <ul class="body" style="font-size: 0.8rem; padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+            <li>Thay thế vòng lặp truy vấn Agentic đắt đỏ bằng một bước tính PageRank trên đồ thị.</li>
+            <li>Giảm chi phí token từ 10–30x và tăng tốc độ xử lý từ 6–13x cho các truy vấn multi-hop phức tạp.</li>
+          </ul>
+        </div>
+        
+        <div class="card card-accent-green col">
+          <div class="heading" style="color: var(--neon-green);">
+            <span>📊</span> 2. Local to Global (Community Summaries)
+          </div>
+          <p class="body" style="font-size: 0.85rem;">
+            Xây dựng các tóm tắt nhóm thực thể (Community Summaries) theo thuật toán Leiden giống Microsoft GraphRAG.
+          </p>
+          <ul class="body" style="font-size: 0.8rem; padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+            <li>Phục vụ các câu hỏi mang tính tổng quan toàn bộ tập tài liệu (ví dụ: "Tóm tắt ưu nhược điểm của tất cả dòng xe máy điện VinFast").</li>
+            <li>Sử dụng cấu trúc phân cấp đồ thị (Hierarchical Communities) để giảm dung lượng prompt.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SLIDE 10 — Q&A / END
+       ══════════════════════════════════════════════════════ -->
+  <div class="slide" id="s10">
+    <div style="text-align: center; max-width: 800px; position: relative; z-index: 10;">
+      <h1 class="display s s1" style="font-size: 5rem; margin-bottom: 16px;">
+        Q <span class="grad-green">&</span> A
+      </h1>
+      <p class="body s s2" style="font-size: 1.2rem; margin-bottom: 40px; color: var(--text-secondary);">
+        Cảm ơn thầy và các bạn đã theo dõi phần trình bày!
+      </p>
+      
+      <div style="width: 80px; height: 3px; background: linear-gradient(90deg, var(--neon-green), var(--neon-blue)); margin: 0 auto 36px;" class="s s3"></div>
+      
+      <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;" class="s s4">
+        <div class="card" style="padding: 12px 24px; min-width: 180px;">
+          <div style="font-size: 0.75rem; color: var(--neon-green); font-weight: 700; text-transform: uppercase;">Graph Engine</div>
+          <div style="font-size: 0.85rem; margin-top: 4px; font-weight: 600;">Neo4j / NetworkX</div>
+        </div>
+        <div class="card" style="padding: 12px 24px; min-width: 180px;">
+          <div style="font-size: 0.75rem; color: var(--neon-blue); font-weight: 700; text-transform: uppercase;">Vector Store</div>
+          <div style="font-size: 0.85rem; margin-top: 4px; font-weight: 600;">Qdrant / pgvector</div>
+        </div>
+        <div class="card" style="padding: 12px 24px; min-width: 180px;">
+          <div style="font-size: 0.75rem; color: var(--neon-purple); font-weight: 700; text-transform: uppercase;">Reranker</div>
+          <div style="font-size: 0.85rem; margin-top: 4px; font-weight: 600;">bge-reranker-v2-m3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- ─── Slide Controls ──────────────────────────────────── -->
+<div class="nav-bar">
+  <button id="btn-prev" onclick="go(cur-1)">&#8249;</button>
+  <div class="dots" id="dots-bar"></div>
+  <button id="btn-next" onclick="go(cur+1)">&#8250;</button>
+  <span class="slide-count" id="count"></span>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total  = slides.length;
+let cur = 0;
+
+function buildDots() {
+  const bar = document.getElementById('dots-bar');
+  bar.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' on' : '');
+    d.onclick = () => go(i);
+    bar.appendChild(d);
+  }
+}
+
+function go(idx) {
+  if (idx < 0 || idx >= total) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('prev');
+  const fromIdx = cur;
+  cur = idx;
+  slides[cur].classList.remove('prev');
+  slides[cur].classList.add('active');
+  setTimeout(() => slides[fromIdx].classList.remove('prev'), 500);
+
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('on', i === cur));
+  document.getElementById('count').textContent = (cur+1)+'/'+total;
+  document.getElementById('btn-prev').classList.toggle('off', cur === 0);
+  document.getElementById('btn-next').classList.toggle('off', cur === total-1);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(cur+1); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); go(cur-1); }
+});
+
+// Interactive Graph Simulator
+function simulateGraph(hop) {
+  const hop2Nodes = ['node-catl', 'node-home', 'node-deposit'];
+  const hop1Nodes = ['node-pin', 'node-sac', 'node-thue', 'node-gia'];
+  
+  if (hop === 1) {
+    hop1Nodes.forEach(id => {
+      const node = document.getElementById(id);
+      node.classList.add('hop-1');
+      node.classList.remove('hop-2');
+    });
+    hop2Nodes.forEach(id => {
+      const node = document.getElementById(id);
+      node.style.display = 'none';
+      node.classList.remove('hop-2');
+    });
+  } else if (hop === 2) {
+    hop1Nodes.forEach(id => {
+      const node = document.getElementById(id);
+      node.classList.add('hop-1');
+      node.classList.remove('hop-2');
+    });
+    hop2Nodes.forEach(id => {
+      const node = document.getElementById(id);
+      node.style.display = 'flex';
+      // Stagger display slightly
+      setTimeout(() => {
+        node.classList.add('hop-2');
+      }, 50);
+    });
+  }
+}
+
+buildDots();
+go(0);
+</script>
+</body>
+</html>

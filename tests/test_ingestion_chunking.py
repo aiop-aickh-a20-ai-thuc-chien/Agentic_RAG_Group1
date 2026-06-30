@@ -53,8 +53,56 @@ def test_chunking_package_exposes_focused_submodules_and_compat_exports() -> Non
     assert chunking.chunk_markdown_by_sections is chunk_markdown_by_sections
 
 
+def test_state_scopes_preserve_hierarchy_context_and_split_metadata() -> None:
+    scopes = [
+        chunking.StateScope(
+            scope_type="model",
+            state_id="model-state",
+            stable_id="VF9",
+            label="VF 9",
+            text="Common model overview.",
+        ),
+        chunking.StateScope(
+            scope_type="edition",
+            state_id="eco-state",
+            stable_id="NE3NV",
+            label="Eco",
+            parent_state_id="model-state",
+            parent_labels=("VF 9",),
+            text="Edition price 1.499 billion VND. Seven seat configuration is available.",
+            sibling_index=0,
+            metadata={"section_origin": "dynamic_interaction"},
+        ),
+    ]
+
+    chunks = chunking.chunk_state_scopes(scopes, max_tokens=8)
+    eco_chunks = [item for item in chunks if item.metadata["state_id"] == "eco-state"]
+
+    assert len(eco_chunks) > 1
+    assert all(item.text.startswith("VF 9 > Eco") for item in eco_chunks)
+    assert all(item.metadata["scope_path"] == "model:VF9/edition:NE3NV" for item in eco_chunks)
+    assert all(
+        item.metadata["parent_chunk_id"] == chunks[0].metadata["chunk_id"] for item in eco_chunks
+    )
+    assert [item.metadata["chunk_part_index"] for item in eco_chunks] == list(
+        range(1, len(eco_chunks) + 1)
+    )
+    assert chunking.promote_common_facts(
+        [{"warranty": "10 years"}, {"warranty": " 10 YEARS "}],
+        traversal_complete=True,
+    ) == {"warranty": "10 years"}
+    assert (
+        chunking.promote_common_facts(
+            [{"warranty": "10 years"}, {"warranty": "10 years"}],
+            traversal_complete=False,
+        )
+        == {}
+    )
+
+
 def test_url_chunking_reuses_shared_text_helpers() -> None:
     text = "alpha beta gamma delta epsilon"
+    markdown = "# Section\n\nReusable URL text."
 
     assert url_chunking.split_markdown(text, chunk_size=16, chunk_overlap=5) == (
         chunking.split_markdown(text, chunk_size=16, chunk_overlap=5)
@@ -66,7 +114,10 @@ def test_url_chunking_reuses_shared_text_helpers() -> None:
     assert url_chunking.split_markdown_paragraphs is chunking.split_markdown_paragraphs
     assert url_chunking.split_sentences is chunking.split_sentences
     assert url_chunking.detect_lang is chunking.detect_lang
-    assert url_chunking.chunk_markdown_by_sections is chunking.chunk_markdown_by_sections
+    assert url_chunking.chunk_markdown_by_sections is not chunking.chunk_markdown_by_sections
+    assert url_chunking.chunk_markdown_by_sections(markdown) == (
+        chunking.chunk_markdown_by_sections(markdown)
+    )
 
 
 def test_shared_paragraph_chunking_uses_boundaries_and_overlap() -> None:

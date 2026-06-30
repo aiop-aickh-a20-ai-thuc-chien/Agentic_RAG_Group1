@@ -1,0 +1,100 @@
+{
+  "dat_coc_vinfast": {
+    "thong_tin_xe_hien_tai": {
+      "model": "VF 9",
+      "chon_phien_ban": [
+        {
+          "ten_phien_ban": "VF 9 Eco",
+          "gia_thuc_te_hien_tai": "1.499.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "1.589.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          },
+          "tuy_chon_pin": "Bao gồm PIN ~423 km/1 lần sạc"
+        },
+        {
+          "ten_phien_ban": "VF 9 Plus tùy chọn 7 chỗ",
+          "gia_thuc_te_hien_tai": "1.699.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "1.789.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          },
+          "tuy_chon_pin": "Bao gồm PIN ~423 km/1 lần sạc"
+        },
+        {
+          "ten_phien_ban": "VF 9 Plus tùy chọn ghế cơ trưởng",
+          "gia_thuc_te_hien_tai": "1.731.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "1.821.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          },
+          "tuy_chon_pin": "Bao gồm PIN ~438 km/1 lần sạc"
+        }
+      ],
+      "ngoai_that_VF9": {
+        "mau_co_ban_theo_xe": [
+          "Infinity Blanc (Trắng)",
+          "Jet Black (Đen)",
+          "Zenith Grey (Xám)",
+          "Crimson Red (Đỏ)",
+          "Urban Mint (Xanh ngọc)"
+        ],
+        "mau_nang_cao": {
+          "phu_phi": "12.000.000 VNĐ",
+          "danh_sach_mau": [
+            "Ivy Green (Xanh lá)",
+            "Desat Silver (Bạc)"
+          ]
+        }
+      },
+      "noi_that_VF9": {
+        "danh_sach_mau": [
+          "Granite Black (Đen)",
+          "Saddle Brown (Nâu)",
+          "Cotton Beige (Be)"
+        ],
+        "ghi_chu": "Tùy chọn màu nội thất phụ thuộc vào việc lựa chọn phiên bản Eco hay Plus."
+      },
+      "thong_tin_khach_hang_va_thanh_toan": {
+        "thanh_vien": {
+          "hang_thanh_vien": ["Chưa có", "VinClub Vàng", "VinClub Bạch Kim", "VinClub Kim Cương"],
+          "quyen_loi": "Áp dụng tích điểm và giảm giá trực tiếp tùy theo hạng thẻ VinClub"
+        },
+        "uu_dai": {
+          "ma_khuyen_mai": null,
+          "chuong_trinh_ap_dung": "Miễn phí sạc pin, ưu đãi gửi xe công cộng Vingroup"
+        },
+        "tinh_thanh": {
+          "lua_chon_tinh_thanh": ["Hà Nội", "TP. Hồ Chí Minh", "Hà Tĩnh", "Các tỉnh/thành phố khác"]
+        },
+        "bang_tinh_chi_phi": {
+          "gia_ca": "1.499.000.000 VNĐ",
+          "phi_giam_ve_uu_dai": "- 0 VNĐ",
+          "chi_phi_lan_banh_du_kien": {
+            "le_phi_truoc_ba": "0 VNĐ (Ô tô điện được miễn 100% LPTB)",
+            "phi_dang_ky_bien_so": "20.000.000 VNĐ (Tạm tính tại vùng I)",
+            "phi_dang_kiem": "340.000 VNĐ",
+            "phi_bao_tri": "1.560.000 VNĐ / năm (Phí bảo trì đường bộ)",
+            "bao_hiem_tnds_bat_buoc": "873.400 VNĐ / năm",
+            "tong_chi_phi_lan_banh": "1.521.773.400 VNĐ"
+          }
+        }
+      }
+    },
+    "cac_xe_VF_khac": {
+      "mo_ta": "Panel điều hướng bên phải. Khi tương tác sẽ cập nhật tham số URL ?modelId=",
+      "danh_sach_model": [
+        { "ten_xe": "VF 3", "modelId": "Products-Car-VF3" },
+        { "ten_xe": "VF 5", "modelId": "Products-Car-VF5" },
+        { "ten_xe": "VF 6", "modelId": "Products-Car-VF6" },
+        { "ten_xe": "VF 7", "modelId": "Products-Car-VF7" },
+        { "ten_xe": "VF 8", "modelId": "Products-Car-VF8" },
+        { "ten_xe": "VF 8 The All New", "modelId": "Products-Car-VF8-The-All-New" },
+        { "ten_xe": "MPV 7", "modelId": "Products-Car-MPV7" }
+      ]
+    }
+  }
+}

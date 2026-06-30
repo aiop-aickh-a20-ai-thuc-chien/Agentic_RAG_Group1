@@ -18,6 +18,7 @@ from rank_bm25 import BM25Okapi
 from turbovec.langchain import TurboQuantVectorStore
 
 from agentic_rag.core.contracts import Chunk, EmbeddingOutput, SearchResult
+from agentic_rag.ingestion.metadata import QDRANT_INDEX_FIELDS
 from agentic_rag.model_runtime.config import EmbeddingConfig, resolve_embedding_config
 from agentic_rag.model_runtime.embeddings import (
     EmbeddingCompatibilityAdapter,
@@ -44,11 +45,8 @@ EmbeddingProfile = EmbeddingOutput
 _QDRANT_DOCUMENT_ID_FIELD = "document_id"
 _QDRANT_DEDUP_PRIMARY_LAYER_FIELD = "metadata.deduplication.primary_layer"
 _QDRANT_ENTITIES_CANONICAL_FIELD = "metadata.entities_canonical"
-_QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS = (
-    _QDRANT_DOCUMENT_ID_FIELD,
-    _QDRANT_DEDUP_PRIMARY_LAYER_FIELD,
-    _QDRANT_ENTITIES_CANONICAL_FIELD,
-)
+_QDRANT_METADATA_PREFILTER_EXCLUDE_FIELD = "metadata.metadata_prefilter_exclude"
+_QDRANT_KEYWORD_PAYLOAD_INDEX_FIELDS = QDRANT_INDEX_FIELDS
 
 REQUERY_ROUTER_PROMPT = """
 <task>
@@ -550,6 +548,23 @@ def _entity_prefilter_llm_enabled() -> bool:
     return os.getenv("ENTITY_PREFILTER_LLM", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _retrieval_graph_enabled() -> bool:
+    """Master toggle for Graph-enhanced retrieval query expansion (default OFF)."""
+    import os
+
+    return os.getenv("RETRIEVAL_GRAPH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _retrieval_graph_hops() -> int:
+    """Max hops for BFS neighbor expansion (default 1)."""
+    import os
+
+    try:
+        return max(int(os.getenv("RETRIEVAL_GRAPH_HOPS", "1")), 1)
+    except ValueError:
+        return 1
+
+
 _ENTITY_LLM_SYSTEM = (
     "Bạn trích xuất thực thể để LỌC tài liệu xe điện VinFast. CHỈ được chọn các tên "
     "có trong danh sách cho sẵn. Trả về DUY NHẤT một JSON array, không giải thích."
@@ -630,6 +645,19 @@ def _entity_prefilter_for(query: str) -> list[str] | None:
     entities = detect_in_query(query)
     if not entities and _entity_prefilter_llm_enabled():
         entities = list(_llm_detect_entities(query))
+
+    if entities and _retrieval_graph_enabled():
+        try:
+            from agentic_rag.retrieval.graph_store import GraphStore
+            store = GraphStore()
+            neighbors = store.get_neighbors(entities, max_depth=_retrieval_graph_hops())
+            if neighbors:
+                # Merge seed entities and their neighbors
+                entities = list(set(entities + neighbors))
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to expand entities via GraphStore: {e}")
+
     return entities or None
 
 
@@ -1576,9 +1604,15 @@ def _ensure_qdrant_payload_indexes(*, client: Any, collection: str, models: Any)
             create_payload_index(
                 collection_name=collection,
                 field_name=field_name,
-                field_schema=models.PayloadSchemaType.KEYWORD,
+                field_schema=_qdrant_payload_index_schema(field_name, models=models),
                 wait=True,
             )
+
+
+def _qdrant_payload_index_schema(field_name: str, *, models: Any) -> Any:
+    if field_name == _QDRANT_METADATA_PREFILTER_EXCLUDE_FIELD:
+        return getattr(models.PayloadSchemaType, "BOOL", models.PayloadSchemaType.KEYWORD)
+    return models.PayloadSchemaType.KEYWORD
 
 
 def _validate_qdrant_collection_info(
@@ -1811,6 +1845,12 @@ def _qdrant_combined_filter(
                 match=models.MatchAny(any=list(exclude_dedup_layers)),
             )
         )
+    must_not.append(
+        models.FieldCondition(
+            key=_QDRANT_METADATA_PREFILTER_EXCLUDE_FIELD,
+            match=models.MatchValue(value=True),
+        )
+    )
 
     if entity_filter and _hard_filter_enabled():
         # Union (OR) across canonical entities: a chunk matches if it carries ANY

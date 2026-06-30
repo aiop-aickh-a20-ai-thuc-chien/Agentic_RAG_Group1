@@ -23,6 +23,17 @@ DEFAULT_HIERARCHICAL_MIN_CHARS = 40
 _HEADING_RE = re.compile(r"^(?P<marker>#{1,6})(?!#)\s*(?P<title>.+?)\s*$")
 _SUBSECTION_NUMBER_RE = re.compile(r"^\s*(?:-\s*)?(\d+(?:\.\d+)*?)[.)]\s+(.{3,120})$")
 _BOLD_LEAD_RE = re.compile(r"^\s*(?:-\s*)?\*\*(.{2,80}?)\*\*:?\s*$")
+_ENTITY_HEADING_RE = re.compile(
+    r"^(?:VF\s?\d(?:\s+The\s+All\s+New)?|MPV\s?7|Evo200|Feliz\s+S|Klara\s+S|"
+    r"Vento\s+S|Theon\s+S|Herio\s+Green|Limo\s+Green|Minio\s+Green|Nerio\s+Green)$",
+    flags=re.IGNORECASE,
+)
+# TODO [guide_2/TODO.md Priority 3 – Reduce Cross-Model Noise]:
+# The regex above may miss normalised forms such as "VF9" (no space), "VF 9 Plus",
+# "VF 9 Eco", or future model names. Extend the pattern or replace it with a
+# data-driven allowlist loaded from the VinFast product catalogue.
+# Also add tests proving VF 3, VF 5, VF 6 facts are excluded from a VF9 parse.
+# Reference: guide_2/TODO.md Priority 3, guide_2/TODO_Gemini_Pro.md §3
 _VIETNAMESE_MARKERS = set("ăâđêôơưàáạảãằắặẳẵầấậẩẫèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ")
 
 
@@ -87,6 +98,12 @@ def chunk_markdown(
     overlap_chars: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[MarkdownChunk]:
     """Split Markdown into deterministic section-aware chunks."""
+
+    # TODO [guide_2/vinfast_pipeline_todo §6 – Retrieval benchmark]:
+    # Measure retrieval precision before and after this chunker runs on VinFast
+    # ground-truth questions. Store the report under guide_2 or benchmark/.
+    # Do not consider the chunking strategy finalized until a ground-truth pass
+    # confirms improvement. See: guide_2/missing implementation.md §cần môi trường
 
     if max_chars <= 0:
         raise ValueError("max_chars must be greater than zero.")
@@ -239,6 +256,14 @@ def chunk_markdown_by_sections(
     root_title: str | None = None,
 ) -> list[MarkdownChunk]:
     """Split Markdown into deterministic hierarchical chunks."""
+
+    # TODO [guide_2/TODO_Gemini.md §2 – Preserve entity boundaries before chunking]:
+    # When the Markdown contains multiple product entities (e.g. VF 9 and VF 8
+    # sections from the same configurator page), the coalescing logic below may
+    # merge them into a single chunk because both sections share the same major
+    # heading level. Before coalescing, assert that only one `product_model` scope
+    # is present in each merged block.
+    # Reference: guide_2/TODO_Gemini.md §2, guide_2/TODO_Gemini_Pro.md §1
 
     effective_max_chars = max_chars or DEFAULT_CHUNK_SIZE
     if max_chars is None and max_tokens != DEFAULT_PARAGRAPH_MAX_TOKENS:
@@ -463,6 +488,8 @@ def _coalesce_short_blocks(
         return label_len + len(text) + 1
 
     def is_short_candidate(path: list[str], text: str) -> bool:
+        if _is_atomic_entity_block(path, text):
+            return False
         return (
             len(path) >= 2
             and len(text.strip()) < DEFAULT_HIERARCHICAL_TARGET_MIN
@@ -528,7 +555,7 @@ def _merge_blocks_by_major(
 
     for path, section_level, text, src_start, src_end in blocks:
         major = tuple(path[:2])
-        if len(text) > max_chars:
+        if len(text) > max_chars or _is_atomic_entity_block(path, text):
             flush_buffer()
             output.append((path, section_level, text, src_start, src_end))
             continue
@@ -552,6 +579,35 @@ def _format_merged_blocks(
         label = " / ".join(path[len(common_path) :])
         lines.append(f"{label}: {text}" if label else text)
     return common_path, "\n".join(lines).strip()
+
+
+def _is_atomic_entity_block(path: list[str], text: str) -> bool:
+    if not path:
+        return False
+    title = path[-1].strip()
+    if not _ENTITY_HEADING_RE.match(title):
+        return False
+    normalized_text = text.casefold()
+    fact_markers = (
+        "modelid",
+        "gia",
+        "giá",
+        "cong suat",
+        "công suất",
+        "dung luong pin",
+        "dung lượng pin",
+        "quang duong",
+        "quãng đường",
+        "pin",
+        "kwh",
+        "kw",
+        "km",
+    )
+    # TODO [guide_2/TODO.md Priority 3 – Atomic entity block detection]:
+    # Add fact markers for color options, deposit amount, CTA URL, and warranty
+    # so that those blocks are also protected from cross-model merging.
+    # Reference: guide_2/TODO.md Priority 1 & 2
+    return not normalized_text or any(marker in normalized_text for marker in fact_markers)
 
 
 def _common_prefix(paths: list[list[str]]) -> list[str]:
@@ -751,7 +807,9 @@ def _count_tokens(text: str) -> int:
         tiktoken = cast(Any, import_module("tiktoken"))
         encoding = tiktoken.get_encoding("o200k_base")
         return len(encoding.encode(text))
-    except (ImportError, ModuleNotFoundError, RuntimeError, AttributeError):
+    except (ImportError, ModuleNotFoundError, RuntimeError, AttributeError, OSError):
+        return len(text.split())
+    except Exception:
         return len(text.split())
 
 

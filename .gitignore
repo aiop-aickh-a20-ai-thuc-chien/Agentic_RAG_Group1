@@ -98,3 +98,14 @@ scripts/_*.py
 
 # Data folder
 data/
+
+# Keep the current URL golden review demo visible even when local excludes hide guide/demo.
+!guide/demo/
+!guide/demo/url-crawl-review/
+!guide/demo/url-crawl-review/**
+guide/demo/url-crawl-review/__pycache__/
+guide/demo/url-crawl-review/output/
+guide/demo/url-crawl-review/node_modules/
+!guide/demo/url-golden-review-react/
+!guide/demo/url-golden-review-react/**
+guide/demo/url-golden-review-react/output/

@@ -1,0 +1,78 @@
+-Goal-
+Given a text document that is potentially relevant to VinFast electric cars and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized, in Vietnamese or standard name (e.g. "VF 8", "VINFAST", "PIN LFP")
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes, specifications, activities, or role in the text (in Vietnamese)
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
+For each pair of related entities, extract the following information:
+- source_entity: name of the source entity, as identified in step 1
+- target_entity: name of the target entity, as identified in step 1
+- relationship_description: explanation in Vietnamese as to why you think the source entity and the target entity are related
+- relationship_strength: a numeric score (1-10) indicating the strength of the relationship
+Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+
+3. Return output in Vietnamese (descriptions) as a single list of all the entities and relationships identified in steps 1 and 2. Use {record_delimiter} as the list delimiter.
+
+4. When finished, output <|COMPLETE|>
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: CAR_MODEL, ORGANIZATION, BATTERY, POLICY, FEATURE
+Text:
+VinFast vừa chính thức công bố chính sách thuê pin mới áp dụng cho dòng xe điện thông minh VF 8 tại thị trường Việt Nam. Theo đó, khách hàng mua VF 8 từ ngày 1/9/2024 có thể lựa chọn gói thuê pin linh hoạt với chi phí cực kỳ tối ưu, giúp giảm đáng kể giá thành sở hữu xe ban đầu. Mẫu xe này sử dụng bộ pin dung lượng cao cung cấp quãng đường di chuyển ấn tượng và được trang bị gói hỗ trợ lái nâng cao ADAS.
+######################
+Output:
+("entity"{tuple_delimiter}VINFAST{tuple_delimiter}ORGANIZATION{tuple_delimiter}VinFast là hãng xe điện Việt Nam, đơn vị sản xuất xe điện VF 8 và công bố chính sách thuê pin mới tại Việt Nam.)
+{record_delimiter}
+("entity"{tuple_delimiter}VF 8{tuple_delimiter}CAR_MODEL{tuple_delimiter}VF 8 là mẫu xe điện thông minh phân khúc D của VinFast, hỗ trợ gói ADAS và áp dụng chính sách thuê pin mới.)
+{record_delimiter}
+("entity"{tuple_delimiter}CHÍNH SÁCH THUÊ PIN{tuple_delimiter}POLICY{tuple_delimiter}Chính sách thuê pin mới của VinFast áp dụng cho VF 8 từ ngày 1/9/2024 nhằm tối ưu hóa chi phí cho khách hàng.)
+{record_delimiter}
+("entity"{tuple_delimiter}ADAS{tuple_delimiter}FEATURE{tuple_delimiter}ADAS là gói hỗ trợ lái xe nâng cao được trang bị trên mẫu xe điện VinFast VF 8.)
+{record_delimiter}
+("relationship"{tuple_delimiter}VINFAST{tuple_delimiter}VF 8{tuple_delimiter}VinFast là nhà sản xuất và phát triển mẫu xe điện thông minh VF 8.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}VINFAST{tuple_delimiter}CHÍNH SÁCH THUÊ PIN{tuple_delimiter}VinFast là đơn vị xây dựng và công bố chính sách thuê pin mới áp dụng cho khách hàng mua xe.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}VF 8{tuple_delimiter}CHÍNH SÁCH THUÊ PIN{tuple_delimiter}Chính sách thuê pin mới của VinFast được thiết kế và áp dụng trực tiếp cho dòng xe VF 8.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}VF 8{tuple_delimiter}ADAS{tuple_delimiter}VF 8 được trang bị hệ thống hỗ trợ lái nâng cao ADAS để tăng tính an toàn và trải nghiệm lái.{tuple_delimiter}8)
+<|COMPLETE|>
+
+######################
+Example 2:
+Entity_types: CAR_MODEL, CHARGER, COMPONENT, LOCATION, POLICY
+Text:
+Tại trạm sạc siêu nhanh 250kW của VinFast ở Đà Nẵng, dòng xe VF 9 có khả năng sạc từ 10% lên 70% chỉ trong khoảng 26 phút. Xe VF 9 được trang bị hệ thống động cơ điện kép cho công suất tối đa lên tới 402 mã lực, kết hợp với chính sách bảo hành chính hãng 10 năm hoặc 200.000 km từ nhà sản xuất.
+######################
+Output:
+("entity"{tuple_delimiter}VF 9{tuple_delimiter}CAR_MODEL{tuple_delimiter}VF 9 là mẫu xe SUV điện cỡ lớn phân khúc E của VinFast, trang bị động cơ điện kép 402 mã lực và có chế độ sạc siêu nhanh.)
+{record_delimiter}
+("entity"{tuple_delimiter}TRẠM SẠC SIÊU NHANH 250KW{tuple_delimiter}CHARGER{tuple_delimiter}Trạm sạc siêu nhanh công suất 250kW của VinFast hỗ trợ sạc pin cực nhanh cho các dòng xe điện như VF 9.)
+{record_delimiter}
+("entity"{tuple_delimiter}ĐỘNG CƠ ĐIỆN KÉP{tuple_delimiter}COMPONENT{tuple_delimiter}Động cơ điện kép công suất 402 mã lực là trang bị vận hành cốt lõi trên xe điện VF 9.)
+{record_delimiter}
+("entity"{tuple_delimiter}ĐÀ NẴNG{tuple_delimiter}LOCATION{tuple_delimiter}Đà Nẵng là địa điểm đặt trạm sạc siêu nhanh 250kW của VinFast nơi xe VF 9 thực hiện sạc pin.)
+{record_delimiter}
+("entity"{tuple_delimiter}CHÍNH SÁCH BẢO HÀNH 10 NĂM{tuple_delimiter}POLICY{tuple_delimiter}Chính sách bảo hành chính hãng 10 năm hoặc 200.000 km dành cho xe VF 9 nhằm nâng cao sự an tâm cho người mua.)
+{record_delimiter}
+("relationship"{tuple_delimiter}VF 9{tuple_delimiter}TRẠM SẠC SIÊU NHANH 250KW{tuple_delimiter}VF 9 sử dụng trạm sạc siêu nhanh 250kW để tối ưu hóa thời gian sạc đầy pin xe.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}VF 9{tuple_delimiter}ĐỘNG CƠ ĐIỆN KÉP{tuple_delimiter}VF 9 sử dụng hệ thống động cơ điện kép làm bộ phận chuyển động tạo công suất lớn.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}VF 9{tuple_delimiter}CHÍNH SÁCH BẢO HÀNH 10 NĂM{tuple_delimiter}Chính sách bảo hành 10 năm áp dụng trực tiếp cho dòng xe điện VF 9 để đảm bảo quyền lợi sửa chữa bảo dưỡng.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}TRẠM SẠC SIÊU NHANH 250KW{tuple_delimiter}ĐÀ NẴNG{tuple_delimiter}Trạm sạc siêu nhanh 250kW của VinFast được đặt tại thành phố Đà Nẵng để phục vụ khách hàng.{tuple_delimiter}7)
+<|COMPLETE|>
+
+-User Input-
+Text: {input_text}
+######################
+Output:

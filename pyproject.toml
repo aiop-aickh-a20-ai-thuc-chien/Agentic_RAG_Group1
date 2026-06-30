@@ -30,9 +30,23 @@ dependencies = [
     "psycopg-pool>=3.1,<4",
     # Language detection
     "lingua-language-detector>=2.0.2",
+    "pixelrag",
+    "neo4j>=6.2.0",
+    "python-dotenv>=1.0.1",
 ]
 
+[project.scripts]
+vinfast-pipeline-worker = "agentic_rag.ingestion.integration.url.vinfast.worker:main"
+
 [project.optional-dependencies]
+# Optional production pieces for the VinFast browser/VLM pipeline. Core models,
+# fallback routing, hashing, and chunking remain deterministic without this extra.
+vinfast-pipeline = [
+    "apscheduler>=3.10,<4",
+    "instructor>=1.7,<2",
+    "openai>=1.60,<3",
+]
+
 # Evaluation workbook tooling and deferred RAGAS dependencies.
 evaluation = [
     "datasets",
@@ -45,6 +59,11 @@ evaluation = [
 # LangSmith trace integration.
 observability = [
     "langsmith>=0.4,<1",
+]
+
+# Crawlee/Apify browser crawling for ill-structured dynamic pages.
+crawling = [
+    "crawlee[playwright]>=1.7,<2",
 ]
 
 # Local HuggingFace embedding and sentence-transformers reranker. Torch build

@@ -38,6 +38,7 @@ class IngestionArtifacts(BaseModel):
     parsed_sections_path: Path | None = None
     extracted_markdown_path: Path | None = None
     quality_path: Path | None = None
+    visual_semantics_path: Path | None = None
 
 
 def persist_debug_artifacts(
@@ -80,6 +81,7 @@ def persist_ingestion_artifacts(
     source_html_stage: str | None = None,
     parsed_sections: str | None = None,
     extracted_markdown: str | None = None,
+    visual_semantics: Iterable[dict[str, Any]] = (),
 ) -> IngestionArtifacts | None:
     """Persist staged URL ingestion artifacts for one run."""
 
@@ -108,6 +110,11 @@ def persist_ingestion_artifacts(
     extracted_markdown_path = _write_optional_text(
         run_dir / "extracted.md",
         extracted_markdown,
+    )
+    visual_semantics_list = list(visual_semantics)
+    visual_semantics_path = _write_optional_json(
+        run_dir / "visual_semantics.json",
+        {"facts": visual_semantics_list},
     )
     markdown_path = run_dir / "parsed.md"
     chunks_path = run_dir / "chunks.jsonl"
@@ -140,6 +147,7 @@ def persist_ingestion_artifacts(
         "markdown_path": _path_text(markdown_path),
         "chunks_path": _path_text(chunks_path),
         "quality_path": _path_text_optional(quality_path),
+        "visual_semantics_path": _path_text_optional(visual_semantics_path),
         "manifest_path": _path_text(manifest_path),
         "stage_paths": {
             "source_html": _path_text_optional(source_html_path),
@@ -148,6 +156,7 @@ def persist_ingestion_artifacts(
             "extracted_markdown": _path_text_optional(extracted_markdown_path),
             "cleaned_markdown": _path_text(markdown_path),
             "quality": _path_text_optional(quality_path),
+            "visual_semantics": _path_text_optional(visual_semantics_path),
             "chunks": _path_text(chunks_path),
         },
         "chunk_count": len(chunk_list),
@@ -166,6 +175,7 @@ def persist_ingestion_artifacts(
         parsed_sections_path=parsed_sections_path,
         extracted_markdown_path=extracted_markdown_path,
         quality_path=quality_path,
+        visual_semantics_path=visual_semantics_path,
     )
 
 
@@ -184,6 +194,16 @@ def _write_optional_text(path: Path, content: str | None) -> Path | None:
     if content is None:
         return None
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+    return path
+
+
+def _write_optional_json(path: Path, payload: dict[str, Any]) -> Path | None:
+    if not payload.get("facts"):
+        return None
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 

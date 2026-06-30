@@ -1,0 +1,7 @@
+Loaded 6 network payloads:
+Payload 0: method='None', url='None', status=None, type='None'
+Payload 1: method='None', url='None', status=None, type='None'
+Payload 2: method='None', url='None', status=None, type='None'
+Payload 3: method='None', url='None', status=None, type='None'
+Payload 4: method='None', url='None', status=None, type='None'
+Payload 5: method='None', url='None', status=None, type='None'

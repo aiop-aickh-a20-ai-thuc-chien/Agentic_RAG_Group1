@@ -1,0 +1,12 @@
+Found 5 slide-item elements:
+Item 0: name='Đỏ Tươi', code='REQ', pid='VF-ZFG-ESNEALHH-REQ', html='<li class="slide-item " data-name="Đỏ Tươi" data-item="REQ" data-pid="VF-ZFG-ESNEALHH-REQ">'
+Item 1: name='Vàng Cát', code='YES', pid='VF-ZFG-ESNEALHH-YES', html='<li class="slide-item " data-name="Vàng Cát" data-item="YES" data-pid="VF-ZFG-ESNEALHH-YES">'
+Item 2: name='Đen Bóng', code='BAU', pid='VF-ZFG-ESNEALHH-BAU', html='<li class="slide-item " data-name="Đen Bóng" data-item="BAU" data-pid="VF-ZFG-ESNEALHH-BAU">'
+Item 3: name='Trắng Ngọc Trai', code='WHR', pid='VF-ZFG-ESNEALHH-WHR', html='<li class="slide-item " data-name="Trắng Ngọc Trai" data-item="WHR" data-pid="VF-ZFG-ESNEALHH-WHR">'
+Item 4: name='Xám', code='GRC', pid='VF-ZFG-ESNEALHH-GRC', html='<li class="slide-item " data-name="Xám" data-item="GRC" data-pid="VF-ZFG-ESNEALHH-GRC">'
+
+Found 79 scripts
+
+--- Script 47 (len 7109) ---
+  Line 3: window.vinfast = {"thisProduct":{"ruleDocs":{},"cat":"Products-Scooter-VIPER","productId":"VF-ZFG-ESNEALHH-BAU","productColor":"BAU","productName":"VIPER","editionName":"","image":{"alt":"Viper, , lar
+  Line 4: window.leasingServices = {"VF-ZFG-ESNEALHH-BAU":{"services":[{"id":"Services-Scooter-VIPER-Mua-Pin","name":"Kèm Pin","description":null,"multiChoice":false,"forceSelect":false,"operatingCosts":false,"

@@ -119,6 +119,7 @@ def test_build_chunks_returns_contract_objects_with_metadata() -> None:
     assert chunks[0].metadata["dedupe_hash"] == short_hash(
         normalize_for_dedupe_hash("Overview content")
     )
+    assert chunks[0].metadata["dedupe_text"] == normalize_for_dedupe_hash("Overview content")
     assert chunks[0].metadata["normalized_text"] == "overview content"
     assert chunks[0].metadata["ingestion_at"] == "2026-06-01T00:00:00+00:00"
     assert chunks[0].metadata["updated_date"] == "2026-06-01T00:00:00+00:00"

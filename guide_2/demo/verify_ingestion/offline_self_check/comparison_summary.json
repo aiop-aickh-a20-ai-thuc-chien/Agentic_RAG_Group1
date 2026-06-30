@@ -1,0 +1,20 @@
+{
+  "ground_truth": {
+    "characters": 7447,
+    "words": 1337,
+    "lines": 218
+  },
+  "actual": {
+    "characters": 7447,
+    "words": 1337,
+    "lines": 218
+  },
+  "text_similarity_ratio": 1.0,
+  "structured_ground_truth": {
+    "json_path": "guide_2\\ground_truth\\https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products-car-VF9\\vf9_ground_truth.json",
+    "checked_terms": 203,
+    "covered_terms": 178,
+    "missing_terms": 25,
+    "coverage_ratio": 0.8768
+  }
+}

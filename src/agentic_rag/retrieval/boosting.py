@@ -96,6 +96,18 @@ def _boosting_enabled() -> bool:
     return os.getenv("METADATA_BOOSTING_ENABLED", "true").lower() == "true"
 
 
+def _quality_boost_enabled() -> bool:
+    return os.getenv("METADATA_QUALITY_BOOST_ENABLED", "false").lower() == "true"
+
+
+def _retrieval_weight_boost_enabled() -> bool:
+    return os.getenv("METADATA_RETRIEVAL_WEIGHT_BOOST_ENABLED", "false").lower() == "true"
+
+
+def _trust_boost_enabled() -> bool:
+    return os.getenv("METADATA_TRUST_BOOST_ENABLED", "false").lower() == "true"
+
+
 def apply_metadata_boost(
     results: list[SearchResult],
     *,
@@ -125,16 +137,31 @@ def apply_metadata_boost(
     for result in results:
         normalized_score = (result.score - min_score) / score_range
         metadata = result.chunk.metadata
-        factor = 1.0
-        factor *= _document_type_factor(
+        document_type_factor = _document_type_factor(
             doc_type=str(metadata.get("document_type") or "unknown"),
             query_type=query_type,
         )
-        factor *= _recency_factor(metadata.get("fetched_at"))
-        factor *= _dedup_factor(metadata.get("deduplication"))
-        factor = max(0.7, min(1.4, factor))
+        recency_factor = _recency_factor(metadata.get("fetched_at"))
+        dedup_factor = _dedup_factor(metadata.get("deduplication"))
+        quality_factor = (
+            _quality_factor(metadata.get("quality_score")) if _quality_boost_enabled() else 1.0
+        )
+        retrieval_weight_factor = (
+            _retrieval_weight_factor(metadata.get("retrieval_weight"))
+            if _retrieval_weight_boost_enabled()
+            else 1.0
+        )
+        trust_factor = _trust_factor(metadata) if _trust_boost_enabled() else 1.0
+        raw_factor = (
+            document_type_factor
+            * recency_factor
+            * dedup_factor
+            * quality_factor
+            * retrieval_weight_factor
+            * trust_factor
+        )
+        factor = max(0.7, min(1.4, raw_factor))
         factors.append(factor)
-
         boosted.append(result.model_copy(update={"score": normalized_score * factor}))
 
     boosted.sort(key=lambda r: r.score, reverse=True)
@@ -181,4 +208,28 @@ def _dedup_factor(deduplication: Any) -> float:
         return 1.0
     if deduplication.get("status") == "duplicate_candidate":
         return _DEDUP_CANDIDATE_FACTOR
+    return 1.0
+
+
+def _quality_factor(quality_score: Any) -> float:
+    if isinstance(quality_score, bool) or not isinstance(quality_score, (int, float)):
+        return 1.0
+    score = max(0.0, min(1.0, float(quality_score)))
+    # Map 0..1 to a small 0.9..1.1 multiplier.
+    return 0.9 + (score * 0.2)
+
+
+def _retrieval_weight_factor(retrieval_weight: Any) -> float:
+    if isinstance(retrieval_weight, bool) or not isinstance(retrieval_weight, (int, float)):
+        return 1.0
+    return max(0.8, min(1.2, float(retrieval_weight)))
+
+
+def _trust_factor(metadata: Any) -> float:
+    if not isinstance(metadata, dict):
+        return 1.0
+    if metadata.get("metadata_prefilter_exclude") is True:
+        return 0.7
+    if metadata.get("trusted_for_retrieval") is False:
+        return 0.85
     return 1.0

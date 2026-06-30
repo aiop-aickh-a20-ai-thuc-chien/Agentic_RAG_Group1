@@ -661,10 +661,6 @@ def _search_via_provider(
         )
     ).results
     dense = [r for r in chunks if r.retriever == "dense"]
-    # Everything that is not dense (bm25, question-index, qdrant "hybrid") goes in
-    # the first bucket so it survives fusion — previously results tagged
-    # "question"/"hybrid" were silently dropped here, killing the question-index
-    # retriever on the agent path.
     non_dense = [r for r in chunks if r.retriever != "dense"]
     if not non_dense and not dense:
         return chunks, []

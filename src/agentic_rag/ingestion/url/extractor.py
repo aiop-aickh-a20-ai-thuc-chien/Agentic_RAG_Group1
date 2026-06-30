@@ -61,6 +61,7 @@ DOM_WALKER_JS = r"""
     let p = el;
     while (p && p.tagName) {
       if (SKIP_TAGS.has(p.tagName)) return true;
+      if (p.id === 'rollingUpCostPopUp' || p.id === 'installmentCostPopUp') return false;
       const cls = (p.getAttribute && p.getAttribute('class')) || '';
       if (cls && SKIP_CLASS.test(cls)) return true;
       const role = (p.getAttribute && p.getAttribute('role')) || '';
@@ -148,18 +149,26 @@ EXPAND_JS = r"""
     e.removeAttribute('hidden');
     e.setAttribute('aria-hidden','false');
   });
+  
+  // Open cost modals
+  document.querySelectorAll('.js-rollingUpCostPopUp, .js-installmentCostPopUp').forEach(btn => {
+    try { btn.click(); } catch(e) {}
+  });
 }
 """
 
 PRODUCT_JS = r"""
-() => {
+(inModelId) => {
   const T = s => (s||'').trim().replace(/\s+/g,' ');
   const uniq = a => [...new Set(a)];
   const res = {prices:[], specs:[], anchors:[], deposit_amount:'', rolling_cost_details:[]};
   
   if (window.carDeposit && window.carDeposit.products) {
-    const urlParams = new URLSearchParams(window.location.search);
-    let modelId = urlParams.get('modelId');
+    let modelId = inModelId;
+    if (!modelId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      modelId = urlParams.get('modelId');
+    }
     if (!modelId) {
       const keys = Object.keys(window.carDeposit.products).filter(k => k !== 'colorsConfig');
       if (keys.length > 0) {
@@ -368,6 +377,14 @@ def extract_markdown_from_html(
     )
     if not normalized:
         return None
+    
+    # TODO [FUTURE GraphRAG Integration - Phase 1 & 2]:
+    # Pseudocode for integrating GraphRAG processing here or downstream:
+    # 1. Convert `normalized` markdown into GraphRAG `TextUnit`s (Chunking - Phase 1).
+    # 2. Pass `TextUnit`s to `extract_graph` workflow to extract `Entity` and `Relationship` nodes using LLM (Phase 2).
+    # 3. Store the resulting entities and relationships into the GraphDB/VectorDB.
+    # Reference: guide_RAG/GUIDELINE.md
+
     return ExtractedMarkdown(
         markdown=normalized,
         parser_name=_PARSER_NAME,
@@ -383,7 +400,7 @@ def extract_markdown_with_playwright(
     timeout_seconds: int = 60,
     wait_until: str = "load",
     settle_after_scroll_ms: int = 800,
-    settle_after_expand_ms: int = 400,
+    settle_after_expand_ms: int = 2000,
 ) -> ExtractedMarkdown:
     """Render a URL and extract Markdown using the Crawl link Playwright DOM walker."""
 
@@ -440,12 +457,66 @@ def extract_markdown_with_playwright(
                 page.evaluate("window.scrollTo(0, 0)")
                 page.evaluate(EXPAND_JS)
                 page.wait_for_timeout(settle_after_expand_ms)
+                
+                # --- State Space Exploration for Promotional Switches ---
+                # Open select2 to expose models
+                try:
+                    if page.locator(".select2-selection__arrow").count() > 0:
+                        page.locator(".select2-selection__arrow").first.click(timeout=1000)
+                        page.wait_for_timeout(300)
+                except Exception:
+                    pass
+                
+                # Toggle switches and snapshot ruc-summary
+                try:
+                    switches = page.locator(".switch-button input[type='checkbox']").all()
+                    for switch in switches:
+                        switch_id = switch.get_attribute("id") or "unknown_switch"
+                        # Toggle ON
+                        switch.evaluate("node => node.click()")
+                        page.wait_for_timeout(1000)  # Wait for React to calculate
+                        
+                        summary_html = ""
+                        if page.locator(".ruc-summary").count() > 0:
+                            summary_html = page.locator(".ruc-summary").first.inner_html()
+                        
+                        if summary_html:
+                            # Append to DOM using arguments to prevent XSS/syntax errors
+                            page.evaluate(
+                                "(args) => { const div = document.createElement('div'); div.innerHTML = '<h2>Chi phí lăn bánh với ưu đãi: ' + args.id + '</h2>' + args.html; document.body.appendChild(div); }", 
+                                {"id": switch_id, "html": summary_html}
+                            )
+                        
+                        # Toggle OFF
+                        switch.evaluate("node => node.click()")
+                        page.wait_for_timeout(500)
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Error during state exploration: {e}")
+                # --------------------------------------------------------
             except Exception:
                 pass
             data = cast(dict[str, object], page.evaluate(DOM_WALKER_JS))
+            # TODO [LLM Fallback Extraction]: Replace hardcoded PRODUCT_JS with LLM-based fallback
+            # Pseudocode:
+            # 1. Read prompt template from `src/agentic_rag/ingestion/url/prompts/fallback_extraction_prompt.txt`
+            # 2. Format the prompt with the extracted text (e.g., `data.get("markdown", "")` or `rendered_html`)
+            # 3. Call `configured_ingestion_vlm_client()` or similar LLM client to extract JSON.
+            # 4. Parse JSON and assign to `product`
+            # 5. Handle errors gracefully (e.g., `product = {}` on failure).
+            # Example:
+            # prompt = load_prompt("fallback_extraction_prompt.txt").format(input_data=data["markdown"])
+            # llm_response = await llm_client.completion(messages=[{"role": "user", "content": prompt}], response_format_json_object=True)
+            # product = json.loads(llm_response)
+            
             try:
-                product = cast(dict[str, object], page.evaluate(PRODUCT_JS))
-            except Exception:
+                from urllib.parse import urlparse, parse_qs
+                parsed_query = parse_qs(urlparse(url).query)
+                model_id_arg = parsed_query.get("modelId", [None])[0]
+                product = cast(dict[str, object], page.evaluate(PRODUCT_JS, model_id_arg))
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to evaluate PRODUCT_JS: {e}")
                 product = {}
             rendered_html = cast(str, page.content())
             final_url = cast(str, page.url)
@@ -581,9 +652,20 @@ async def _extract_markdown_with_crawlee_async(
             settle_after_expand_ms=settle_after_expand_ms,
         )
         data = cast(dict[str, object], await page.evaluate(DOM_WALKER_JS))
+        # TODO [LLM Fallback Extraction]: Replace hardcoded PRODUCT_JS with LLM-based fallback
+        # Pseudocode:
+        # 1. Read prompt template from `src/agentic_rag/ingestion/url/prompts/fallback_extraction_prompt.txt`
+        # 2. Format the prompt with the extracted text (e.g., `data.get("markdown", "")` or raw HTML)
+        # 3. Call LLM to extract JSON matching the product schema.
+        # 4. Parse JSON and assign to `product`
         try:
-            product = cast(dict[str, object], await page.evaluate(PRODUCT_JS))
-        except Exception:
+            from urllib.parse import urlparse, parse_qs
+            parsed_query = parse_qs(urlparse(url).query)
+            model_id_arg = parsed_query.get("modelId", [None])[0]
+            product = cast(dict[str, object], await page.evaluate(PRODUCT_JS, model_id_arg))
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to evaluate PRODUCT_JS in async: {e}")
             product = {}
         result.update(
             {
@@ -686,6 +768,14 @@ def _extracted_from_rendered_data(
             "is_product": bool(clean_product),
         },
     )
+    
+    # TODO [FUTURE GraphRAG Integration - Phase 1 & 2]:
+    # Pseudocode for integrating GraphRAG processing for dynamic rendered pages:
+    # 1. Feed the `normalized` markdown to the `create_base_text_units` chunker.
+    # 2. Feed chunks to LLM extractor to identify entities/relationships (`extract_graph`).
+    # 3. Save extracted knowledge to the downstream index.
+    # Reference: guide_RAG/GUIDELINE.md
+
     return ExtractedMarkdown(
         markdown=normalized,
         parser_name=parser_name,

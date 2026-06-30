@@ -13,10 +13,17 @@ from agentic_rag.ingestion.url import (
     load_html_with_artifacts,
     load_text_chunks,
     load_url_chunks,
+    load_url_with_artifacts,
 )
 from agentic_rag.ingestion.url import loader as loader_module
 from agentic_rag.ingestion.url.chunking import normalize_for_content_hash, short_hash
 from agentic_rag.ingestion.url.extractor import ExtractedMarkdown
+from agentic_rag.ingestion.url.interactions.models import (
+    InteractionCaptureResult,
+    InteractionOptions,
+    InteractionProfile,
+    InteractionStateRecord,
+)
 
 
 def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None:
@@ -53,7 +60,7 @@ def test_load_html_chunks_removes_noise_and_preserves_section_metadata() -> None
     assert chunks[0].metadata["chunk_part_index"] == 1
     assert chunks[0].metadata["chunk_part_total"] == 1
     assert "chunking_method" not in chunks[0].metadata
-    assert "semantic_unit" not in chunks[0].metadata
+    assert chunks[0].metadata["section_origin"] == "source_markdown"
     assert "Applications require transcripts." in chunks[0].text
     assert "Shortlisted applicants join one interview." in chunks[0].text
     assert "Home Login Pricing" not in chunks[0].text
@@ -83,13 +90,23 @@ def test_load_html_chunks_adds_dom_entity_metadata() -> None:
           </body>
         </html>
         """,
-        source="https://shop.vinfastauto.com/vn_vi/vf8",
-        source_url="https://shop.vinfastauto.com/vn_vi/vf8",
+        source="https://shop.vinfastauto.com/vn_vi/vf8?modelId=Products-Car-VF8",
+        source_url="https://shop.vinfastauto.com/vn_vi/vf8?modelId=Products-Car-VF8",
     )
 
     assert chunks
     metadata = chunks[0].metadata
     assert metadata["source_type"] == "official"
+    assert metadata["url"] == "https://shop.vinfastauto.com/vn_vi/vf8"
+    assert (
+        metadata["requested_url"]
+        == "https://shop.vinfastauto.com/vn_vi/vf8?modelId=Products-Car-VF8"
+    )
+    assert (
+        metadata["source_url"] == "https://shop.vinfastauto.com/vn_vi/vf8?modelId=Products-Car-VF8"
+    )
+    assert metadata["original_url"] is None
+    assert metadata["final_url"] is None
     assert metadata["canonical_url"] == "https://shop.vinfastauto.com/vn_vi/vf8"
     assert metadata["captured_at"]
     assert metadata["published_at"] == "2026-06-01"
@@ -164,6 +181,41 @@ def test_load_html_chunks_adds_product_spec_metadata_from_detail_text() -> None:
     assert metadata["attribute_group"] == "pricing_specs"
 
 
+def test_load_html_chunks_adds_structure_aware_table_metadata() -> None:
+    chunks = load_html_chunks(
+        """
+        <html>
+          <head><title>VinFast Table</title></head>
+          <body>
+            <main>
+              <h1>Bang gia xe</h1>
+              <table>
+                <tr><th>Model</th><th>Price</th></tr>
+                <tr><td>VF 9 Eco</td><td>1.499.000.000 VND</td></tr>
+                <tr><td>VF 9 Plus</td><td>1.699.000.000 VND</td></tr>
+              </table>
+            </main>
+          </body>
+        </html>
+        """,
+        source="https://shop.vinfastauto.com/vn_vi/vf9?modelId=Products-Car-VF9",
+        source_url="https://shop.vinfastauto.com/vn_vi/vf9?modelId=Products-Car-VF9",
+    )
+
+    structure_chunks = [
+        chunk for chunk in chunks if chunk.metadata.get("section_origin") == "generated_structure"
+    ]
+
+    assert structure_chunks
+    assert any(
+        "comparison_table" in chunk.metadata.get("structure_block_types", [])
+        for chunk in structure_chunks
+    )
+    assert all(chunk.metadata.get("structure_aware") is True for chunk in structure_chunks)
+    assert all(chunk.metadata.get("structure_dedupe_hash") for chunk in structure_chunks)
+    assert any("VF 9 Eco" in chunk.text for chunk in structure_chunks)
+
+
 def test_load_html_chunks_uses_page_hash_and_chunk_level_content_hash() -> None:
     first_text = " ".join(f"first{i}" for i in range(180))
     second_text = " ".join(f"second{i}" for i in range(180))
@@ -195,6 +247,7 @@ def test_load_html_chunks_uses_page_hash_and_chunk_level_content_hash() -> None:
         normalize_for_content_hash(chunks[0].text)
     )
     assert chunks[0].metadata["dedupe_hash"]
+    assert chunks[0].metadata["dedupe_text"]
     assert chunks[0].metadata["normalized_text"] == normalize_for_content_hash(chunks[0].text)
 
 
@@ -512,7 +565,9 @@ def test_load_url_chunks_uses_fetched_final_url(monkeypatch: pytest.MonkeyPatch)
     assert chunks[0].metadata["url"] == "https://example.edu/final"
     assert chunks[0].metadata["domain"] == "example.edu"
     assert chunks[0].metadata["original_url"] == "https://example.edu"
-    assert "final_url" not in chunks[0].metadata
+    assert chunks[0].metadata["requested_url"] == "https://example.edu"
+    assert chunks[0].metadata["source_url"] == "https://example.edu/final"
+    assert chunks[0].metadata["final_url"] == "https://example.edu/final"
     assert chunks[0].metadata["section"] == "Overview"
     assert chunks[0].metadata["section_path"] == ["Overview"]
 
@@ -577,6 +632,53 @@ def test_load_url_chunks_prefers_rendered_output_for_dynamic_product_page(
     assert metadata["entity_name"] == "VF 8"
     assert captured_render_options["timeout_seconds"] == 20
     assert captured_render_options["wait_until"] == "load"
+
+
+def test_load_url_chunks_tries_crawlee_first_for_dynamic_shell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://shop.vinfastauto.com/vn_vi/dat-coc.html?modelId=Products-Car-VF9"
+    captured_crawlee_options: dict[str, object] = {}
+
+    def fake_fetch_url(fetch_url: str) -> loader_module._FetchedPage:
+        assert fetch_url == url
+        return loader_module._FetchedPage(
+            html=(
+                "<html><head><title>VF 9</title>"
+                '<script id="__NEXT_DATA__">{"props":{}}</script></head>'
+                '<body><div id="__next"></div></body></html>'
+            ),
+            url=url,
+        )
+
+    def fake_crawlee(url_to_render: str, **kwargs: object) -> ExtractedMarkdown:
+        assert url_to_render == url
+        captured_crawlee_options.update(kwargs)
+        return ExtractedMarkdown(
+            markdown="# VF 9\n\nGia 1.499.000.000 VND.",
+            parser_name="fake-crawlee",
+            title="VF 9",
+            final_url=url,
+            rendered_html=(
+                "<html><body><main><article class='vehicle-card'>"
+                "<h1>VF 9</h1><p>Gia 1.499.000.000 VND</p>"
+                "</article></main></body></html>"
+            ),
+        )
+
+    def fail_playwright(*_args: object, **_kwargs: object) -> ExtractedMarkdown:
+        raise AssertionError("Playwright fallback should not run when Crawlee succeeds")
+
+    monkeypatch.setattr(loader_module, "_fetch_url", fake_fetch_url)
+    monkeypatch.setattr(loader_module, "extract_markdown_with_crawlee", fake_crawlee)
+    monkeypatch.setattr(loader_module, "extract_markdown_with_playwright", fail_playwright)
+
+    chunks = load_url_chunks(url)
+
+    assert chunks
+    assert chunks[0].metadata["url_quality_gate"]["parser"] == "rendered"
+    assert captured_crawlee_options["timeout_seconds"] is None
+    assert captured_crawlee_options["wait_until"] == "load"
 
 
 def test_load_url_chunks_uses_browser_when_static_fetch_is_blocked(
@@ -654,6 +756,114 @@ def test_load_url_chunks_marks_dynamic_static_fallback_when_browser_disabled(
     assert gate["accepted"] is False
     assert gate["requires_rendered_parser"] is True
     assert "browser_extractor_disabled" in gate["reason"]
+
+
+def test_load_url_with_artifacts_appends_promoted_interaction_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    url = (
+        "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF3"
+    )
+
+    def fake_fetch_url(fetch_url: str) -> loader_module._FetchedPage:
+        assert fetch_url == url
+        return loader_module._FetchedPage(
+            html=(
+                "<html><head><title>Dat coc VinFast</title></head>"
+                "<body><main><h1>Dat coc VinFast</h1>"
+                "<p>Trang dat coc xe dien VinFast co lua chon mau xe.</p>"
+                "</main></body></html>"
+            ),
+            url=url,
+        )
+
+    def fake_capture(
+        capture_url: str,
+        options: InteractionOptions,
+    ) -> InteractionCaptureResult:
+        assert capture_url == url
+        assert options.max_states == 3
+        return InteractionCaptureResult(
+            profile=InteractionProfile(
+                requested_url=url,
+                final_url=url,
+                page_type="booking_flow",
+                interaction_required=True,
+                reasons=["booking_url"],
+                url_query_params={"modelId": "Products-Car-VF3"},
+                model_id="Products-Car-VF3",
+            ),
+            states=[
+                InteractionStateRecord(
+                    state_id="vf3-visible-text",
+                    requested_url=url,
+                    final_url=url,
+                    model_id="Products-Car-VF3",
+                    model_name="VF 3",
+                    option_group="model",
+                    option_label="VF 3",
+                    source_control_id="model-vf3",
+                    panel_role="left_panel",
+                    panel_id="left_panel",
+                    variant_options={"model": "VF 3"},
+                    price=None,
+                    currency=None,
+                    price_source="not_visible",
+                    specifications={},
+                    image_url=None,
+                    availability="available",
+                    evidence_source="dom",
+                    captured_at="2026-06-18T00:00:00+00:00",
+                    changed_panels=["right_panel"],
+                    changed_fields=["visible_text"],
+                    dom_evidence={
+                        "after_snapshot_text": (
+                            "VF 3 modelId Products-Car-VF3 Cong suat toi da 30 kW"
+                        )
+                    },
+                )
+            ],
+        )
+
+    monkeypatch.setattr(loader_module, "_fetch_url", fake_fetch_url)
+
+    document = load_url_with_artifacts(
+        url,
+        use_browser_extractor=False,
+        include_interactions=True,
+        interaction_options=InteractionOptions(max_states=3),
+        interaction_capture=fake_capture,
+        data_artifact_dir=tmp_path,
+        run_id="vf3-run",
+    )
+
+    dynamic_chunks = [
+        chunk for chunk in document.chunks if chunk.metadata.get("chunk_type") == "dynamic_state"
+    ]
+    assert len(dynamic_chunks) == 1
+    assert dynamic_chunks[0].metadata["metadata_prefilter_exclude"] is False
+    assert "Products-Car-VF3" in dynamic_chunks[0].text
+    assert "## Dynamic Interaction Facts" in document.markdown
+    assert "Products-Car-VF3" in document.markdown
+    assert "```json" in document.markdown
+
+    assert document.artifacts is not None
+    artifact_markdown = document.artifacts.markdown_path.read_text(encoding="utf-8")
+    assert "## Dynamic Interaction Facts" in artifact_markdown
+    assert "Products-Car-VF3" in artifact_markdown
+
+    chunk_lines = document.artifacts.chunks_path.read_text(encoding="utf-8").splitlines()
+    assert len(chunk_lines) == len(document.chunks)
+    assert any(
+        json.loads(line)["metadata"].get("chunk_type") == "dynamic_state" for line in chunk_lines
+    )
+
+    manifest = json.loads(document.artifacts.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["chunk_count"] == len(document.chunks)
+    assert manifest["markdown_augmented_with_interactions"] is True
+    assert manifest["promoted_interaction_chunk_count"] == 1
+    assert manifest["promoted_interaction_chunk_ids"] == [dynamic_chunks[0].chunk_id]
 
 
 def test_load_url_chunks_rejects_non_http_url() -> None:

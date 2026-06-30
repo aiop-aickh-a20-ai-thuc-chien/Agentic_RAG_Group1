@@ -1,0 +1,245 @@
+{
+  "template_id": "advanced_url_ingestion_scorecard_v1",
+  "description": "Template for scoring URL ingestion quality on top of the base pass/fail evaluator in agentic_rag.ingestion.url.evaluation.",
+  "base_evaluation_contract": {
+    "module": "agentic_rag.ingestion.url.evaluation",
+    "entrypoint": "evaluate_sample",
+    "required_first_step": "Run the base evaluator and keep all severity=error checks as hard gates.",
+    "hard_fail_if_base_errors": true,
+    "base_error_checks": [
+      "chunk_count",
+      "required_metadata_keys",
+      "required_text_snippet",
+      "forbidden_text_snippet",
+      "strip_navigation",
+      "strip_footer",
+      "preserve_canonical_url",
+      "preserve_query_params",
+      "language_expected",
+      "deduplicate_repeated_ui_text",
+      "entity_boundary"
+    ]
+  },
+  "score_policy": {
+    "max_score": 100,
+    "pass_score": 85,
+    "review_score": 70,
+    "fail_score_below": 70,
+    "fail_if_base_evaluation_fails": true,
+    "round_score_digits": 2
+  },
+  "dimensions": [
+    {
+      "id": "content_coverage",
+      "label": "Content Coverage",
+      "weight": 25,
+      "purpose": "Reward extraction that captures the expected core page content.",
+      "checks": [
+        {
+          "id": "required_snippet_coverage",
+          "metric": "ratio",
+          "source": "expectations.required_text_snippets",
+          "target": "combined markdown + chunk text",
+          "ideal": 1.0,
+          "minimum_for_partial_credit": 0.5
+        },
+        {
+          "id": "optional_snippet_coverage",
+          "metric": "ratio",
+          "source": "expectations.optional_text_snippets",
+          "target": "combined markdown + chunk text",
+          "ideal": 0.6,
+          "minimum_for_partial_credit": 0.25,
+          "hard_fail": false
+        }
+      ]
+    },
+    {
+      "id": "noise_control",
+      "label": "Noise Control",
+      "weight": 20,
+      "purpose": "Penalize boilerplate, navigation, footer, cookie, login, and repeated UI text.",
+      "checks": [
+        {
+          "id": "forbidden_snippet_absence",
+          "metric": "ratio_absent",
+          "source": "expectations.forbidden_text_snippets",
+          "ideal": 1.0
+        },
+        {
+          "id": "url_quality_verdict",
+          "metric": "categorical",
+          "metadata_path": "url_quality.verdict",
+          "score_map": {
+            "useful": 1.0,
+            "low_signal": 0.4,
+            "empty": 0.0
+          }
+        },
+        {
+          "id": "boilerplate_hits",
+          "metric": "lower_is_better",
+          "metadata_path": "url_quality.boilerplate_hit_count",
+          "ideal_max": 0,
+          "partial_credit_max": 3
+        }
+      ]
+    },
+    {
+      "id": "metadata_fidelity",
+      "label": "Metadata Fidelity",
+      "weight": 20,
+      "purpose": "Reward chunks that preserve source identity and URL-specific metadata needed by retrieval, review, and evaluation.",
+      "checks": [
+        {
+          "id": "required_metadata_presence",
+          "metric": "ratio",
+          "source": "expectations.required_metadata_keys",
+          "target": "all chunks",
+          "ideal": 1.0
+        },
+        {
+          "id": "canonical_url_alignment",
+          "metric": "boolean",
+          "source": "expectations.normalization_checks.preserve_canonical_url",
+          "target": "chunk.metadata.canonical_url",
+          "required_when_enabled": true
+        },
+        {
+          "id": "language_alignment",
+          "metric": "boolean",
+          "source": "expectations.normalization_checks.language_expected",
+          "target": "chunk.metadata.language",
+          "required_when_set": true
+        },
+        {
+          "id": "page_type_present",
+          "metric": "boolean",
+          "target": "chunk.metadata.page_type",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "chunk_shape",
+      "label": "Chunk Shape",
+      "weight": 15,
+      "purpose": "Reward chunk counts and chunk sizes that are useful for RAG without merging unrelated page sections.",
+      "checks": [
+        {
+          "id": "chunk_count_bounds",
+          "metric": "boolean",
+          "source": "expectations.min_chunk_count + expectations.max_chunk_count",
+          "target": "len(chunks)",
+          "required": true
+        },
+        {
+          "id": "useful_chunk_ratio",
+          "metric": "ratio",
+          "metadata_path": "url_quality.useful_chunk_count / url_quality.chunk_count",
+          "ideal": 0.8,
+          "minimum_for_partial_credit": 0.5
+        },
+        {
+          "id": "oversized_chunk_guard",
+          "metric": "lower_is_better",
+          "target": "chunk.metadata.chunk_token_count",
+          "ideal_max": 900,
+          "partial_credit_max": 1400
+        }
+      ]
+    },
+    {
+      "id": "dom_entity_readiness",
+      "label": "DOM And Entity Readiness",
+      "weight": 15,
+      "purpose": "Reward output that carries DOM/entity signals for future card/table/FAQ-aware chunking.",
+      "checks": [
+        {
+          "id": "semantic_block_detection",
+          "metric": "greater_is_better",
+          "metadata_path": "semantic_block_count",
+          "ideal_min": 1,
+          "partial_credit_min": 0,
+          "applies_to_page_types": [
+            "shop_product_detail",
+            "shop_listing_or_category",
+            "vehicle_or_product_page",
+            "product_page",
+            "faq_page",
+            "comparison_table_page"
+          ]
+        },
+        {
+          "id": "entity_detection",
+          "metric": "greater_is_better",
+          "metadata_path": "entity_count",
+          "ideal_min": 1,
+          "partial_credit_min": 0,
+          "applies_to_page_types": [
+            "shop_product_detail",
+            "shop_listing_or_category",
+            "vehicle_or_product_page",
+            "product_page"
+          ]
+        },
+        {
+          "id": "enabled_entity_boundary_checks",
+          "metric": "ratio",
+          "source": "expectations.entity_boundary_checks[enabled=true]",
+          "target": "chunks",
+          "ideal": 1.0,
+          "hard_fail": true
+        }
+      ]
+    },
+    {
+      "id": "artifact_reviewability",
+      "label": "Artifact Reviewability",
+      "weight": 5,
+      "purpose": "Reward outputs that are easy to debug in review tools.",
+      "checks": [
+        {
+          "id": "section_path_present",
+          "metric": "ratio",
+          "target": "chunk.metadata.section_path",
+          "ideal": 1.0
+        },
+        {
+          "id": "source_hash_present",
+          "metric": "ratio",
+          "target": "chunk.metadata.url_source_hash",
+          "ideal": 1.0
+        }
+      ]
+    }
+  ],
+  "advanced_sample_overrides_template": {
+    "sample_id": "copy-from-base-sample",
+    "page_type_hint": "shop_product_detail | shop_listing_or_category | article | faq | policy | comparison_table",
+    "score_threshold_override": null,
+    "dimension_weight_overrides": {},
+    "additional_required_metadata_keys": [],
+    "additional_required_text_snippets": [],
+    "additional_forbidden_text_snippets": [],
+    "manual_review_notes": []
+  },
+  "score_output_template": {
+    "sample_id": "",
+    "source_url": "",
+    "base_passed": true,
+    "advanced_passed": true,
+    "score": 0.0,
+    "dimension_scores": {
+      "content_coverage": 0.0,
+      "noise_control": 0.0,
+      "metadata_fidelity": 0.0,
+      "chunk_shape": 0.0,
+      "dom_entity_readiness": 0.0,
+      "artifact_reviewability": 0.0
+    },
+    "hard_failures": [],
+    "warnings": [],
+    "review_notes": []
+  }
+}

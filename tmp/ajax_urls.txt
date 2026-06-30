@@ -1,0 +1,30 @@
+Found 28 unique demandware URLs:
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Accessories-ViewCart
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Account-IsEmailExist
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Account-PreLogin
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Account-SubscribeEmail
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Cart-RemoveCouponLineItem
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-AddCoupon
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-AddProduct
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-FindStore
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-RemoveProductLineItem
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-ValidateCustomer
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-VerifyEmployeeReferral
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-VerifyStaffCode
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CartBike-VinClubMemberShip
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CheckoutServices-SubmitPayment
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CheckoutServices-ValidateForm
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CheckoutServices-ValidateSalePerson
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CheckoutServices-VinClubCheckout
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/CheckoutServices-VinClubCheckoutRequest
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Community-CheckActiveMember
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Kols-GetKolsRefCode
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Login-Auth0ForgotPassword
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Login-Auth0Login
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Login-Auth0Register
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Login-PreLogout
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Page-GetAllProduct
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/Page-SetLocale
+  /on/demandware.store/Sites-app_vinfast_vn-Site/vi_VN/ServiceBooking-getReminderList
+
+Searching fetch/ajax details in scripts:

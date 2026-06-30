@@ -1,0 +1,173 @@
+
+================ Script 50 (len 5870) ================
+Line 1: 
+Line 2: {
+Line 3: "@context": "https://schema.org",
+Line 4: "@type": "ItemList",
+Line 5: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast",
+Line 6: "numberOfItems": "9",
+Line 7: "itemListElement": [
+Line 8: {
+Line 9: "@type": "Product",
+Line 10: "position": "1",
+Line 11: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw04cebe7d/images/productScooter/Products-Scooter-THEON-S.png",
+Line 12: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#theon-s",
+Line 13: "name": "Theon S",
+Line 14: "brand": {
+Line 15: "@type": "Brand",
+Line 16: "name": "VinFast"
+Line 17: },
+Line 18: "offers": {
+Line 19: "@type": "Offer",
+Line 20: "priceCurrency": "VND",
+Line 21: "price": "69900000.",
+Line 22: "itemCondition": "https://schema.org/NewCondition",
+Line 23: "availability": "Instock"
+Line 24: }
+Line 25: },
+Line 26: {
+Line 27: "@type": "Product",
+Line 28: "position": "2",
+Line 29: "name": "Theon",
+Line 30: "brand": {
+Line 31: "@type": "Brand",
+Line 32: "name": "VinFast"
+Line 33: },
+Line 34: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwafad78d5/images/productScooter/Products-Scooter-THEON.png",
+Line 35: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#theon",
+Line 36: "offers": {
+Line 37: "@type": "Offer",
+Line 38: "priceCurrency": "VND",
+Line 39: "price": "63900000.",
+Line 40: "itemCondition": "https://schema.org/NewCondition",
+Line 41: "availability": "Instock"
+Line 42: }
+Line 43: },
+Line 44: {
+Line 45: "@type": "Product",
+Line 46: "position": "3",
+Line 47: "name": "Vento S",
+Line 48: "brand": {
+Line 49: "@type": "Brand",
+Line 50: "name": "VinFast"
+Line 51: },
+Line 52: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw5875cb20/images/productScooter/Products-Scooter-VENTO-S.png",
+Line 53: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#vento-s",
+Line 54: "offers": {
+Line 55: "@type": "Offer",
+Line 56: "priceCurrency": "VND",
+Line 57: "price": "56000000.",
+Line 58: "itemCondition": "https://schema.org/NewCondition",
+Line 59: "availability": "Instock"
+Line 60: }
+Line 61: },
+Line 62: {
+Line 63: "@type": "Product",
+Line 64: "position": "4",
+Line 65: "name": "Vento",
+Line 66: "brand": {
+Line 67: "@type": "Brand",
+Line 68: "name": "VinFast"
+Line 69: },
+Line 70: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw19b8a591/images/productScooter/Products-Scooter-VENTO.png",
+Line 71: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#vento",
+Line 72: "offers": {
+Line 73: "@type": "Offer",
+Line 74: "priceCurrency": "VND",
+Line 75: "price": "56350000.",
+Line 76: "itemCondition": "https://schema.org/NewCondition",
+Line 77: "availability": "Instock"
+Line 78: }
+Line 79: },
+Line 80: {
+Line 81: "@type": "Product",
+Line 82: "position": "5",
+Line 83: "name": "Feliz S",
+Line 84: "brand": {
+Line 85: "@type": "Brand",
+Line 86: "name": "VinFast"
+Line 87: },
+Line 88: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa157998b/images/productScooter/Products-Scooter-FELIZ-S.png",
+Line 89: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#feliz-s",
+Line 90: "offers": {
+Line 91: "@type": "Offer",
+Line 92: "priceCurrency": "VND",
+Line 93: "price": "29900000.",
+Line 94: "itemCondition": "https://schema.org/NewCondition",
+Line 95: "availability": "Instock"
+Line 96: }
+Line 97: },
+Line 98: {
+Line 99: "@type": "Product",
+Line 100: "position": "6",
+Line 101: "name": "Klara S 2022",
+Line 102: "brand": {
+Line 103: "@type": "Brand",
+Line 104: "name": "VinFast"
+Line 105: },
+Line 106: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw760d662e/images/productScooter/Products-Scooter-KLARA-S-2022.png",
+Line 107: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#klara-s-2022",
+Line 108: "offers": {
+Line 109: "@type": "Offer",
+Line 110: "priceCurrency": "VND",
+Line 111: "price": "36900000.",
+Line 112: "itemCondition": "https://schema.org/NewCondition",
+Line 113: "availability": "Instock"
+Line 114: }
+Line 115: },
+Line 116: {
+Line 117: "@type": "Product",
+Line 118: "position": "7",
+Line 119: "name": "Klara S",
+Line 120: "brand": {
+Line 121: "@type": "Brand",
+Line 122: "name": "VinFast"
+Line 123: },
+Line 124: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwdc4f06e6/images/productScooter/Products-Scooter-KLARA-S.png",
+Line 125: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#klara-s",
+Line 126: "offers": {
+Line 127: "@type": "Offer",
+Line 128: "priceCurrency": "VND",
+Line 129: "price": "39900000.",
+Line 130: "itemCondition": "https://schema.org/NewCondition",
+Line 131: "availability": "Instock"
+Line 132: }
+Line 133: },
+Line 134: {
+Line 135: "@type": "Product",
+Line 136: "position": "8",
+Line 137: "name": "Evo 200",
+Line 138: "brand": {
+Line 139: "@type": "Brand",
+Line 140: "name": "VinFast"
+Line 141: },
+Line 142: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw747ef047/images/productScooter/Products-Scooter-EVO200.png",
+Line 143: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#evo-200",
+Line 144: "offers": {
+Line 145: "@type": "Offer",
+Line 146: "priceCurrency": "VND",
+Line 147: "price": "22000000.",
+Line 148: "itemCondition": "https://schema.org/NewCondition",
+Line 149: "availability": "Instock"
+Line 150: }
+Line 151: },
+Line 152: {
+Line 153: "@type": "Product",
+Line 154: "position": "9",
+Line 155: "name": "Evo 200 Lite",
+Line 156: "brand": {
+Line 157: "@type": "Brand",
+Line 158: "name": "VinFast"
+Line 159: },
+Line 160: "image": "https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa5b930c1/images/productScooter/Products-Scooter-EVO200-LITE.png",
+Line 161: "url": "https://shop.vinfastauto.com/vn_vi/dat-mua-xe-may-dien-vinfast#evo-200-lite",
+Line 162: "offers": {
+Line 163: "@type": "Offer",
+Line 164: "priceCurrency": "VND",
+Line 165: "price": "22000000.",
+Line 166: "itemCondition": "https://schema.org/NewCondition",
+Line 167: "availability": "Instock"
+Line 168: }
+Line 169: }
+Line 170: ]
+Line 171: }

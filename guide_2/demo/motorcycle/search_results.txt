@@ -1,0 +1,22 @@
+=== data-edition search ===
+=== modelId search ===
+=== Evo / Lite / Grand context ===
+Line 1415: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw92508659/images/productScooter/Products-Scooter-EVO.png" alt="Xe máy điện VinFast Evo">
+Line 1416: <figcaption>Evo</figcaption>
+Line 1421: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwff3f2362/images/productScooter/Products-Scooter-EVOLITE.png" alt="Xe máy điện VinFast Evo Lite">
+Line 1422: <figcaption>Evo Lite</figcaption>
+Line 1427: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwd624f266/images/productScooter/Products-Scooter-EVOGRAND.png" alt="Xe máy điện VinFast Evo Grand">
+Line 1428: <figcaption>Evo Grand</figcaption>
+Line 1433: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw1bcc3e26/images/productScooter/Products-Scooter-EVOGRANDLITE.png" alt="Xe máy điện VinFast Evo Grand Lite">
+Line 1434: <figcaption>Evo Grand Lite</figcaption>
+Line 1612: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw92508659/images/productScooter/Products-Scooter-EVO.png" alt="Xe máy điện VinFast Evo">
+Line 1613: <figcaption>Evo</figcaption>
+Line 1618: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwff3f2362/images/productScooter/Products-Scooter-EVOLITE.png" alt="Xe máy điện VinFast Evo Lite">
+Line 1619: <figcaption>Evo Lite</figcaption>
+Line 1624: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwd624f266/images/productScooter/Products-Scooter-EVOGRAND.png" alt="Xe máy điện VinFast Evo Grand">
+Line 1625: <figcaption>Evo Grand</figcaption>
+Line 1630: <img src="https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw1bcc3e26/images/productScooter/Products-Scooter-EVOGRANDLITE.png" alt="Xe máy điện VinFast Evo Grand Lite">
+Line 1631: <figcaption>Evo Grand Lite</figcaption>
+Line 20498: "name": "Evo 200",
+Line 20516: "name": "Evo 200 Lite",
+Line 20562: window.manualStoreAllocation = [{"id":"S49201","name":"VinFast Ngọc Hùng Cần Giờ","address":"Số 245 Lương Văn Nho, Ấp Thạnh Thới, Xã Cần Giờ, Thành phố Hồ Chí Minh","city":"ho-chi-minh","storeType":"Showroom","vincom":true},{"id":"G00101","name":"Viettel Post sẽ liên hệ với Quý Khách hàng về địa điể

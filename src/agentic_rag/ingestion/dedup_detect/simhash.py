@@ -7,7 +7,7 @@ import re
 from collections.abc import Iterable
 
 from agentic_rag.ingestion.dedup_detect.models import DedupDocument, DuplicateMatch
-from agentic_rag.ingestion.dedup_detect.normalization import normalize_text
+from agentic_rag.ingestion.dedup_detect.normalization import dedup_text, normalize_text
 
 _TOKEN_RE = re.compile(r"\w+", flags=re.UNICODE)
 
@@ -71,7 +71,7 @@ def find_simhash_duplicates(
     indexed = [
         (
             document,
-            simhash_fingerprint(document.text, bits=bits, shingle_size=shingle_size),
+            simhash_fingerprint(dedup_text(document), bits=bits, shingle_size=shingle_size),
         )
         for document in documents
         if document.document_id not in excluded_chunks

@@ -9,7 +9,7 @@ from inspect import Parameter, signature
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agentic_rag.ingestion.url.extractor import ExtractedMarkdown, extract_markdown_with_playwright
 
@@ -21,7 +21,7 @@ class RenderOptions(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    timeout_seconds: int = Field(default=60, gt=0)
+    timeout_seconds: int | None = 60
     wait_until: RenderWaitUntil = "load"
     settle_after_scroll_ms: int = Field(default=800, ge=0)
     settle_after_expand_ms: int = Field(default=400, ge=0)
@@ -30,6 +30,13 @@ class RenderOptions(BaseModel):
     retry_timeout_seconds: int | None = Field(default=None, gt=0)
     cache_dir: Path | None = None
     use_cache: bool = True
+
+    @field_validator("timeout_seconds")
+    @classmethod
+    def _validate_timeout_seconds(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("timeout_seconds must be greater than 0 or None.")
+        return value
 
 
 class RenderAttempt(BaseModel):

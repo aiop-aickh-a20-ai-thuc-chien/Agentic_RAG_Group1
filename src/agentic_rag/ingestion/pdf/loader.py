@@ -138,6 +138,109 @@ def _load_pdf_with_markdown(
             fallback_chunker=fallback_chunker.chunker_name,
             exc=exc,
         )
+    # TODO [PixelRAG Integration — PDF Visual Chunking]:
+    # For PDFs with heavy visual content (brochures, catalogs, spec sheets with
+    # diagrams), consider rendering pages as screenshot tiles alongside the
+    # existing text-based markdown chunking.
+    #
+    # Pseudocode:
+    #
+    #   IF config.VISUAL_PDF_ENABLED:
+    #       # Stage 1: Render each PDF page to an image (poppler / pdf2image)
+    #       page_images = render_pdf(path, visual_output_dir / "tiles", dpi=200)
+    #       # Each page produces ~1650×2200 pixels for A4 at DPI=200
+    #
+    #       # Stage 2: Chunk page images into 1024px-tall strips
+    #       FOR EACH page_tile_dir IN page_images:
+    #           chunk_article(page_tile_dir)
+    #           # Produces chunk_XXXX_YY.png files (1024px height, viewport_width)
+    #           # Discards strips < 28px (one Qwen3-VL patch)
+    #
+    #       # Stage 3: Embed image chunks with VLM
+    #       image_items = scan_chunks(visual_output_dir / "tiles")
+    #       visual_embeddings = embed_items(image_items,
+    #                                       model="Qwen/Qwen3-VL-Embedding-2B",
+    #                                       device="auto")
+    #
+    #       # Stage 4: Create visual Chunk objects with page-level metadata
+    #       FOR i, item IN enumerate(image_items):
+    #           visual_chunk = Chunk(
+    #               chunk_id=f"pdf_visual_{safe_file_stem}_p{item.tile_index}_c{item.chunk_index}",
+    #               text="[visual chunk — see image tile]",
+    #               metadata={
+    #                   "source": str(path),
+    #                   "source_type": "pdf",
+    #                   "extraction_method": "visual_pixelrag",
+    #                   "page": item.tile_index + 1,
+    #                   "tile_index": item.tile_index,
+    #                   "chunk_index": item.chunk_index,
+    #                   "y_offset": item.y_offset,
+    #                   "image_path": item.path,
+    #                   "viewport_width": 875,
+    #               }
+    #           )
+    #           chunks.append(visual_chunk)
+    #
+    #       # Optionally build a separate FAISS index for visual PDF retrieval
+    #       build_faiss_index(visual_output_dir / "embeddings",
+    #                         visual_output_dir / "index")
+    #
+    # Reference: guide_RAG/GUIDELINE.md §4, PixelRAG/render/src/pixelrag_render/render.py
+
+    VISUAL_PDF_ENABLED = False  # Set to True when PixelRAG backend is installed
+    if VISUAL_PDF_ENABLED:
+        try:
+            from agentic_rag.ingestion.visual_pipeline import render_pdf, embed_visual_chunks, build_faiss_index
+            from agentic_rag.ingestion.chunking.visual import VisualTileChunker
+            from agentic_rag.ingestion.metadata.visual import enrich_visual_metadata
+            
+            # Using the same safe stem logic as text chunks
+            safe_file_stem = _safe_chunk_id_part(path.stem)
+            visual_output_dir = path.parent / f"{path.name}_visual"
+            
+            # Stage 1
+            page_images = render_pdf(path, visual_output_dir / "tiles", dpi=200)
+            
+            # Stage 2
+            chunker = VisualTileChunker()
+            all_image_chunks = []
+            for page_tile_dir in page_images:
+                page_img_path = page_tile_dir / "page.png"
+                if page_img_path.exists():
+                    all_image_chunks.extend(chunker.chunk(page_img_path))
+                    
+            # Stage 3
+            if all_image_chunks:
+                try:
+                    visual_embeddings = embed_visual_chunks(all_image_chunks)
+                    build_faiss_index(visual_output_dir / "embeddings", visual_output_dir / "index")
+                except NotImplementedError:
+                    pass  # Embedding unsupported but we still keep chunks
+                    
+            # Stage 4
+            for i, item in enumerate(all_image_chunks):
+                visual_chunk = Chunk(
+                    chunk_id=f"pdf_visual_{safe_file_stem}_p{item.index}_c{i}",
+                    text="[visual chunk — see image tile]",
+                    metadata={}
+                )
+                enriched_chunk = enrich_visual_metadata(visual_chunk, {
+                    "source": str(path),
+                    "source_type": "pdf",
+                    "extraction_method": "visual_pixelrag",
+                    "page": item.index + 1,
+                    "tile_index": item.index,
+                    "chunk_index": i,
+                    "y_offset": item.y_offset,
+                    "image_path": str(visual_output_dir),  # Path placeholder
+                    "viewport_width": chunker.VIEWPORT_WIDTH,
+                })
+                chunks.append(enriched_chunk)
+
+        except NotImplementedError:
+            pass  # Visual PDF rendering gracefully degrades if backend absent
+
+
     return LoadedPdfDocument(
         markdown=parse_result.markdown,
         chunks=chunks,

@@ -1,0 +1,225 @@
+{
+  "page": {
+    "title": "Xe điện VinFast VF 9 - Giá bán và chương trình ưu đãi | VinFast",
+    "url_deposit_page": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html",
+    "url_model_selector": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9",
+    "model_id": "Products-Car-VF9"
+  },
+  "vehicle": {
+    "name": "VinFast VF 9",
+    "type": "eSUV – SUV điện 7 chỗ hạng sang",
+    "tagline": "Sự Lựa Chọn Của Người Thành Đạt, Tiên Phong",
+    "key_specs": {
+      "range_wltp_km": 626,
+      "range_note": "Tiêu chuẩn WLTP, phiên bản Eco pin CATL",
+      "power_hp": 402,
+      "torque_nm": 620,
+      "warranty": "200.000 km hoặc 10 năm"
+    }
+  },
+  "variants": [
+    {
+      "edition_id": "NE3NV",
+      "name": "VF 9 Eco",
+      "base_price_vnd": 1499000000,
+      "base_price_formatted": "1.499.000.000 VNĐ"
+    },
+    {
+      "edition_id": "NE3MV",
+      "name": "VF 9 Plus tùy chọn 7 chỗ",
+      "base_price_vnd": 1699000000,
+      "base_price_formatted": "1.699.000.000 VNĐ"
+    },
+    {
+      "edition_id": "NE3MV",
+      "name": "VF 9 Plus tùy chọn ghế cơ trưởng",
+      "base_price_vnd": 1731000000,
+      "base_price_formatted": "1.731.000.000 VNĐ"
+    }
+  ],
+  "pricing_notes": [
+    "Giá xe đã bao gồm VAT."
+  ],
+  "deposit": {
+    "amount_vnd": 50000000,
+    "amount_formatted": "50.000.000 VNĐ",
+    "cta_label": "Đặt cọc 50.000.000 VNĐ",
+    "cta_url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9"
+  },
+  "rolling_cost_popup": {
+    "trigger_element": "<a href=\"javascript:void(0);\" data-bs-toggle=\"modal\" data-bs-target=\"#rollingUpCostPopUp\" class=\"tab-right-cost-more js-rollingUpCostPopUp\">Chi tiết</a>",
+    "modal_id": "rollingUpCostPopUp",
+    "label": "Chi tiết",
+    "purpose": "Hiển thị chi phí lăn bánh (on-road cost breakdown)"
+  },
+  "configured_prices": {
+    "note": "Giá xe = Giá niêm yết phiên bản + Phụ thu màu (nếu có). Đã bao gồm VAT.",
+    "pricing_rule": {
+      "standard_color_surcharge_vnd": 0,
+      "premium_color_surcharge_vnd": 12000000,
+      "premium_colors": ["CE22", "CE17"]
+    },
+    "VF9_Eco": {
+      "edition_id": "NE3NV",
+      "base_price_vnd": 1499000000,
+      "combinations": [
+        { "color_code": "CE18", "color_name": "Infinity Blanc", "color_tier": "standard", "total_price_vnd": 1499000000, "total_price_formatted": "1.499.000.000 VNĐ" },
+        { "color_code": "CE11", "color_name": "Jet Black",      "color_tier": "standard", "total_price_vnd": 1499000000, "total_price_formatted": "1.499.000.000 VNĐ" },
+        { "color_code": "CE1V", "color_name": "Zenith Grey",    "color_tier": "standard", "total_price_vnd": 1499000000, "total_price_formatted": "1.499.000.000 VNĐ" },
+        { "color_code": "CE1M", "color_name": "Crimson Red",    "color_tier": "standard", "total_price_vnd": 1499000000, "total_price_formatted": "1.499.000.000 VNĐ" },
+        { "color_code": "CE1W", "color_name": "Urban Mint",     "color_tier": "standard", "total_price_vnd": 1499000000, "total_price_formatted": "1.499.000.000 VNĐ" },
+        { "color_code": "CE22", "color_name": "Ivy Green",      "color_tier": "premium",  "total_price_vnd": 1511000000, "total_price_formatted": "1.511.000.000 VNĐ" },
+        { "color_code": "CE17", "color_name": "Desat Silver",   "color_tier": "premium",  "total_price_vnd": 1511000000, "total_price_formatted": "1.511.000.000 VNĐ" }
+      ]
+    },
+    "VF9_Plus_7_cho": {
+      "edition_id": "NE3MV",
+      "base_price_vnd": 1699000000,
+      "combinations": [
+        { "color_code": "CE18", "color_name": "Infinity Blanc", "color_tier": "standard", "total_price_vnd": 1699000000, "total_price_formatted": "1.699.000.000 VNĐ" },
+        { "color_code": "CE11", "color_name": "Jet Black",      "color_tier": "standard", "total_price_vnd": 1699000000, "total_price_formatted": "1.699.000.000 VNĐ" },
+        { "color_code": "CE1V", "color_name": "Zenith Grey",    "color_tier": "standard", "total_price_vnd": 1699000000, "total_price_formatted": "1.699.000.000 VNĐ" },
+        { "color_code": "CE1M", "color_name": "Crimson Red",    "color_tier": "standard", "total_price_vnd": 1699000000, "total_price_formatted": "1.699.000.000 VNĐ" },
+        { "color_code": "CE1W", "color_name": "Urban Mint",     "color_tier": "standard", "total_price_vnd": 1699000000, "total_price_formatted": "1.699.000.000 VNĐ" },
+        { "color_code": "CE22", "color_name": "Ivy Green",      "color_tier": "premium",  "total_price_vnd": 1711000000, "total_price_formatted": "1.711.000.000 VNĐ" },
+        { "color_code": "CE17", "color_name": "Desat Silver",   "color_tier": "premium",  "total_price_vnd": 1711000000, "total_price_formatted": "1.711.000.000 VNĐ" }
+      ]
+    },
+    "VF9_Plus_ghe_co_truong": {
+      "edition_id": "NE3MV",
+      "base_price_vnd": 1731000000,
+      "combinations": [
+        { "color_code": "CE18", "color_name": "Infinity Blanc", "color_tier": "standard", "total_price_vnd": 1731000000, "total_price_formatted": "1.731.000.000 VNĐ" },
+        { "color_code": "CE11", "color_name": "Jet Black",      "color_tier": "standard", "total_price_vnd": 1731000000, "total_price_formatted": "1.731.000.000 VNĐ" },
+        { "color_code": "CE1V", "color_name": "Zenith Grey",    "color_tier": "standard", "total_price_vnd": 1731000000, "total_price_formatted": "1.731.000.000 VNĐ" },
+        { "color_code": "CE1M", "color_name": "Crimson Red",    "color_tier": "standard", "total_price_vnd": 1731000000, "total_price_formatted": "1.731.000.000 VNĐ" },
+        { "color_code": "CE1W", "color_name": "Urban Mint",     "color_tier": "standard", "total_price_vnd": 1731000000, "total_price_formatted": "1.731.000.000 VNĐ" },
+        { "color_code": "CE22", "color_name": "Ivy Green",      "color_tier": "premium",  "total_price_vnd": 1743000000, "total_price_formatted": "1.743.000.000 VNĐ" },
+        { "color_code": "CE17", "color_name": "Desat Silver",   "color_tier": "premium",  "total_price_vnd": 1743000000, "total_price_formatted": "1.743.000.000 VNĐ" }
+      ]
+    }
+  },
+  "exterior_colors": {
+    "active_edition_shown": "NE3NV",
+    "currently_selected_color": "Crimson Red",
+    "note": "Per-color prices removed – the data-price-value attributes in the HTML reflect internal cart totals for a specific edition+color combination, not meaningful standalone color prices. Use variant base prices and surcharge only.",
+    "color_categories": [
+      {
+        "category": "Màu cơ bản - Theo xe",
+        "surcharge_vnd": 0,
+        "surcharge_label": "Không phụ thu",
+        "colors": [
+          { "code": "CE18", "name": "Infinity Blanc" },
+          { "code": "CE11", "name": "Jet Black" },
+          { "code": "CE1V", "name": "Zenith Grey" },
+          { "code": "CE1M", "name": "Crimson Red", "is_active": true },
+          { "code": "CE1W", "name": "Urban Mint" }
+        ]
+      },
+      {
+        "category": "Màu nâng cao",
+        "surcharge_vnd": 12000000,
+        "surcharge_label": "+ 12.000.000 VNĐ",
+        "colors": [
+          { "code": "CE22", "name": "Ivy Green" },
+          { "code": "CE17", "name": "Desat Silver" }
+        ]
+      }
+    ]
+  },
+  "interior_colors": {
+    "note": "Available interior colors depend on chosen exterior color",
+    "combinations": [
+      {
+        "exterior_code": "CE18",
+        "exterior_name": "Infinity Blanc",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      },
+      {
+        "exterior_code": "CE1M",
+        "exterior_name": "Crimson Red",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI13", "name": "Cotton Beige" }
+        ]
+      },
+      {
+        "exterior_code": "CE1W",
+        "exterior_name": "Urban Mint",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      },
+      {
+        "exterior_code": "CE11",
+        "exterior_name": "Jet Black",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI13", "name": "Cotton Beige" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      },
+      {
+        "exterior_code": "CE22",
+        "exterior_name": "Ivy Green",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI13", "name": "Cotton Beige" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      },
+      {
+        "exterior_code": "CE1V",
+        "exterior_name": "Zenith Grey",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      },
+      {
+        "exterior_code": "CE17",
+        "exterior_name": "Desat Silver",
+        "available_interiors": [
+          { "code": "CI11", "name": "Granite Black" },
+          { "code": "CI12", "name": "Saddle Brown" }
+        ]
+      }
+    ]
+  },
+  "product_ids_sample": [
+    "VF-ZVEH-PE1U_2023-NE3NV-CE18-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE18-CI12",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1M-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1M-CI13",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1W-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1W-CI12",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE11-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE11-CI13",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE11-CI12",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE22-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE22-CI13",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE22-CI12",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1V-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE1V-CI12",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE17-CI11",
+    "VF-ZVEH-PE1U_2023-NE3NV-CE17-CI12"
+  ],
+  "model_code": "PE1U_2023",
+  "navigation_sections": [
+    "Phiên bản",
+    "Ngoại thất",
+    "Nội thất",
+    "Công nghệ",
+    "Đặc quyền",
+    "Pin sạc"
+  ],
+  "sources": {
+    "html_snippet": "Provided document (shop.vinfastauto.com VF9 color selector)",
+    "pdp_page": "https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html",
+    "model_selector_page": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9"
+  }
+}

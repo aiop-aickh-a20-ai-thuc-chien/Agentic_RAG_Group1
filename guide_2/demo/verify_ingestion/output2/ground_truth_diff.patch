@@ -1,0 +1,369 @@
+--- ground_truth.md
++++ actual_output.md
+@@ -1,235 +1,174 @@
+-# Ground Truth: VinFast VF 9 – Trang Đặt Cọc
++# Thông tin bảo hành
+ 
+-> **Sources:**  
+-> - HTML snippet: `shop.vinfastauto.com` – VF9 color selector (provided)  
+-> - PDP: https://shop.vinfastauto.com/vn_vi/dat-coc-xe-vf9.html  
+-> - Model selector: https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9  
+-> - `model_id`: `Products-Car-VF9`
++## Nội dung bảo hành
+ 
+----
++| Hạng mục                                   |
++|--------------------------------------------|
++| Bảo hành - sửa chữa                        |
++| Thời hạn bảo hành ô tô                     |
++| Thời hạn bảo hành xe máy điện              |
++| Phạm vi bảo hành                           |
++| Phụ tùng xe mới Bảo hành giới hạn         |
++| Bảo hành phụ tùng Thay thế chính hãng     |
++| Bảo hành phụ kiện chính hãng VinFast      |
+ 
+-## 1. Thông tin xe
++## Structured DOM Content
+ 
+-| Trường | Giá trị |
+-|---|---|
+-| Tên xe | VinFast VF 9 |
+-| Phân khúc | eSUV – SUV điện 7 chỗ hạng sang |
+-| Tagline | Sự Lựa Chọn Của Người Thành Đạt, Tiên Phong |
+-| Quãng đường (WLTP) | **626 km** *(phiên bản Eco, pin CATL)* |
+-| Công suất | **402 hp / 620 Nm** |
+-| Bảo hành xe | **200.000 km hoặc 10 năm** |
++### VF 8
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_122aa112ed62
++- structure_dedupe_hash: b057918f45c0
++- structure_attributes: class='field__item'
++- content: VinFast đã chuyển đổi Sổ Bảo Hành sang hình thức điện tử. Tại thời điểm bàn giao xe, Đại lý phân phối sẽ tư vấn, hướng dẫn Khách hàng xác nhận Sổ Bảo Hành điện tử và cách thức tra cứu, sử dụng. Đối với xe được sử dụng ở điều kiện sử dụng tiêu chuẩn: Thời hạn bảo hành 10 năm hoặc 200.000 km tùy điều kiện nào đến trước: Fadil, Lux A 2.0, Lux SA 2.0, President, VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. Thời hạn bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước: VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF e34, VF Minio Green, VF Nerio Green, VF Herio Green, VF MPV 7, VF Limo Green. Thời hạn bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước: VF EC Van. Đối với xe đang hoặc đã từng được sử dụng cho hoạt động dịch vụ thương mại: Thời hạn bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước: VF 3, VF 7, VF 8, VF 9, VF 8 The All New. Phụ tùng được thay thế theo chính sách bảo hành xe có thời hạn bảo hành bằng thời hạn bảo hành còn lại của xe; hoặc thời hạn bảo hành còn lại của phụ tùng được thay thế đó (trong trường hợp phụ tùng có thời hạn bảo hành riêng). ** Dịch vụ thương mại là đối tượng khách hàng kinh doanh, bao gồm nhưng không giới hạn, đang hoặc đã từng sử dụng xe làm taxi, xe sử dụng cho dịch vụ chở khách, kể cả các dịch vụ như Grab, Be hay tương tự, xe cho thuê, xe đưa đón, xe giao hàng. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe.
+ 
+-## 2. Phiên bản & Giá niêm yết
++### VF 8
+ 
+-| Edition ID | Tên phiên bản | Giá (VNĐ, có VAT) |
+-|---|---|---|
+-| `NE3NV` | VF 9 Eco | **1.499.000.000** |
+-| `NE3MV` | VF 9 Plus tùy chọn 7 chỗ | **1.699.000.000** |
+-| `NE3MV` | VF 9 Plus tùy chọn ghế cơ trưởng | **1.731.000.000** |
++- structure_block_type: product_card
++- structure_block_id: dom_320b6a748db1
++- structure_dedupe_hash: 2797a4f3ed8e
++- structure_attributes: class='warranty-time-info'
++- content: Thời hạn bảo hành ô tô VinFast đã chuyển đổi Sổ Bảo Hành sang hình thức điện tử. Tại thời điểm bàn giao xe, Đại lý phân phối sẽ tư vấn, hướng dẫn Khách hàng xác nhận Sổ Bảo Hành điện tử và cách thức tra cứu, sử dụng. Đối với xe được sử dụng ở điều kiện sử dụng tiêu chuẩn: Thời hạn bảo hành 10 năm hoặc 200.000 km tùy điều kiện nào đến trước: Fadil, Lux A 2.0, Lux SA 2.0, President, VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. Thời hạn bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước: VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF e34, VF Minio Green, VF Nerio Green, VF Herio Green, VF MPV 7, VF Limo Green. Thời hạn bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước: VF EC Van. Đối với xe đang hoặc đã từng được sử dụng cho hoạt động dịch vụ thương mại: Thời hạn bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước: VF 3, VF 7, VF 8, VF 9, VF 8 The All New. Phụ tùng được thay thế theo chính sách bảo hành xe có thời hạn bảo hành bằng thời hạn bảo hành còn lại của xe; hoặc thời hạn bảo hành còn lại của phụ tùng được thay thế đó (trong trường hợp phụ tùng có thời hạn bảo hành riêng). ** Dịch vụ thương mại là đối tượng khách hàng kinh doanh, bao gồm nhưng không giới hạn, đang hoặc đã từng sử dụng xe làm taxi, xe sử dụng cho dịch vụ chở khách, kể cả các dịch vụ như Grab, Be hay tương tự, xe cho thuê, xe đưa đón, xe giao hàng. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe. SỔ BẢO HÀNH Ô TÔ VF 3 VF 5 VF 6 VF 8 VF 9 Lac Hong 900 LX Minio Green Nerio Green Herio Green Limo Green VF EC VAN Ebus 6B Ebus 8B Ebus 10B MPV 7 HƯỚNG DẪN SỬ DỤNG
+ 
+-**Lưu ý giá:**
+-- Giá xe **đã bao gồm VAT**.
++### VF 8
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_6eec604a905c
++- structure_dedupe_hash: 69c8f80d6a14
++- structure_attributes: class='paragraph paragraph--type--warranty-time paragraph--view-mode--default'
++- content: Thời hạn bảo hành ô tô Thời hạn bảo hành ô tô VinFast đã chuyển đổi Sổ Bảo Hành sang hình thức điện tử. Tại thời điểm bàn giao xe, Đại lý phân phối sẽ tư vấn, hướng dẫn Khách hàng xác nhận Sổ Bảo Hành điện tử và cách thức tra cứu, sử dụng. Đối với xe được sử dụng ở điều kiện sử dụng tiêu chuẩn: Thời hạn bảo hành 10 năm hoặc 200.000 km tùy điều kiện nào đến trước: Fadil, Lux A 2.0, Lux SA 2.0, President, VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. Thời hạn bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước: VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF e34, VF Minio Green, VF Nerio Green, VF Herio Green, VF MPV 7, VF Limo Green. Thời hạn bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước: VF EC Van. Đối với xe đang hoặc đã từng được sử dụng cho hoạt động dịch vụ thương mại: Thời hạn bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước: VF 3, VF 7, VF 8, VF 9, VF 8 The All New. Phụ tùng được thay thế theo chính sách bảo hành xe có thời hạn bảo hành bằng thời hạn bảo hành còn lại của xe; hoặc thời hạn bảo hành còn lại của phụ tùng được thay thế đó (trong trường hợp phụ tùng có thời hạn bảo hành riêng). ** Dịch vụ thương mại là đối tượng khách hàng kinh doanh, bao gồm nhưng không giới hạn, đang hoặc đã từng sử dụng xe làm taxi, xe sử dụng cho dịch vụ chở khách, kể cả các dịch vụ như Grab, Be hay tương tự, xe cho thuê, xe đưa đón, xe giao hàng. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe. SỔ BẢO HÀNH Ô TÔ VF 3 VF 5 VF 6 VF 8 VF 9 Lac Hong 900 LX Minio Green Nerio Green Herio Green Limo Green VF EC VAN Ebus 6B Ebus 8B Ebus 10B MPV 7 HƯỚNG DẪN SỬ DỤNG
+ 
+-## 3. Đặt cọc
++### VF 8
+ 
+-| Trường | Giá trị |
+-|---|---|
+-| Số tiền đặt cọc | **50.000.000 VNĐ** |
+-| CTA Label | "Đặt cọc 50.000.000 VNĐ" |
+-| CTA URL | https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9 |
++- structure_block_type: product_card
++- structure_block_id: dom_e53b8fcc66c5
++- structure_dedupe_hash: 531f13d12b00
++- structure_attributes: class='field__items'
++- content: Thời hạn bảo hành ô tô Thời hạn bảo hành ô tô VinFast đã chuyển đổi Sổ Bảo Hành sang hình thức điện tử. Tại thời điểm bàn giao xe, Đại lý phân phối sẽ tư vấn, hướng dẫn Khách hàng xác nhận Sổ Bảo Hành điện tử và cách thức tra cứu, sử dụng. Đối với xe được sử dụng ở điều kiện sử dụng tiêu chuẩn: Thời hạn bảo hành 10 năm hoặc 200.000 km tùy điều kiện nào đến trước: Fadil, Lux A 2.0, Lux SA 2.0, President, VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. Thời hạn bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước: VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF e34, VF Minio Green, VF Nerio Green, VF Herio Green, VF MPV 7, VF Limo Green. Thời hạn bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước: VF EC Van. Đối với xe đang hoặc đã từng được sử dụng cho hoạt động dịch vụ thương mại: Thời hạn bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước: VF 3, VF 7, VF 8, VF 9, VF 8 The All New. Phụ tùng được thay thế theo chính sách bảo hành xe có thời hạn bảo hành bằng thời hạn bảo hành còn lại của xe; hoặc thời hạn bảo hành còn lại của phụ tùng được thay thế đó (trong trường hợp phụ tùng có thời hạn bảo hành riêng). ** Dịch vụ thương mại là đối tượng khách hàng kinh doanh, bao gồm nhưng không giới hạn, đang hoặc đã từng sử dụng xe làm taxi, xe sử dụng cho dịch vụ chở khách, kể cả các dịch vụ như Grab, Be hay tương tự, xe cho thuê, xe đưa đón, xe giao hàng. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe. SỔ BẢO HÀNH Ô TÔ VF 3 VF 5 VF 6 VF 8 VF 9 Lac Hong 900 LX Minio Green Nerio Green Herio Green Limo Green VF EC VAN Ebus 6B Ebus 8B Ebus 10B MPV 7 HƯỚNG DẪN SỬ DỤNG Thời hạn bảo hành xe máy điện Thời hạn bảo hành xe máy điện Đối với các dòng xe máy điện VinFast sử dụng pin LFP, thời hạn bảo hành xe là 6 năm/không giới hạn số km và thời hạn bảo hành pin lên tới 8 năm/không giới hạn số km . Các dòng xe còn lại thời hạn bảo hành 3 năm/không giới hạn km. Đối với pin LFP theo mô hình đổi pin, thời hạn bảo hành là 8 năm/ không giới hạn số km. Quý khách hàng vui lòng tham khảo tại Sổ bảo hành để biết thêm các thông tin bảo hành chi tiết. SỔ BẢO HÀNH XE MÁY ĐIỆN PIN LFP SỔ BẢO HÀNH XE MÁY ĐIỆN PIN KHÁC HƯỚNG DẪN SỬ DỤNG XE MÁY ĐIỆN Klara A1 Klara A2 Klara S Ludo Impes Feliz Theon Klara A2 2020 Vento Tempest Feliz S Shiper Feliz S Klara S2 Theon S Vento S Evo200 Evo200 Lite Motio Evo Neo Evo Lite Neo Vento Neo Feliz Neo Klara Neo Evo Grand Evo Grand Lite Feliz II Feliz 2025 Feliz Lite Vero X ZGoo Flazz VinFast Evo VinFast Amio VinFast Feliz II VinFast Viper VinFast Evo Lite VinFast Flazz VinFast Amio S VF DrgnFly eBike
+ 
+----
++### Thông tin bảo hành | VinFast product card
+ 
+-## 4. Chi phí lăn bánh – Popup "Chi tiết"
++- structure_block_type: product_card
++- structure_block_id: dom_a29c2b51bfda
++- structure_dedupe_hash: 27a2533b5cfb
++- structure_attributes: class='field__item'
++- content: Lốp được trang bị theo xe (bao gồm cả lốp dự phòng nếu có) được bảo hành đối với các khuyết tật, hư hỏng do lỗi nguyên vật liệu hoặc lỗi trong quá trình sản xuất, lưu kho của nhà sản xuất lốp được tính kể từ ngày kích hoạt bảo hành xe. Chi tiết bảo hành đối với từng loại sản phẩm như sau: Ô tô xăng: 5 năm (không giới hạn quãng đường sử dụng). Ô tô điện: Bảo hành bởi nhà sản xuất lốp xe. Nếu nhà sản xuất lốp cung cấp dịch vụ bảo hành tại thị trường Việt Nam, lốp xe sẽ được bảo hành hành theo chính sách riêng của nhà sản xuất lốp xe. Những hạng mục, hư hỏng không thuộc bảo hành lốp: Hư hỏng do lốp xe bị phá hoại, tai nạn hoặc va chạm. Hư hỏng do lốp bị lạm dụng trong quá trình sử dụng. Hư hỏng do lốp không được bảo dưỡng hoặc vận hành với áp suất lốp không tiêu chuẩn. Lốp là chi tiết hao mòn theo thời gian và quãng đường sử dụng, các hao mòn này không thuộc phạm vi bảo hành. Các hư hỏng được đánh giá không ảnh hưởng đến chất lượng, hiệu suất hoặc chức năng của lốp. Sử dụng lốp sai so với mục đích khuyến nghị của nhà sản xuất. Lốp đã được sửa chữa, thay đổi, đắp hoặc dán lại. Hư hỏng do ảnh hưởng từ các yếu tố bên ngoài như tình trạng của đường hoặc các bề mặt tiếp xúc khác, những yếu tố khác như hóa chất, ô nhiễm, mưa axit, mưa đá, cát, không khí, muối, đá, hỏa hoạn, thiên tai, v.v... Các vấn đề phát sinh khác mà không thể chứng minh được là có trực tiếp hay gián tiếp liên quan đến vấn đề chất lượng lốp như chi phí cho việc không sử dụng xe, tiêu tốn thời gian, nhiên liệu, điện thoại, chỗ ở hoặc các phát sinh khác.
+ 
+-Trên trang model selector (`?modelId=Products-Car-VF9`), có link mở modal chi tiết chi phí lăn bánh:
++### Thông tin bảo hành | VinFast product card
+ 
+-```html
+-<a href="javascript:void(0);"
+-   data-bs-toggle="modal"
+-   data-bs-target="#rollingUpCostPopUp"
+-   class="tab-right-cost-more js-rollingUpCostPopUp">Chi tiết</a>
+-```
++- structure_block_type: product_card
++- structure_block_id: dom_04ee07dcbc41
++- structure_dedupe_hash: 557787efeb13
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-scontent paragraph--view-mode--default'
++- content: Lốp xe Lốp được trang bị theo xe (bao gồm cả lốp dự phòng nếu có) được bảo hành đối với các khuyết tật, hư hỏng do lỗi nguyên vật liệu hoặc lỗi trong quá trình sản xuất, lưu kho của nhà sản xuất lốp được tính kể từ ngày kích hoạt bảo hành xe. Chi tiết bảo hành đối với từng loại sản phẩm như sau: Ô tô xăng: 5 năm (không giới hạn quãng đường sử dụng). Ô tô điện: Bảo hành bởi nhà sản xuất lốp xe. Nếu nhà sản xuất lốp cung cấp dịch vụ bảo hành tại thị trường Việt Nam, lốp xe sẽ được bảo hành hành theo chính sách riêng của nhà sản xuất lốp xe. Những hạng mục, hư hỏng không thuộc bảo hành lốp: Hư hỏng do lốp xe bị phá hoại, tai nạn hoặc va chạm. Hư hỏng do lốp bị lạm dụng trong quá trình sử dụng. Hư hỏng do lốp không được bảo dưỡng hoặc vận hành với áp suất lốp không tiêu chuẩn. Lốp là chi tiết hao mòn theo thời gian và quãng đường sử dụng, các hao mòn này không thuộc phạm vi bảo hành. Các hư hỏng được đánh giá không ảnh hưởng đến chất lượng, hiệu suất hoặc chức năng của lốp. Sử dụng lốp sai so với mục đích khuyến nghị của nhà sản xuất. Lốp đã được sửa chữa, thay đổi, đắp hoặc dán lại. Hư hỏng do ảnh hưởng từ các yếu tố bên ngoài như tình trạng của đường hoặc các bề mặt tiếp xúc khác, những yếu tố khác như hóa chất, ô nhiễm, mưa axit, mưa đá, cát, không khí, muối, đá, hỏa hoạn, thiên tai, v.v... Các vấn đề phát sinh khác mà không thể chứng minh được là có trực tiếp hay gián tiếp liên quan đến vấn đề chất lượng lốp như chi phí cho việc không sử dụng xe, tiêu tốn thời gian, nhiên liệu, điện thoại, chỗ ở hoặc các phát sinh khác.
+ 
+-| Thuộc tính | Giá trị |
+-|---|---|
+-| Modal ID | `#rollingUpCostPopUp` |
+-| CSS classes | `tab-right-cost-more js-rollingUpCostPopUp` |
+-| Label | Chi tiết |
+-| Chức năng | Hiển thị bảng chi phí lăn bánh (on-road cost breakdown) |
++### VF 8
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_12f51df74304
++- structure_dedupe_hash: 8a1e3132a90f
++- structure_attributes: class='field__items'
++- content: Pin cao áp Pin cao áp mua theo xe mới, sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm hoặc 200.000 km tùy theo điều kiện nào đến trước. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 8 năm hoặc 160.000 km tùy điều kiện nào đến trước. Áp dụng cho VF EC Van: được bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước. Pin cao áp mua theo xe mới, xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9: được bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành pin áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe cho chủ sở hữu mới hoặc xe không còn được sử dụng cho mục đích dịch vụ thương mại. Ắc - quy Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng). Gỉ sét Điều kiện sử dụng tiêu chuẩn: Bảo hành gỉ sét có thời hạn bảo hành là 10 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng) với xe VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. sử dụng trong điều kiện tiêu chuẩn, áp dụng với tấm kim loại bị xuyên thủng trong điều kiện hoạt động bình thường mà nguyên nhân do lỗi nguyên vật liệu hoặc lỗi lắp ráp của nhà sản xuất, và 7 năm không giới hạn số km với xe VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green và 5 năm không giới hạn số km với xe VF EC Van. Sử dụng cho dịch vụ thương mại: Bảo hành là 3 năm hoặc 100.000 km với xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại đối với VF 3, VF 7, VF 8, VF 9. Sơn ngoại thất Điều kiện sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm không giới hạn số km. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 7 năm không giới hạn số km. Áp dụng cho VF EC Van: được bảo hành 5 năm không giới hạn số km. Sử dụng cho dịch vụ thương mại: 3 năm hoặc 100.000 km tùy điều kiện nào đến trước áp dụng cho VF 3, VF 7, VF 8, VF 9. Các bộ phận treo Sử dụng trong điều kiện tiêu chuẩn: Các bộ phận treo (Bộ giảm xóc, Thanh ổn định, Cụm liên kết trên, Cánh tay điều khiển dưới, Khớp bi, Lắp thanh chống trên) được bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước. Sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9, thời hạn bảo hành là 3 năm hoặc 100.000 km. Lốp xe Lốp được trang bị theo xe (bao gồm cả lốp dự phòng nếu có) được bảo hành đối với các khuyết tật, hư hỏng do lỗi nguyên vật liệu hoặc lỗi trong quá trình sản xuất, lưu kho của nhà sản xuất lốp được tính kể từ ngày kích hoạt bảo hành xe. Chi tiết bảo hành đối với từng loại sản phẩm như sau: Ô tô xăng: 5 năm (không giới hạn quãng đường sử dụng). Ô tô điện: Bảo hành bởi nhà sản xuất lốp xe. Nếu nhà sản xuất lốp cung cấp dịch vụ bảo hành tại thị trường Việt Nam, lốp xe sẽ được bảo hành hành theo chính sách riêng của nhà sản xuất lốp xe. Những hạng mục, hư hỏng không thuộc bảo hành lốp: Hư hỏng do lốp xe bị phá hoại, tai nạn hoặc va chạm. Hư hỏng do lốp bị lạm dụng trong quá trình sử dụng. Hư hỏng do lốp không được bảo dưỡng hoặc vận hành với áp suất lốp không tiêu chuẩn. Lốp là chi tiết hao mòn theo thời gian và quãng đường sử dụng, các hao mòn này không thuộc phạm vi bảo hành. Các hư hỏng được đánh giá không ảnh hưởng đến chất lượng, hiệu suất hoặc chức năng của lốp. Sử dụng lốp sai so với mục đích khuyến nghị của nhà sản xuất. Lốp đã được sửa chữa, thay đổi, đắp hoặc dán lại. Hư hỏng do ảnh hưởng từ các yếu tố bên ngoài như tình trạng của đường hoặc các bề mặt tiếp xúc khác, những yếu tố khác như hóa chất, ô nhiễm, mưa axit, mưa đá, cát, không khí, muối, đá, hỏa hoạn, thiên tai, v.v... Các vấn đề phát sinh khác mà không thể chứng minh được là có trực tiếp hay gián tiếp liên quan đến vấn đề chất lượng lốp như chi phí cho việc không sử dụng xe, tiêu tốn thời gian, nhiên liệu, điện thoại, chỗ ở hoặc các phát sinh khác.
+ 
+-## 5. Màu ngoại thất (Exterior Colors)
++### VF 8
+ 
+-> Hiển thị cho edition `NE3NV` (VF 9 Eco). Màu đang chọn mặc định: **Crimson Red**.
+->
+-> ⚠️ **Lưu ý:** Các giá trị `data-price-value` trên từng swatch màu trong HTML (1.731.000.000 / 1.743.000.000) là **cart total nội bộ** cho tổ hợp edition+màu cụ thể, **không phải giá của màu sắc**. Không dùng các con số này để đánh giá. Chỉ dùng giá niêm yết của phiên bản và mức phụ thu màu nâng cao.
++- structure_block_type: product_card
++- structure_block_id: dom_c15be9997ba8
++- structure_dedupe_hash: 51140220e7f5
++- structure_attributes: class='field__item--content'
++- content: Phụ tùng xe mới Bảo hành giới hạn Pin cao áp Pin cao áp mua theo xe mới, sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm hoặc 200.000 km tùy theo điều kiện nào đến trước. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 8 năm hoặc 160.000 km tùy điều kiện nào đến trước. Áp dụng cho VF EC Van: được bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước. Pin cao áp mua theo xe mới, xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9: được bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành pin áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe cho chủ sở hữu mới hoặc xe không còn được sử dụng cho mục đích dịch vụ thương mại. Ắc - quy Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng). Gỉ sét Điều kiện sử dụng tiêu chuẩn: Bảo hành gỉ sét có thời hạn bảo hành là 10 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng) với xe VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. sử dụng trong điều kiện tiêu chuẩn, áp dụng với tấm kim loại bị xuyên thủng trong điều kiện hoạt động bình thường mà nguyên nhân do lỗi nguyên vật liệu hoặc lỗi lắp ráp của nhà sản xuất, và 7 năm không giới hạn số km với xe VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green và 5 năm không giới hạn số km với xe VF EC Van. Sử dụng cho dịch vụ thương mại: Bảo hành là 3 năm hoặc 100.000 km với xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại đối với VF 3, VF 7, VF 8, VF 9. Sơn ngoại thất Điều kiện sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm không giới hạn số km. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 7 năm không giới hạn số km. Áp dụng cho VF EC Van: được bảo hành 5 năm không giới hạn số km. Sử dụng cho dịch vụ thương mại: 3 năm hoặc 100.000 km tùy điều kiện nào đến trước áp dụng cho VF 3, VF 7, VF 8, VF 9. Các bộ phận treo Sử dụng trong điều kiện tiêu chuẩn: Các bộ phận treo (Bộ giảm xóc, Thanh ổn định, Cụm liên kết trên, Cánh tay điều khiển dưới, Khớp bi, Lắp thanh chống trên) được bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước. Sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9, thời hạn bảo hành là 3 năm hoặc 100.000 km. Lốp xe Lốp được trang bị theo xe (bao gồm cả lốp dự phòng nếu có) được bảo hành đối với các khuyết tật, hư hỏng do lỗi nguyên vật liệu hoặc lỗi trong quá trình sản xuất, lưu kho của nhà sản xuất lốp được tính kể từ ngày kích hoạt bảo hành xe. Chi tiết bảo hành đối với từng loại sản phẩm như sau: Ô tô xăng: 5 năm (không giới hạn quãng đường sử dụng). Ô tô điện: Bảo hành bởi nhà sản xuất lốp xe. Nếu nhà sản xuất lốp cung cấp dịch vụ bảo hành tại thị trường Việt Nam, lốp xe sẽ được bảo hành hành theo chính sách riêng của nhà sản xuất lốp xe. Những hạng mục, hư hỏng không thuộc bảo hành lốp: Hư hỏng do lốp xe bị phá hoại, tai nạn hoặc va chạm. Hư hỏng do lốp bị lạm dụng trong quá trình sử dụng. Hư hỏng do lốp không được bảo dưỡng hoặc vận hành với áp suất lốp không tiêu chuẩn. Lốp là chi tiết hao mòn theo thời gian và quãng đường sử dụng, các hao mòn này không thuộc phạm vi bảo hành. Các hư hỏng được đánh giá không ảnh hưởng đến chất lượng, hiệu suất hoặc chức năng của lốp. Sử dụng lốp sai so với mục đích khuyến nghị của nhà sản xuất. Lốp đã được sửa chữa, thay đổi, đắp hoặc dán lại. Hư hỏng do ảnh hưởng từ các yếu tố bên ngoài như tình trạng của đường hoặc các bề mặt tiếp xúc khác, những yếu tố khác như hóa chất, ô nhiễm, mưa axit, mưa đá, cát, không khí, muối, đá, hỏa hoạn, thiên tai, v.v... Các vấn đề phát sinh khác mà không thể chứng minh được là có trực tiếp hay gián tiếp liên quan đến vấn đề chất lượng lốp như chi phí cho việc không sử dụng xe, tiêu tốn thời gian, nhiên liệu, điện thoại, chỗ ở hoặc các phát sinh khác.
+ 
+-### 5.1 Màu cơ bản – Theo xe (không phụ thu)
++### VF 8
+ 
+-| Mã màu | Tên màu |
+-|---|---|
+-| `CE18` | Infinity Blanc |
+-| `CE11` | Jet Black |
+-| `CE1V` | Zenith Grey |
+-| `CE1M` | Crimson Red ✅ *(mặc định đang chọn)* |
+-| `CE1W` | Urban Mint |
++- structure_block_type: product_card
++- structure_block_id: dom_9b4c832d4376
++- structure_dedupe_hash: 4051ea06447d
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-sub paragraph--view-mode--default'
++- content: Phụ tùng xe mới Bảo hành giới hạn Pin cao áp Pin cao áp mua theo xe mới, sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm hoặc 200.000 km tùy theo điều kiện nào đến trước. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 8 năm hoặc 160.000 km tùy điều kiện nào đến trước. Áp dụng cho VF EC Van: được bảo hành 7 năm hoặc 160.000 km tùy điều kiện nào đến trước. Pin cao áp mua theo xe mới, xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9: được bảo hành 3 năm hoặc 100.000 km tùy điều kiện nào đến trước. Đối với xe đã từng được sử dụng cho mục đích dịch vụ thương mại, chính sách bảo hành pin áp dụng cho xe sử dụng cho mục đích dịch vụ thương mại sẽ tiếp tục được duy trì và áp dụng kể cả trong trường hợp chuyển nhượng xe cho chủ sở hữu mới hoặc xe không còn được sử dụng cho mục đích dịch vụ thương mại. Ắc - quy Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng). Gỉ sét Điều kiện sử dụng tiêu chuẩn: Bảo hành gỉ sét có thời hạn bảo hành là 10 năm từ ngày kích hoạt bảo hành xe (không giới hạn quãng đường sử dụng) với xe VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S. sử dụng trong điều kiện tiêu chuẩn, áp dụng với tấm kim loại bị xuyên thủng trong điều kiện hoạt động bình thường mà nguyên nhân do lỗi nguyên vật liệu hoặc lỗi lắp ráp của nhà sản xuất, và 7 năm không giới hạn số km với xe VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green và 5 năm không giới hạn số km với xe VF EC Van. Sử dụng cho dịch vụ thương mại: Bảo hành là 3 năm hoặc 100.000 km với xe đang hoặc đã từng sử dụng cho mục đích dịch vụ thương mại đối với VF 3, VF 7, VF 8, VF 9. Sơn ngoại thất Điều kiện sử dụng tiêu chuẩn: Áp dụng cho VF 8, VF 9, Lạc Hồng LX 900, Lạc Hồng 900S, Lạc Hồng 800S: được bảo hành 10 năm không giới hạn số km. Áp dụng cho VF 3, VF 5, VF 6, VF 7, VF 8 The All New, VF Minio Green, VF Herio Green, VF MPV 7, VF e34, VF Nerio Green, VF Limo Green: được bảo hành 7 năm không giới hạn số km. Áp dụng cho VF EC Van: được bảo hành 5 năm không giới hạn số km. Sử dụng cho dịch vụ thương mại: 3 năm hoặc 100.000 km tùy điều kiện nào đến trước áp dụng cho VF 3, VF 7, VF 8, VF 9. Các bộ phận treo Sử dụng trong điều kiện tiêu chuẩn: Các bộ phận treo (Bộ giảm xóc, Thanh ổn định, Cụm liên kết trên, Cánh tay điều khiển dưới, Khớp bi, Lắp thanh chống trên) được bảo hành 5 năm hoặc 130.000 km tùy điều kiện nào đến trước. Sử dụng cho mục đích dịch vụ thương mại: Áp dụng cho VF 3, VF 7, VF 8, VF 9, thời hạn bảo hành là 3 năm hoặc 100.000 km. Lốp xe Lốp được trang bị theo xe (bao gồm cả lốp dự phòng nếu có) được bảo hành đối với các khuyết tật, hư hỏng do lỗi nguyên vật liệu hoặc lỗi trong quá trình sản xuất, lưu kho của nhà sản xuất lốp được tính kể từ ngày kích hoạt bảo hành xe. Chi tiết bảo hành đối với từng loại sản phẩm như sau: Ô tô xăng: 5 năm (không giới hạn quãng đường sử dụng). Ô tô điện: Bảo hành bởi nhà sản xuất lốp xe. Nếu nhà sản xuất lốp cung cấp dịch vụ bảo hành tại thị trường Việt Nam, lốp xe sẽ được bảo hành hành theo chính sách riêng của nhà sản xuất lốp xe. Những hạng mục, hư hỏng không thuộc bảo hành lốp: Hư hỏng do lốp xe bị phá hoại, tai nạn hoặc va chạm. Hư hỏng do lốp bị lạm dụng trong quá trình sử dụng. Hư hỏng do lốp không được bảo dưỡng hoặc vận hành với áp suất lốp không tiêu chuẩn. Lốp là chi tiết hao mòn theo thời gian và quãng đường sử dụng, các hao mòn này không thuộc phạm vi bảo hành. Các hư hỏng được đánh giá không ảnh hưởng đến chất lượng, hiệu suất hoặc chức năng của lốp. Sử dụng lốp sai so với mục đích khuyến nghị của nhà sản xuất. Lốp đã được sửa chữa, thay đổi, đắp hoặc dán lại. Hư hỏng do ảnh hưởng từ các yếu tố bên ngoài như tình trạng của đường hoặc các bề mặt tiếp xúc khác, những yếu tố khác như hóa chất, ô nhiễm, mưa axit, mưa đá, cát, không khí, muối, đá, hỏa hoạn, thiên tai, v.v... Các vấn đề phát sinh khác mà không thể chứng minh được là có trực tiếp hay gián tiếp liên quan đến vấn đề chất lượng lốp như chi phí cho việc không sử dụng xe, tiêu tốn thời gian, nhiên liệu, điện thoại, chỗ ở hoặc các phát sinh khác. Phụ tùng xe mới Bảo hành giới hạn
+ 
+-### 5.2 Màu nâng cao (+12.000.000 VNĐ so với giá niêm yết phiên bản)
++### Thông tin bảo hành | VinFast product card
+ 
+-| Mã màu | Tên màu |
+-|---|---|
+-| `CE22` | Ivy Green |
+-| `CE17` | Desat Silver |
++- structure_block_type: product_card
++- structure_block_id: dom_732fdb574b33
++- structure_dedupe_hash: cc3744017470
++- structure_attributes: class='field__item'
++- content: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm hoặc 80.000 km tùy theo điều kiện nào đến trước kể từ ngày mua.
+ 
+-### 5.3 Bảng giá đầy đủ theo Phiên bản × Màu ngoại thất
++### Thông tin bảo hành | VinFast product card
+ 
+-> **Công thức:** Giá = Giá niêm yết phiên bản + Phụ thu màu (0 đ hoặc +12.000.000 đ). Đã bao gồm VAT.
++- structure_block_type: product_card
++- structure_block_id: dom_f04271fec611
++- structure_dedupe_hash: 265fed41a448
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-scontent paragraph--view-mode--default'
++- content: Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm hoặc 80.000 km tùy theo điều kiện nào đến trước kể từ ngày mua.
+ 
+-| Phiên bản | Màu | Loại màu | Giá (VNĐ) |
+-|---|---|---|---|
+-| VF 9 Eco | Infinity Blanc | Cơ bản | **1.499.000.000** |
+-| VF 9 Eco | Jet Black | Cơ bản | **1.499.000.000** |
+-| VF 9 Eco | Zenith Grey | Cơ bản | **1.499.000.000** |
+-| VF 9 Eco | Crimson Red ✅ | Cơ bản | **1.499.000.000** |
+-| VF 9 Eco | Urban Mint | Cơ bản | **1.499.000.000** |
+-| VF 9 Eco | Ivy Green | Nâng cao | **1.511.000.000** |
+-| VF 9 Eco | Desat Silver | Nâng cao | **1.511.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Infinity Blanc | Cơ bản | **1.699.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Jet Black | Cơ bản | **1.699.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Zenith Grey | Cơ bản | **1.699.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Crimson Red | Cơ bản | **1.699.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Urban Mint | Cơ bản | **1.699.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Ivy Green | Nâng cao | **1.711.000.000** |
+-| VF 9 Plus tùy chọn 7 chỗ | Desat Silver | Nâng cao | **1.711.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Infinity Blanc | Cơ bản | **1.731.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Jet Black | Cơ bản | **1.731.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Zenith Grey | Cơ bản | **1.731.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Crimson Red | Cơ bản | **1.731.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Urban Mint | Cơ bản | **1.731.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Ivy Green | Nâng cao | **1.743.000.000** |
+-| VF 9 Plus tùy chọn ghế cơ trưởng | Desat Silver | Nâng cao | **1.743.000.000** |
++### Thông tin bảo hành | VinFast product card
+ 
+-**Tóm tắt 6 mức giá có thể xảy ra:**
++- structure_block_type: product_card
++- structure_block_id: dom_a3882252ce77
++- structure_dedupe_hash: bdbd3cd294ac
++- structure_attributes: class='field__items'
++- content: Phụ tùng thay thế cho xe của khách hàng trong quá trình sửa chữa tại XDV/NPP của VinFast do khách hàng chịu chi phí, sẽ có thời hạn bảo hành như sau: Phụ tùng (không bao gồm Ắc Quy 12V và Pin cao áp): Ô tô xăng: bao gồm Fadil, Lux A, Lux SA, President: 12 tháng hoặc 20.000 km tùy thuộc điều kiện nào đến trước từ ngày hoàn thành sửa chữa. Ô tô điện: 2 năm hoặc 40.000 km tùy theo điều kiện nào đến trước tính từ ngày mua. Phụ tùng mua nhưng không được thay thế tại XDV/ NPP của VinFast sẽ không được bảo hành theo chính sách. Để nhận được chế độ bảo hành phụ tùng, khách hàng có trách nhiệm lưu trữ hồ sơ (lệnh sửa chữa, hóa đơn, v.v.) cho những lần thay thế phụ tùng. Quý khách hàng vui lòng tham khảo tại Sổ bảo hành để biết thêm các thông tin bảo hành chi tiết. Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm hoặc 80.000 km tùy theo điều kiện nào đến trước kể từ ngày mua. Ắc quy 12V: Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng).
+ 
+-| Mức giá | Khi nào |
+-|---|---|
+-| 1.499.000.000 VNĐ | VF 9 Eco + màu cơ bản |
+-| 1.511.000.000 VNĐ | VF 9 Eco + màu nâng cao (Ivy Green / Desat Silver) |
+-| 1.699.000.000 VNĐ | VF 9 Plus tùy chọn 7 chỗ + màu cơ bản |
+-| 1.711.000.000 VNĐ | VF 9 Plus tùy chọn 7 chỗ + màu nâng cao (Ivy Green / Desat Silver) |
+-| 1.731.000.000 VNĐ | VF 9 Plus tùy chọn ghế cơ trưởng + màu cơ bản |
+-| 1.743.000.000 VNĐ | VF 9 Plus tùy chọn ghế cơ trưởng + màu nâng cao (Ivy Green / Desat Silver) |
++### Thông tin bảo hành | VinFast product card
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_7001df207892
++- structure_dedupe_hash: f5dff5b744c7
++- structure_attributes: class='field__item--content'
++- content: Bảo hành phụ tùng Thay thế chính hãng Phụ tùng thay thế cho xe của khách hàng trong quá trình sửa chữa tại XDV/NPP của VinFast do khách hàng chịu chi phí, sẽ có thời hạn bảo hành như sau: Phụ tùng (không bao gồm Ắc Quy 12V và Pin cao áp): Ô tô xăng: bao gồm Fadil, Lux A, Lux SA, President: 12 tháng hoặc 20.000 km tùy thuộc điều kiện nào đến trước từ ngày hoàn thành sửa chữa. Ô tô điện: 2 năm hoặc 40.000 km tùy theo điều kiện nào đến trước tính từ ngày mua. Phụ tùng mua nhưng không được thay thế tại XDV/ NPP của VinFast sẽ không được bảo hành theo chính sách. Để nhận được chế độ bảo hành phụ tùng, khách hàng có trách nhiệm lưu trữ hồ sơ (lệnh sửa chữa, hóa đơn, v.v.) cho những lần thay thế phụ tùng. Quý khách hàng vui lòng tham khảo tại Sổ bảo hành để biết thêm các thông tin bảo hành chi tiết. Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm hoặc 80.000 km tùy theo điều kiện nào đến trước kể từ ngày mua. Ắc quy 12V: Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng).
+ 
+-## 6. Màu nội thất (Interior Colors)
++### Thông tin bảo hành | VinFast product card
+ 
+-> Màu nội thất khả dụng phụ thuộc vào màu ngoại thất đã chọn.
++- structure_block_type: product_card
++- structure_block_id: dom_ae3badfdfc29
++- structure_dedupe_hash: 19e447839a5a
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-sub paragraph--view-mode--default'
++- content: Bảo hành phụ tùng Thay thế chính hãng Phụ tùng thay thế cho xe của khách hàng trong quá trình sửa chữa tại XDV/NPP của VinFast do khách hàng chịu chi phí, sẽ có thời hạn bảo hành như sau: Phụ tùng (không bao gồm Ắc Quy 12V và Pin cao áp): Ô tô xăng: bao gồm Fadil, Lux A, Lux SA, President: 12 tháng hoặc 20.000 km tùy thuộc điều kiện nào đến trước từ ngày hoàn thành sửa chữa. Ô tô điện: 2 năm hoặc 40.000 km tùy theo điều kiện nào đến trước tính từ ngày mua. Phụ tùng mua nhưng không được thay thế tại XDV/ NPP của VinFast sẽ không được bảo hành theo chính sách. Để nhận được chế độ bảo hành phụ tùng, khách hàng có trách nhiệm lưu trữ hồ sơ (lệnh sửa chữa, hóa đơn, v.v.) cho những lần thay thế phụ tùng. Quý khách hàng vui lòng tham khảo tại Sổ bảo hành để biết thêm các thông tin bảo hành chi tiết. Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm hoặc 80.000 km tùy theo điều kiện nào đến trước kể từ ngày mua. Ắc quy 12V: Ô tô xăng: 1 năm hoặc 20.000 km tùy thuộc điều kiện nào đến trước. Ô tô điện: 1 năm (không giới hạn quãng đường sử dụng). Bảo hành phụ tùng Thay thế chính hãng
+ 
+-| Màu ngoại thất | Mã ngoại | Nội thất khả dụng |
+-|---|---|---|
+-| Infinity Blanc | `CE18` | Granite Black (`CI11`), Saddle Brown (`CI12`) |
+-| Crimson Red | `CE1M` | Granite Black (`CI11`), Cotton Beige (`CI13`) |
+-| Urban Mint | `CE1W` | Granite Black (`CI11`), Saddle Brown (`CI12`) |
+-| Jet Black | `CE11` | Granite Black (`CI11`), Cotton Beige (`CI13`), Saddle Brown (`CI12`) |
+-| Ivy Green | `CE22` | Granite Black (`CI11`), Cotton Beige (`CI13`), Saddle Brown (`CI12`) |
+-| Zenith Grey | `CE1V` | Granite Black (`CI11`), Saddle Brown (`CI12`) |
+-| Desat Silver | `CE17` | Granite Black (`CI11`), Saddle Brown (`CI12`) |
++### VF 3
+ 
+-### Tổng hợp mã nội thất
++- structure_block_type: product_card
++- structure_block_id: dom_e4c30725ea2c
++- structure_dedupe_hash: 3e4314acdf8a
++- structure_attributes: class='field__item'
++- content: Phụ kiện (Không bao gồm Móc kéo xe (bao gồm điện), Bậc lên xuống xe, Giá đỡ hành lý) được bảo hành 2 năm không giới hạn số km kể từ ngày mua. Các phụ kiện bao gồm móc kéo xe (bao gồm điện), bậc lên xuống xe và giá đỡ hành lý: Sử dụng trong điều kiện tiêu chuẩn: có thời hạn bảo hành là 5 năm không giới hạn số km kể từ ngày mua. Sử dụng cho mục đích dịch vụ thương mại: có thời hạn bảo hành là 3 năm không giới hạn số km kể từ ngày mua, áp dụng cho VF 3, VF 7, VF 8, VF 9. Thời hạn bảo hành áp dụng cho các phụ kiện chính hãng không yêu cầu lắp đặt cố định trên xe (nếu có) như: Bộ sạc di động, bộ dụng cụ sửa chữa lốp, thảm sàn, tấm rèm trần, xích lốp, giá ngăn hành lý, biển tam giác cảnh báo và áo khoác phản quang... là 2 năm không giới hạn số km kể từ ngày mua. Phụ kiện được thay thế theo bảo hành phụ kiện có thời hạn bảo hành theo thời hạn bảo hành còn lại của phụ kiện. Để nhận được bảo hành phụ kiện VinFast, khách hàng có trách nhiệm lưu giữ hồ sơ lắp đặt, quyết toán và hóa đơn cho các phụ kiện đó.
+ 
+-| Mã | Tên |
+-|---|---|
+-| `CI11` | Granite Black |
+-| `CI12` | Saddle Brown |
+-| `CI13` | Cotton Beige |
++### VF 3
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_8f0794032500
++- structure_dedupe_hash: 2a9a513a56b2
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-scontent paragraph--view-mode--default'
++- content: Thông tin bảo hành Phụ kiện (Không bao gồm Móc kéo xe (bao gồm điện), Bậc lên xuống xe, Giá đỡ hành lý) được bảo hành 2 năm không giới hạn số km kể từ ngày mua. Các phụ kiện bao gồm móc kéo xe (bao gồm điện), bậc lên xuống xe và giá đỡ hành lý: Sử dụng trong điều kiện tiêu chuẩn: có thời hạn bảo hành là 5 năm không giới hạn số km kể từ ngày mua. Sử dụng cho mục đích dịch vụ thương mại: có thời hạn bảo hành là 3 năm không giới hạn số km kể từ ngày mua, áp dụng cho VF 3, VF 7, VF 8, VF 9. Thời hạn bảo hành áp dụng cho các phụ kiện chính hãng không yêu cầu lắp đặt cố định trên xe (nếu có) như: Bộ sạc di động, bộ dụng cụ sửa chữa lốp, thảm sàn, tấm rèm trần, xích lốp, giá ngăn hành lý, biển tam giác cảnh báo và áo khoác phản quang... là 2 năm không giới hạn số km kể từ ngày mua. Phụ kiện được thay thế theo bảo hành phụ kiện có thời hạn bảo hành theo thời hạn bảo hành còn lại của phụ kiện. Để nhận được bảo hành phụ kiện VinFast, khách hàng có trách nhiệm lưu giữ hồ sơ lắp đặt, quyết toán và hóa đơn cho các phụ kiện đó.
+ 
+-## 7. Cấu trúc Product ID
++### VF 3
+ 
+-Format: `VF-ZVEH-{modelCode}-{editionId}-{exteriorCode}-{interiorCode}`
++- structure_block_type: product_card
++- structure_block_id: dom_5acf54cd3567
++- structure_dedupe_hash: 578dd61505e2
++- structure_attributes: class='field__item--content'
++- content: Bảo hành phụ kiện Chính hãng VinFast Thông tin bảo hành Phụ kiện (Không bao gồm Móc kéo xe (bao gồm điện), Bậc lên xuống xe, Giá đỡ hành lý) được bảo hành 2 năm không giới hạn số km kể từ ngày mua. Các phụ kiện bao gồm móc kéo xe (bao gồm điện), bậc lên xuống xe và giá đỡ hành lý: Sử dụng trong điều kiện tiêu chuẩn: có thời hạn bảo hành là 5 năm không giới hạn số km kể từ ngày mua. Sử dụng cho mục đích dịch vụ thương mại: có thời hạn bảo hành là 3 năm không giới hạn số km kể từ ngày mua, áp dụng cho VF 3, VF 7, VF 8, VF 9. Thời hạn bảo hành áp dụng cho các phụ kiện chính hãng không yêu cầu lắp đặt cố định trên xe (nếu có) như: Bộ sạc di động, bộ dụng cụ sửa chữa lốp, thảm sàn, tấm rèm trần, xích lốp, giá ngăn hành lý, biển tam giác cảnh báo và áo khoác phản quang... là 2 năm không giới hạn số km kể từ ngày mua. Phụ kiện được thay thế theo bảo hành phụ kiện có thời hạn bảo hành theo thời hạn bảo hành còn lại của phụ kiện. Để nhận được bảo hành phụ kiện VinFast, khách hàng có trách nhiệm lưu giữ hồ sơ lắp đặt, quyết toán và hóa đơn cho các phụ kiện đó.
+ 
+-- Model code: `PE1U_2023`
+-- Ví dụ: `VF-ZVEH-PE1U_2023-NE3NV-CE18-CI11`
++### VF 3
+ 
+-### Danh sách Product IDs (edition NE3NV)
++- structure_block_type: product_card
++- structure_block_id: dom_558f521f621d
++- structure_dedupe_hash: f44b56fdf63e
++- structure_attributes: class='paragraph paragraph--type--dvhm-warranty-coverrage-sub paragraph--view-mode--default'
++- content: Bảo hành phụ kiện Chính hãng VinFast Thông tin bảo hành Phụ kiện (Không bao gồm Móc kéo xe (bao gồm điện), Bậc lên xuống xe, Giá đỡ hành lý) được bảo hành 2 năm không giới hạn số km kể từ ngày mua. Các phụ kiện bao gồm móc kéo xe (bao gồm điện), bậc lên xuống xe và giá đỡ hành lý: Sử dụng trong điều kiện tiêu chuẩn: có thời hạn bảo hành là 5 năm không giới hạn số km kể từ ngày mua. Sử dụng cho mục đích dịch vụ thương mại: có thời hạn bảo hành là 3 năm không giới hạn số km kể từ ngày mua, áp dụng cho VF 3, VF 7, VF 8, VF 9. Thời hạn bảo hành áp dụng cho các phụ kiện chính hãng không yêu cầu lắp đặt cố định trên xe (nếu có) như: Bộ sạc di động, bộ dụng cụ sửa chữa lốp, thảm sàn, tấm rèm trần, xích lốp, giá ngăn hành lý, biển tam giác cảnh báo và áo khoác phản quang... là 2 năm không giới hạn số km kể từ ngày mua. Phụ kiện được thay thế theo bảo hành phụ kiện có thời hạn bảo hành theo thời hạn bảo hành còn lại của phụ kiện. Để nhận được bảo hành phụ kiện VinFast, khách hàng có trách nhiệm lưu giữ hồ sơ lắp đặt, quyết toán và hóa đơn cho các phụ kiện đó. Bảo hành phụ kiện chính hãng VinFast
+ 
+-```
+-VF-ZVEH-PE1U_2023-NE3NV-CE18-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE18-CI12
+-VF-ZVEH-PE1U_2023-NE3NV-CE1M-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE1M-CI13
+-VF-ZVEH-PE1U_2023-NE3NV-CE1W-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE1W-CI12
+-VF-ZVEH-PE1U_2023-NE3NV-CE11-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE11-CI13
+-VF-ZVEH-PE1U_2023-NE3NV-CE11-CI12
+-VF-ZVEH-PE1U_2023-NE3NV-CE22-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE22-CI13
+-VF-ZVEH-PE1U_2023-NE3NV-CE22-CI12
+-VF-ZVEH-PE1U_2023-NE3NV-CE1V-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE1V-CI12
+-VF-ZVEH-PE1U_2023-NE3NV-CE17-CI11
+-VF-ZVEH-PE1U_2023-NE3NV-CE17-CI12
+-```
++### Thông tin bảo hành | VinFast product card
+ 
+----
++- structure_block_type: product_card
++- structure_block_id: dom_5c10d2225530
++- structure_dedupe_hash: ab0080f3946a
++- content: Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm (không giới hạn quãng đường sử dụng) tính từ ngày mua.
+ 
+-## 8. Điều hướng trang PDP
++### Thông tin bảo hành | VinFast product card
+ 
+-Thanh menu dọc trang (section anchors):
+-
+-1. Phiên bản (`#section-version`)
+-2. Ngoại thất (`#section-product-exterior`)
+-3. Nội thất (`#section-product-interior`)
+-4. Công nghệ (`#section-technology`)
+-5. Đặc quyền (`#section-exclusive-rights`)
+-6. Pin sạc (`#section-charging-solution`)
+-
+----
+-
+-## 9. Ghi chú cho Scoring
+-
+-| Hạng mục kiểm tra | Expected value |
+-|---|---|
+-| Số phiên bản | 3 (Eco, Plus tùy chọn 7 chỗ, Plus tùy chọn ghế cơ trưởng) |
+-| Giá Eco (base) | 1.499.000.000 VNĐ |
+-| Giá Plus tùy chọn 7 chỗ (base) | 1.699.000.000 VNĐ |
+-| Giá Plus tùy chọn ghế cơ trưởng (base) | 1.731.000.000 VNĐ |
+-| Tiền đặt cọc | 50.000.000 VNĐ |
+-| Số màu ngoại thất | 7 tổng (5 cơ bản, 2 nâng cao) |
+-| Phụ thu màu nâng cao | +12.000.000 VNĐ so với giá niêm yết phiên bản |
+-| Màu nội thất có | 3 (Granite Black, Saddle Brown, Cotton Beige) |
+-| Màu mặc định hiển thị | Crimson Red (`CE1M`) |
+-| Modal chi tiết lăn bánh | `#rollingUpCostPopUp` |
+-| VAT included | Có |
+-| Bảo hành | 10 năm / 200.000 km |
+-| **Giá cấu hình: Eco + Infinity Blanc** | **1.499.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Jet Black** | **1.499.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Zenith Grey** | **1.499.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Crimson Red** | **1.499.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Urban Mint** | **1.499.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Ivy Green** | **1.511.000.000 VNĐ** |
+-| **Giá cấu hình: Eco + Desat Silver** | **1.511.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Infinity Blanc** | **1.699.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Jet Black** | **1.699.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Zenith Grey** | **1.699.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Crimson Red** | **1.699.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Urban Mint** | **1.699.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Ivy Green** | **1.711.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn 7 chỗ + Desat Silver** | **1.711.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Infinity Blanc** | **1.731.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Jet Black** | **1.731.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Zenith Grey** | **1.731.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Crimson Red** | **1.731.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Urban Mint** | **1.731.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Ivy Green** | **1.743.000.000 VNĐ** |
+-| **Giá cấu hình: Plus tùy chọn ghế cơ trưởng + Desat Silver** | **1.743.000.000 VNĐ** |
+-| Số mức giá có thể xảy ra | 6 (1.499M / 1.511M / 1.699M / 1.711M / 1.731M / 1.743M) |
++- structure_block_type: product_card
++- structure_block_id: dom_11be0a3dc6e4
++- structure_dedupe_hash: 47759c4ed929
++- structure_attributes: class='field__item'
++- content: Phụ tùng thay thế cho xe của khách hàng trong quá trình sửa chữa tại XDV/ĐLPP của VinFast do khách hàng chịu chi phí (không bao gồm pin cao áp) sẽ có thời hạn bảo hành 1 năm (không giới hạn quãng đường sử dụng) tính từ ngày mua. Pin cao áp: Pin do khách hàng mua và được lắp đặt lên xe tại XDV/ĐLPP của VinFast sau thời điểm giao xe có thời hạn bảo hành là 4 năm (không giới hạn quãng đường sử dụng) tính từ ngày mua.

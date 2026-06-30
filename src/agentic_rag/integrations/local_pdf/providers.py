@@ -58,6 +58,7 @@ from agentic_rag.ingestion.knowledge_quality import (
 from agentic_rag.ingestion.metadata import (
     apply_extracted_metadata,
     extract_chunk_metadata,
+    normalize_metadata,
 )
 from agentic_rag.ingestion.pdf import load_pdf_with_markdown
 from agentic_rag.ingestion.pdf.config import PdfIngestionConfig
@@ -396,11 +397,13 @@ class LocalPdfEvidenceProvider:
         ingest_started_at = time.perf_counter()
         debug_artifact_dir = None if self._source_store is not None else self._debug_dir / run_id
         data_artifact_dir = None if self._source_store is not None else self._artifacts_dir
+        include_interactions = os.getenv("INGESTION_INTERACTIONS_ENABLED", "false").strip().lower() == "true"
         loaded_url = load_url_with_artifacts(
             url,
             debug_artifact_dir=debug_artifact_dir,
             data_artifact_dir=data_artifact_dir,
             run_id=run_id,
+            include_interactions=include_interactions,
         )
         chunks = loaded_url.chunks
         if not chunks:
@@ -1045,7 +1048,7 @@ class LocalPdfEvidenceProvider:
                 )
             )
 
-        chunks = self._chunks_for_documents(request.document_ids)
+        chunks = _retrievable_chunks(self._chunks_for_documents(request.document_ids))
         if not chunks:
             return RetrievalOutput()
 
@@ -1110,6 +1113,7 @@ class LocalPdfEvidenceProvider:
                 bm25_results=bm25_results,
                 dense_results=dense_results,
                 fused_results=fused_results,
+                question_results=question_results,
                 dense_error=dense_error,
             )
         )
@@ -1132,9 +1136,33 @@ class LocalPdfEvidenceProvider:
             extracted = extract_chunk_metadata(chunk)
             if extracted is not None:
                 apply_extracted_metadata(chunk.metadata, extracted)
+                chunk.metadata.update(normalize_metadata(dict(chunk.metadata)))
                 any_enriched = True
         if any_enriched:
             self._replace_document_chunks(document_id=document_id, chunks=chunks)
+            try:
+                from agentic_rag.retrieval.graph_store import GraphStore
+                store = GraphStore()
+                for chunk in chunks:
+                    relations = chunk.metadata.get("relations")
+                    if isinstance(relations, list):
+                        for rel in relations:
+                            if isinstance(rel, dict):
+                                head = rel.get("head")
+                                relation = rel.get("relation") or "related"
+                                tail = rel.get("tail")
+                                strength = float(rel.get("strength") or 5.0)
+                                if head and tail:
+                                    store.add_relation(head, relation, tail, strength)
+                for chunk in chunks:
+                    entities_canonical = chunk.metadata.get("entities_canonical")
+                    if isinstance(entities_canonical, list) and len(entities_canonical) > 1:
+                        for i in range(len(entities_canonical)):
+                            for j in range(i + 1, len(entities_canonical)):
+                                store.add_relation(entities_canonical[i], "cooccur", entities_canonical[j], 1.0)
+                store.save()
+            except Exception as graph_err:
+                logging.warning(f"Failed to update knowledge graph: {graph_err}")
             _upsert_dense_embeddings_safely(chunks)
         return chunks
 
@@ -1520,7 +1548,7 @@ def _chunk_with_local_metadata(
     }
     if source_type == "url":
         metadata["url"] = source or chunk.metadata.get("url")
-    return Chunk(chunk_id=chunk.chunk_id, text=chunk.text, metadata=metadata)
+    return Chunk(chunk_id=chunk.chunk_id, text=chunk.text, metadata=normalize_metadata(metadata))
 
 
 def _document_id_from_chunks(chunks: list[Chunk], *, fallback: str) -> str:
@@ -1560,6 +1588,17 @@ def _chunks_with_local_metadata(
             storage_chunk_id=chunk.metadata.get("chunk_id") or f"{document_id}:{index:04d}",
         )
         for index, chunk in enumerate(chunks, start=1)
+    ]
+
+
+def _retrievable_chunks(chunks: list[Chunk]) -> list[Chunk]:
+    """Drop debug-only chunks before local retrieval builds BM25/dense indexes."""
+
+    return [
+        chunk
+        for chunk in chunks
+        if chunk.metadata.get("metadata_prefilter_exclude") is not True
+        and chunk.metadata.get("trusted_for_retrieval") is not False
     ]
 
 
@@ -2663,10 +2702,12 @@ def _with_pipeline_metadata(
     bm25_results: list[SearchResult],
     dense_results: list[SearchResult],
     fused_results: list[SearchResult],
+    question_results: list[SearchResult] | None,
     dense_error: str | None,
 ) -> list[SearchResult]:
     bm25_by_chunk_id = _results_by_chunk_id(bm25_results)
     dense_by_chunk_id = _results_by_chunk_id(dense_results)
+    question_by_chunk_id = _results_by_chunk_id(question_results or [])
     fused_by_chunk_id = _results_by_chunk_id(fused_results)
     pipeline_trace = {
         "preprocess_query": {
@@ -2718,12 +2759,16 @@ def _with_pipeline_metadata(
             "input": {
                 "bm25_results": [_trace_search_result(result) for result in bm25_results],
                 "dense_results": [_trace_search_result(result) for result in dense_results],
+                "question_results": [
+                    _trace_search_result(result) for result in (question_results or [])
+                ],
             },
             "output": [
                 _trace_rrf_result(
                     result=result,
                     bm25_result=bm25_by_chunk_id.get(result.chunk.chunk_id),
                     dense_result=dense_by_chunk_id.get(result.chunk.chunk_id),
+                    question_result=question_by_chunk_id.get(result.chunk.chunk_id),
                 )
                 for result in fused_results
             ],
@@ -2757,11 +2802,13 @@ def _with_pipeline_metadata(
             "preprocessed_query": preprocessed_query,
             "bm25": _stage_debug(bm25_by_chunk_id.get(chunk_id)),
             "dense": _stage_debug(dense_by_chunk_id.get(chunk_id)),
+            "question": _stage_debug(question_by_chunk_id.get(chunk_id)),
             "dense_error": dense_error,
             "rrf": _stage_debug(fused_by_chunk_id.get(chunk_id)),
             "rrf_contributions": _rrf_contributions(
                 bm25_result=bm25_by_chunk_id.get(chunk_id),
                 dense_result=dense_by_chunk_id.get(chunk_id),
+                question_result=question_by_chunk_id.get(chunk_id),
             ),
             "final": {
                 "rank": result.rank,
@@ -2815,12 +2862,14 @@ def _trace_rrf_result(
     result: SearchResult,
     bm25_result: SearchResult | None,
     dense_result: SearchResult | None,
+    question_result: SearchResult | None,
 ) -> dict[str, object]:
     return {
         **_trace_search_result(result),
         "contributions": _rrf_contributions(
             bm25_result=bm25_result,
             dense_result=dense_result,
+            question_result=question_result,
         ),
     }
 
@@ -2829,12 +2878,15 @@ def _rrf_contributions(
     *,
     bm25_result: SearchResult | None,
     dense_result: SearchResult | None,
+    question_result: SearchResult | None = None,
 ) -> dict[str, object]:
     contributions: dict[str, object] = {}
     if bm25_result is not None:
         contributions["bm25"] = _rrf_contribution(bm25_result)
     if dense_result is not None:
         contributions["dense"] = _rrf_contribution(dense_result)
+    if question_result is not None:
+        contributions["question"] = _rrf_contribution(question_result)
     total_rrf_score = 0.0
     for contribution in contributions.values():
         if isinstance(contribution, dict):

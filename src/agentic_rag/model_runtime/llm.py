@@ -59,11 +59,30 @@ class LiteLLMClient(BaseModel):
             raise ModelInvocationError(f"LLM streaming invocation failed: {exc}") from exc
 
     def _completion_kwargs(self, request: LLMCompletionInput) -> dict[str, object]:
+        if not request.images:
+            user_content: str | list[dict[str, Any]] = request.prompt
+        else:
+            user_content = [{"type": "text", "text": request.prompt}]
+            import base64
+            from pathlib import Path
+            for img in request.images:
+                try:
+                    ext = Path(img).suffix.lower().lstrip(".")
+                    mime = "jpeg" if ext in ("jpg", "jpeg") else ("png" if ext == "png" else "jpeg")
+                    encoded = base64.b64encode(Path(img).read_bytes()).decode("utf-8")
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/{mime};base64,{encoded}"}
+                    })
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to encode image {img}: {e}")
+
         kwargs: dict[str, object] = {
             "model": self._model_name(),
             "messages": [
                 {"role": "system", "content": request.system_message},
-                {"role": "user", "content": request.prompt},
+                {"role": "user", "content": user_content},
             ],
             "temperature": request.temperature,
             "timeout": self.config.timeout_seconds,

@@ -177,6 +177,27 @@ def score_url_quality(
         score -= 1
     if _is_react_shell(profile=profile, report=report, chunks=chunks):
         score -= 3
+
+    # Calculate cross-model contamination penalty
+    model_counts: dict[str, int] = {}
+    for chunk in chunks:
+        model = chunk.metadata.get("product_model") or chunk.metadata.get("entity_name")
+        if isinstance(model, str):
+            from agentic_rag.ingestion.url.entities.extractor import _MODEL_RE, _format_model_name
+            match = _MODEL_RE.search(model)
+            if match:
+                formatted = _format_model_name(match.group(0))
+                model_counts[formatted] = model_counts.get(formatted, 0) + 1
+
+    if len(model_counts) > 1:
+        total_matched_chunks = sum(model_counts.values())
+        if total_matched_chunks > 0:
+            dominant_model = max(model_counts, key=model_counts.get)
+            dominant_count = model_counts[dominant_model]
+            other_count = total_matched_chunks - dominant_count
+            contamination_ratio = other_count / total_matched_chunks
+            if contamination_ratio > 0.20:
+                score -= 2
     return max(score, 0)
 
 

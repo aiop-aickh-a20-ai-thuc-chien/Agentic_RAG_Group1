@@ -36,6 +36,8 @@ def persist_interaction_artifacts(
     chunks_path = run_dir / "chunks.jsonl"
     manifest_path = run_dir / "manifest.json"
     network_path = _write_network_payloads(run_dir / "network_payloads.jsonl", result)
+    panel_snapshots_path = _write_panel_snapshots(run_dir / "panel_snapshots.json", result)
+    panel_diffs_path = _write_panel_diffs(run_dir / "panel_diffs.json", result)
 
     states_payload = {
         "profile": result.profile.model_dump(mode="json"),
@@ -44,6 +46,13 @@ def persist_interaction_artifacts(
             control.model_dump(mode="json") for control in result.skipped_controls
         ],
         "states": _state_payloads_with_snapshot_refs(result),
+        "readiness": (
+            result.readiness.model_dump(mode="json") if result.readiness is not None else None
+        ),
+        "section_visits": [visit.model_dump(mode="json") for visit in result.section_visits],
+        "transitions": [transition.model_dump(mode="json") for transition in result.transitions],
+        "traversal_issues": [issue.model_dump(mode="json") for issue in result.traversal_issues],
+        "traversal_complete": result.traversal_complete,
         "errors": result.errors,
     }
     states_path.write_text(
@@ -64,11 +73,18 @@ def persist_interaction_artifacts(
         "state_count": len(result.states),
         "control_count": len(result.controls),
         "skipped_control_count": len(result.skipped_controls),
+        "panel_snapshot_count": len(result.panel_snapshots),
+        "panel_diff_count": len(result.panel_diffs),
+        "transition_count": len(result.transitions),
+        "traversal_complete": result.traversal_complete,
+        "traversal_issue_count": len(result.traversal_issues),
         "chunk_count": len(chunk_list),
         "source_html_path": _path_text_optional(source_html_path),
         "states_path": _path_text(states_path),
         "image_snapshots_path": _path_text_optional(image_snapshots_path),
         "network_payloads_path": _path_text_optional(network_path),
+        "panel_snapshots_path": _path_text_optional(panel_snapshots_path),
+        "panel_diffs_path": _path_text_optional(panel_diffs_path),
         "chunks_path": _path_text(chunks_path),
         "manifest_path": _path_text(manifest_path),
         "stage_paths": {
@@ -76,6 +92,8 @@ def persist_interaction_artifacts(
             "interaction_states": _path_text(states_path),
             "image_snapshots": _path_text_optional(image_snapshots_path),
             "network_payloads": _path_text_optional(network_path),
+            "panel_snapshots": _path_text_optional(panel_snapshots_path),
+            "panel_diffs": _path_text_optional(panel_diffs_path),
             "chunks": _path_text(chunks_path),
         },
     }
@@ -91,6 +109,8 @@ def persist_interaction_artifacts(
         source_html_path=source_html_path,
         image_snapshots_path=image_snapshots_path,
         network_payloads_path=network_path,
+        panel_snapshots_path=panel_snapshots_path,
+        panel_diffs_path=panel_diffs_path,
     )
 
 
@@ -116,6 +136,46 @@ def _write_network_payloads(
         json.dumps(_json_safe(payload), ensure_ascii=False) for payload in result.network_payloads
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _write_panel_snapshots(
+    path: Path,
+    result: InteractionCaptureResult,
+) -> Path | None:
+    if not result.panel_snapshots:
+        return None
+    payload = {
+        "snapshot_schema_version": 1,
+        "artifact_role": "panel_snapshots",
+        "requested_url": result.profile.requested_url,
+        "final_url": result.profile.final_url,
+        "snapshots": [snapshot.model_dump(mode="json") for snapshot in result.panel_snapshots],
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_panel_diffs(
+    path: Path,
+    result: InteractionCaptureResult,
+) -> Path | None:
+    if not result.panel_diffs:
+        return None
+    payload = {
+        "diff_schema_version": 1,
+        "artifact_role": "panel_diffs",
+        "requested_url": result.profile.requested_url,
+        "final_url": result.profile.final_url,
+        "diffs": [diff.model_dump(mode="json") for diff in result.panel_diffs],
+    }
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 

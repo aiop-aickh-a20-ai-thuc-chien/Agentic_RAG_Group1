@@ -1,0 +1,38 @@
+# Chiến lược Yêu cầu Metadata: source_type, document_type, và language
+
+Tài liệu này giải thích lý do kiến trúc đằng sau việc phân loại các trường metadata trong pipeline Agentic RAG, cụ thể là các yêu cầu đối với việc nạp dữ liệu từ URL và PDF.
+
+## 1. Tại sao `source_type` là Bắt buộc
+
+Trường `source_type` (ví dụ: `official`, `internal`, `partner`, `news`, `community`, `unknown`) là một thành phần **bắt buộc** của hợp đồng `Chunk` dùng chung. Giá trị URL/path thật nằm trong `source`, `url`, hoặc `file_name`. Yêu cầu này xuất phát từ:
+
+- **Tính toàn vẹn của Hợp đồng:** Mỗi chunk phải có một nhóm nguồn/trust category nhất định. Điều này cho phép các lớp lưu trữ và truy xuất lọc nguồn theo mức độ tin cậy hoặc nguồn gốc, còn cách trích dẫn cụ thể dựa vào `source`, `url`, `file_name`, và `page_number`.
+- **Lọc dữ liệu Truy xuất:** Nó cung cấp cơ chế chính cho người dùng hoặc agent giới hạn phạm vi tìm kiếm (ví dụ: "Chỉ tìm kiếm trong các sổ tay PDF").
+- **Hashing Danh tính:** Logic tạo `chunk_id` có thể dùng prefix kỹ thuật như `url_`, `html_`, `text_`, hoặc `pdf_`, nhưng metadata `source_type` vẫn là category dùng chung.
+- **Tách biệt Module:** Nó cho phép module Generation xử lý các chunk một cách nhất quán mà không cần biết parser cụ thể nào đã tạo ra chúng.
+
+## 2. Tại sao `document_type` là Tùy chọn
+
+Trường `document_type` (ví dụ: `faq`, `policy`, `product_detail`) được phân loại là **tùy chọn** hoặc "thêm vào khi có sẵn":
+
+- **Sự mơ hồ về Ngữ nghĩa:** Không phải tất cả nội dung đều khớp hoàn toàn vào một danh mục đã định nghĩa trước. Việc ép buộc gán loại cho một trang "chung chung" (generic) hoặc "bài viết" (article) mơ hồ sẽ dẫn đến metadata bị nhiễu.
+- **Quyền sở hữu Quy trình:** Phân loại thường là một bước làm giàu dữ liệu (thông qua `normalizer.py` hoặc `quality.py`) thay vì là một bước nạp dữ liệu thô. Hệ thống vẫn phải hoạt động ngay cả khi bộ phân loại không chắc chắn.
+- **Bản chất là Alias:** Như đã định nghĩa trong `schema.md`, `document_type` thường là một alias (tên thay thế) tiêu chuẩn hóa cho các trường đặc thù của nguồn như `page_type`. Nó được dùng để tăng trọng số truy xuất nhưng không thiết yếu cho việc định danh tài liệu cơ bản.
+
+## 3. Tại sao `language` là Tùy chọn
+
+Trường `language` (ví dụ: `vi`, `en`) được phân loại là **tùy chọn** dựa trên các điểm sau:
+
+- **Hạn chế của việc Phát hiện:** Các parser HTML tĩnh hoặc các bộ trích xuất PDF đơn giản có thể không phải lúc nào cũng tìm thấy thẻ `lang` rõ ràng. Việc bắt buộc trường này sẽ khiến quá trình nạp dữ liệu thất bại đối với những nội dung hoàn toàn hợp lệ nhưng thiếu metadata.
+- **Ngăn chặn Tắc nghẽn:** Pipeline được thiết kế để có khả năng phục hồi. Nếu phát hiện thất bại, hệ thống có thể dự phòng về một locale mặc định hoặc sử dụng văn bản thô, thay vì chặn toàn bộ công việc nạp dữ liệu.
+- **Tính phức tạp Đa ngôn ngữ:** Đối với các tài liệu chứa nhiều ngôn ngữ, một trường chuỗi đơn lẻ bắt buộc thường là không đủ. Việc giữ nó là tùy chọn cho phép hệ thống xử lý các trạng thái "không xác định" hoặc "hỗn hợp" một cách nhẹ nhàng.
+
+## Bảng Tóm tắt
+
+| Trường | Yêu cầu | Mục đích Chính |
+| :--- | :--- | :--- |
+| `source_type` | **Bắt buộc** | Lọc theo họ nguồn cấp cao, giao diện Trích dẫn và Định danh Chunk. |
+| `document_type`| **Tùy chọn** | Tăng trọng số ngữ nghĩa và điều hướng cho các ý định cụ thể (Giá, FAQ). |
+| `language` | **Tùy chọn** | Lọc truy xuất đa ngôn ngữ và nhóm để phát hiện xung đột thông tin. |
+
+*Tham khảo: Xem `src/agentic_rag/ingestion/url/schema.md` để biết toàn bộ sơ đồ ánh xạ của các trường dùng chung.*

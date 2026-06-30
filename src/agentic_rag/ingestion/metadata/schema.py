@@ -67,6 +67,8 @@ class ChunkMetadata(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     questions: list[str] = Field(default_factory=list)
     entities: list[str] = Field(default_factory=list)
+    entities_canonical: list[str] = Field(default_factory=list)
+    relations: list[dict[str, Any]] = Field(default_factory=list)
     quality_score: float | None = None
 
     def __getitem__(self, key: str) -> Any:
@@ -122,12 +124,29 @@ QDRANT_INDEX_FIELDS: tuple[str, ...] = (
     "document_type",
     "product_model",
     "language",
-    "topic_tags",
+    "metadata.entities_canonical",
+    "metadata.metadata_prefilter_exclude",
     "metadata.deduplication.primary_layer",
 )
 
 REQUIRED_METADATA_FIELDS: tuple[str, ...] = ("source_type", "updated_date")
 
+# TODO [metadata/schema – source_type semantics]:
+# `source_type` describes *content provenance* (who published it), not *ingestion
+# modality* (how it arrived). The values "pdf", "url", and "text" were added
+# experimentally but do not represent provenance categories and may mislead
+# retrieval filters. If you need to track ingestion modality separately, add a
+# distinct field (e.g. `ingestion_modality: Literal["pdf", "url", "text"]`) to
+# `ChunkMetadata` and remove pdf/url/text from this set.
+# Reference: src/agentic_rag/ingestion/metadata/schema.py (SOURCE_TYPE_VALUES)
+#
+# TODO [GraphRAG – source_type → graph node label]:
+# When building a knowledge graph from ingested chunks, each `source_type` value
+# should be mapped to a named graph node label so that retrieval can traverse
+# provenance edges (e.g. Chunk → SourceNode[official] → DomainNode[vinfastauto.com]).
+# Design the mapping here before the graph layer is introduced so that the
+# node label vocabulary is stable from ingestion day 1.
+# Reference: GraphRAG integration plan (to be created)
 SOURCE_TYPE_VALUES = frozenset(
     {
         "community",
@@ -136,6 +155,9 @@ SOURCE_TYPE_VALUES = frozenset(
         "official",
         "partner",
         "unknown",
+        "pdf",
+        "url",
+        "text",
     }
 )
 

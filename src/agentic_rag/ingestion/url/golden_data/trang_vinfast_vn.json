@@ -1,0 +1,69 @@
+{
+  "vinfast_homepage": {
+    "navigation_menu": {
+      "o_to_dien": ["VF 3", "VF 5 Plus", "VF e34", "VF 6", "VF 7", "VF 8", "VF 9"],
+      "xe_may_dien": ["Evo200", "Feliz S", "Klara S", "Vento S", "Theon S"],
+      "dich_vu_hau_mai": ["Bảo hành", "Sửa chữa lưu động", "Sạc pin lưu động"],
+      "pin_va_tram_sac": ["Hệ thống trạm sạc", "Thuê pin", "Mua pin"],
+      "cong_dong_vinclub": "Chương trình ưu đãi và đặc quyền thành viên"
+    },
+    "hero_banner": [
+      {
+        "tieu_de": "Mãnh liệt tinh thần Việt Nam",
+        "mo_ta": "Chương trình ưu đãi đặc biệt dành cho giải pháp di chuyển xanh",
+        "call_to_action": "Tìm hiểu thêm"
+      }
+    ],
+    "san_pham_noi_bat": {
+      "o_to_dien": [
+        {
+          "ten_xe": "VF 3",
+          "gia_thuc_te_hien_tai": "240.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "270.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          },
+          "phan_khuc": "Mini SUV"
+        },
+        {
+          "ten_xe": "VF 9",
+          "gia_thuc_te_hien_tai": "1.499.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "1.589.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          },
+          "phan_khuc": "Full-size E-SUV"
+        }
+      ],
+      "xe_may_dien": [
+        {
+          "ten_xe": "Evo200",
+          "gia_thuc_te_hien_tai": "18.000.000 VNĐ",
+          "gia_nguyen_goc": {
+            "muc_gia": "22.000.000 VNĐ",
+            "trang_thai_hien_thi": "line-through",
+            "html_class": "field-spec-item--desc-sub"
+          }
+        }
+      ]
+    },
+    "he_sinh_thai_toan_dien": {
+      "tieu_de": "Hệ sinh thái xe điện toàn diện",
+      "cac_diem_chinh": [
+        "Quy hoạch 150.000 cổng sạc trên toàn quốc",
+        "Xưởng dịch vụ không ngày nghỉ",
+        "Dịch vụ cứu hộ 24/7"
+      ]
+    },
+    "footer": {
+      "thong_tin_cong_ty": "Công ty TNHH Kinh doanh Thương mại và Dịch vụ VinFast",
+      "lien_he": {
+        "hotline": "1900 23 23 89",
+        "email": "support.vn@vinfastauto.com"
+      },
+      "mang_xa_hoi": ["Facebook", "YouTube", "TikTok", "Zalo"]
+    }
+  }
+}

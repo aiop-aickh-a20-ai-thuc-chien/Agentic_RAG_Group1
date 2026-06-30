@@ -1,0 +1,429 @@
+=== CONTROLS ===
+- ID: control-2, Label: Next slide, Group: option, Disabled: False, Selector: None
+- ID: control-3, Label: Previous slide, Group: option, Disabled: True, Selector: None
+- ID: url-interaction-1, Label: Động cơ điện, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-1"]
+- ID: url-interaction-2, Label: Động cơ xăng, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-2"]
+- ID: url-interaction-3, Label: Dòng xe dịch vụ, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-3"]
+- ID: url-interaction-4, Label: Tài khoản, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-4"]
+- ID: url-interaction-9, Label: Đặt cọc, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-9"]
+- ID: url-interaction-10, Label: Chi tiết đơn hàng × Estimated Delivery Giá xe 39.900.000 VNĐ Mua pin 5.600.000 VNĐ coupon.couponName coupon.couponValue VNĐ Giá trị đơn hàng 45.500.000 VNĐ, Group: details, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-10"]
+- ID: url-interaction-11, Label: Chi tiết đơn hàng, Group: details, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-11"]
+- ID: url-interaction-12, Label: Đăng nhập, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-12"]
+- ID: url-interaction-13, Label: Đăng ký tài khoản, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-13"]
+- ID: url-interaction-14, Label: Quyền riêng tư của bạn, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-14"]
+- ID: url-interaction-15, Label: Cookie chức năng, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-15"]
+- ID: url-interaction-16, Label: Cookie nhắm mục tiêu, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-16"]
+- ID: url-interaction-17, Label: Cookie hoàn toàn cần thiết, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-17"]
+- ID: url-interaction-18, Label: Cookie hiệu suất, Group: option, Disabled: False, Selector: [data-url-ingestion-interaction-id="url-interaction-18"]
+
+=== SKIPPED CONTROLS ===
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Services-Scooter-VIPER-Mua-Pin, Group: serviceGroup, Reason: not_option_like
+- Label: Services-Scooter-VIPER-Thue-Pin, Group: serviceGroup, Reason: not_option_like
+- Label: tiếp theo, Group: option, Reason: not_option_like
+- Label: personal, Group: dwfrm_billing_addressFields_customerType, Reason: not_option_like
+- Label: corporate, Group: dwfrm_billing_addressFields_customerType, Reason: not_option_like
+- Label: XMDUDCBNV, Group: referralProgram, Reason: not_option_like
+- Label: Tìm kiếm, Group: option, Reason: not_option_like
+- Label: DTCL, Group: referralProgram, Reason: not_option_like
+- Label: VF_CTV_REFXMD, Group: referralProgram, Reason: not_option_like
+- Label: tiếp theo, Group: option, Reason: not_option_like
+- Label: Áp dụng, Group: option, Reason: unsafe_control_type
+- Label: Đặt cọc, Group: option, Reason: unsafe_action_label
+- Label: BankTransfer, Group: paymentMethod, Reason: not_option_like
+- Label: CreditCard, Group: paymentMethod, Reason: not_option_like
+- Label: OnePay, Group: paymentGateway, Reason: not_option_like
+- Label: Payoo, Group: paymentGateway, Reason: not_option_like
+- Label: AtmCard, Group: paymentMethod, Reason: not_option_like
+- Label: OnePay, Group: paymentGateway, Reason: not_option_like
+- Label: Payoo, Group: paymentGateway, Reason: not_option_like
+- Label: THANH TOÁN, Group: option, Reason: unsafe_action_label
+- Label: ×, Group: option, Reason: not_option_like
+- Label: không, Group: option, Reason: not_option_like
+- Label: tiếp tục, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Tôi đã đọc và đồng ý với điều khoản, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Hủy, Group: option, Reason: unsafe_control_type
+- Label: Xóa, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: ×, Group: option, Reason: not_option_like
+- Label: Xác nhận, Group: option, Reason: unsafe_control_type
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Đồng ý bỏ qua, Group: option, Reason: not_option_like
+- Label: Xác nhận, Group: option, Reason: not_option_like
+- Label: Điều chỉnh, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Thoát, Group: option, Reason: not_option_like
+- Label: Đăng ký, Group: option, Reason: unsafe_action_label
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Đăng nhập, Group: option, Reason: unsafe_action_label
+- Label: Đăng ký, Group: option, Reason: unsafe_action_label
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Đăng nhập, Group: option, Reason: unsafe_action_label
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Close, Group: option, Reason: not_option_like
+- Label: Đặt lại mật khẩu, Group: option, Reason: unsafe_control_type
+- Label: Đánh giá, Group: option, Reason: not_option_like
+- Label: Tìm hiểu thêm, Group: option, Reason: not_option_like
+- Label: Chấp nhận mọi cookie, Group: option, Reason: not_option_like
+- Label: Đóng, Group: option, Reason: not_option_like
+- Label: Back, Group: option, Reason: not_option_like
+- Label: Filter, Group: option, Reason: not_option_like
+- Label: Clear, Group: option, Reason: not_option_like
+- Label: Apply, Group: option, Reason: not_option_like
+- Label: Cancel, Group: option, Reason: not_option_like
+- Label: Xác nhận lựa chọn của tôi, Group: option, Reason: not_option_like
+- Label: Từ chối tất cả, Group: option, Reason: not_option_like
+- Label: Cho phép tất cả, Group: option, Reason: not_option_like
+- Label: Mở Tùy chọn, Group: option, Reason: not_option_like
+- Label: Đóng Tùy chọn, Group: option, Reason: not_option_like
+- Label: Động cơ điện, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-1\"]")
+    - locator resolved to <a role="tab" id="dong_co_dien" data-bs-toggle="tab" aria-selected="true" href="#dong_co_dien_content" class="nav-item nav-link active" aria-controls="nav-dong_co_dien" data-url-ingestion-interaction-id="url-interaction-1">Động cơ điện</a>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    5 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Động cơ xăng, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-2\"]")
+    - locator resolved to <a role="tab" tabindex="-1" id="dong_co_xang" data-bs-toggle="tab" aria-selected="false" class="nav-item nav-link" href="#dong_co_xang_content" aria-controls="nav-dong_co_xang" data-url-ingestion-interaction-id="url-interaction-2">Động cơ xăng</a>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Dòng xe dịch vụ, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-3\"]")
+    - locator resolved to <a role="tab" id="vgreen" tabindex="-1" data-bs-toggle="tab" aria-selected="false" href="#vgreen_content" aria-controls="vgreen" class="nav-item nav-link" data-url-ingestion-interaction-id="url-interaction-3">Dòng xe dịch vụ</a>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Tài khoản, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-4\"]")
+    - locator resolved to <a data-bs-toggle="modal" data-bs-dismiss="modal" data-bs-target="#modalLoginRegister" class="we-mega-menu-li btn login-icon" data-url-ingestion-interaction-id="url-interaction-4" href="/vn_vi/dang-nhap?oauthProvider=Auth0&oauthLoginTargetEndPoint=1">…</a>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    5 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 500ms
+
+- Label: Next slide, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-5\"]")
+    - locator resolved to <div tabindex="0" role="button" aria-disabled="false" aria-label="Next slide" class="swiper-button-next" data-url-ingestion-interaction-id="url-interaction-5"></div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div id="onetrust-policy-text">Chúng tôi thu thập cookies cho các mục đích khác …</div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div id="onetrust-policy-text">Chúng tôi thu thập cookies cho các mục đích khác …</div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+  3 × retrying click action
+      - waiting 500ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="onetrust-pc-dark-filter ot-fade-in"></div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div id="onetrust-policy-text">Chúng tôi thu thập cookies cho các mục đích khác …</div> from <div data-nosnippet="true" id="onetrust-consent-sdk">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+- Label: Previous slide, Group: option, Reason: disabled
+- Label: Next slide, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-7\"]")
+    - locator resolved to <div tabindex="0" role="button" aria-disabled="false" aria-label="Next slide" class="swiper-button-next" data-url-ingestion-interaction-id="url-interaction-7"></div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Previous slide, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-8\"]")
+    - locator resolved to <div tabindex="0" role="button" aria-disabled="false" class="swiper-button-prev" aria-label="Previous slide" data-url-ingestion-interaction-id="url-interaction-8"></div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Đặt cọc, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-9\"]")
+    - locator resolved to <button role="tab" type="button" data-bs-toggle="tab" aria-selected="true" class="nav-link active" id="deposit-payment-tab" data-paymenttype="DepositPayment" data-bs-target="#tabDepositPayment" aria-controls="deposit-payment-tab" data-url-ingestion-interaction-id="url-interaction-9">↵                                Đặt cọc↵        …</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Chi tiết đơn hàng × Estimated Delivery Giá xe 39.900.000 VNĐ Mua pin 5.600.000 VNĐ coupon.couponName coupon.couponValue VNĐ Giá trị đơn hàng 45.500.000 VNĐ, Group: details, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-10\"]")
+    - locator resolved to <div role="dialog" class="js-booking-detail-success modal modal-box" data-url-ingestion-interaction-id="url-interaction-10">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Chi tiết đơn hàng, Group: details, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-11\"]")
+    - locator resolved to <p class="title-detail-booking" data-url-ingestion-interaction-id="url-interaction-11">Chi tiết đơn hàng</p>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Đăng nhập, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-12\"]")
+    - locator resolved to <div role="tab" id="login-tab" href="#tabLogin" data-bs-toggle="tab" aria-selected="true" aria-controls="tabLogin" class="btn btn-outline-primary active" data-url-ingestion-interaction-id="url-interaction-12">Đăng nhập</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Đăng ký tài khoản, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-13\"]")
+    - locator resolved to <div role="tab" tabindex="-1" id="register-tab" href="#tabRegister" data-bs-toggle="tab" aria-selected="false" aria-controls="profile" class="btn btn-outline-primary" data-url-ingestion-interaction-id="url-interaction-13">Đăng ký tài khoản</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Quyền riêng tư của bạn, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-14\"]")
+    - locator resolved to <div role="tab" tabindex="0" aria-selected="true" aria-controls="ot-tab-desc" class="ot-active-menu category-menu-switch-handler" data-url-ingestion-interaction-id="url-interaction-14">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Cookie chức năng, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-15\"]")
+    - locator resolved to <div role="tab" tabindex="-1" aria-selected="false" aria-controls="ot-desc-id-C0003" class="category-menu-switch-handler" data-url-ingestion-interaction-id="url-interaction-15">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Cookie nhắm mục tiêu, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-16\"]")
+    - locator resolved to <div role="tab" tabindex="-1" aria-selected="false" aria-controls="ot-desc-id-C0004" class="category-menu-switch-handler" data-url-ingestion-interaction-id="url-interaction-16">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Cookie hoàn toàn cần thiết, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-17\"]")
+    - locator resolved to <div role="tab" tabindex="-1" aria-selected="false" aria-controls="ot-desc-id-C0001" class="category-menu-switch-handler" data-url-ingestion-interaction-id="url-interaction-17">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+
+- Label: Cookie hiệu suất, Group: option, Reason: click_failed:Locator.click: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator("[data-url-ingestion-interaction-id=\"url-interaction-18\"]")
+    - locator resolved to <div role="tab" tabindex="-1" aria-selected="false" aria-controls="ot-desc-id-C0002" class="category-menu-switch-handler" data-url-ingestion-interaction-id="url-interaction-18">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    6 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms

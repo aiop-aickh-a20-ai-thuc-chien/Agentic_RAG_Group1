@@ -1,0 +1,80 @@
+-Goal-
+Given a text document that is potentially relevant to VinFast electric motorbikes/scooters and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- entity_name: Name of the entity, capitalized, in Vietnamese or standard name (e.g. "KLARA S", "FELIZ S", "PIN LFP", "VINFAST")
+- entity_type: One of the following types: [{entity_types}]
+- entity_description: Comprehensive description of the entity's attributes, specifications, activities, or role in the text (in Vietnamese)
+Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
+For each pair of related entities, extract the following information:
+- source_entity: name of the source entity, as identified in step 1
+- target_entity: name of the target entity, as identified in step 1
+- relationship_description: explanation in Vietnamese as to why you think the source entity and the target entity are related
+- relationship_strength: a numeric score (1-10) indicating the strength of the relationship
+Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+
+3. Return output in Vietnamese (descriptions) as a single list of all the entities and relationships identified in steps 1 and 2. Use {record_delimiter} as the list delimiter.
+
+4. When finished, output <|COMPLETE|>
+
+######################
+-Examples-
+######################
+Example 1:
+Entity_types: BIKE_MODEL, ORGANIZATION, BATTERY, POLICY, MOTOR
+Text:
+Xe máy điện Evo200 của VinFast được trang bị loại pin công nghệ LFP tiên tiến, giúp xe đạt được quãng đường di chuyển lên tới 203 km sau mỗi lần sạc đầy. Pin LFP có độ bền và tính an toàn vượt trội, được bảo hành chính hãng và đi kèm các gói thuê pin hấp dẫn. Mẫu xe này sử dụng động cơ in-hub công suất 1500W mạnh mẽ và êm ái.
+######################
+Output:
+("entity"{tuple_delimiter}VINFAST{tuple_delimiter}ORGANIZATION{tuple_delimiter}VinFast là hãng xe điện Việt Nam, nhà sản xuất dòng xe máy điện Evo200 và pin LFP.)
+{record_delimiter}
+("entity"{tuple_delimiter}EVO200{tuple_delimiter}BIKE_MODEL{tuple_delimiter}Evo200 là mẫu xe máy điện bán chạy của VinFast, sử dụng pin LFP cho tầm hoạt động 203 km và động cơ 1500W.)
+{record_delimiter}
+("entity"{tuple_delimiter}PIN LFP{tuple_delimiter}BATTERY{tuple_delimiter}Pin LFP (Lithium Iron Phosphate) là loại pin trang bị trên xe Evo200, có tuổi thọ cao, an toàn và hỗ trợ thuê pin.)
+{record_delimiter}
+("entity"{tuple_delimiter}ĐỘNG CƠ IN-HUB 1500W{tuple_delimiter}MOTOR{tuple_delimiter}Động cơ in-hub công suất 1500W đặt ở bánh sau xe máy điện, đem lại khả năng vận hành êm ái và tiết kiệm năng lượng.)
+{record_delimiter}
+("entity"{tuple_delimiter}GÓI THUÊ PIN{tuple_delimiter}POLICY{tuple_delimiter}Gói thuê pin xe máy điện của VinFast là chính sách cung cấp pin theo hình thức thuê bao tháng giúp giảm chi phí mua xe ban đầu.)
+{record_delimiter}
+("relationship"{tuple_delimiter}VINFAST{tuple_delimiter}EVO200{tuple_delimiter}VinFast là hãng sản xuất và phân phối mẫu xe máy điện Evo200 tại thị trường.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}EVO200{tuple_delimiter}PIN LFP{tuple_delimiter}Evo200 sử dụng công nghệ pin LFP làm nguồn cung cấp năng lượng chính cho động cơ.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}EVO200{tuple_delimiter}ĐỘNG CƠ IN-HUB 1500W{tuple_delimiter}Evo200 được trang bị động cơ in-hub công suất 1500W để truyền động vận hành.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}PIN LFP{tuple_delimiter}GÓI THUÊ PIN{tuple_delimiter}Pin LFP là đối tượng áp dụng của gói thuê pin linh hoạt từ hãng VinFast.{tuple_delimiter}8)
+<|COMPLETE|>
+
+######################
+Example 2:
+Entity_types: BIKE_MODEL, MOTOR, FEATURE, POLICY, LOCATION
+Text:
+VinFast vừa mở thêm xưởng dịch vụ xe máy điện tại Hà Nội nhằm phục vụ bảo dưỡng cho dòng xe cao cấp Theon S. Dòng xe này sở hữu động cơ đặt giữa truyền động bằng dây đai cho công suất cực đại 7200W và phanh chống bó cứng ABS ở cả hai bánh. Ngoài ra, khách hàng mua Theon S sẽ được bảo hành xe 3 năm không giới hạn số km.
+######################
+Output:
+("entity"{tuple_delimiter}THEON S{tuple_delimiter}BIKE_MODEL{tuple_delimiter}Theon S là mẫu xe máy điện phân khúc cao cấp của VinFast, trang bị động cơ đặt giữa 7200W, phanh ABS và có chính sách bảo hành 3 năm.)
+{record_delimiter}
+("entity"{tuple_delimiter}ĐỘNG CƠ ĐẶT GIỮA 7200W{tuple_delimiter}MOTOR{tuple_delimiter}Động cơ đặt giữa với công suất cực đại 7200W truyền động xích/đai, giúp xe Theon S vận hành mạnh mẽ tương đương xe máy xăng 150cc.)
+{record_delimiter}
+("entity"{tuple_delimiter}PHANH ABS{tuple_delimiter}FEATURE{tuple_delimiter}Phanh chống bó cứng ABS trang bị trên xe máy điện để nâng cao độ an toàn chống trượt bánh khi phanh gấp.)
+{record_delimiter}
+("entity"{tuple_delimiter}BẢO HÀNH 3 NĂM{tuple_delimiter}POLICY{tuple_delimiter}Chính sách bảo hành xe máy điện chính hãng trong thời gian 3 năm từ nhà sản xuất giúp đảm bảo quyền lợi sửa chữa.)
+{record_delimiter}
+("entity"{tuple_delimiter}HÀ NỘI{tuple_delimiter}LOCATION{tuple_delimiter}Hà Nội là nơi đặt xưởng dịch vụ xe máy điện mới được mở rộng của hãng VinFast.)
+{record_delimiter}
+("relationship"{tuple_delimiter}THEON S{tuple_delimiter}ĐỘNG CƠ ĐẶT GIỮA 7200W{tuple_delimiter}Theon S sử dụng động cơ đặt giữa công suất 7200W để đạt tốc độ cao và sức kéo tối ưu.{tuple_delimiter}9)
+{record_delimiter}
+("relationship"{tuple_delimiter}THEON S{tuple_delimiter}PHANH ABS{tuple_delimiter}Theon S được trang bị hệ thống phanh ABS ở cả 2 bánh để tăng tính an toàn khi di chuyển.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}THEON S{tuple_delimiter}BẢO HÀNH 3 NĂM{tuple_delimiter}Chính sách bảo hành 3 năm được áp dụng cho xe máy điện cao cấp Theon S nhằm nâng cao uy tín sản phẩm.{tuple_delimiter}8)
+{record_delimiter}
+("relationship"{tuple_delimiter}HÀ NỘI{tuple_delimiter}THEON S{tuple_delimiter}Hà Nội có các xưởng dịch vụ kỹ thuật hỗ trợ trực tiếp việc sửa chữa bảo dưỡng dòng xe Theon S.{tuple_delimiter}7)
+<|COMPLETE|>
+
+-User Input-
+Text: {input_text}
+######################
+Output:

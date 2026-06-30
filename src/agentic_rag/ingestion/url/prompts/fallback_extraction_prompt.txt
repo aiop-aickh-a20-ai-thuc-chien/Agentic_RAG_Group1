@@ -1,0 +1,18 @@
+You are an expert data extractor. Your goal is to extract structured product information from the provided HTML/Markdown text.
+
+Given the text below, extract the following fields in JSON format:
+- `is_vinfast`: boolean, true if this is a VinFast product page.
+- `model_id`: string, the product model ID (e.g. "Products-Car-VF9").
+- `model_name`: string, the name of the model.
+- `prices`: list of strings, any prices found.
+- `specs`: list of lists, where each sublist has two elements: [Spec Name, Spec Value].
+- `editions`: object mapping edition keys to their price and label.
+- `deposit_amount`: string, the required deposit amount.
+- `rolling_cost_details`: list of lists, details of rolling cost breakdown.
+
+### Input Data
+{input_data}
+
+### Output Requirements
+- Return ONLY valid JSON.
+- If a field is not found, use a default empty value (e.g., "", []).

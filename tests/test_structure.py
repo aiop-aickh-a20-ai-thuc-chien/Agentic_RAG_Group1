@@ -26,6 +26,8 @@ def test_production_code_does_not_use_dataclasses() -> None:
     source_root = Path(__file__).resolve().parents[1] / "src"
     offenders: list[str] = []
     for path in source_root.rglob("*.py"):
+        if ".venv" in path.parts or "node_modules" in path.parts:
+            continue
         text = path.read_text(encoding="utf-8")
         if "@dataclass" in text or "from dataclasses" in text or "import dataclasses" in text:
             offenders.append(path.relative_to(source_root).as_posix())

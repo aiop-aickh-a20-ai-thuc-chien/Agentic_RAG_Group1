@@ -1,0 +1,52 @@
+{
+  "ground_truth": {
+    "characters": 9169,
+    "words": 1715,
+    "lines": 235
+  },
+  "actual": {
+    "characters": 37515,
+    "words": 7863,
+    "lines": 174
+  },
+  "evidence_corpus": {
+    "characters": 711774,
+    "words": 65023,
+    "artifact_count": 15,
+    "artifact_paths": [
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/chunks.jsonl",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/cleaned.html",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/extracted.md",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/manifest.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/parsed.md",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/parsed_sections.txt",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/quality.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion/source.html",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/chunks.jsonl",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/image_snapshots.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/interaction_states.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/manifest.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/network_payloads.jsonl",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/panel_snapshots.json",
+      "guide_2/demo/verify_ingestion/output2/ingestion_artifacts/artifacts/https-vinfastauto-com-vn-vi-thong-tin-bao-hanh_7f921895430c/url-ingestion-interactions/source.html"
+    ]
+  },
+  "text_similarity_ratio": 0.0112,
+  "source_url_routing": {
+    "url": "https://vinfastauto.com/vn_vi/thong-tin-bao-hanh",
+    "path": "/vn_vi/thong-tin-bao-hanh",
+    "query_params": {},
+    "primary_routing_param": null,
+    "primary_model_id": null,
+    "model_id_present_in_actual_markdown": false,
+    "model_id_present_in_evidence_corpus": false,
+    "model_id_present_in_ground_truth": false
+  },
+  "structured_ground_truth": {
+    "json_path": "guide_2\\ground_truth\\https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products-car-VF9\\vf9_ground_truth.json",
+    "checked_terms": 243,
+    "covered_terms": 6,
+    "missing_terms": 237,
+    "coverage_ratio": 0.0247
+  }
+}

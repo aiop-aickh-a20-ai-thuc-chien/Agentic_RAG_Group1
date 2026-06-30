@@ -100,6 +100,7 @@ def build_chunks(
                     "chunk_index": index,
                     "page_hash": page_hash,
                     "content_hash": short_hash(normalized_chunk_text),
+                    "dedupe_text": normalize_for_dedupe_hash(chunk_text),
                     "dedupe_hash": short_hash(normalize_for_dedupe_hash(chunk_text)),
                     "normalized_text": normalized_chunk_text,
                     "chunk_part_index": index,

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import Any
+
+from pydantic import BaseModel
 
 from agentic_rag.core.contracts import Chunk
 from agentic_rag.core.ports import EmbeddingClient
@@ -16,12 +19,17 @@ from agentic_rag.ingestion.dedup_detect.embedding import (
     find_embedding_duplicates,
 )
 from agentic_rag.ingestion.dedup_detect.exact import find_exact_duplicates
+from agentic_rag.ingestion.dedup_detect.llm_review import (
+    DuplicatePairReviewer,
+    review_blocked_candidates,
+)
 from agentic_rag.ingestion.dedup_detect.models import (
     DedupConfig,
     DedupDocument,
     DedupReport,
     DuplicateMatch,
 )
+from agentic_rag.ingestion.dedup_detect.normalization import dedup_text
 from agentic_rag.ingestion.dedup_detect.simhash import find_simhash_duplicates
 
 
@@ -32,8 +40,17 @@ def detect_duplicates(
     embedding_vectors: EmbeddingVectorMap | None = None,
     embedding_client: EmbeddingClient | None = None,
     embedding_fallback_candidates: Sequence[EmbeddingFallbackCandidate] | None = None,
+    metadata_reviewer: DuplicatePairReviewer | None = None,
 ) -> DedupReport:
     """Run exact, SimHash, and optional embedding duplicate detection."""
+
+    # TODO [guide_2/missing implementation.md – ChangeStore not connected]:
+    # Before writing chunks to the Vector DB, call `ChangeStore.record()` with
+    # the content hash. If it returns False (content unchanged), skip re-ingest.
+    # This avoids duplicate Vector DB upserts on unchanged pages.
+    # Choose the source provider/collection before wiring to avoid changing
+    # general ingestion behaviour for non-VinFast sources.
+    # Reference: guide_2/missing implementation.md §Chuưa nối vào production entry point
 
     resolved_config = config or DedupConfig()
     document_list = list(documents)
@@ -41,6 +58,36 @@ def detect_duplicates(
     excluded_pairs = _matched_pairs(exact_matches)
     # Chunk-level cascade: chunks already flagged in L1 are skipped entirely by L2/L3.
     excluded_chunk_ids = _duplicate_chunk_ids(exact_matches)
+
+    metadata_reviews = (
+        review_blocked_candidates(
+            document_list,
+            reviewer=metadata_reviewer,
+            max_block_size=resolved_config.metadata_block_max_size,
+            exclude_pairs=excluded_pairs,
+        )
+        if resolved_config.enable_metadata_llm
+        else []
+    )
+    metadata_llm_matches = [
+        DuplicateMatch(
+            layer="metadata_llm",
+            document_id=review.document_id,
+            duplicate_document_id=review.duplicate_document_id,
+            score=review.confidence,
+            reason=review.reason,
+            metadata={
+                "compared_metadata_fields": review.compared_metadata_fields,
+                "cited_chunk_ids": review.cited_chunk_ids,
+                "evidence_refs": review.evidence_refs,
+                "pair_category": review.pair_category,
+            },
+        )
+        for review in metadata_reviews
+        if review.classification == "duplicate"
+    ]
+    excluded_pairs.update(_matched_pairs(metadata_llm_matches))
+    excluded_chunk_ids.update(_duplicate_chunk_ids(metadata_llm_matches))
 
     simhash_matches = (
         find_simhash_duplicates(
@@ -67,15 +114,24 @@ def detect_duplicates(
             vectors = embedding_vectors_from_client(document_list, embedding_client)
             method = method or "embedding_client"
         elif vectors is None:
-            result = _resolve_embedding_vectors_with_fallback(
-                document_list,
-                candidates=embedding_fallback_candidates,
-            )
-            vectors = result.vectors
-            provider = result.provider
-            model = result.model
-            method = method or result.method
-            fallback_attempts = result.fallback_attempts
+            try:
+                result = _resolve_embedding_vectors_with_fallback(
+                    document_list,
+                    candidates=embedding_fallback_candidates,
+                )
+                vectors = result.vectors
+                provider = result.provider
+                model = result.model
+                method = method or result.method
+                fallback_attempts = result.fallback_attempts
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "All embedding providers failed for dedup Layer 3; "
+                    "recording embedding_status=\"fallback_without_embedding\" and proceeding. Error: %s",
+                    exc
+                )
+                vectors = {}
         if vectors is None:
             raise ValueError(
                 "Embedding dedup is enabled, but no embedding_vectors or "
@@ -96,6 +152,8 @@ def detect_duplicates(
     return DedupReport(
         document_count=len(document_list),
         exact_matches=exact_matches,
+        metadata_llm_matches=metadata_llm_matches,
+        metadata_reviews=metadata_reviews,
         simhash_matches=simhash_matches,
         embedding_matches=embedding_matches,
     )
@@ -104,14 +162,49 @@ def detect_duplicates(
 def documents_from_chunks(chunks: Sequence[Chunk]) -> list[DedupDocument]:
     """Create dedup documents from shared ingestion chunks."""
 
-    return [
+    # TODO [url/TODO_dedup.md §2 – dedupe_hash for exact blocking]:
+    # URL ingestion should populate `chunk.metadata["dedupe_hash"]` with an
+    # aggressively normalised hash before this function is called.
+    # Verify that the `dedup_text()` path here picks up `dedupe_hash` (via
+    # `metadata.dedupe_text`) rather than re-normalising raw chunk text.
+    # This avoids redundant parsing and keeps exact blocking deterministic.
+    # Reference: url/TODO_dedup.md §2
+
+    documents = [
         DedupDocument(
             document_id=chunk.chunk_id,
             text=chunk.text,
-            metadata=chunk.metadata,
+            metadata=_chunk_metadata_dict(chunk),
         )
         for chunk in chunks
     ]
+    return [
+        document.model_copy(
+            update={
+                "text": dedup_text(document),
+                "metadata": {
+                    **document.metadata,
+                    "dedup_text_source": _dedup_text_source(document),
+                },
+            }
+        )
+        for document in documents
+    ]
+
+
+def _dedup_text_source(document: DedupDocument) -> str:
+    if isinstance(document.metadata.get("dedupe_text"), str):
+        return "metadata.dedupe_text"
+    if isinstance(document.metadata.get("normalized_text"), str):
+        return "metadata.normalized_text"
+    return "text"
+
+
+def _chunk_metadata_dict(chunk: Chunk) -> dict[str, Any]:
+    metadata = chunk.metadata
+    if isinstance(metadata, BaseModel):
+        return metadata.model_dump(mode="json", exclude_none=True)
+    return dict(metadata)
 
 
 def _matched_pairs(matches: Iterable[DuplicateMatch]) -> set[tuple[str, str]]:

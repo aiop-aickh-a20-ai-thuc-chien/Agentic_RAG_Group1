@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from html.parser import HTMLParser
@@ -49,6 +50,39 @@ _PRICE_ATTR_KEYS = ("data-price", "data-display-price", "data-final-price")
 _LABEL_ATTR_KEYS = ("data-option-label", "aria-label", "title", "value", "alt")
 _GROUP_ATTR_KEYS = ("data-option-group", "data-group", "name")
 _MODEL_ATTR_KEYS = ("data-model-name", "data-model", "data-product-name")
+_SPEC_CONTAINER_KEYS = (
+    "specs",
+    "specifications",
+    "technicalSpecs",
+    "technicalSpecifications",
+    "attributes",
+    "properties",
+    "productSpecs",
+)
+_SPEC_LABEL_KEYS = (
+    "name",
+    "label",
+    "title",
+    "key",
+    "attribute",
+    "attributeName",
+    "specName",
+    "displayName",
+)
+_SPEC_VALUE_KEYS = ("value", "displayValue", "text", "content", "description")
+_MAX_SPEC_FIELDS = 24
+_PROMOTABLE_GROUP_RE = re.compile(
+    r"\b("
+    r"model|trim|variant|version|color|colour|exterior|interior|battery|package|"
+    r"finance|financing|deposit|payment|price|spec|specification|specifications|"
+    r"thong\s*so|vf\s*\d|mpv\s*7"
+    r")\b",
+    re.IGNORECASE,
+)
+_SKIP_PROMOTION_LABEL_RE = re.compile(
+    r"^\s*(previous|prev|next|back|forward|slide|carousel|xem\s+them|thu\s+gon)\s*$",
+    re.IGNORECASE,
+)
 
 
 def extract_interaction_states_from_html(
@@ -146,57 +180,273 @@ def build_interaction_chunks(
         normalized_text = normalize_for_content_hash(text)
         chunk_id = f"url_interaction_{short_hash(chunk_source)}_{index:04d}"
         state_snapshot_ref = _image_snapshot_ref(state)
-        chunks.append(
-            Chunk(
-                chunk_id=chunk_id,
-                text=text,
-                metadata={
-                    "chunk_id": chunk_id,
-                    "source": chunk_source,
-                    "source_type": source_type,
-                    "url": result.profile.final_url or result.profile.requested_url,
-                    "requested_url": result.profile.requested_url,
-                    "url_query_params": result.profile.url_query_params,
-                    "section": "interaction_states",
-                    "heading": "interaction_states",
-                    "breadcrumb": ["interaction_states"],
-                    "title": state.model_name,
-                    "fetched_at": captured_at,
-                    "captured_at": state.captured_at,
-                    "updated_date": captured_at,
-                    "updated_date_source": "ingestion_start",
-                    "page_hash": page_hash,
-                    "content_hash": short_hash(normalized_text),
-                    "dedupe_hash": short_hash(normalize_for_dedupe_hash(text)),
-                    "normalized_text": normalized_text,
-                    "token_count": len(normalized_text.split()),
-                    "chunk_index": index,
-                    "chunk_part_index": index,
-                    "chunk_part_total": len(result.states),
-                    "page_type": result.profile.page_type,
-                    "document_type": result.profile.page_type,
-                    "entities": entity_names,
-                    "interaction_required": result.profile.interaction_required,
-                    "interaction_reasons": result.profile.reasons,
-                    "interaction_states": state_summaries,
-                    "interaction_state": state.to_metadata_summary(),
-                    "interaction_state_id": state.state_id,
-                    "image_snapshot_ref": state_snapshot_ref,
-                    "image_snapshot_refs": image_snapshot_refs,
-                    "product_model": state.model_name or state.model_id,
-                    "product_price": state.price,
-                    "variant_id": state.state_id,
-                    "variant_options": state.variant_options,
-                    "image_url": state.image_url,
-                    "price_source": state.price_source,
-                    "evidence_source": state.evidence_source,
-                    "attribute_group": "pricing_specs" if state.price else "product_variant",
-                    "is_noise": False,
-                    "retrieval_weight": 1.4 if state.price else 1.1,
-                },
-            )
+        metadata = {
+            "chunk_id": chunk_id,
+            "source": chunk_source,
+            "source_type": source_type,
+            "url": result.profile.final_url or result.profile.requested_url,
+            "requested_url": result.profile.requested_url,
+            "url_query_params": result.profile.url_query_params,
+            "section": "interaction_states",
+            "heading": "interaction_states",
+            "breadcrumb": ["interaction_states"],
+            "chunk_type": "interaction_debug",
+            "section_kind": "dynamic",
+            "section_origin": (
+                "dynamic_state_payload"
+                if state.evidence_source == "network"
+                else "dynamic_interaction"
+            ),
+            "retrieval_visibility": "debug_only",
+            "metadata_prefilter_exclude": True,
+            "trusted_for_retrieval": False,
+            "semantic_application_status": "unmapped",
+            "debug_reason": "interaction_state_capture_unmapped",
+            "panel_role": state.panel_role,
+            "panel_id": state.panel_id,
+            "source_control_id": state.source_control_id,
+            "changed_panels": state.changed_panels,
+            "changed_fields": state.changed_fields,
+            "before_snapshot_ref": state.before_snapshot_ref,
+            "after_snapshot_ref": state.after_snapshot_ref,
+            "state_diff_ref": state.state_diff_ref,
+            "gain_score": state.gain_score,
+            "information_gain": state.information_gain,
+            "title": state.model_name,
+            "fetched_at": captured_at,
+            "captured_at": state.captured_at,
+            "updated_date": captured_at,
+            "updated_date_source": "ingestion_start",
+            "page_hash": page_hash,
+            "content_hash": short_hash(normalized_text),
+            "dedupe_hash": short_hash(normalize_for_dedupe_hash(text)),
+            "dedupe_text": normalized_text,
+            "normalized_text": normalized_text,
+            "token_count": len(normalized_text.split()),
+            "chunk_index": index,
+            "chunk_part_index": index,
+            "chunk_part_total": len(result.states),
+            "page_type": result.profile.page_type,
+            "document_type": result.profile.page_type,
+            "entities": entity_names,
+            "interaction_required": result.profile.interaction_required,
+            "interaction_reasons": result.profile.reasons,
+            "interaction_states": state_summaries,
+            "interaction_state": state.to_metadata_summary(),
+            "interaction_state_id": state.state_id,
+            "image_snapshot_ref": state_snapshot_ref,
+            "image_snapshot_refs": image_snapshot_refs,
+            "selected_model_id": result.profile.model_id,
+            "selected_product_model": _model_name_from_model_id(result.profile.model_id),
+            "product_model": state.model_name or state.model_id,
+            "product_price": state.price,
+            "deposit_amount": _deposit_amount_for_state(state),
+            "product_specs": state.specifications,
+            "variant_id": state.state_id,
+            "variant_options": state.variant_options,
+            "image_url": state.image_url,
+            "price_source": state.price_source,
+            "evidence_source": state.evidence_source,
+            "attribute_group": _attribute_group_for_state(state),
+            "is_noise": False,
+            "retrieval_weight": 1.4 if state.price else 1.25 if state.specifications else 1.1,
+        }
+        base_chunk = Chunk(
+            chunk_id=chunk_id,
+            text=text,
+            metadata={
+                "chunk_id": chunk_id,
+                "source": chunk_source,
+                "source_type": source_type,
+                "updated_date": captured_at,
+            },
         )
+        chunks.append(base_chunk.model_copy(update={"metadata": metadata}))
     return chunks
+
+
+def build_promoted_interaction_chunks(
+    result: InteractionCaptureResult,
+    *,
+    source: str | None = None,
+    fetched_at: str | None = None,
+) -> list[Chunk]:
+    """Promote validated dynamic facts into normal retrieval chunks."""
+
+    chunk_source = source or result.profile.final_url or result.profile.requested_url
+    source_type = infer_source_type(chunk_source)
+    captured_at = fetched_at or _utc_now()
+    promotable_states = [
+        state for state in result.states if _state_is_promotable_dynamic_fact(state)
+    ]
+    page_text = "\n".join(_promoted_state_text(state) for state in promotable_states)
+    page_hash = short_hash(normalize_for_content_hash(page_text))
+    chunks: list[Chunk] = []
+    for index, state in enumerate(promotable_states, start=1):
+        text = _promoted_state_text(state)
+        normalized_text = normalize_for_content_hash(text)
+        chunk_id = f"url_dynamic_state_{short_hash(chunk_source)}_{index:04d}"
+        state_snapshot_ref = _image_snapshot_ref(state)
+        metadata = {
+            "chunk_id": chunk_id,
+            "source": chunk_source,
+            "source_type": source_type,
+            "url": result.profile.final_url or result.profile.requested_url,
+            "requested_url": result.profile.requested_url,
+            "url_query_params": result.profile.url_query_params,
+            "section": "dynamic_interaction_facts",
+            "heading": "dynamic_interaction_facts",
+            "breadcrumb": ["dynamic_interaction_facts"],
+            "chunk_type": "dynamic_state",
+            "section_kind": "dynamic",
+            "section_origin": (
+                "dynamic_state_payload"
+                if state.evidence_source == "network"
+                else "dynamic_interaction"
+            ),
+            "retrieval_visibility": "normal",
+            "metadata_prefilter_exclude": False,
+            "trusted_for_retrieval": True,
+            "semantic_application_status": "applied_to_semantic_chunk",
+            "panel_role": state.panel_role,
+            "panel_id": state.panel_id,
+            "source_control_id": state.source_control_id,
+            "changed_panels": state.changed_panels,
+            "changed_fields": state.changed_fields,
+            "before_snapshot_ref": state.before_snapshot_ref,
+            "after_snapshot_ref": state.after_snapshot_ref,
+            "state_diff_ref": state.state_diff_ref,
+            "gain_score": state.gain_score,
+            "information_gain": state.information_gain,
+            "title": state.model_name,
+            "fetched_at": captured_at,
+            "captured_at": state.captured_at,
+            "updated_date": captured_at,
+            "updated_date_source": "ingestion_start",
+            "page_hash": page_hash,
+            "content_hash": short_hash(normalized_text),
+            "dedupe_hash": short_hash(normalize_for_dedupe_hash(text)),
+            "dedupe_text": normalized_text,
+            "normalized_text": normalized_text,
+            "token_count": len(normalized_text.split()),
+            "chunk_index": index,
+            "chunk_part_index": index,
+            "chunk_part_total": len(promotable_states),
+            "page_type": result.profile.page_type,
+            "document_type": result.profile.page_type,
+            "entities": _interaction_entity_names([state]),
+            "interaction_required": result.profile.interaction_required,
+            "interaction_reasons": result.profile.reasons,
+            "interaction_state": state.to_metadata_summary(),
+            "interaction_state_id": state.state_id,
+            "image_snapshot_ref": state_snapshot_ref,
+            "image_snapshot_refs": [state_snapshot_ref] if state_snapshot_ref else [],
+            "selected_model_id": result.profile.model_id,
+            "selected_product_model": _model_name_from_model_id(result.profile.model_id),
+            "product_model": state.model_name or state.model_id,
+            "product_price": state.price,
+            "deposit_amount": _deposit_amount_for_state(state),
+            "product_specs": state.specifications,
+            "variant_id": state.state_id,
+            "variant_options": state.variant_options,
+            "image_url": state.image_url,
+            "price_source": state.price_source,
+            "evidence_source": state.evidence_source,
+            "attribute_group": _attribute_group_for_state(state),
+            "is_noise": False,
+            "retrieval_weight": 1.8 if state.price else 1.6 if state.specifications else 1.4,
+        }
+        base_chunk = Chunk(
+            chunk_id=chunk_id,
+            text=text,
+            metadata={
+                "chunk_id": chunk_id,
+                "source": chunk_source,
+                "source_type": source_type,
+                "updated_date": captured_at,
+            },
+        )
+        chunks.append(base_chunk.model_copy(update={"metadata": metadata}))
+    return chunks
+
+
+def _state_is_promotable_dynamic_fact(state: InteractionStateRecord) -> bool:
+    if not state.changed_fields:
+        return False
+    if _SKIP_PROMOTION_LABEL_RE.search(_ascii_fold(state.option_label)):
+        return False
+    group_text = _ascii_fold(f"{state.option_group} {state.option_label}")
+    if not _PROMOTABLE_GROUP_RE.search(group_text):
+        return False
+    useful_fields = {
+        "price",
+        "image",
+        "availability",
+        "payment_summary",
+        "specifications",
+        "visible_text",
+        "tables",
+        "nodes",
+    }
+    if not any(field in useful_fields for field in state.changed_fields):
+        return False
+    has_visible_change = bool(state.dom_evidence.get("after_snapshot_text"))
+    has_supported_fact = (
+        bool(state.price or state.image_url or state.specifications)
+        or ("availability" in state.changed_fields and state.availability != "unknown")
+        or has_visible_change
+    )
+    if not has_supported_fact:
+        return False
+    if state.evidence_source == "network" and state.specifications:
+        return True
+    return not (state.evidence_source == "network" and not state.dom_evidence)
+
+
+def _promoted_state_text(state: InteractionStateRecord) -> str:
+    product_name = state.model_name or state.model_id or "Product"
+    if state.option_group == "deposit" and state.price:
+        return f"{product_name} deposit amount is {state.price} from network payload."
+    group = state.option_group.replace("_", " ")
+    label = state.option_label
+    changed_panels = ", ".join(panel.replace("_", " ") for panel in state.changed_panels)
+    subject = f"{product_name} selected {group} {label}"
+    details: list[str] = []
+    if state.price:
+        price_panel = (
+            "right-panel visible price"
+            if "right_panel" in state.changed_panels
+            else "visible price"
+        )
+        details.append(f"{price_panel} to {state.price}")
+    if state.specifications:
+        specs = "; ".join(
+            f"{key.replace('_', ' ')} {value}"
+            for key, value in sorted(state.specifications.items())
+        )
+        details.append(f"API-backed specifications: {specs}")
+    if state.image_url:
+        image_panel = (
+            "center product image"
+            if "center_visual" in state.changed_panels
+            else "visible product image"
+        )
+        details.append(f"{image_panel} to {state.image_url}")
+    if state.availability != "unknown":
+        details.append(f"availability to {state.availability}")
+    if (
+        not state.price
+        and not state.specifications
+        and not state.image_url
+        and state.dom_evidence.get("after_snapshot_text")
+    ):
+        details.append(
+            f"visible text after interaction: {state.dom_evidence['after_snapshot_text']}"
+        )
+    if not details:
+        details.append("visible dynamic facts")
+    panel_phrase = f" across {changed_panels}" if changed_panels else ""
+    return f"{subject} changes{panel_phrase}: {', '.join(details)}."
 
 
 def _image_snapshot_ref(state: InteractionStateRecord) -> str | None:
@@ -218,6 +468,39 @@ def _interaction_entity_names(states: Iterable[InteractionStateRecord]) -> list[
         seen.add(key)
         names.append(name)
     return names
+
+
+def _attribute_group_for_state(state: InteractionStateRecord) -> str:
+    if state.price or state.specifications:
+        return "pricing_specs"
+    return "product_variant"
+
+
+def _deposit_amount_for_state(state: InteractionStateRecord) -> str | None:
+    if state.option_group == "deposit":
+        return state.price
+    value = state.specifications.get("deposit_amount")
+    return value or None
+
+
+def extract_specifications_from_text(text: str) -> dict[str, str]:
+    """Extract canonical product specs from visible modal/table text."""
+
+    lines = [line for line in (_clean_text(part) for part in text.splitlines()) if line]
+    specs: dict[str, str] = {}
+    for index, line in enumerate(lines):
+        label, value = _split_spec_line(line)
+        if label and value:
+            canonical_key = _canonical_spec_key(label)
+            spec_text = _scalar_spec_text(value)
+            if canonical_key is not None and spec_text:
+                specs.setdefault(canonical_key, spec_text)
+        canonical_line = _canonical_spec_key(line)
+        if canonical_line is not None and index + 1 < len(lines):
+            spec_text = _scalar_spec_text(lines[index + 1])
+            if spec_text:
+                specs.setdefault(canonical_line, spec_text)
+    return _clean_specifications(specs)
 
 
 class _InteractionHtmlParser(HTMLParser):
@@ -316,7 +599,8 @@ class _InteractionHtmlParser(HTMLParser):
     def _finish_control(self) -> None:
         if self._current_control is None:
             return
-        attrs = dict(self._current_control["attrs"])
+        raw_attrs = self._current_control["attrs"]
+        attrs = dict(raw_attrs) if isinstance(raw_attrs, Mapping) else {}
         self._current_control = None
         text = _clean_text(" ".join(self._control_parts))
         self._control_parts = []
@@ -420,15 +704,30 @@ def _state_from_payload_candidate(
     fallback_model_id: str | None,
     captured_at: str,
 ) -> InteractionStateRecord | None:
-    price = _value_by_keys(candidate, ("price", "displayPrice", "finalPrice", "salePrice"))
+    deposit_amount = _deposit_amount_from_candidate(candidate)
+    price = deposit_amount or _value_by_keys(
+        candidate, ("price", "displayPrice", "finalPrice", "salePrice")
+    )
     image_url = _value_by_keys(candidate, ("image", "imageUrl", "image_url", "thumbnail", "url"))
     label = _value_by_keys(candidate, ("color", "colorName", "optionLabel", "variantName", "name"))
-    group = _value_by_keys(candidate, ("optionGroup", "group", "type", "category")) or "variant"
+    specifications = _specifications_from_candidate(candidate)
+    if deposit_amount:
+        specifications = {**specifications, "deposit_amount": deposit_amount}
+    group = _value_by_keys(candidate, ("optionGroup", "group", "type", "category")) or (
+        "deposit" if deposit_amount else "specifications" if specifications else "variant"
+    )
     model_name = _value_by_keys(candidate, ("modelName", "productName", "model", "title"))
-    candidate_model_id = _value_by_keys(candidate, ("modelId", "productId", "sku"))
-    if price is None and image_url is None:
+    candidate_model_id = _model_id_from_candidate(candidate)
+    model_name = model_name or _model_name_from_model_id(candidate_model_id or fallback_model_id)
+    if price is None and image_url is None and not specifications:
         return None
-    option_label = label or model_name or candidate_model_id or "network_state"
+    option_label = (
+        label
+        or model_name
+        or candidate_model_id
+        or ("deposit_amount" if deposit_amount else None)
+        or ("api_specs" if specifications else "network_state")
+    )
     normalized_image = urljoin(final_url or requested_url, image_url) if image_url else None
     return _build_state(
         requested_url=requested_url,
@@ -438,6 +737,7 @@ def _state_from_payload_candidate(
         option_group=slugify(group) or "variant",
         option_label=option_label,
         price=price,
+        specifications=specifications,
         image_url=normalized_image,
         availability=_availability_from_candidate(candidate),
         evidence_source="network",
@@ -461,12 +761,24 @@ def _build_state(
     evidence_source: EvidenceSource,
     price_source: PriceSource,
     captured_at: str,
+    specifications: dict[str, str] | None = None,
     dom_evidence: dict[str, str] | None = None,
     network_evidence: dict[str, str] | None = None,
 ) -> InteractionStateRecord:
     normalized_group = slugify(option_group) or "variant"
     normalized_label = normalize_space(option_label) or "unknown"
     variant_options = {} if normalized_group == "default" else {normalized_group: normalized_label}
+    normalized_specs = _clean_specifications(specifications or {})
+    changed_fields: list[str] = []
+    if evidence_source == "network":
+        if price:
+            changed_fields.append("price")
+        if normalized_specs:
+            changed_fields.append("specifications")
+        if image_url:
+            changed_fields.append("image")
+        if availability != "unknown":
+            changed_fields.append("availability")
     state_key = "|".join(
         part or ""
         for part in (
@@ -476,6 +788,7 @@ def _build_state(
             normalized_group,
             normalized_label,
             normalize_space(price or ""),
+            json.dumps(normalized_specs, sort_keys=True, ensure_ascii=True),
             normalize_space(image_url or ""),
         )
     )
@@ -491,10 +804,12 @@ def _build_state(
         price=normalize_space(price or "") or None,
         currency=_currency_from_price(price),
         price_source=price_source,
+        specifications=normalized_specs,
         image_url=image_url,
         availability=availability,
         evidence_source=evidence_source,
         captured_at=captured_at,
+        changed_fields=changed_fields,
         dom_evidence=dom_evidence or {},
         network_evidence=network_evidence or {},
     )
@@ -537,22 +852,189 @@ def _looks_like_variant_payload(value: Mapping[str, object]) -> bool:
             "imageurl",
             "image_url",
             "thumbnail",
+            "depositamount",
         }
     )
-    has_label = bool(
-        lowered_keys
-        & {
-            "color",
-            "colorname",
-            "optionlabel",
-            "variantname",
-            "name",
-            "modelname",
-            "productname",
-            "sku",
-        }
+    has_deposit = _deposit_amount_from_candidate(value) is not None
+    has_specs = any(_canonical_spec_key(str(key)) is not None for key in value) or bool(
+        lowered_keys & {key.lower() for key in _SPEC_CONTAINER_KEYS}
     )
-    return has_fact and has_label
+    has_label = (
+        bool(
+            lowered_keys
+            & {
+                "color",
+                "colorname",
+                "optionlabel",
+                "variantname",
+                "name",
+                "modelname",
+                "productname",
+                "modelid",
+                "productid",
+                "sku",
+            }
+        )
+        or _model_id_from_candidate(value) is not None
+    )
+    return (has_fact and has_label) or (has_specs and has_label) or (has_deposit and has_label)
+
+
+def _specifications_from_candidate(candidate: Mapping[str, object]) -> dict[str, str]:
+    specs: dict[str, str] = {}
+    _collect_direct_spec_keys(candidate, specs)
+    for container_key in _SPEC_CONTAINER_KEYS:
+        raw = _raw_by_key(candidate, container_key)
+        if raw is not None:
+            _collect_spec_items(raw, specs)
+    return _clean_specifications(specs)
+
+
+def _collect_direct_spec_keys(
+    value: Mapping[str, object],
+    specs: dict[str, str],
+) -> None:
+    for key, raw in value.items():
+        if len(specs) >= _MAX_SPEC_FIELDS:
+            return
+        canonical_key = _canonical_spec_key(str(key))
+        if canonical_key is None:
+            continue
+        text = _scalar_spec_text(raw)
+        if text:
+            specs.setdefault(canonical_key, text)
+
+
+def _collect_spec_items(value: object, specs: dict[str, str]) -> None:
+    if len(specs) >= _MAX_SPEC_FIELDS:
+        return
+    if isinstance(value, Mapping):
+        label = _value_by_keys(value, _SPEC_LABEL_KEYS)
+        spec_value = _value_by_keys(value, _SPEC_VALUE_KEYS)
+        if label and spec_value:
+            canonical_key = _canonical_spec_key(label)
+            if canonical_key is not None:
+                specs.setdefault(canonical_key, spec_value)
+        for key, raw in value.items():
+            if len(specs) >= _MAX_SPEC_FIELDS:
+                return
+            canonical_key = _canonical_spec_key(str(key))
+            if canonical_key is not None:
+                text = _scalar_spec_text(raw)
+                if text:
+                    specs.setdefault(canonical_key, text)
+            elif str(key).lower() in {item.lower() for item in _SPEC_CONTAINER_KEYS}:
+                _collect_spec_items(raw, specs)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            _collect_spec_items(item, specs)
+
+
+def _clean_specifications(value: Mapping[str, str]) -> dict[str, str]:
+    cleaned: dict[str, str] = {}
+    for key, raw in sorted(value.items()):
+        if len(cleaned) >= _MAX_SPEC_FIELDS:
+            break
+        canonical_key = _canonical_spec_key(key)
+        if canonical_key is None:
+            continue
+        text = _scalar_spec_text(raw)
+        if text:
+            cleaned.setdefault(canonical_key, text)
+    return cleaned
+
+
+def _canonical_spec_key(value: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9]+", "_", _ascii_fold(value)).strip("_")
+    if not normalized:
+        return None
+    exact_aliases = {
+        "range": "driving_range",
+        "range_km": "driving_range",
+        "driving_range": "driving_range",
+        "battery": "battery_capacity",
+        "battery_capacity": "battery_capacity",
+        "battery_kwh": "battery_capacity",
+        "seats": "seats",
+        "seat": "seats",
+        "number_of_seats": "seats",
+        "power": "power",
+        "max_power": "power",
+        "torque": "torque",
+        "max_torque": "torque",
+        "dimensions": "dimensions",
+        "dimension": "dimensions",
+        "length": "length",
+        "width": "width",
+        "height": "height",
+        "wheelbase": "wheelbase",
+        "charging_time": "charging_time",
+        "fast_charging_time": "charging_time",
+        "acceleration": "acceleration",
+        "top_speed": "top_speed",
+        "drivetrain": "drivetrain",
+        "ground_clearance": "ground_clearance",
+        "cargo_volume": "cargo_volume",
+        "deposit_amount": "deposit_amount",
+        "deposit": "deposit_amount",
+    }
+    if normalized in exact_aliases:
+        return exact_aliases[normalized]
+    contains_aliases = (
+        (("quang_duong", "tam_hoat_dong", "driving_range", "range"), "driving_range"),
+        (("dung_luong_pin", "battery_capacity", "battery", "pin"), "battery_capacity"),
+        (("so_cho_ngoi", "number_of_seats", "seats"), "seats"),
+        (("cong_suat", "max_power", "power"), "power"),
+        (("mo_men", "torque"), "torque"),
+        (("kich_thuoc", "dimensions", "dai_rong_cao"), "dimensions"),
+        (("chieu_dai", "length"), "length"),
+        (("chieu_rong", "width"), "width"),
+        (("chieu_cao", "height"), "height"),
+        (("chieu_dai_co_so", "wheelbase"), "wheelbase"),
+        (("thoi_gian_sac", "charging_time", "charge_time"), "charging_time"),
+        (("tang_toc", "acceleration"), "acceleration"),
+        (("toc_do_toi_da", "top_speed"), "top_speed"),
+        (("he_dan_dong", "drivetrain"), "drivetrain"),
+        (("khoang_sang_gam", "ground_clearance"), "ground_clearance"),
+        (("the_tich_khoang_chua_do", "cargo", "luggage"), "cargo_volume"),
+        (("deposit", "dat_coc", "tien_dat_coc"), "deposit_amount"),
+    )
+    for needles, canonical_key in contains_aliases:
+        if any(needle in normalized for needle in needles):
+            return canonical_key
+    return None
+
+
+def _scalar_spec_text(value: object) -> str | None:
+    if not isinstance(value, str | int | float | bool):
+        return None
+    text = normalize_space(str(value))
+    if not text or text == "[redacted]" or len(text) > 160:
+        return None
+    lowered = text.lower()
+    if lowered.startswith(("http://", "https://")):
+        return None
+    return text
+
+
+def _raw_by_key(value: Mapping[str, object], key: str) -> object | None:
+    lowered = {item.lower(): item for item in value}
+    actual_key = lowered.get(key.lower())
+    if actual_key is None:
+        return None
+    return value.get(actual_key)
+
+
+def _split_spec_line(line: str) -> tuple[str | None, str | None]:
+    for separator in (":", "\t", " - ", " \u2013 "):
+        if separator not in line:
+            continue
+        left, right = line.split(separator, 1)
+        left = _clean_text(left)
+        right = _clean_text(right)
+        if left and right:
+            return left, right
+    return None, None
 
 
 def _value_by_keys(value: Mapping[str, object], keys: tuple[str, ...]) -> str | None:
@@ -566,6 +1048,51 @@ def _value_by_keys(value: Mapping[str, object], keys: tuple[str, ...]) -> str | 
             text = normalize_space(str(raw))
             if text:
                 return text
+    return None
+
+
+def _deposit_amount_from_candidate(candidate: Mapping[str, object]) -> str | None:
+    raw = _raw_by_key(candidate, "depositAmount")
+    if isinstance(raw, Mapping):
+        amount = _value_by_keys(raw, ("depositAmount", "amount", "value", "formatted"))
+        if amount:
+            return _format_vnd_amount(amount)
+    amount = _value_by_keys(candidate, ("depositAmount", "deposit_amount", "deposit"))
+    if amount:
+        return _format_vnd_amount(amount)
+    return None
+
+
+def _model_id_from_candidate(candidate: Mapping[str, object]) -> str | None:
+    model_id = _value_by_keys(candidate, ("modelId", "modelID", "productId", "sku"))
+    if model_id:
+        return model_id
+    for nested_key in ("querystring", "queryString", "query"):
+        raw = _raw_by_key(candidate, nested_key)
+        if isinstance(raw, Mapping):
+            model_id = _value_by_keys(raw, ("modelId", "modelID", "productId", "sku"))
+            if model_id:
+                return model_id
+    return None
+
+
+def _format_vnd_amount(value: str) -> str:
+    text = normalize_space(value)
+    if not text:
+        return text
+    if re.search(r"\b(?:vnd|vn\u0111|\u0111|\u20ab)\b", text, re.IGNORECASE):
+        return text
+    if re.fullmatch(r"\d+(?:[.,]\d+)*", text):
+        return f"{text} VND"
+    return text
+
+
+def _model_name_from_model_id(model_id: str | None) -> str | None:
+    if not model_id:
+        return None
+    match = re.search(r"Products-Car-VF(\d+)", model_id, re.IGNORECASE)
+    if match is not None:
+        return f"VF {match.group(1)}"
     return None
 
 
@@ -696,49 +1223,8 @@ def _clean_text(value: str) -> str:
 
 
 def _ascii_fold(value: str) -> str:
-    folded = value.lower()
-    replacements = {
-        "\u0111": "d",
-        "\u0110": "d",
-        "\u00e1": "a",
-        "\u00e0": "a",
-        "\u1ea3": "a",
-        "\u00e3": "a",
-        "\u1ea1": "a",
-        "\u1eaf": "a",
-        "\u1eb1": "a",
-        "\u1eb3": "a",
-        "\u1eb5": "a",
-        "\u1eb7": "a",
-        "\u1ea5": "a",
-        "\u1ea7": "a",
-        "\u1ea9": "a",
-        "\u1eab": "a",
-        "\u1ead": "a",
-        "\u00e9": "e",
-        "\u00e8": "e",
-        "\u1ebb": "e",
-        "\u1ebd": "e",
-        "\u1eb9": "e",
-        "\u00ed": "i",
-        "\u00ec": "i",
-        "\u1ec9": "i",
-        "\u0129": "i",
-        "\u1ecb": "i",
-        "\u00f3": "o",
-        "\u00f2": "o",
-        "\u1ecf": "o",
-        "\u00f5": "o",
-        "\u1ecd": "o",
-        "\u00fa": "u",
-        "\u00f9": "u",
-        "\u1ee7": "u",
-        "\u0169": "u",
-        "\u1ee5": "u",
-    }
-    for source, target in replacements.items():
-        folded = folded.replace(source, target)
-    return folded
+    folded = value.replace("\u0111", "d").replace("\u0110", "D")
+    return unicodedata.normalize("NFKD", folded).encode("ascii", "ignore").decode("ascii").lower()
 
 
 def _utc_now() -> str:
@@ -747,5 +1233,7 @@ def _utc_now() -> str:
 
 __all__ = [
     "build_interaction_chunks",
+    "build_promoted_interaction_chunks",
     "extract_interaction_states_from_html",
+    "extract_specifications_from_text",
 ]

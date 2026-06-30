@@ -95,6 +95,12 @@ def embedding_vectors_from_first_available_client(
         )
 
     attempted = ", ".join(f"{attempt['provider']}/{attempt['model']}" for attempt in attempts)
+    # TODO [dedup_detect/README.md – Fallback status recording]:
+    # When all embedding providers fail, the upload trace should record
+    # `embedding_status="fallback_without_embedding"` in the ingestion trace
+    # metadata so operators can identify sources where Layer 3 was skipped.
+    # The exact and SimHash results are still valid; this note is for auditing.
+    # Reference: dedup_detect/README.md §Integration And Backfill
     raise RuntimeError(f"All embedding providers failed for dedup Layer 3: {attempted}")
 
 

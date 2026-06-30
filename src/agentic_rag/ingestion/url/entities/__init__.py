@@ -5,6 +5,15 @@ from agentic_rag.ingestion.url.entities.extractor import (
     entities_summary,
     extract_entities,
     extract_product_specs,
+    filter_blocks_for_primary_entity,
+    infer_primary_page_entity,
 )
 
-__all__ = ["UrlEntity", "entities_summary", "extract_entities", "extract_product_specs"]
+__all__ = [
+    "UrlEntity",
+    "entities_summary",
+    "extract_entities",
+    "extract_product_specs",
+    "filter_blocks_for_primary_entity",
+    "infer_primary_page_entity",
+]

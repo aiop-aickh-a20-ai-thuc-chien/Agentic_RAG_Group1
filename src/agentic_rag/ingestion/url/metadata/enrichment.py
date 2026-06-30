@@ -6,6 +6,7 @@ import re
 from urllib.parse import urlparse
 
 from agentic_rag.core.contracts import Chunk
+from agentic_rag.ingestion.metadata import normalize_filterable
 from agentic_rag.ingestion.url.chunking import short_hash
 from agentic_rag.ingestion.url.dom import DomBlock, dom_blocks_summary
 from agentic_rag.ingestion.url.entities import (
@@ -34,6 +35,8 @@ def enrich_chunks_with_url_metadata(
     entity_list = entities or []
     block_summary = dom_blocks_summary(blocks)
     entity_summary = entities_summary(entity_list)
+    entity_names = _entity_names(entity_summary)
+    entities_canonical = normalize_filterable(entity_names)
     page_type = _infer_page_type(block_summary, entity_summary)
     source_hash = short_hash(best_url or "")
     page_specs = extract_product_specs(
@@ -71,29 +74,39 @@ def enrich_chunks_with_url_metadata(
                         **schema_metadata,
                         "url": best_url,
                         "domain": _extract_domain(best_url),
+                        "requested_url": original_url or source_url,
+                        "source_url": source_url,
                         "original_url": original_url,
+                        "final_url": final_url,
                         "canonical_url": canonical_url,
                         "language": parsed.metadata.language,
                         "author": parsed.metadata.author,
                         "published_at": parsed.metadata.published_at,
-                        "captured_at": chunk.metadata.get("fetched_at"),
+                        "captured_at": chunk.metadata.get("captured_at")
+                        or chunk.metadata.get("ingestion_at")
+                        or chunk.metadata.get("fetched_at"),
                         "page_type": page_type,
                         "url_source_hash": source_hash,
                         "semantic_block_count": block_summary["semantic_block_count"],
                         "semantic_block_types": block_summary["semantic_block_types"],
+                        "semantic_blocks": [block.model_dump(mode="json") for block in blocks[:20]],
                         "entity_count": entity_summary["entity_count"],
                         "entity_types": entity_summary["entity_types"],
                         "entity_names": entity_summary["entity_names"],
+                        "entities_canonical": entities_canonical,
+                        "url_entities": [
+                            entity.model_dump(mode="json") for entity in entity_list[:20]
+                        ],
                         "entity_type": matched_entity.entity_type if matched_entity else None,
                         "entity_name": matched_entity.entity_name if matched_entity else None,
                         "entity_hash": _entity_hash(matched_entity),
                         "product_specs": product_specs,
                         "product_spec_fields": sorted(product_specs),
-                        "product_model": product_specs.get("model_name"),
-                        "product_price": product_specs.get("price"),
-                        "driving_range": product_specs.get("driving_range"),
-                        "battery_capacity": product_specs.get("battery_capacity"),
-                        "charging_time": product_specs.get("charging_time"),
+                        "product_model": _string_spec(product_specs, "model_name"),
+                        "product_price": _string_spec(product_specs, "price"),
+                        "driving_range": _string_spec(product_specs, "driving_range"),
+                        "battery_capacity": _string_spec(product_specs, "battery_capacity"),
+                        "charging_time": _string_spec(product_specs, "charging_time"),
                         "vehicle_segment": _infer_vehicle_segment(chunk.text, matched_entity),
                         "attribute_group": attribute_group,
                         "is_noise": is_noise,
@@ -118,13 +131,12 @@ def _general_schema_metadata(
 ) -> dict[str, object]:
     """Return Agentic RAG shared metadata aliases proven by URL ingestion."""
 
-    section_path = chunk.metadata.get("section_path")
-    entity_names = entity_summary.get("entity_names")
     metadata: dict[str, object] = {
         "document_type": page_type,
-        "heading": chunk.metadata.get("section"),
-        "breadcrumb": list(section_path) if isinstance(section_path, list) else [],
-        "entities": list(entity_names) if isinstance(entity_names, list) else [],
+        "heading": _page_heading(chunk),
+        "breadcrumb": _breadcrumb_without_leaf(chunk),
+        "entities": _entity_names(entity_summary),
+        "entities_canonical": normalize_filterable(_entity_names(entity_summary)),
     }
     token_count = chunk.metadata.get("chunk_token_count")
     if isinstance(token_count, int):
@@ -161,6 +173,38 @@ def _infer_page_type(
     return "generic"
 
 
+def _entity_names(entity_summary: dict[str, object]) -> list[str]:
+    entity_names = entity_summary.get("entity_names")
+    if not isinstance(entity_names, list):
+        return []
+    output: list[str] = []
+    seen: set[str] = set()
+    for name in entity_names:
+        text = str(name).strip()
+        key = text.casefold()
+        if text and key not in seen:
+            seen.add(key)
+            output.append(text)
+    return output
+
+
+def _page_heading(chunk: Chunk) -> str | None:
+    section_path = chunk.metadata.get("section_path")
+    if isinstance(section_path, list) and len(section_path) >= 2:
+        return str(section_path[-2])
+    section = chunk.metadata.get("section")
+    return str(section) if section is not None else None
+
+
+def _breadcrumb_without_leaf(chunk: Chunk) -> list[str]:
+    section_path = chunk.metadata.get("section_path")
+    if not isinstance(section_path, list):
+        return []
+    if len(section_path) <= 1:
+        return [str(part) for part in section_path]
+    return [str(part) for part in section_path[:-1]]
+
+
 def _extract_domain(url: str | None) -> str | None:
     if not url:
         return None
@@ -189,11 +233,11 @@ def _product_specs_for_chunk(
     chunk: Chunk,
     *,
     entity: UrlEntity | None,
-    page_specs: dict[str, str],
+    page_specs: dict[str, object],
     title: str | None,
     url: str | None,
-) -> dict[str, str]:
-    specs: dict[str, str] = {}
+) -> dict[str, object]:
+    specs: dict[str, object] = {}
     if _should_apply_page_specs(page_specs, entity=entity, url=url):
         specs.update(page_specs)
     if entity is not None:
@@ -205,7 +249,7 @@ def _product_specs_for_chunk(
 
 
 def _should_apply_page_specs(
-    specs: dict[str, str],
+    specs: dict[str, object],
     *,
     entity: UrlEntity | None,
     url: str | None,
@@ -221,7 +265,7 @@ def _should_apply_page_specs(
 
 
 def _should_keep_product_specs(
-    specs: dict[str, str],
+    specs: dict[str, object],
     *,
     entity: UrlEntity | None,
     url: str | None,
@@ -252,7 +296,7 @@ def _infer_attribute_group(
     text: str,
     entity: UrlEntity | None,
     *,
-    product_specs: dict[str, str] | None = None,
+    product_specs: dict[str, object] | None = None,
 ) -> str:
     combined_text = text.casefold()
     if entity is not None:
@@ -279,6 +323,11 @@ def _infer_attribute_group(
     if re.search(r"\b(?:policy|terms|privacy|chinh sach|dieu khoan)\b", combined_text, re.I):
         return "policy_terms"
     return "general"
+
+
+def _string_spec(specs: dict[str, object], key: str) -> str | None:
+    value = specs.get(key)
+    return value if isinstance(value, str) else None
 
 
 def _is_noise_chunk(chunk: Chunk) -> bool:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http.client import IncompleteRead
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -33,6 +34,47 @@ class FetchedPage(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
 
 
+class AcquisitionRecord(BaseModel):
+    """Bounded handoff from navigation/rendering to interaction capture."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    requested_url: str
+    final_url: str
+    rendered_html: str
+    framework_state: dict[str, object] = Field(default_factory=dict)
+    network_payload_refs: tuple[str, ...] = ()
+    readiness_evidence: dict[str, bool] = Field(default_factory=dict)
+    handoff_token: str | None = None
+    html_truncated: bool = False
+
+
+def acquisition_record_from_fetched_page(
+    page: FetchedPage,
+    *,
+    requested_url: str | None = None,
+    framework_state: dict[str, object] | None = None,
+    network_payload_refs: tuple[str, ...] = (),
+    readiness_evidence: dict[str, bool] | None = None,
+    handoff_token: str | None = None,
+    max_html_chars: int = 2_000_000,
+) -> AcquisitionRecord:
+    """Create a bounded record without flattening independent page evidence."""
+
+    if max_html_chars <= 0:
+        raise ValueError("max_html_chars must be greater than zero.")
+    return AcquisitionRecord(
+        requested_url=requested_url or page.original_url or page.url,
+        final_url=page.url,
+        rendered_html=page.html[:max_html_chars],
+        framework_state=framework_state or {},
+        network_payload_refs=network_payload_refs,
+        readiness_evidence=readiness_evidence or {},
+        handoff_token=handoff_token,
+        html_truncated=len(page.html) > max_html_chars,
+    )
+
+
 def fetch_url(
     url: str,
     *,
@@ -56,6 +98,8 @@ def fetch_url(
         raise RuntimeError(f"Failed to fetch URL {normalized_url}: HTTP {exc.code}") from exc
     except URLError as exc:
         raise RuntimeError(f"Failed to fetch URL {normalized_url}: {exc.reason}") from exc
+    except (IncompleteRead, TimeoutError) as exc:
+        raise RuntimeError(f"Failed to fetch URL {normalized_url}: {exc}") from exc
 
     return FetchedPage(
         html=content.decode(charset, errors="replace"),
@@ -94,7 +138,9 @@ def reject_pdf_content_type(content_type: str | None) -> None:
 
 __all__ = [
     "DEFAULT_REQUEST_HEADERS",
+    "AcquisitionRecord",
     "FetchedPage",
+    "acquisition_record_from_fetched_page",
     "fetch_url",
     "reject_pdf_content_type",
     "reject_pdf_url",

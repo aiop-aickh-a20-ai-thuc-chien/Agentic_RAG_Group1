@@ -83,6 +83,55 @@ def test_chunk_markdown_by_sections_splits_numbered_subsections() -> None:
     assert "Warranty covers the battery pack for long ownership periods." in chunks[0].text
 
 
+def test_url_chunking_demotes_price_only_pseudo_heading() -> None:
+    chunks = chunk_markdown_by_sections(
+        "# Xe điện VinFast VF 9\n\n"
+        "Sự Lựa Chọn Của Người Thành Đạt, Tiên Phong\n"
+        "Giá bán từ\n"
+        "1.499.000.000 VNĐ\n"
+        "1.444.150.000 VNĐ*\n"
+        "1.699.000.000 VNĐ\n"
+        "- Giá xe đã bao gồm VAT.\n"
+        "- Giá xe chưa bao gồm tùy chọn ghế cơ trưởng.\n"
+        "- (*) Mức giá ưu đãi mang tính chất tham khảo.\n",
+        max_chars=220,
+    )
+
+    assert "1.699.000.000 VNĐ" not in [chunk.section for chunk in chunks]
+    assert all(chunk.section == "Xe điện VinFast VF 9" for chunk in chunks)
+    assert any("1.699.000.000 VNĐ" in chunk.text for chunk in chunks)
+    assert not any(chunk.text.startswith("# 1.699.000.000 VNĐ") for chunk in chunks)
+    assert any(
+        chunk.metadata.get("demoted_value_heading") == "1.699.000.000 VNĐ" for chunk in chunks
+    )
+
+
+def test_vehicle_model_headings_remain_atomic_chunks() -> None:
+    chunks = chunk_markdown_by_sections(
+        "# Dat coc mua xe o to dien VinFast online\n\n"
+        "## VF 3\n\n"
+        "- modelId: Products-Car-VF3\n"
+        "- Cong suat toi da: 30 kW\n"
+        "- Dung luong pin kha dung: 18,64 kWh\n\n"
+        "## VF 5\n\n"
+        "- modelId: Products-Car-VF5\n"
+        "- Quang duong di chuyen: 326 km\n\n"
+        "## VF 6\n\n"
+        "- modelId: Products-Car-VF6\n"
+        "- Quang duong di chuyen: 399 km\n",
+        max_chars=900,
+    )
+
+    sections = [chunk.section for chunk in chunks]
+    assert "VF 3" in sections
+    assert "VF 5" in sections
+    assert "VF 6" in sections
+    assert any("Products-Car-VF3" in chunk.text for chunk in chunks if chunk.section == "VF 3")
+    assert not any(
+        "Products-Car-VF3" in chunk.text and "Products-Car-VF5" in chunk.text for chunk in chunks
+    )
+
+
 def test_chunk_input_range_maps_to_body_not_heading_prefix() -> None:
     # Each section body must be > DEFAULT_HIERARCHICAL_TARGET_MIN (512 chars) to avoid coalescing
     body_1 = "Xe điện VinFast với công nghệ tiên tiến mang lại trải nghiệm lái xe tuyệt vời. " * 8

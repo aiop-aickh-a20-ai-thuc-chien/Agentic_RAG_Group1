@@ -1,5 +1,41 @@
 # Worklog
 
+## 2026-06-26 - GraphRAG Presentation Showcase Creation
+
+### Completed
+
+- **Created GraphRAG Interactive Presentation**:
+  - Developed [presentation_graphrag.html](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/presentation_graphrag.html) to showcase the end-to-end GraphRAG design in this workspace.
+  - Styled with a premium dark cyber theme (neon green/blue/purple gradients, custom Outfit/monospace fonts, glassmorphism card panels, slide progress indicator, and responsive grid layouts).
+  - Built a live interactive Graph Simulator in JavaScript/CSS directly inside Slide 4. Users can click buttons to simulate **1-Hop** (direct neighbors) and **2-Hop** BFS expansion starting from a seed entity node (`VF 8`), showing how the graph dynamically connects entities like `PIN LFP`, `SẠC 7.4KW`, `CATL`, etc.
+  - Documented Offline KG Construction including LLM structured relation extraction (`(head, relation, tail, strength)` payload) fallback to Co-occurrence graph from `entities_canonical` in chunks, normalized via `normalize_entity()`.
+  - Documented Online Graph-Enhanced Retrieval using BFS expansion inside `_entity_prefilter_for()`, fused via RRF (Reciprocal Rank Fusion) with BM25 and Dense Qdrant/pgvector search pathways, and reranked using Cross-Encoders.
+  - Outlined RAG Integration and Guardrails (LangGraph, Citation validation, LLM-as-judge evaluation, and future roadmap containing HippoRAG PPR and Leiden community clustering).
+
+### Verification
+- Verified HTML structure and interactive script execution on browser.
+
+## 2026-06-25 - GraphRAG System Integration & Reference Documentation
+
+### Completed
+
+- **System Reference Manual & Setup Guides**:
+  - Authored [manual.md](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/docs/manual.md) to serve as the blueprint reference manual for the hybrid GraphRAG + RAG system, detailing directory structures, ingestion block-diagrams, and frontend nav paths.
+  - Developed [neo4j-setup-guide.md](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/docs/neo4j-setup-guide.md) mapping out Docker local deployments, Neo4j Desktop configurations, AuraDB Cloud instance options, and Python connector configurations.
+- **GraphStore Implementation**:
+  - Built the core [graph_store.py](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/retrieval/graph_store.py) backend.
+  - Implemented dual backends: Local JSON adjacency list (`storage/local_pdf/graph_store.json`) and scalable Neo4j Graph Database Bolt connection (`neo4j` Python driver).
+  - Programmed relationship extraction matching: reads chunk metadata `relations` list (populated by LLM parser) or automatically builds fallback co-occurrence edges between entities in `entities_canonical`.
+  - Implemented BFS neighbors lookup `get_neighbors(seeds, max_depth)` to traverse connections in real-time.
+  - Created Neo4j sync script in `scripts/sync_to_neo4j.py` to synchronize ingested vector storage items into Neo4j nodes/relationships.
+- **Retrieval and Boosting Integration**:
+  - Integrated `_entity_prefilter_for` query expansion in [search.py](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/retrieval/search.py) to automatically load `GraphStore` neighbors and expand seed filters.
+  - Mapped toggles (`RETRIEVAL_GRAPH_ENABLED` and `RETRIEVAL_GRAPH_HOPS`) inside retrieve nodes of LangGraph.
+  - Created [boosting.py](file:///e:/VINSMART_Future_Thuc_Tap/Agentic_RAG_Project/Agentic_RAG_Group1/src/agentic_rag/retrieval/boosting.py) for metadata trust score adjustments.
+
+### Verification
+- Verified local unit tests and database connection connectivity.
+
 ## 2026-06-22 - Rule-Based Metadata and V2 Deduplication / LLM Review
 
 ### Completed

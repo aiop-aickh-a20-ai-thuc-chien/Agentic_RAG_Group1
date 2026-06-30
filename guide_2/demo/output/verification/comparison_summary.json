@@ -1,0 +1,48 @@
+{
+  "ground_truth": {
+    "characters": 9169,
+    "words": 1715,
+    "lines": 235
+  },
+  "actual": {
+    "characters": 2992,
+    "words": 656,
+    "lines": 125
+  },
+  "evidence_corpus": {
+    "characters": 98917221,
+    "words": 321532,
+    "artifact_count": 9,
+    "artifact_paths": [
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/chunks.jsonl",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/cleaned.html",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/extracted.md",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/manifest.json",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/parsed.md",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/parsed_sections.txt",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/quality.json",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/source.html",
+      "guide_2/demo/output/artifacts/artifacts/https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products_2a7cf685fe11/url-ingestion/visual_semantics.json"
+    ]
+  },
+  "text_similarity_ratio": 0.019,
+  "source_url_routing": {
+    "url": "https://shop.vinfastauto.com/vn_vi/dat-coc-o-to-dien-vinfast.html?modelId=Products-Car-VF9",
+    "path": "/vn_vi/dat-coc-o-to-dien-vinfast.html",
+    "query_params": {
+      "modelId": "Products-Car-VF9"
+    },
+    "primary_routing_param": "modelId",
+    "primary_model_id": "Products-Car-VF9",
+    "model_id_present_in_actual_markdown": false,
+    "model_id_present_in_evidence_corpus": true,
+    "model_id_present_in_ground_truth": true
+  },
+  "structured_ground_truth": {
+    "json_path": "guide_2\\ground_truth\\https-shop-vinfastauto-com-vn-vi-dat-coc-o-to-dien-vinfast-html-modelid-products-car-VF9\\vf9_ground_truth.json",
+    "checked_terms": 243,
+    "covered_terms": 204,
+    "missing_terms": 39,
+    "coverage_ratio": 0.8395
+  }
+}

@@ -60,6 +60,13 @@ class MetadataExtractionInput(BaseModel):
     source_hint: str | None = None  # file_name or url
 
 
+class RelationTriple(BaseModel):
+    head: str
+    relation: str
+    tail: str
+    strength: float = 1.0
+
+
 class LLMExtractedMetadata(BaseModel):
     """⚠️ LLM Extract OUTPUT schema — the ``[L]`` subset ONLY (not ChunkMetadata).
 
@@ -69,6 +76,7 @@ class LLMExtractedMetadata(BaseModel):
     - ``keywords``      : salient keywords                         (retrieval)
     - ``questions``     : questions this chunk can answer          (retrieval)
     - ``entities``      : named entities mentioned                 (retrieval)
+    - ``relations``     : extracted relationship triples           (retrieval/graph)
     - ``document_type`` : enum in DOCUMENT_TYPE_VALUES             (filter)
     - ``language``      : enum in LANGUAGE_VALUES                  (filter)
     - ``quality_score`` : 0.0-1.0 self-contained/usefulness rating (ranking)
@@ -80,6 +88,7 @@ class LLMExtractedMetadata(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     questions: list[str] = Field(default_factory=list)
     entities: list[str] = Field(default_factory=list)
+    relations: list[RelationTriple] = Field(default_factory=list)
     document_type: str = DEFAULT_DOCUMENT_TYPE
     language: str = DEFAULT_LANGUAGE
     quality_score: float | None = None
@@ -110,6 +119,20 @@ class LLMExtractedMetadata(BaseModel):
                 seen.add(key)
                 cleaned.append(text)
         return cleaned[:MAX_LIST_ITEMS]
+
+    @field_validator("relations", mode="before")
+    @classmethod
+    def _coerce_relations(cls, value: object) -> list[RelationTriple]:
+        if not isinstance(value, list):
+            return []
+        out = []
+        for item in value:
+            if isinstance(item, dict):
+                try:
+                    out.append(RelationTriple.model_validate(item))
+                except Exception:
+                    continue
+        return out
 
     @field_validator("document_type", mode="before")
     @classmethod
@@ -186,6 +209,14 @@ def build_extraction_prompt(payload: MetadataExtractionInput) -> str:
         f'  "keywords": ["tối đa {MAX_LIST_ITEMS} từ khóa nổi bật"],',
         '  "questions": ["2-4 câu hỏi mà đoạn này trả lời được"],',
         '  "entities": ["tên riêng: sản phẩm, model, tổ chức, địa điểm, chính sách"],',
+        '  "relations": [',
+        '    {',
+        '      "head": "tên thực thể nguồn, viết hoa (ví dụ: VF 8)",',
+        '      "relation": "mối quan hệ ngắn gọn (ví dụ: sử dụng)",',
+        '      "tail": "tên thực thể đích, viết hoa (ví dụ: PIN LFP)",',
+        '      "strength": 5.0',
+        '    }',
+        '  ],',
         f'  "document_type": "một trong: {document_types}",',
         f'  "language": "một trong: {languages}",',
         '  "quality_score": 0.0',
@@ -194,9 +225,12 @@ def build_extraction_prompt(payload: MetadataExtractionInput) -> str:
         "",
         "<instructions>",
         "- Chỉ dùng thông tin trong <content>; <context> chỉ để định hướng.",
-        "- Viết summary/keywords/questions bằng đúng ngôn ngữ của nội dung.",
+        "- Viết summary/keywords/questions/relations bằng đúng ngôn ngữ của nội dung.",
         "- document_type và language phải thuộc tập giá trị cho phép;",
         '  nếu không chắc, dùng "unknown".',
+        "- relations: trích xuất các quan hệ rõ ràng giữa các thực thể vừa tìm được.",
+        "  Cả head và tail phải là các thực thể trong danh sách 'entities'.",
+        "  relation mô tả ngắn bằng tiếng Việt. strength là số thực từ 1.0 đến 10.0.",
         "- quality_score: số thực 0.0-1.0 — đoạn càng tự chứa, rõ ràng và",
         "  nhiều thông tin hữu ích cho việc trả lời thì điểm càng cao.",
         "- Trả về JSON thuần: KHÔNG markdown, KHÔNG giải thích, KHÔNG code fence.",
@@ -269,6 +303,7 @@ def apply_extracted_metadata(
     metadata["keywords"] = list(extracted.keywords)
     metadata["questions"] = list(extracted.questions)
     metadata["entities"] = list(extracted.entities)
+    metadata["relations"] = [r.model_dump() for r in extracted.relations]
     metadata["document_type"] = extracted.document_type
     metadata["language"] = extracted.language
     metadata["quality_score"] = extracted.quality_score

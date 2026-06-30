@@ -1,0 +1,19 @@
+=== Chunks Search Results ===
+
+Scanning: e:\VINSMART_Future_Thuc_Tap\Agentic_RAG_Project\Agentic_RAG_Group1\guide_2\demo\motorcycle\artifacts\https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94\url-ingestion\chunks.jsonl
+Scanned 151 chunks. Found 0 matches.
+
+Scanning: e:\VINSMART_Future_Thuc_Tap\Agentic_RAG_Project\Agentic_RAG_Group1\guide_2\demo\motorcycle\artifacts\https-shop-vinfastauto-com-vn-vi-dat-mua-xe-may-dien-vinfast_dd5430051b94\url-ingestion-interactions\chunks.jsonl
+
+Chunk 10 matched terms ['Evo']:
+  ID: url_interaction_dd5430051b94_0010
+  Section: interaction_states
+  Text: Unknown product - variant: Evo 200 - image: https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dw747ef047/images/productScooter/Products-Scooter-EVO200.png
+------------------------------------------------------------
+
+Chunk 11 matched terms ['Evo', 'Lite']:
+  ID: url_interaction_dd5430051b94_0011
+  Section: interaction_states
+  Text: Unknown product - variant: Evo 200 Lite - image: https://shop.vinfastauto.com/on/demandware.static/-/Sites-app_vinfast_vn-Library/default/dwa5b930c1/images/productScooter/Products-Scooter-EVO200-LITE.png
+------------------------------------------------------------
+Scanned 11 chunks. Found 2 matches.

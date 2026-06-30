@@ -7,7 +7,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from agentic_rag.ingestion.dedup_detect.models import DedupDocument, DuplicateMatch
-from agentic_rag.ingestion.dedup_detect.normalization import normalize_text
+from agentic_rag.ingestion.dedup_detect.normalization import dedup_text, normalize_text
 
 
 def sha256_fingerprint(text: str) -> str:
@@ -22,7 +22,10 @@ def find_exact_duplicates(documents: Iterable[DedupDocument]) -> list[DuplicateM
 
     by_fingerprint: dict[str, list[DedupDocument]] = defaultdict(list)
     for document in documents:
-        by_fingerprint[sha256_fingerprint(document.text)].append(document)
+        fingerprint = document.metadata.get("dedupe_hash")
+        if not fingerprint:
+            fingerprint = sha256_fingerprint(dedup_text(document))
+        by_fingerprint[fingerprint].append(document)
 
     matches: list[DuplicateMatch] = []
     for fingerprint, group in sorted(by_fingerprint.items()):

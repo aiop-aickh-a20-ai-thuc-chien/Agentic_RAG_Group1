@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from agentic_rag.ingestion.metadata import ChunkMetadata
 
@@ -34,6 +34,31 @@ class Chunk(_ContractModel):
     chunk_id: str
     text: str
     metadata: ChunkMetadata = Field(default_factory=ChunkMetadata)
+
+    @field_serializer("metadata", mode="wrap")
+    def serialize_metadata(self, v: Any, handler: Any) -> Any:
+        if isinstance(v, dict):
+            try:
+                v_copy = dict(v)
+                list_fields = {
+                    "product_model",
+                    "topic_tags",
+                    "keywords",
+                    "questions",
+                    "entities",
+                    "entities_canonical",
+                }
+                for field in list_fields:
+                    if field in v_copy:
+                        val = v_copy[field]
+                        if isinstance(val, str):
+                            v_copy[field] = [val] if val.strip() else []
+                        elif val is None:
+                            v_copy[field] = []
+                return handler(ChunkMetadata(**v_copy))
+            except Exception:
+                return handler(v)
+        return handler(v)
 
 
 class SearchResult(_ContractModel):
@@ -188,6 +213,7 @@ class LLMCompletionInput(_ContractModel):
     prompt: str
     system_message: str
     temperature: float = 0.0
+    images: list[str] = Field(default_factory=list)
 
 
 class LLMCompletionOutput(_ContractModel):
