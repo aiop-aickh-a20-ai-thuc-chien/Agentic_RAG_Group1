@@ -7,12 +7,21 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from agentic_rag.agent.clarification import (
+    build_clarification_question,
+    build_pending_clarification,
+    detect_entities,
+    detect_intents,
+    resolve_clarification_reply,
+    should_clarify,
+)
 from agentic_rag.agent.grading import (
     preprocess_query,
     transform_query,
 )
 from agentic_rag.agent.node_contracts import (
     CheckAnswerNodeOutput,
+    ClarifyQuestionNodeOutput,
     GenerateNodeOutput,
     PreprocessNodeOutput,
     RerankNodeOutput,
@@ -20,15 +29,25 @@ from agentic_rag.agent.node_contracts import (
     TransformQueryNodeOutput,
 )
 from agentic_rag.agent.state import AgentState
-from agentic_rag.core.contracts import RetrievalInput, SearchResult
+from agentic_rag.core.contracts import Answer, RetrievalInput, SearchResult
 from agentic_rag.core.ports import SourceEvidenceProvider
-from agentic_rag.generation.answering import generate_answer_with_trace
+from agentic_rag.generation.answering import (
+    AnswerDelta,
+    AnswerDone,
+    generate_answer_with_trace,
+    stream_answer,
+)
+from agentic_rag.ingestion.metadata import filter_coverage
+from agentic_rag.ingestion.metadata.entity_normalizer import detect_in_query
+from agentic_rag.language import detect_language
 from agentic_rag.model_runtime.factory import get_llm_client
+from agentic_rag.retrieval.boosting import apply_metadata_boost
 from agentic_rag.retrieval.fusion import (
     build_evidence_context,
     rerank_with_metadata,
     rrf_fusion,
 )
+from agentic_rag.retrieval.search import _entity_prefilter_for
 
 
 def _noop_traceable(*, name: str = "", run_type: str = "chain", **_: object) -> Any:
@@ -76,11 +95,15 @@ def _retrieve_query(
     provider: SourceEvidenceProvider,
     query: str,
     document_ids: list[str] | None,
+    exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
+    boost_query_type: str | None = None,
 ) -> list[SearchResult]:
-    bm25, dense = _search_via_provider(provider, query, document_ids)
-    if not dense:
-        return bm25
-    return _fuse(bm25, dense)
+    bm25, dense = _search_via_provider(
+        provider, query, document_ids, exclude_dedup_layers, entity_filter
+    )
+    fused = bm25 if not dense else _fuse(bm25, dense)
+    return apply_metadata_boost(fused, query_type=boost_query_type)
 
 
 @_ls_traceable(name="retrieve-aggregate", run_type="tool")
@@ -103,12 +126,16 @@ def _generate(
     evidence_context: str,
     evidence_chunks: list[SearchResult],
     original_question: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    lang: str = "vi",
 ) -> Any:
     return generate_answer_with_trace(
         question=question,
         evidence_context=evidence_context,
         evidence_chunks=evidence_chunks,
         original_question=original_question,
+        history=history,
+        lang=lang,
     )
 
 
@@ -131,29 +158,95 @@ def _effective_question(state: AgentState) -> str:
 
 
 def preprocess_node(state: AgentState) -> PreprocessNodeOutput:
-    """Resolve history context and/or decompose multi-intent queries."""
+    """Resolve history context and/or decompose multi-intent queries.
+
+    When the previous bot turn was a clarification question, the rule-based
+    resolver in clarification.py is tried first as a cheap fast-path.  The
+    LLM-based preprocess_query then handles any remaining rewrites.
+    """
     question = state["question"]
     history = state.get("history", [])
-    llm_client = get_llm_client("query_rewrite")
 
+    # Detect language once here; all downstream nodes read from state
+    lang = detect_language(question, history)
+
+    # Fast-path: rule-based resolution of clarification replies (no LLM → full detect)
+    resolved_by_rules = resolve_clarification_reply(question, history, lang=lang)
+    if resolved_by_rules is not None:
+        extra = [resolved_by_rules] if resolved_by_rules != question else []
+        entities = _entity_prefilter_for(resolved_by_rules) or []
+        return PreprocessNodeOutput(
+            rewritten_question=resolved_by_rules,
+            queries_tried=extra,
+            detected_language=lang,
+            filter_entities=entities,
+            filter_entities_map={resolved_by_rules: entities},
+            boost_query_type="unknown",
+            trace=[
+                {
+                    "node": "preprocess",
+                    "type": "clarification_resolved",
+                    "original": question,
+                    "resolved": resolved_by_rules,
+                    "detected_language": lang,
+                }
+            ],
+        )
+
+    llm_client = get_llm_client("query_rewrite")
     result = preprocess_query(question, history, llm_client)
+    boost_query_type = result.get("query_type", "unknown")
 
     if result["type"] == "multi":
         questions: list[str] = result.get("questions", [question])
         if len(questions) > 1:
+            # LLM already extracted per-query entities in preprocess_query.
+            # Fall back to dict detect per sub-query if the LLM omitted the field.
+            llm_ents: list[list[str]] = result.get("entities") or []
+            filter_entities_map = {
+                q: (llm_ents[i] if i < len(llm_ents) else detect_in_query(q))
+                for i, q in enumerate(questions)
+            }
+            all_entities = sorted({e for ents in filter_entities_map.values() for e in ents})
             return PreprocessNodeOutput(
                 rewritten_question=questions[0],
                 queries_tried=[questions[0]],
                 pending_queries=questions[1:],
-                trace=[{"node": "preprocess", "type": "multi", "questions": questions}],
+                detected_language=lang,
+                filter_entities=all_entities,
+                filter_entities_map=filter_entities_map,
+                boost_query_type=boost_query_type,
+                trace=[
+                    {
+                        "node": "preprocess",
+                        "type": "multi",
+                        "questions": questions,
+                        "filter_entities_map": filter_entities_map,
+                        "detected_language": lang,
+                    }
+                ],
             )
 
     rewritten: str = result.get("question", question)
     extra = [rewritten] if rewritten != question else []
+    # LLM already extracted entities in the same call; fall back to full detect
+    # (dict + optional LLM) if the field was omitted or empty.
+    entities = result.get("entities") or _entity_prefilter_for(rewritten) or []
     return PreprocessNodeOutput(
         rewritten_question=rewritten,
         queries_tried=extra,
-        trace=[{"node": "preprocess", "type": "single", "question": rewritten}],
+        detected_language=lang,
+        filter_entities=entities,
+        filter_entities_map={rewritten: entities},
+        boost_query_type=boost_query_type,
+        trace=[
+            {
+                "node": "preprocess",
+                "type": "single",
+                "question": rewritten,
+                "detected_language": lang,
+            }
+        ],
     )
 
 
@@ -166,20 +259,32 @@ def make_retrieve_node(
         queries_this_round = [current_query, *pending]
 
         document_ids = state.get("document_ids")
+        exclude_dedup_layers = state.get("exclude_dedup_layers") or None
+        # Per-query entity filters from preprocess_node. Decomposed queries each
+        # get their own focused filter; fall back to the union list for queries
+        # added later by transform_query_node (not in the map).
+        filter_map = state.get("filter_entities_map") or {}
+        global_filter = state.get("filter_entities") or []
+        entity_filters = [filter_map.get(q, global_filter) for q in queries_this_round]
+
         new_fused: list[SearchResult] = []
         extra_tried: list[str] = []
         per_query: list[dict[str, Any]] = []
         worker_count = min(len(queries_this_round), _configured_retrieve_workers())
+        boost_query_type = state.get("boost_query_type")
         query_results = _retrieve_queries_parallel(
             provider=provider,
             queries=queries_this_round,
             document_ids=document_ids,
             worker_count=worker_count,
+            exclude_dedup_layers=exclude_dedup_layers,
+            entity_filters=entity_filters,
+            boost_query_type=boost_query_type,
         )
-
-        for query_index, (query, results) in enumerate(
-            zip(queries_this_round, query_results, strict=True)
+        for query_index, (query, results, entity_filter) in enumerate(
+            zip(queries_this_round, query_results, entity_filters, strict=True)
         ):
+            coverage = filter_coverage(entity_filter)
             added_chunk_ids: list[str] = []
             for r in results:
                 tagged = _with_retrieval_query_metadata(r, query, query_index)
@@ -191,12 +296,17 @@ def make_retrieve_node(
             per_query.append(
                 {
                     "query": query,
+                    "entity_filter": entity_filter,
+                    "candidate_chunks": coverage,
+                    "candidate_chunks_total": sum(coverage.values()),
                     "returned_chunks": len(results),
                     "added_chunks": len(results),
                     "added_chunk_ids": added_chunk_ids,
                 }
             )
 
+        # per_query carries the entity_filter used + the resulting chunk count,
+        # so the retrieve node trace shows the pre-filter's effect directly.
         aggregate_trace = _trace_retrieve_aggregation(
             {
                 "query_count": len(queries_this_round),
@@ -297,6 +407,7 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
         queries_tried=queries_tried,
         missing_entities=missing_entities,
         llm_client=llm_client,
+        lang=state.get("detected_language", "vi"),
     )
 
     method = result.get("method", "requery")
@@ -316,6 +427,7 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
             fresh = [q for q in queries if q not in queries_tried]
             if fresh:
                 return TransformQueryNodeOutput(
+                    rewritten_question=fresh[0],
                     queries_tried=[fresh[0]],
                     pending_queries=list(fresh[1:]),
                     retrieval_exhausted=False,
@@ -373,11 +485,48 @@ def transform_query_node(state: AgentState) -> TransformQueryNodeOutput:
         )
 
     return TransformQueryNodeOutput(
+        rewritten_question=query,
         queries_tried=[query],
         pending_queries=[],
         retrieval_exhausted=False,
         trace=[{**trace_base, "query": query, "next_route_hint": "retrieve"}],
     )
+
+
+def _stream_writer() -> Any:
+    """The active LangGraph custom-stream writer, or None outside a streaming run."""
+    try:
+        from langgraph.config import get_stream_writer
+
+        return get_stream_writer()
+    except Exception:
+        return None
+
+
+def _generate_streamed(
+    writer: Callable[[dict[str, Any]], None],
+    question: str,
+    evidence_context: str,
+    docs: list[SearchResult],
+    *,
+    history: list[dict[str, str]],
+    lang: str,
+) -> AnswerDone | None:
+    """Run the same generation but emit token deltas to the LangGraph stream writer.
+    Returns the AnswerDone (has .answer + .trace, like _generate's result)."""
+    final = None
+    for ev in stream_answer(
+        question=question,
+        evidence_context=evidence_context,
+        evidence_chunks=docs,
+        lang=lang,
+        history=history,
+    ):
+        if isinstance(ev, AnswerDelta):
+            writer({"answer_delta": ev.text})
+        elif isinstance(ev, AnswerDone):
+            final = ev
+    return final
 
 
 def generate_node(state: AgentState) -> GenerateNodeOutput:
@@ -392,9 +541,25 @@ def generate_node(state: AgentState) -> GenerateNodeOutput:
     )
 
     evidence_context = build_evidence_context(docs)
-    result = _generate(
-        _effective_question(state), evidence_context, docs, original_question=state["question"]
-    )
+    question = _effective_question(state)
+    history = state.get("history", [])
+    lang = state.get("detected_language", "vi")
+    # Real token streaming: when invoked via run_agent_stream, push deltas to the writer.
+    writer = _stream_writer() if state.get("stream") else None
+    result = None
+    if writer is not None:
+        result = _generate_streamed(
+            writer, question, evidence_context, docs, history=history, lang=lang
+        )
+    if result is None:  # non-streaming path (invoke / eval / tests) or stream produced nothing
+        result = _generate(
+            question,
+            evidence_context,
+            docs,
+            original_question=state["question"],
+            history=history,
+            lang=lang,
+        )
 
     return GenerateNodeOutput(
         answer=result.answer,
@@ -418,9 +583,75 @@ def check_answer_node(state: AgentState) -> CheckAnswerNodeOutput:
     return CheckAnswerNodeOutput(trace=[{"node": "check_answer", "status": answer.status}])
 
 
+def clarify_question_node(state: AgentState) -> ClarifyQuestionNodeOutput:
+    """Detect underspecified queries and ask for clarification before retrieval.
+
+    Uses the resolved question (after preprocess rewrites) as the signal.
+    If the question is clear enough, returns ``needs_clarification=False`` and
+    the graph proceeds normally to retrieve.  If not, returns an Answer with
+    ``status="clarification_needed"`` and the graph routes to END.
+    """
+    question = state.get("rewritten_question") or state["question"]
+    history = state.get("history", [])
+    lang = state.get("detected_language", "vi")
+
+    entities = detect_entities(question)
+    intents = detect_intents(question)
+    needs_clarification, reason = should_clarify(question, history)
+
+    if not needs_clarification:
+        return ClarifyQuestionNodeOutput(
+            needs_clarification=False,
+            detected_entities=entities,
+            detected_intents=intents,
+            trace=[
+                {
+                    "node": "clarify_question",
+                    "needs_clarification": False,
+                    "entities": entities,
+                    "intents": intents,
+                }
+            ],
+        )
+
+    clarification_q = build_clarification_question(reason, entities, intents, lang=lang)
+    pending = build_pending_clarification(reason, entities, intents)
+
+    return ClarifyQuestionNodeOutput(
+        needs_clarification=True,
+        clarification_reason=reason,
+        clarification_question=clarification_q,
+        detected_entities=entities,
+        detected_intents=intents,
+        pending_clarification=pending,
+        answer=Answer(
+            answer=clarification_q,
+            status="clarification_needed",
+            citations=[],
+        ),
+        trace=[
+            {
+                "node": "clarify_question",
+                "needs_clarification": True,
+                "reason": reason,
+                "entities": entities,
+                "intents": intents,
+                "clarification_question": clarification_q,
+            }
+        ],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routing functions
 # ---------------------------------------------------------------------------
+
+
+def route_after_clarification(state: AgentState) -> str:
+    """Route to END (return clarification question) or continue to retrieve."""
+    if state.get("needs_clarification") and not state.get("single_turn"):
+        return "end"
+    return "retrieve"
 
 
 def route_after_rerank(state: AgentState) -> str:
@@ -470,13 +701,26 @@ def _search_via_provider(
     provider: SourceEvidenceProvider,
     query: str,
     document_ids: list[str] | None,
+    exclude_dedup_layers: list[str] | None = None,
+    entity_filter: list[str] | None = None,
 ) -> tuple[list[SearchResult], list[SearchResult]]:
-    chunks = provider.retrieve(RetrievalInput(question=query, document_ids=document_ids)).results
-    bm25 = [r for r in chunks if r.retriever == "bm25"]
+    chunks = provider.retrieve(
+        RetrievalInput(
+            question=query,
+            document_ids=document_ids,
+            exclude_dedup_layers=exclude_dedup_layers or [],
+            entity_filter=entity_filter or [],
+        )
+    ).results
     dense = [r for r in chunks if r.retriever == "dense"]
-    if not bm25 and not dense:
+    # Everything that is not dense (bm25, question-index, qdrant "hybrid") goes in
+    # the first bucket so it survives fusion — previously results tagged
+    # "question"/"hybrid" were silently dropped here, killing the question-index
+    # retriever on the agent path.
+    non_dense = [r for r in chunks if r.retriever != "dense"]
+    if not non_dense and not dense:
         return chunks, []
-    return bm25, dense
+    return non_dense, dense
 
 
 def _deduped(results: list[SearchResult]) -> list[SearchResult]:
@@ -495,18 +739,27 @@ def _retrieve_queries_parallel(
     queries: list[str],
     document_ids: list[str] | None,
     worker_count: int,
+    exclude_dedup_layers: list[str] | None = None,
+    entity_filters: list[list[str]] | None = None,
+    boost_query_type: str | None = None,
 ) -> list[list[SearchResult]]:
     if not queries:
         return []
+    _filters: list[list[str]] = entity_filters or [[] for _ in queries]
     if worker_count <= 1 or len(queries) == 1:
-        return [_retrieve_query(provider, query, document_ids) for query in queries]
+        return [
+            _retrieve_query(provider, q, document_ids, exclude_dedup_layers, f, boost_query_type)
+            for q, f in zip(queries, _filters, strict=True)
+        ]
 
     max_workers = min(worker_count, len(queries))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         return list(
             executor.map(
-                lambda query: _retrieve_query(provider, query, document_ids),
-                queries,
+                lambda qf: _retrieve_query(
+                    provider, qf[0], document_ids, exclude_dedup_layers, qf[1], boost_query_type
+                ),
+                zip(queries, _filters, strict=True),
             )
         )
 

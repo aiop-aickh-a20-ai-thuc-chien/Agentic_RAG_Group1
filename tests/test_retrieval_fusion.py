@@ -19,6 +19,7 @@ from agentic_rag.retrieval.fusion import (
     rerank,
     rerank_with_metadata,
     rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 
@@ -67,6 +68,35 @@ def test_threshold_config_is_pydantic_contract() -> None:
         setattr(config, field_name, 0.4)
 
 
+def _fusion_result(chunk_id: str, rank: int, retriever: str) -> SearchResult:
+    return SearchResult(
+        chunk=Chunk(chunk_id=chunk_id, text=chunk_id, metadata={}),
+        score=1.0 / rank,
+        rank=rank,
+        retriever=retriever,
+    )
+
+
+def test_rrf_fusion_nway_fuses_three_retrievers() -> None:
+    bm25 = [_fusion_result("c1", 1, "bm25")]
+    dense = [_fusion_result("c2", 1, "dense")]
+    questions = [_fusion_result("c3", 1, "question")]
+
+    fused = rrf_fusion_nway([bm25, dense, questions], top_k=10)
+
+    assert {result.chunk.chunk_id for result in fused} == {"c1", "c2", "c3"}
+
+
+def test_rrf_fusion_nway_matches_two_way_rrf_fusion() -> None:
+    bm25 = [_fusion_result("c1", 1, "bm25"), _fusion_result("c2", 2, "bm25")]
+    dense = [_fusion_result("c2", 1, "dense"), _fusion_result("c3", 2, "dense")]
+
+    nway = rrf_fusion_nway([bm25, dense], top_k=10)
+    two_way = rrf_fusion(bm25, dense, top_k=10)
+
+    assert [r.chunk.chunk_id for r in nway] == [r.chunk.chunk_id for r in two_way]
+
+
 def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
     chunk_a = _chunk("chunk-a", "Sparse-first evidence.")
     chunk_b = _chunk("chunk-b", "Shared evidence.")
@@ -85,7 +115,8 @@ def test_rrf_fusion_boosts_chunks_seen_by_both_retrievers() -> None:
 
     assert [result.chunk.chunk_id for result in fused] == ["chunk-b", "chunk-a", "chunk-c"]
     assert fused[0].score > fused[1].score
-    assert fused[0].retriever == "hybrid"
+    # fused chunk now carries the source channels that produced it (was generic "hybrid")
+    assert fused[0].retriever == "bm25+dense"
 
 
 def test_rrf_fusion_deduplicates_duplicate_chunk_ids_within_one_retriever() -> None:
@@ -128,7 +159,8 @@ def test_rrf_fusion_respects_top_k_and_reassigns_hybrid_ranks() -> None:
     )
 
     assert [result.rank for result in fused] == [1, 2]
-    assert [result.retriever for result in fused] == ["hybrid", "hybrid"]
+    # single-channel chunks keep their source label (was generic "hybrid")
+    assert [result.retriever for result in fused] == ["bm25", "bm25"]
     assert [result.chunk.chunk_id for result in fused] == ["chunk-a", "chunk-b"]
 
 
@@ -297,7 +329,8 @@ def test_rerank_orders_by_candidate_score_and_reassigns_rerank_ranks(
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-b", "chunk-c"]
     assert [result.rank for result in reranked] == [1, 2]
-    assert [result.retriever for result in reranked] == ["rerank", "rerank"]
+    # rerank now preserves each candidate's source channel (was overwritten to "rerank")
+    assert [result.retriever for result in reranked] == ["hybrid", "hybrid"]
 
 
 def test_rerank_deduplicates_candidates_by_best_rank(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -343,7 +376,8 @@ def test_rerank_uses_sentence_transformers_when_configured(monkeypatch: pytest.M
 
     assert [result.chunk.chunk_id for result in reranked] == ["chunk-b", "chunk-c"]
     assert [result.score for result in reranked] == [0.95, 0.4]
-    assert [result.retriever for result in reranked] == ["rerank", "rerank"]
+    # rerank now preserves each candidate's source channel (was overwritten to "rerank")
+    assert [result.retriever for result in reranked] == ["hybrid", "hybrid"]
 
 
 def test_rerank_with_metadata_reports_actual_sentence_transformers_provider(

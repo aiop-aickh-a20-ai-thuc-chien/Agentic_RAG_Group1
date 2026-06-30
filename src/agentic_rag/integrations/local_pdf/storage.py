@@ -69,6 +69,9 @@ class LocalSourceStore(Protocol):
     def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
         """Return chunks for multiple documents in one query."""
 
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        """Replace stored chunks for one already-persisted document."""
+
     def list_documents(self) -> list[StoredSourceDocument]:
         """Return stored source document metadata."""
 
@@ -130,7 +133,7 @@ class S3LocalSourceStore:
             markdown_key = f"{base_key}/parsed/document.md"
             self._put_bytes(
                 markdown_key,
-                markdown_path.read_bytes(),
+                markdown_path.read_text(encoding="utf-8").encode(),
                 content_type="text/markdown; charset=utf-8",
             )
 
@@ -179,6 +182,28 @@ class S3LocalSourceStore:
 
     def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
         return [chunk for document_id in document_ids for chunk in self.read_chunks(document_id)]
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        manifest = self._read_manifest(document_id)
+        if manifest is None:
+            raise ValueError(f"Document {document_id!r} not found in source store.")
+        base_key = self._document_prefix(document_id)
+        chunks_key = _manifest_text(manifest, "chunks_key") or f"{base_key}/chunks/chunks.jsonl"
+        chunks_payload = "\n".join(chunk.model_dump_json() for chunk in chunks)
+        self._put_bytes(
+            chunks_key,
+            f"{chunks_payload}\n".encode() if chunks_payload else b"",
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        now = datetime.now(UTC).isoformat()
+        manifest["chunks_key"] = chunks_key
+        manifest["total_chunks"] = len(chunks)
+        manifest["updated_at"] = now
+        metadata = manifest.get("metadata")
+        if isinstance(metadata, dict):
+            metadata["updated_at"] = now
+        self._put_json(f"{base_key}/manifest.json", manifest)
+        self._invalidate_list_cache()
 
     def _invalidate_list_cache(self) -> None:
         _list_cache.pop(self._cache_key, None)
@@ -353,12 +378,24 @@ class PostgresLocalSourceStore:
         self._chunks_table = _safe_table_name(f"{table_prefix}_chunks")
         from psycopg_pool import ConnectionPool
 
+        # Neon (serverless) closes idle connections aggressively, which surfaces
+        # as "server closed the connection unexpectedly" mid-transaction on long
+        # runs. ``check`` validates (and recycles) a connection before handing it
+        # out, and TCP keepalives keep idle ones alive — mirroring the eval pool
+        # in autodata_eval/db.py.
         self._pool = ConnectionPool(
             self._psycopg_connection,
             min_size=1,
-            max_size=4,
+            max_size=10,
             open=True,
-            kwargs={"prepare_threshold": None},
+            check=ConnectionPool.check_connection,
+            kwargs={
+                "prepare_threshold": None,
+                "keepalives": 1,
+                "keepalives_idle": 10,
+                "keepalives_interval": 2,
+                "keepalives_count": 5,
+            },
         )
         self._ensure_schema()
 
@@ -418,27 +455,24 @@ class PostgresLocalSourceStore:
                     (document_id,),
                 )
                 if chunks:
-                    rows = [
-                        (
-                            _storage_chunk_id(chunk=chunk, fallback_index=index),
-                            document_id,
-                            chunk.chunk_id,
-                            _chunk_index(chunk=chunk, fallback_index=index),
-                            chunk.text,
-                            Jsonb(chunk.metadata),
-                        )
-                        for index, chunk in enumerate(chunks, start=1)
-                    ]
-                    placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(rows))
-                    flat_values = [v for row in rows for v in row]
-                    cur.execute(
-                        f"""
-                        insert into {self._chunks_table}
-                            (storage_chunk_id, document_id, chunk_id, chunk_index, text, metadata)
-                        values {placeholders}
-                        """,
-                        flat_values,
-                    )
+                    self._insert_chunk_rows(cur, document_id=document_id, chunks=chunks)
+            conn.commit()
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"update {self._documents_table} set updated_at = now() where document_id = %s",
+                    (document_id,),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(f"Document {document_id!r} not found in store.")
+                cur.execute(
+                    f"delete from {self._chunks_table} where document_id = %s",
+                    (document_id,),
+                )
+                if chunks:
+                    self._insert_chunk_rows(cur, document_id=document_id, chunks=chunks)
             conn.commit()
 
     def delete_document(self, document_id: str) -> None:
@@ -486,27 +520,52 @@ class PostgresLocalSourceStore:
                     d.source_type,
                     d.source,
                     d.metadata,
+                    d.created_at,
+                    d.updated_at,
                     count(c.storage_chunk_id) as chunk_count
                 from {self._documents_table} d
                 left join {self._chunks_table} c on c.document_id = d.document_id
-                group by d.document_id, d.dataset_id, d.name, d.source_type, d.source, d.metadata
+                group by
+                    d.document_id,
+                    d.dataset_id,
+                    d.name,
+                    d.source_type,
+                    d.source,
+                    d.metadata,
+                    d.created_at,
+                    d.updated_at
                 order by max(coalesce(c.created_at, d.created_at)) desc, d.created_at desc
                 """
             )
             rows = cur.fetchall()
 
-        return [
-            StoredSourceDocument(
-                document_id=str(document_id),
-                dataset_id=str(dataset_id),
-                name=str(name),
-                source_type=str(source_type),
-                source=str(source),
-                total_chunks=int(total_chunks),
-                metadata=dict(metadata) if isinstance(metadata, dict) else {},
+        documents: list[StoredSourceDocument] = []
+        for (
+            document_id,
+            dataset_id,
+            name,
+            source_type,
+            source,
+            metadata,
+            created_at,
+            updated_at,
+            total_chunks,
+        ) in rows:
+            document_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+            document_metadata.setdefault("created_at", str(created_at))
+            document_metadata.setdefault("updated_at", str(updated_at))
+            documents.append(
+                StoredSourceDocument(
+                    document_id=str(document_id),
+                    dataset_id=str(dataset_id),
+                    name=str(name),
+                    source_type=str(source_type),
+                    source=str(source),
+                    total_chunks=int(total_chunks),
+                    metadata=document_metadata,
+                )
             )
-            for document_id, dataset_id, name, source_type, source, metadata, total_chunks in rows
-        ]
+        return documents
 
     def _ensure_schema(self) -> None:
         with self._pool.connection() as conn:
@@ -553,6 +612,24 @@ class PostgresLocalSourceStore:
                     on {self._chunks_table} using gin (metadata)
                     """
                 )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._chunks_table}_chunk_id_idx
+                    on {self._chunks_table} (chunk_id)
+                    """
+                )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._chunks_table}_text_fts_idx
+                    on {self._chunks_table} using gin (to_tsvector('english', text))
+                    """
+                )
+                cur.execute(
+                    f"""
+                    create index if not exists {self._documents_table}_source_type_idx
+                    on {self._documents_table} (source_type)
+                    """
+                )
             conn.commit()
 
     def _read_chunks(self, *, where_sql: str, params: tuple[object, ...]) -> list[Chunk]:
@@ -580,6 +657,138 @@ class PostgresLocalSourceStore:
                 )
             )
         return chunks
+
+    def _insert_chunk_rows(self, cur: Any, *, document_id: str, chunks: list[Chunk]) -> None:
+        rows = [
+            (
+                _storage_chunk_id(chunk=chunk, fallback_index=index),
+                document_id,
+                chunk.chunk_id,
+                _chunk_index(chunk=chunk, fallback_index=index),
+                chunk.text,
+                # ChunkMetadata is a Pydantic model, not a plain dict; psycopg's
+                # Jsonb cannot serialize it directly. Coerce via its mapping
+                # protocol (declared fields + extras) before writing.
+                Jsonb(dict(chunk.metadata)),
+            )
+            for index, chunk in enumerate(chunks, start=1)
+        ]
+        placeholders = ", ".join(["(%s, %s, %s, %s, %s, %s)"] * len(rows))
+        flat_values = [value for row in rows for value in row]
+        cur.execute(
+            f"""
+            insert into {self._chunks_table}
+                (storage_chunk_id, document_id, chunk_id, chunk_index, text, metadata)
+            values {placeholders}
+            """,
+            flat_values,
+        )
+
+
+class HybridLocalSourceStore:
+    """Raw source files go to S3; document metadata and chunks go to Postgres."""
+
+    def __init__(
+        self,
+        *,
+        s3_store: S3LocalSourceStore,
+        pg_store: PostgresLocalSourceStore,
+    ) -> None:
+        self._s3 = s3_store
+        self._pg = pg_store
+
+    @classmethod
+    def from_env(cls) -> HybridLocalSourceStore:
+        import os
+
+        connection = os.getenv("LOCAL_SOURCE_POSTGRES_CONNECTION", "").strip()
+        if not connection:
+            raise ValueError("LOCAL_SOURCE_STORE=hybrid requires LOCAL_SOURCE_POSTGRES_CONNECTION.")
+        table_prefix = os.getenv("LOCAL_SOURCE_POSTGRES_TABLE_PREFIX", "local_rag").strip()
+        return cls(
+            s3_store=S3LocalSourceStore.from_env(),
+            pg_store=PostgresLocalSourceStore(
+                connection=connection,
+                table_prefix=table_prefix,
+            ),
+        )
+
+    def write_document(
+        self,
+        *,
+        document_id: str,
+        dataset_id: str,
+        name: str,
+        source_type: str,
+        source: str,
+        raw_path: Path | None,
+        markdown_path: Path | None,
+        metadata: dict[str, object],
+        chunks: list[Chunk],
+    ) -> None:
+        # Postgres is the source of truth for chunks; write it first.
+        self._pg.write_document(
+            document_id=document_id,
+            dataset_id=dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=chunks,
+        )
+        # Upload raw file + markdown to S3, and mirror the chunks there too so a
+        # fallback to LOCAL_SOURCE_STORE=s3 (or direct S3 inspection) sees the same
+        # [P]+[L] metadata as Neon. S3 stays a full mirror rather than blob-only.
+        self._s3.write_document(
+            document_id=document_id,
+            dataset_id=dataset_id,
+            name=name,
+            source_type=source_type,
+            source=source,
+            raw_path=raw_path,
+            markdown_path=markdown_path,
+            metadata=metadata,
+            chunks=chunks,
+        )
+
+    def read_chunks(self, document_id: str) -> list[Chunk]:
+        return self._pg.read_chunks(document_id)
+
+    def read_all_chunks(self) -> list[Chunk]:
+        return self._pg.read_all_chunks()
+
+    def read_chunks_for_documents(self, document_ids: list[str]) -> list[Chunk]:
+        return self._pg.read_chunks_for_documents(document_ids)
+
+    def replace_document_chunks(self, document_id: str, chunks: list[Chunk]) -> None:
+        # Neon is authoritative — update it first. Then mirror to S3 best-effort
+        # (same pattern as delete_document) so the LLM-enriched [L] chunks reach
+        # S3 too without letting a transient S3 error break the primary write.
+        self._pg.replace_document_chunks(document_id, chunks)
+        with contextlib.suppress(Exception):
+            self._s3.replace_document_chunks(document_id, chunks)
+
+    def list_documents(self) -> list[StoredSourceDocument]:
+        return self._pg.list_documents()
+
+    def delete_document(self, document_id: str) -> None:
+        self._pg.delete_document(document_id)
+        with contextlib.suppress(Exception):
+            self._s3.delete_document(document_id)
+
+    def delete_all_documents(self) -> int:
+        count = self._pg.delete_all_documents()
+        with contextlib.suppress(Exception):
+            self._s3.delete_all_documents()
+        return count
+
+    def read_markdown(self, document_id: str) -> str:
+        return self._s3.read_markdown(document_id)
+
+    def read_raw(self, document_id: str) -> StoredRawSource:
+        return self._s3.read_raw(document_id)
 
 
 def _safe_table_name(value: str) -> str:
@@ -633,6 +842,9 @@ def _manifest_text(manifest: dict[str, object], key: str) -> str | None:
 def _stored_document_from_manifest(manifest: dict[str, object]) -> StoredSourceDocument:
     metadata = manifest.get("metadata")
     document_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    created_at = manifest.get("created_at")
+    if isinstance(created_at, str):
+        document_metadata.setdefault("created_at", created_at)
     updated_at = manifest.get("updated_at")
     if isinstance(updated_at, str):
         document_metadata.setdefault("updated_at", updated_at)

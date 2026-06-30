@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.core.contracts import Answer, SearchResult
 
@@ -20,6 +20,14 @@ class PreprocessNodeOutput(_AgentNodeOutput):
     queries_tried: list[str]
     pending_queries: list[str] | None = None
     trace: list[dict[str, Any]]
+    detected_language: str = "vi"
+    # Canonical entities for the retrieval pre-filter. Kept separate from the
+    # clarification node's ``detected_entities`` (VinFast model names, lowercase).
+    filter_entities: list[str] = Field(default_factory=list)
+    # Per-query map: {query: [canonical, ...]}. Decomposed queries each get their
+    # own focused filter; single queries produce a one-entry map.
+    filter_entities_map: dict[str, list[str]] = Field(default_factory=dict)
+    boost_query_type: str = "unknown"
 
 
 class RetrieveNodeOutput(_AgentNodeOutput):
@@ -40,6 +48,7 @@ class RerankNodeOutput(_AgentNodeOutput):
 
 
 class TransformQueryNodeOutput(_AgentNodeOutput):
+    rewritten_question: str | None = None
     queries_tried: list[str] | None = None
     pending_queries: list[str] | None = None
     relevant_docs: list[SearchResult] | None = None
@@ -54,4 +63,16 @@ class GenerateNodeOutput(_AgentNodeOutput):
 
 
 class CheckAnswerNodeOutput(_AgentNodeOutput):
+    trace: list[dict[str, Any]]
+
+
+class ClarifyQuestionNodeOutput(_AgentNodeOutput):
+    needs_clarification: bool
+    detected_entities: list[str]
+    detected_intents: list[str]
+    clarification_question: str | None = None
+    clarification_reason: str | None = None
+    pending_clarification: dict[str, str] | None = None
+    # Only set when needs_clarification=True; None means "leave state's answer untouched"
+    answer: Answer | None = None
     trace: list[dict[str, Any]]

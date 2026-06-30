@@ -43,20 +43,23 @@ embeddings and reranking:
 uv sync --extra local-models
 ```
 
-Torch wheel selection is machine-specific, so this repo does not pin a global
-CUDA wheel or PyTorch index in `pyproject.toml`.
+Torch wheel selection is machine-specific. For Windows/Linux local development,
+this repo routes `torch` to the PyTorch `cu124` index so
+`uv sync --extra local-models` installs a CUDA-enabled wheel that works with a
+compatible NVIDIA driver. macOS keeps the default PyPI wheel.
 
-- Windows/Linux CPU: use `EMBEDDING_DEVICE=cpu` and `RERANK_DEVICE=cpu`.
-- Windows/Linux NVIDIA CUDA: install the torch build recommended by the official
-  PyTorch selector for the machine's CUDA target, then use
-  `EMBEDDING_DEVICE=cuda` and `RERANK_DEVICE=cuda`.
+- Windows/Linux CPU-only machines: use `EMBEDDING_DEVICE=cpu` and
+  `RERANK_DEVICE=cpu`.
+- Windows/Linux NVIDIA CUDA: run `uv sync --extra local-models`, verify that
+  `torch.version.cuda` is not `None`, then use `EMBEDDING_DEVICE=cuda` and
+  `RERANK_DEVICE=cuda`.
 - macOS: start with `auto`; use `mps` only when the installed PyTorch and
   sentence-transformers stack supports it, otherwise use `cpu`.
 
 Verify local torch/device behavior with:
 
 ```bash
-uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available())"
+uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'no cuda')"
 ```
 
 ## 2. Baseline Local Environment
@@ -179,6 +182,70 @@ Inspect parser/chunker debug data:
 ```bash
 curl http://127.0.0.1:8000/sources/{document_id}/debug
 ```
+
+### Dedup New And Existing Sources
+
+Upload-time dedup runs in the `local_pdf` provider after chunks receive local
+metadata and before chunks are persisted/indexed. It marks only
+`duplicate_candidate` chunks; canonical chunks are left unmarked and referenced
+from the candidate metadata.
+
+Canonical selection is deterministic. New uploads keep existing chunks as
+canonical. Legacy backfill prefers chunks/documents already referenced by eval
+questions, then older `created_at` timestamps when available, then
+`document_id`, chunk index, and `chunk_id`.
+
+Dedup uses three layers by default:
+
+- exact SHA-256 over normalized text
+- SimHash near-duplicate detection
+- embedding cosine similarity using the shared `EMBEDDING_*` runtime
+
+Relevant environment variables:
+
+```env
+INGESTION_DEDUP_ENABLED=true
+DEDUP_ENABLE_EXACT=true
+DEDUP_ENABLE_SIMHASH=true
+DEDUP_ENABLE_EMBEDDING=true
+DEDUP_SIMHASH_HAMMING_THRESHOLD=6
+DEDUP_EMBEDDING_SIMILARITY_THRESHOLD=0.92
+DEDUP_EMBEDDING_BATCH_SIZE=64
+```
+
+For documents uploaded before dedup existed, run a backfill:
+
+```bash
+uv run python scripts/backfill_dedup.py --dry-run
+uv run python scripts/backfill_dedup.py
+```
+
+`--dry-run` reports the candidate count without writing. The real run rewrites
+stored chunk metadata and re-upserts dense payloads so the vector store also has
+the updated dedup metadata. Use `--strict-embedding` if Layer 3 embedding failure
+should stop the job instead of falling back to exact/SimHash.
+
+Review candidates in the internal UI:
+
+```text
+/internal/dedup-review
+```
+
+### Knowledge-Quality Conflicts
+
+Inspect knowledge-quality conflicts and duplicates:
+
+```bash
+curl http://127.0.0.1:8000/sources/{document_id}/quality
+curl http://127.0.0.1:8000/knowledge-quality
+curl -X POST http://127.0.0.1:8000/knowledge-quality/scan
+```
+
+The knowledge-quality scan is offline-first and only supports
+`EVIDENCE_PROVIDER=local_pdf`. It writes compact summaries to
+`Chunk.metadata["knowledge_quality"]` and returns detailed facts/findings for
+review. See [knowledge-quality-conflict-detection.md](knowledge-quality-conflict-detection.md)
+for the research framing, demo fixture, and evaluation template.
 
 ## 4. Online Search Pipeline
 

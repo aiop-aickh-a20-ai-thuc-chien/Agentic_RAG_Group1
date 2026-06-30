@@ -26,6 +26,38 @@ class FusedCandidate(BaseModel):
     representative: SearchResult
     score: float
     best_rank: int
+    sources: tuple[str, ...] = ()  # channels that contributed (bm25/dense/question/graph)
+
+
+def _channels(retriever: str) -> tuple[str, ...]:
+    """Split a (possibly already-fused) retriever tag into its individual channels."""
+    return tuple(part for part in str(retriever).split("+") if part)
+
+
+def rrf_fusion_nway(
+    result_lists: list[list[SearchResult]],
+    *,
+    top_k: int = 10,
+    rrf_k: int = RRF_K,
+) -> list[SearchResult]:
+    """Fuse an arbitrary number of retriever result lists via RRF.
+
+    Each list is one retriever (bm25, dense, question-index, ...). RRF is
+    rank-based, so retrievers on different score scales fuse without
+    normalization. Empty lists contribute nothing.
+    """
+
+    if top_k < 0:
+        raise ValueError("top_k must be >= 0 for rrf_fusion_nway.")
+    if rrf_k < 0:
+        raise ValueError("rrf_k must be >= 0 for rrf_fusion_nway.")
+    if top_k == 0:
+        return []
+
+    fused_by_chunk_id: dict[str, FusedCandidate] = {}
+    for results in result_lists:
+        accumulate_rrf_scores(fused_by_chunk_id, results, rrf_k=rrf_k)
+    return rank_fused_candidates(fused_by_chunk_id.values(), top_k=top_k)
 
 
 def rrf_fusion(
@@ -37,17 +69,7 @@ def rrf_fusion(
 ) -> list[SearchResult]:
     """Fuse BM25 and dense results into a final ranked result list."""
 
-    if top_k < 0:
-        raise ValueError("top_k must be >= 0 for rrf_fusion.")
-    if rrf_k < 0:
-        raise ValueError("rrf_k must be >= 0 for rrf_fusion.")
-    if top_k == 0:
-        return []
-
-    fused_by_chunk_id: dict[str, FusedCandidate] = {}
-    accumulate_rrf_scores(fused_by_chunk_id, bm25_results, rrf_k=rrf_k)
-    accumulate_rrf_scores(fused_by_chunk_id, dense_results, rrf_k=rrf_k)
-    return rank_fused_candidates(fused_by_chunk_id.values(), top_k=top_k)
+    return rrf_fusion_nway([bm25_results, dense_results], top_k=top_k, rrf_k=rrf_k)
 
 
 def weighted_rrf_fusion(
@@ -141,6 +163,7 @@ def accumulate_rrf_scores(
                 representative=result,
                 score=contribution,
                 best_rank=result.rank,
+                sources=_channels(result.retriever),
             )
             continue
 
@@ -170,6 +193,7 @@ def accumulate_weighted_rrf_scores(
                 representative=result,
                 score=contribution,
                 best_rank=result.rank,
+                sources=_channels(result.retriever),
             )
             continue
 
@@ -198,7 +222,8 @@ def rank_fused_candidates(
             chunk=candidate.representative.chunk,
             score=candidate.score,
             rank=rank,
-            retriever="hybrid",
+            # show the real contributing channels (e.g. "dense+graph") instead of "hybrid"
+            retriever="+".join(candidate.sources) or "hybrid",
         )
         for rank, candidate in enumerate(ranked_candidates[:top_k], start=1)
     ]
@@ -210,7 +235,10 @@ def _updated_candidate(
     *,
     additional_score: float,
 ) -> FusedCandidate:
-    updates: dict[str, object] = {"score": candidate.score + additional_score}
+    updates: dict[str, object] = {
+        "score": candidate.score + additional_score,
+        "sources": tuple(sorted(set(candidate.sources) | set(_channels(result.retriever)))),
+    }
     if result.rank < candidate.best_rank or (
         result.rank == candidate.best_rank and result.score > candidate.representative.score
     ):

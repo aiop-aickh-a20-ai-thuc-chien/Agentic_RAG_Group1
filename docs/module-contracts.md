@@ -264,5 +264,6 @@ agentic_rag/
 Dùng `agentic_rag.testing.fixtures` cho phát triển độc lập:
 
 - `sample_chunks()`
+- `sample_knowledge_quality_chunks()`
 - `sample_search_results()`
 - `sample_answer()`

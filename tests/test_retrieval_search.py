@@ -83,6 +83,101 @@ def test_bm25_search_returns_matching_chunk_not_loop_index() -> None:
     assert results[0].rank == 1
 
 
+def test_bm25_indexes_text_only_by_default(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_BM25_AUGMENT_KEYWORDS", raising=False)
+    # "pin" lives only in metadata keywords, not in the chunk text.
+    chunk = Chunk(
+        chunk_id="c1",
+        text="noi dung khong chua tu khoa muc tieu",
+        metadata={"keywords": ["pin"]},
+    )
+    store = Store([chunk])
+
+    results = store.bm25_search("pin", top_k=1)
+
+    # Baseline indexes chunk.text only, so the keyword contributes nothing.
+    assert results[0].score == 0.0
+
+
+# Three chunks so the appended keyword lands in 1/3 docs → positive BM25 IDF
+# (with 2 docs a 1/2-frequency term gets idf log(1)=0 and scores 0).
+def test_bm25_augments_with_keywords_when_enabled(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_BM25_AUGMENT_KEYWORDS", "true")
+    chunks = [
+        Chunk(chunk_id="c1", text="lich bao duong lop xe", metadata={}),
+        Chunk(chunk_id="c2", text="huong dan thay the gat mua", metadata={}),
+        Chunk(
+            chunk_id="c3",
+            text="noi dung khong chua tu khoa muc tieu",
+            metadata={"keywords": ["pin"]},
+        ),
+    ]
+    store = Store(chunks)
+
+    results = store.bm25_search("pin", top_k=3)
+
+    # The appended keyword makes c3 the only lexical match for "pin".
+    assert results[0].chunk.chunk_id == "c3"
+    assert results[0].score > 0.0
+
+
+def test_question_search_disabled_by_default(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("RETRIEVAL_QUESTION_INDEX_ENABLED", raising=False)
+    store = Store([Chunk(chunk_id="c1", text="noi dung", metadata={"questions": ["cau hoi"]})])
+
+    assert store.question_search("bat ky", top_k=5) == []
+
+
+def test_question_search_maps_to_parent_and_dedups(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "true")
+    monkeypatch.delenv("QUESTION_MIN_SCORE", raising=False)
+    chunks = [
+        Chunk(chunk_id="c1", text="a", metadata={"questions": ["q0"]}),
+        Chunk(chunk_id="c2", text="b", metadata={"questions": ["q1a", "q1b"]}),
+    ]
+    store = Store(chunks)
+
+    class FakeQuestionIndex:
+        def similarity_search_with_score(self, *, query: str, k: int) -> list[tuple[Any, float]]:
+            return [
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.9),
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.8),  # dup → keep best 0.9
+                (SimpleNamespace(metadata={"parent_index": 0}), 0.6),
+            ]
+
+    monkeypatch.setattr(store, "_build_question_index", lambda chunks: FakeQuestionIndex())
+
+    results = store.question_search("q", top_k=5)
+
+    assert [r.chunk.chunk_id for r in results] == ["c2", "c1"]
+    assert results[0].score == 0.9
+    assert results[0].retriever == "question"
+    assert results[0].rank == 1
+
+
+def test_question_search_applies_min_score(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "true")
+    monkeypatch.setenv("QUESTION_MIN_SCORE", "0.5")
+    chunks = [
+        Chunk(chunk_id="c1", text="a", metadata={"questions": ["q0"]}),
+        Chunk(chunk_id="c2", text="b", metadata={"questions": ["q1"]}),
+    ]
+    store = Store(chunks)
+
+    class FakeQuestionIndex:
+        def similarity_search_with_score(self, *, query: str, k: int) -> list[tuple[Any, float]]:
+            return [
+                (SimpleNamespace(metadata={"parent_index": 0}), 0.9),
+                (SimpleNamespace(metadata={"parent_index": 1}), 0.3),  # below 0.5 → dropped
+            ]
+
+    monkeypatch.setattr(store, "_build_question_index", lambda chunks: FakeQuestionIndex())
+
+    results = store.question_search("q", top_k=5)
+
+    assert [r.chunk.chunk_id for r in results] == ["c1"]
+
+
 def test_upsert_dense_embeddings_uses_stable_ids_without_deleting_collection(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -407,6 +502,9 @@ def test_qdrant_hybrid_search_filters_documents_and_reconstructs_search_results(
     monkeypatch.setattr(
         "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
     )
+    # Isolate from the question-index path (and any leaked env flag) so only the
+    # main hybrid query_points call is captured.
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false")
 
     results = qdrant_hybrid_search("pin vf8", document_ids=["doc-1"], top_k=3)
 
@@ -441,6 +539,9 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
         def create_collection(self, **kwargs: Any) -> None:
             seen["create_collection"] = kwargs
 
+        def create_payload_index(self, **kwargs: Any) -> None:
+            seen.setdefault("payload_indexes", []).append(kwargs)
+
         def upsert(self, **kwargs: Any) -> None:
             seen["upsert"] = kwargs
 
@@ -471,7 +572,108 @@ def test_qdrant_upsert_creates_missing_collection_with_native_dimensions(
 
     dense_config = seen["create_collection"]["vectors_config"]["dense"]
     assert dense_config.size == 3
+    assert [index["field_name"] for index in seen["payload_indexes"]] == [
+        "document_id",
+        "metadata.deduplication.primary_layer",
+        "metadata.entities_canonical",
+    ]
     assert seen["upsert"]["collection_name"] == "agentic_chunks"
+
+
+def test_qdrant_hybrid_search_filters_out_excluded_dedup_layers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class FakeEmbedding:
+        def embed_query(self, text: str) -> list[float]:
+            seen["embedded_query"] = text
+            return [0.3, 0.4]
+
+    class FakeQdrantClient:
+        __module__ = "qdrant_client.fake"
+
+        def get_collection(self, collection_name: str) -> object:
+            seen["get_collection"] = collection_name
+            return SimpleNamespace(
+                config=SimpleNamespace(
+                    params=SimpleNamespace(
+                        vectors={"dense": SimpleNamespace(size=2)},
+                    )
+                )
+            )
+
+        def scroll(self, **kwargs: Any) -> tuple[list[object], None]:
+            return (
+                [
+                    SimpleNamespace(
+                        payload={
+                            "_embedding_profile": {
+                                "schema_version": 1,
+                                "provider": "local",
+                                "model": "local-model",
+                                "dimensions": 2,
+                            }
+                        }
+                    )
+                ],
+                None,
+            )
+
+        def create_payload_index(self, **kwargs: Any) -> None:
+            seen.setdefault("payload_indexes", []).append(kwargs)
+
+        def query_points(self, **kwargs: Any) -> object:
+            seen["query_points"] = kwargs
+            point = SimpleNamespace(
+                score=0.91,
+                payload={
+                    "chunk_id": "c1",
+                    "text": "Pin VF8 duoc bao hanh",
+                    "metadata": {
+                        "document_id": "doc-1",
+                        "storage_chunk_id": "doc-1:0001",
+                        "source": "warranty.pdf",
+                    },
+                },
+            )
+            return SimpleNamespace(points=[point])
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
+    )
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    # Isolate from the question-index path (and any leaked env flag) so only the
+    # main hybrid query_points call is captured.
+    monkeypatch.setenv("RETRIEVAL_QUESTION_INDEX_ENABLED", "false")
+
+    results = qdrant_hybrid_search(
+        "pin vf8",
+        document_ids=["doc-1"],
+        top_k=3,
+        exclude_dedup_layers=["exact_sha256", "simhash", "embedding"],
+    )
+
+    assert [index["field_name"] for index in seen["payload_indexes"]] == [
+        "document_id",
+        "metadata.deduplication.primary_layer",
+        "metadata.entities_canonical",
+    ]
+    query_filter = seen["query_points"]["prefetch"][0].filter
+    assert query_filter.must[0].key == "document_id"
+    assert query_filter.must[0].match.value == "doc-1"
+    assert query_filter.must_not[0].key == "metadata.deduplication.primary_layer"
+    assert query_filter.must_not[0].match.any == ["exact_sha256", "simhash", "embedding"]
+    assert results[0].chunk.chunk_id == "c1"
 
 
 def test_qdrant_upsert_does_not_fallback_after_openai_runtime_failure(
@@ -506,6 +708,231 @@ def test_qdrant_upsert_does_not_fallback_after_openai_runtime_failure(
                 )
             ]
         )
+
+
+def test_upsert_question_index_embeds_questions_into_side_collection(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.retrieval.search import upsert_question_index
+
+    calls: dict[str, Any] = {}
+
+    class FakeEmbedding:
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            calls.setdefault("embedded", []).extend(texts)
+            return [[0.1, 0.2] for _ in texts]
+
+    class FakeQdrantClient:
+        def collection_exists(self, collection_name: str) -> bool:
+            return False
+
+        def create_collection(self, **kwargs: Any) -> object:
+            calls["create_collection"] = kwargs
+            return object()
+
+        def upsert(self, *, collection_name: str, points: list[Any]) -> object:
+            calls["collection_name"] = collection_name
+            calls.setdefault("points", []).extend(points)
+            return object()
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
+    monkeypatch.setenv("EMBEDDING_API_BASE", "http://127.0.0.1:8000/v1")
+    monkeypatch.setenv("EMBEDDING_MODEL", "local-model")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
+    )
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    chunks = [
+        Chunk(
+            chunk_id="c1",
+            text="Pin VF8 duoc bao hanh 10 nam",
+            metadata={"document_id": "doc-1", "questions": ["Pin bao lau?", "Bao hanh the nao?"]},
+        ),
+        Chunk(chunk_id="c2", text="No questions here", metadata={"document_id": "doc-1"}),
+    ]
+
+    result = upsert_question_index(chunks)
+
+    assert result["questions_collection"] == "agentic_chunks_questions"
+    assert result["indexed_questions"] == 2  # two questions on c1, none on c2
+    assert calls["embedded"] == ["Pin bao lau?", "Bao hanh the nao?"]
+    assert "dense" in calls["create_collection"]["vectors_config"]
+    point = calls["points"][0]
+    assert point.vector["dense"] == [0.1, 0.2]
+    assert point.payload["chunk_id"] == "c1"
+    assert point.payload["text"] == "Pin VF8 duoc bao hanh 10 nam"
+    assert point.payload["question_text"] == "Pin bao lau?"
+    assert str(UUID(str(point.id))) == str(point.id)  # deterministic uuid id
+
+
+def test_qdrant_native_question_search_dedups_to_best_parent(monkeypatch: MonkeyPatch) -> None:
+    from agentic_rag.retrieval import search
+
+    class FakeEmbedding:
+        def embed_query(self, text: str) -> list[float]:
+            return [0.3, 0.4]
+
+    class FakeQdrantClient:
+        def collection_exists(self, collection_name: str) -> bool:
+            return True
+
+        def query_points(self, **kwargs: Any) -> object:
+            def _hit(chunk_id: str, score: float, q: str) -> object:
+                return SimpleNamespace(
+                    score=score,
+                    payload={
+                        "chunk_id": chunk_id,
+                        "text": f"text of {chunk_id}",
+                        "metadata": {"document_id": "doc-1"},
+                        "question_text": q,
+                    },
+                )
+
+            return SimpleNamespace(
+                points=[
+                    _hit("c1", 0.92, "q-a"),
+                    _hit("c1", 0.80, "q-b"),  # same parent, lower score -> dropped by dedup
+                    _hit("c2", 0.71, "q-c"),
+                    _hit("c3", 0.30, "q-d"),  # below min_score -> filtered out
+                ]
+            )
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setenv("QUESTION_MIN_SCORE", "0.5")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._configured_embedding", lambda: FakeEmbedding()
+    )
+
+    results = search._qdrant_native_question_search(FakeQdrantClient(), "pin vf8", top_k=5)
+
+    assert results is not None
+    ids = [r.chunk.chunk_id for r in results]
+    assert ids == ["c1", "c2"]  # c1 deduped to best score, c3 below min_score dropped
+    assert results[0].score == pytest.approx(0.92)
+    assert all(r.retriever == "question" for r in results)
+
+
+def test_qdrant_native_question_search_returns_none_when_collection_absent(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.retrieval import search
+
+    class FakeQdrantClient:
+        def collection_exists(self, collection_name: str) -> bool:
+            return False
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+
+    # None signals "no side collection" so the caller falls back to the in-memory index.
+    assert search._qdrant_native_question_search(FakeQdrantClient(), "q", top_k=5) is None
+
+
+def test_delete_qdrant_document_questions_filters_by_metadata_document_id(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.retrieval import search
+
+    seen: dict[str, Any] = {}
+
+    class FakeQdrantClient:
+        __module__ = "qdrant_client.fake"
+
+        def collection_exists(self, collection_name: str) -> bool:
+            return True
+
+        def delete(self, *, collection_name: str, points_selector: Any, wait: bool) -> object:
+            seen["collection_name"] = collection_name
+            seen["selector"] = points_selector
+            return object()
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    result = search.delete_qdrant_document_questions("doc-1")
+
+    assert result["deleted"] is True
+    assert seen["collection_name"] == "agentic_chunks_questions"
+    condition = seen["selector"].filter.must[0]
+    assert condition.key == "metadata.document_id"
+    assert condition.match.value == "doc-1"
+
+
+def test_delete_qdrant_document_questions_skips_when_collection_absent(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from agentic_rag.retrieval import search
+
+    class FakeQdrantClient:
+        def collection_exists(self, collection_name: str) -> bool:
+            return False
+
+    monkeypatch.setenv("DENSE_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example.test")
+    monkeypatch.setenv("QDRANT_COLLECTION", "agentic_chunks")
+    monkeypatch.setattr(
+        "agentic_rag.retrieval.search._qdrant_client", lambda config: FakeQdrantClient()
+    )
+
+    result = search.delete_qdrant_document_questions("doc-1")
+    assert result["skipped"] == "absent"
+
+
+def test_qdrant_question_store_scrolls_all_points_and_caches() -> None:
+    # The question-index retriever on the Qdrant path builds an in-memory Store by
+    # scrolling the whole collection once, preserving each chunk's questions, and
+    # caches it per collection so later queries reuse it.
+    from agentic_rag.retrieval import search
+
+    search._QDRANT_QUESTION_STORE.clear()
+    scroll_calls = {"n": 0}
+
+    class FakeClient:
+        def scroll(self, **kwargs: Any) -> tuple[list[object], Any]:
+            scroll_calls["n"] += 1
+            if kwargs.get("offset") is None:
+                return (
+                    [
+                        SimpleNamespace(
+                            payload={
+                                "chunk_id": "c1",
+                                "text": "Pin VF8 bao hanh",
+                                "metadata": {"questions": ["Pin bao lau?"]},
+                            }
+                        )
+                    ],
+                    "page2",
+                )
+            return (
+                [SimpleNamespace(payload={"chunk_id": "c2", "text": "t2", "metadata": {}})],
+                None,
+            )
+
+    client = FakeClient()
+    try:
+        store = search._qdrant_question_store(client, "col")
+        assert len(store._chunks) == 2  # both pages scrolled
+        assert store._chunks[0].metadata["questions"] == ["Pin bao lau?"]
+        assert scroll_calls["n"] == 2  # paginated until offset is None
+
+        cached = search._qdrant_question_store(client, "col")
+        assert cached is store  # cached: no re-scroll
+        assert scroll_calls["n"] == 2
+    finally:
+        search._QDRANT_QUESTION_STORE.clear()
 
 
 def test_qdrant_upsert_accepts_matching_populated_embedding_profile(

@@ -210,6 +210,27 @@ def test_retrieve_node_adds_all_chunks() -> None:
     assert update.trace[0]["added_chunks_total"] == 4
 
 
+def test_search_via_provider_keeps_question_index_results() -> None:
+    # Regression: results tagged "question"/"hybrid" must survive the bm25/dense
+    # split — previously they were silently dropped, killing the question-index
+    # retriever on the agent path.
+    import agentic_rag.agent.nodes as m
+
+    provider = _FakeProvider(
+        [
+            _result("c1", 0.8, retriever="bm25"),
+            _result("c2", 0.7, retriever="dense"),
+            _result("c3", 0.6, retriever="question"),
+        ]
+    )
+    non_dense, dense = m._search_via_provider(cast(SourceEvidenceProvider, provider), "q", None)
+    non_dense_ids = {r.chunk.chunk_id for r in non_dense}
+    dense_ids = {r.chunk.chunk_id for r in dense}
+    assert "c3" in non_dense_ids  # question result is kept, not dropped
+    assert "c1" in non_dense_ids
+    assert dense_ids == {"c2"}
+
+
 def test_retrieve_node_traces_multi_query_aggregation(monkeypatch: object) -> None:
     monkeypatch.delenv("AGENT_RETRIEVE_WORKERS", raising=False)  # type: ignore[attr-defined]
     provider = _FakeProvider([_result("c1"), _result("c2")])

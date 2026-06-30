@@ -24,5 +24,25 @@ class AgentState(TypedDict):
     step_count: int
     retrieval_exhausted: bool
     document_ids: NotRequired[list[str] | None]
+    exclude_dedup_layers: NotRequired[list[str]]
     answer: NotRequired[Answer]
     trace: Annotated[list[dict[str, Any]], operator.add]
+    # Clarification node fields
+    single_turn: NotRequired[bool]
+    needs_clarification: NotRequired[bool]
+    clarification_question: NotRequired[str | None]
+    clarification_reason: NotRequired[str | None]
+    detected_entities: NotRequired[list[str]]
+    detected_intents: NotRequired[list[str]]
+    # Canonical entities for the retrieval pre-filter (set in preprocess, read in
+    # retrieve). Distinct from detected_entities (clarification's model names).
+    filter_entities: NotRequired[list[str]]
+    # Per-query entity filter map: query string → canonical entities.
+    # Populated by preprocess_node; retrieve_node looks up each sub-query here so
+    # decomposed queries get their own focused filter instead of a shared union.
+    filter_entities_map: NotRequired[dict[str, list[str]]]
+    pending_clarification: NotRequired[dict[str, str] | None]
+    # Language detection — set once in preprocess, read by all downstream nodes
+    detected_language: NotRequired[str]
+    boost_query_type: NotRequired[str]  # detected query type for boosting
+    stream: NotRequired[bool]  # generate_node streams tokens to the LangGraph writer

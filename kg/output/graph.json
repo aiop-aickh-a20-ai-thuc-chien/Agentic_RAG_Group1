@@ -1,0 +1,236 @@
+{
+  "nodes": [
+    {
+      "id": "ent_515d55587edf",
+      "label": "chính sách thuê pin",
+      "type": "policy",
+      "aliases": [
+        "chính sách thuê pin"
+      ],
+      "freq": 1,
+      "community": 0
+    },
+    {
+      "id": "ent_43e6a6c330f5",
+      "label": "pin LFP",
+      "type": "feature",
+      "aliases": [
+        "pin LFP",
+        "pin lithium LFP"
+      ],
+      "freq": 3,
+      "community": 2
+    },
+    {
+      "id": "ent_c10e9dc3b0a7",
+      "label": "VF 8",
+      "type": "product",
+      "aliases": [
+        "VF 8",
+        "VinFast VF8"
+      ],
+      "freq": 5,
+      "community": 0
+    },
+    {
+      "id": "ent_d6e874bb2622",
+      "label": "chính sách bảo hành 10 năm",
+      "type": "policy",
+      "aliases": [
+        "chính sách bảo hành 10 năm"
+      ],
+      "freq": 1,
+      "community": 1
+    },
+    {
+      "id": "ent_885ecf5f4607",
+      "label": "VF 5",
+      "type": "product",
+      "aliases": [
+        "VF 5",
+        "vf5"
+      ],
+      "freq": 4,
+      "community": 1
+    },
+    {
+      "id": "ent_124abc4f01a0",
+      "label": "VF 3",
+      "type": "product",
+      "aliases": [
+        "VF 3"
+      ],
+      "freq": 2,
+      "community": 2
+    },
+    {
+      "id": "ent_75104dd75021",
+      "label": "bộ sạc V-Green",
+      "type": "feature",
+      "aliases": [
+        "bộ sạc V-Green"
+      ],
+      "freq": 2,
+      "community": 0
+    },
+    {
+      "id": "ent_de0ebaefb289",
+      "label": "1.2 tỷ",
+      "type": "value",
+      "aliases": [
+        "1.2 tỷ"
+      ],
+      "freq": 1,
+      "community": 0
+    },
+    {
+      "id": "ent_5a12a187229a",
+      "label": "VinFast",
+      "type": "org",
+      "aliases": [
+        "VinFast"
+      ],
+      "freq": 3,
+      "community": 1
+    }
+  ],
+  "edges": [
+    {
+      "source": "ent_c10e9dc3b0a7",
+      "target": "ent_5a12a187229a",
+      "predicate": "made_by",
+      "weight": 1,
+      "docs": [
+        "d_catalogue"
+      ],
+      "chunks": [
+        "d_catalogue::c1"
+      ],
+      "evidence": [
+        "VinFast sản xuất VF 8"
+      ]
+    },
+    {
+      "source": "ent_c10e9dc3b0a7",
+      "target": "ent_43e6a6c330f5",
+      "predicate": "has_feature",
+      "weight": 1,
+      "docs": [
+        "d_catalogue"
+      ],
+      "chunks": [
+        "d_catalogue::c1"
+      ],
+      "evidence": [
+        "VF 8 được trang bị pin LFP"
+      ]
+    },
+    {
+      "source": "ent_c10e9dc3b0a7",
+      "target": "ent_515d55587edf",
+      "predicate": "applies_policy",
+      "weight": 1,
+      "docs": [
+        "d_catalogue"
+      ],
+      "chunks": [
+        "d_catalogue::c1"
+      ],
+      "evidence": [
+        "VF 8 áp dụng chính sách thuê pin"
+      ]
+    },
+    {
+      "source": "ent_c10e9dc3b0a7",
+      "target": "ent_de0ebaefb289",
+      "predicate": "has_price",
+      "weight": 1,
+      "docs": [
+        "d_catalogue"
+      ],
+      "chunks": [
+        "d_catalogue::c2"
+      ],
+      "evidence": [
+        "VinFast VF8 có giá 1.2 tỷ"
+      ]
+    },
+    {
+      "source": "ent_885ecf5f4607",
+      "target": "ent_5a12a187229a",
+      "predicate": "made_by",
+      "weight": 2,
+      "docs": [
+        "d_vf5"
+      ],
+      "chunks": [
+        "d_vf5::c3",
+        "d_vf5::c4"
+      ],
+      "evidence": [
+        "VF 5 được sản xuất bởi VinFast",
+        "vf5 made by VinFast"
+      ]
+    },
+    {
+      "source": "ent_885ecf5f4607",
+      "target": "ent_43e6a6c330f5",
+      "predicate": "has_feature",
+      "weight": 1,
+      "docs": [
+        "d_vf5"
+      ],
+      "chunks": [
+        "d_vf5::c3"
+      ],
+      "evidence": [
+        "VF 5 trang bị pin lithium LFP"
+      ]
+    },
+    {
+      "source": "ent_885ecf5f4607",
+      "target": "ent_d6e874bb2622",
+      "predicate": "applies_policy",
+      "weight": 1,
+      "docs": [
+        "d_vf5"
+      ],
+      "chunks": [
+        "d_vf5::c4"
+      ],
+      "evidence": [
+        "VF 5 áp dụng chính sách bảo hành 10 năm"
+      ]
+    },
+    {
+      "source": "ent_124abc4f01a0",
+      "target": "ent_43e6a6c330f5",
+      "predicate": "has_feature",
+      "weight": 1,
+      "docs": [
+        "d_misc"
+      ],
+      "chunks": [
+        "d_misc::c6"
+      ],
+      "evidence": [
+        "VF 3 được trang bị pin LFP"
+      ]
+    },
+    {
+      "source": "ent_75104dd75021",
+      "target": "ent_c10e9dc3b0a7",
+      "predicate": "compatible_with",
+      "weight": 1,
+      "docs": [
+        "d_misc"
+      ],
+      "chunks": [
+        "d_misc::c5"
+      ],
+      "evidence": [
+        "Bộ sạc V-Green tương thích với VF 8"
+      ]
+    }
+  ]
+}

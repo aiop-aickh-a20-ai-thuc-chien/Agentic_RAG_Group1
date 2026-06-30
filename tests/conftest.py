@@ -19,6 +19,10 @@ def _test_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         "QDRANT_URL",
         "QDRANT_API_KEY",
         "QDRANT_COLLECTION",
+        # Cách ly Neon: test KHÔNG được chạm bảng dedup_candidates thật. Backfill/
+        # upload trong test gọi replace_all_candidates() — nếu NEON_CONNECTION còn
+        # set, nó ghi đè sạch index dedup production. Gỡ ở đây để mọi test an toàn.
+        "NEON_CONNECTION",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AGENT_MODE", "false")

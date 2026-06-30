@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Iterator
 from types import SimpleNamespace
@@ -23,6 +24,19 @@ from agentic_rag.model_runtime.llm import LiteLLMClient
 def _clean_runtime(monkeypatch: MonkeyPatch) -> Iterator[None]:
     clear_model_runtime_caches()
     monkeypatch.setattr("agentic_rag.model_runtime.config.load_local_env", lambda: None)
+    # Clear role-specific LLM environment variables to prevent test pollution from local .env
+    for key in list(os.environ.keys()):
+        if key.startswith("LLM_") or any(
+            role in key
+            for role in (
+                "QUERY_REWRITE_",
+                "QUERY_TRANSFORM_",
+                "GENERATION_",
+                "INGESTION_",
+                "EVALUATION_",
+            )
+        ):
+            monkeypatch.delenv(key, raising=False)
     yield
     clear_model_runtime_caches()
 

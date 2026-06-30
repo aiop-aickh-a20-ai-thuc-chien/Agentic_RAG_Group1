@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from typing import Any
 
 from agentic_rag.core.contracts import RerankInput, SearchResult
 from agentic_rag.model_runtime.config import resolve_reranker_config
@@ -17,6 +17,7 @@ from agentic_rag.retrieval.fusion_strategies import (
     RRF_K,
     normalized_score_fusion,
     rrf_fusion,
+    rrf_fusion_nway,
     weighted_rrf_fusion,
 )
 from agentic_rag.retrieval.thresholds import (
@@ -122,7 +123,7 @@ def build_evidence_context(evidence_chunks: list[SearchResult]) -> str:
     return "\n".join(lines)
 
 
-def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:
+def _metadata_text(metadata: Any, key: str) -> str | None:
     value = metadata.get(key)
     if value is None:
         return None
@@ -158,5 +159,6 @@ __all__ = [
     "rerank_metadata",
     "rerank_with_metadata",
     "rrf_fusion",
+    "rrf_fusion_nway",
     "weighted_rrf_fusion",
 ]

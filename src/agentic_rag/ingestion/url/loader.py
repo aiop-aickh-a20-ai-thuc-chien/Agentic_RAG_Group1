@@ -241,7 +241,7 @@ def load_text_chunks(
         source=source,
         text=cleaned_text,
     )
-    fetched_at = _utc_now()
+    ingestion_at = _utc_now()
     chunks = build_chunks(
         text=cleaned_text,
         source=source,
@@ -249,7 +249,7 @@ def load_text_chunks(
         section="main",
         url=None,
         title=None,
-        fetched_at=fetched_at,
+        ingestion_at=ingestion_at,
     )
     persist_ingestion_artifacts(
         data_dir=data_artifact_dir,
@@ -258,7 +258,7 @@ def load_text_chunks(
         source_url=None,
         parser="plain-text",
         run_id=run_id,
-        created_at=fetched_at,
+        created_at=ingestion_at,
         markdown=cleaned_text,
         chunks=chunks,
     )
@@ -350,7 +350,7 @@ def _load_extracted_markdown_with_artifacts(
     data_artifact_dir: str | Path | None,
     run_id: str,
 ) -> LoadedUrlDocument:
-    fetched_at = _utc_now()
+    ingestion_at = _utc_now()
     canonical_url = parsed.metadata.canonical_url or parsed.metadata.og_url
     if html is not None:
         _persist_html_debug_artifacts(
@@ -367,7 +367,7 @@ def _load_extracted_markdown_with_artifacts(
         source=source,
         source_type=source_type,
         title=title,
-        fetched_at=fetched_at,
+        ingestion_at=ingestion_at,
     )
     chunks = _with_html_metadata(
         chunks,
@@ -388,7 +388,7 @@ def _load_extracted_markdown_with_artifacts(
         canonical_url=canonical_url,
         parser=extracted.parser_name,
         run_id=run_id,
-        created_at=fetched_at,
+        created_at=ingestion_at,
         markdown=cleaned_markdown,
         chunks=chunks,
         page_metadata=parsed.metadata,
@@ -403,12 +403,14 @@ def _build_markdown_aware_chunks(
     source: str,
     source_type: str,
     title: str | None,
-    fetched_at: str,
+    ingestion_at: str,
 ) -> list[Chunk]:
     content_hash = short_hash(markdown)
     section_indexes: dict[str, int] = defaultdict(int)
     chunks: list[Chunk] = []
-    for markdown_chunk in chunk_markdown_by_sections(markdown, root_title=title):
+    for global_chunk_index, markdown_chunk in enumerate(
+        chunk_markdown_by_sections(markdown, root_title=title), start=1
+    ):
         section = markdown_chunk.section or "main"
         section_indexes[section] += 1
         chunk_index = section_indexes[section]
@@ -425,7 +427,8 @@ def _build_markdown_aware_chunks(
                     "section": section,
                     "section_level": markdown_chunk.section_level,
                     "section_path": list(markdown_chunk.section_path),
-                    "fetched_at": fetched_at,
+                    "ingestion_at": ingestion_at,
+                    "chunk_index": global_chunk_index,
                     "content_hash": content_hash,
                     "chunk_token_count": markdown_chunk.chunk_token_count,
                     **markdown_chunk.metadata,

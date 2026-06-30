@@ -7,21 +7,19 @@ import {
   Check,
   ClipboardList,
   FileCheck2,
+  FlaskConical,
   LockKeyhole,
   Moon,
-  ShieldCheck,
   Sparkles,
   Sun,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { KnowledgeScene } from "@/components/knowledge-scene";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-type Theme = "light" | "dark";
+import { useTheme } from "@/lib/use-theme";
 
 const highlights = [
   "Trả lời bằng tiếng Việt",
@@ -30,8 +28,7 @@ const highlights = [
 ];
 
 export default function ToolLauncherPage() {
-  const [theme, setTheme] = useState<Theme>("light");
-  const isDark = theme === "dark";
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <main
@@ -62,7 +59,7 @@ export default function ToolLauncherPage() {
           <div className="flex items-center gap-2">
             <button
               className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-medium transition hover:bg-paper dark:border-white/14 dark:bg-white/10 dark:text-white dark:hover:bg-white/16"
-              onClick={() => setTheme(isDark ? "light" : "dark")}
+              onClick={toggleTheme}
               type="button"
             >
               {isDark ? (
@@ -134,7 +131,7 @@ export default function ToolLauncherPage() {
 
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <Link
-                href="/eval-review"
+                href="/internal/eval-review"
                 className="group rounded-lg border border-line/80 bg-white/64 p-4 text-sm transition hover:-translate-y-0.5 hover:border-mint/40 hover:bg-white hover:shadow-sm dark:border-white/14 dark:bg-slate-900/76"
               >
                 <ClipboardList className="mb-3 h-4 w-4 text-mint dark:text-emerald-300" aria-hidden="true" />
@@ -143,7 +140,16 @@ export default function ToolLauncherPage() {
                   Duyệt & đánh giá câu hỏi
                 </p>
               </Link>
-              <ComingSoon icon={ShieldCheck} label="So sánh nguồn" />
+              <Link
+                href="/internal/autodata"
+                className="group rounded-lg border border-line/80 bg-white/64 p-4 text-sm transition hover:-translate-y-0.5 hover:border-mint/40 hover:bg-white hover:shadow-sm dark:border-white/14 dark:bg-slate-900/76"
+              >
+                <FlaskConical className="mb-3 h-4 w-4 text-mint dark:text-emerald-300" aria-hidden="true" />
+                <p className="font-medium text-ink dark:text-slate-100">AutoData</p>
+                <p className="mt-1 text-xs text-ink/56 dark:text-slate-200">
+                  Tự sinh câu hỏi từ tài liệu
+                </p>
+              </Link>
               <ComingSoon icon={LockKeyhole} label="Quản lý hồ sơ" />
             </div>
           </section>

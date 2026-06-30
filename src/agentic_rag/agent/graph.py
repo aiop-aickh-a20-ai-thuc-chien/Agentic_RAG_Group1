@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
 from agentic_rag.agent.nodes import (
     check_answer_node,
+    clarify_question_node,
     generate_node,
     make_retrieve_node,
     preprocess_node,
     rerank_node,
     route_after_check,
+    route_after_clarification,
     route_after_rerank,
     route_after_transform,
     transform_query_node,
@@ -32,6 +35,7 @@ def build_agent(provider: SourceEvidenceProvider) -> Any:
     graph: StateGraph[AgentState, Any, Any] = StateGraph(AgentState)
 
     graph.add_node("preprocess", preprocess_node)
+    graph.add_node("clarify_question", clarify_question_node)
     graph.add_node("retrieve", cast(Any, retrieve_node))
     graph.add_node("rerank", rerank_node)
     graph.add_node("transform_query", transform_query_node)
@@ -39,7 +43,12 @@ def build_agent(provider: SourceEvidenceProvider) -> Any:
     graph.add_node("check_answer", check_answer_node)
 
     graph.add_edge(START, "preprocess")
-    graph.add_edge("preprocess", "retrieve")
+    graph.add_edge("preprocess", "clarify_question")
+    graph.add_conditional_edges(
+        "clarify_question",
+        route_after_clarification,
+        {"retrieve": "retrieve", "end": END},
+    )
     graph.add_edge("retrieve", "rerank")
     graph.add_conditional_edges(
         "rerank",
@@ -69,6 +78,7 @@ def run_agent(
     agent = build_agent(provider)
     history = [message.model_dump(mode="python") for message in request.history]
     initial: AgentState = {
+        "single_turn": request.single_turn,
         "question": request.question,
         "rewritten_question": request.question,
         "history": history,
@@ -82,7 +92,11 @@ def run_agent(
         "step_count": 0,
         "retrieval_exhausted": False,
         "document_ids": request.document_ids,
+        "exclude_dedup_layers": request.exclude_dedup_layers,
         "trace": [],
+        # Clarification fields — reset every run; resolved from history if needed
+        "needs_clarification": False,
+        "pending_clarification": None,
     }
     final_state: dict[str, Any] = agent.invoke(initial)
 
@@ -93,10 +107,67 @@ def run_agent(
             status="not_found",
             citations=[],
         )
+    # Clarification answers are a valid final state — pass them through as-is.
 
     return WorkflowRunOutput(
         answer=answer,
         evidence_chunks=final_state.get("relevant_docs", []),
         queries_tried=final_state.get("queries_tried", [request.question]),
         steps=final_state.get("trace", []),
+    )
+
+
+def run_agent_stream(
+    *, provider: SourceEvidenceProvider, request: WorkflowRunInput
+) -> Iterator[tuple[str, str | WorkflowRunOutput]]:
+    """Like :func:`run_agent`, but a generator: yields ``("delta", text)`` as the
+    generate node streams tokens, then a final ``("final", WorkflowRunOutput)``.
+    Uses LangGraph's custom+values stream so the Self-RAG flow is unchanged."""
+    agent = build_agent(provider)
+    history = [message.model_dump(mode="python") for message in request.history]
+    initial: AgentState = {
+        "single_turn": request.single_turn,
+        "question": request.question,
+        "rewritten_question": request.question,
+        "history": history,
+        "pending_queries": [],
+        "fused_results": [],
+        "relevant_docs": [],
+        "pinned_docs": [],
+        "missing_entities": [],
+        "rejected_chunk_ids": [],
+        "queries_tried": [request.question],
+        "step_count": 0,
+        "retrieval_exhausted": False,
+        "document_ids": request.document_ids,
+        "exclude_dedup_layers": request.exclude_dedup_layers,
+        "trace": [],
+        "needs_clarification": False,
+        "pending_clarification": None,
+        "stream": True,
+    }
+    final_state: dict[str, Any] = {}
+    for mode, chunk in agent.stream(initial, stream_mode=["custom", "values"]):
+        if mode == "custom" and isinstance(chunk, dict):
+            text = chunk.get("answer_delta")
+            if text:
+                yield ("delta", text)
+        elif mode == "values" and isinstance(chunk, dict):
+            final_state = chunk
+
+    answer = final_state.get("answer")
+    if not isinstance(answer, Answer):
+        answer = Answer(
+            answer="Mình chưa tìm thấy thông tin này trong tài liệu được cung cấp.",
+            status="not_found",
+            citations=[],
+        )
+    yield (
+        "final",
+        WorkflowRunOutput(
+            answer=answer,
+            evidence_chunks=final_state.get("relevant_docs", []),
+            queries_tried=final_state.get("queries_tried", [request.question]),
+            steps=final_state.get("trace", []),
+        ),
     )

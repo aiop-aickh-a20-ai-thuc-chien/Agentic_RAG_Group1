@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import lru_cache
 from typing import Any, Protocol, cast
 
@@ -115,7 +116,8 @@ class LiteLLMReranker(BaseModel):
                 chunk=request.candidates[index].chunk,
                 score=score,
                 rank=rank,
-                retriever="rerank",
+                # keep the source channel(s) visible after rerank (e.g. "dense+graph")
+                retriever=request.candidates[index].retriever,
             )
             for rank, (index, score) in enumerate(indexed_scores[: request.top_k], start=1)
         ]
@@ -199,7 +201,7 @@ def _score_based_rerank(candidates: list[SearchResult], *, top_k: int) -> list[S
             chunk=candidate.chunk,
             score=candidate.score,
             rank=rank,
-            retriever="rerank",
+            retriever=candidate.retriever,  # keep source channel visible after rerank
         )
         for rank, candidate in enumerate(ranked_candidates[:top_k], start=1)
     ]
@@ -224,14 +226,59 @@ def _rank_by_scores(
             chunk=candidate.chunk,
             score=score,
             rank=rank,
-            retriever="rerank",
+            retriever=candidate.retriever,  # keep source channel visible after rerank
         )
         for rank, (candidate, score) in enumerate(scored_candidates[:top_k], start=1)
     ]
 
 
+def _preimport_sklearn_before_torch() -> None:
+    """Nạp scikit-learn TRƯỚC khi torch/sentence-transformers load.
+
+    Trên Windows, nếu torch nạp trước rồi sentence-transformers mới kéo
+    scikit-learn vào sau, xảy ra xung đột DLL native → access violation
+    (exit 0xC0000005) crash cả tiến trình. Nạp sklearn sớm để cố định thứ tự.
+    Đây là chokepoint torch đầu tiên của server (embedding dùng API, không nạp torch).
+    """
+    # sklearn đi kèm sentence-transformers — nếu chưa có thì import dưới sẽ báo lỗi rõ.
+    with contextlib.suppress(ImportError):
+        importlib.import_module("sklearn")
+
+
 @lru_cache(maxsize=8)
+def _cuda_available() -> bool:
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _resolve_device(
+    device: str | None, *, cuda_available: Callable[[], bool] = _cuda_available
+) -> str | None:
+    """Downgrade a requested CUDA device to CPU when CUDA is unavailable.
+
+    Honors any non-CUDA device as-is. A machine with CPU-only torch (or no GPU)
+    would otherwise raise "Torch not compiled with CUDA enabled"; falling back to
+    CPU keeps the reranker working (slower) instead of failing every request.
+    """
+    if not device or not str(device).lower().startswith("cuda"):
+        return device
+    if cuda_available():
+        return device
+    import warnings
+
+    warnings.warn(
+        f"RERANK_DEVICE={device!r} requested but CUDA is unavailable; using CPU.",
+        stacklevel=2,
+    )
+    return "cpu"
+
+
 def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderModel:
+    _preimport_sklearn_before_torch()
     try:
         sentence_transformers = importlib.import_module("sentence_transformers")
     except ImportError as exc:
@@ -240,7 +287,7 @@ def _load_cross_encoder(model_name: str, device: str | None) -> _CrossEncoderMod
         ) from exc
     cross_encoder = sentence_transformers.CrossEncoder
     try:
-        return cast(_CrossEncoderModel, cross_encoder(model_name, device=device))
+        return cast(_CrossEncoderModel, cross_encoder(model_name, device=_resolve_device(device)))
     except Exception as exc:
         raise ModelInvocationError(f"Local reranker load failed: {exc}") from exc
 

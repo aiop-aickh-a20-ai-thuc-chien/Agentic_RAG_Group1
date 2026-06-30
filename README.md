@@ -79,6 +79,8 @@ Hướng dẫn bàn giao cho thành viên mới nằm ở
 Đọc tài liệu này trước khi chạy demo local, cloud prototype hoặc so sánh RAGFlow.
 Các biến môi trường cho LLM, embedding và reranker được định nghĩa tập trung tại
 [docs/model-runtime-configuration.md](docs/model-runtime-configuration.md).
+Knowledge-quality conflict detection cho nguồn local PDF/URL/text được mô tả tại
+[docs/knowledge-quality-conflict-detection.md](docs/knowledge-quality-conflict-detection.md).
 
 ## Ranh giới module
 

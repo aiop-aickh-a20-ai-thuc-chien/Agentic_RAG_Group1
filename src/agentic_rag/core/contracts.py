@@ -6,8 +6,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AnswerStatus = Literal["answered", "not_found"]
+from agentic_rag.ingestion.metadata import ChunkMetadata
+
+AnswerStatus = Literal["answered", "not_found", "clarification_needed"]
 RetrieverName = Literal["bm25", "dense", "hybrid", "rerank"]
+KnowledgeQualityFindingKind = Literal["exact_duplicate", "near_duplicate", "conflict"]
+KnowledgeQualitySeverity = Literal["info", "warning", "critical"]
+KnowledgeQualityStatus = Literal["open", "resolved", "ignored"]
 ModelRole = Literal[
     "query_rewrite",
     "query_transform",
@@ -28,7 +33,7 @@ class Chunk(_ContractModel):
 
     chunk_id: str
     text: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: ChunkMetadata = Field(default_factory=ChunkMetadata)
 
 
 class SearchResult(_ContractModel):
@@ -68,9 +73,11 @@ class ConversationMessage(_ContractModel):
 class WorkflowRunInput(_ContractModel):
     """Validated input for one Workflow run."""
 
+    single_turn: bool = False
     question: str
     history: list[ConversationMessage] = Field(default_factory=list)
     document_ids: list[str] | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
 
 
 class WorkflowRunOutput(_ContractModel):
@@ -88,6 +95,10 @@ class RetrievalInput(_ContractModel):
     question: str
     document_ids: list[str] | None = None
     page_size: int | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
+    # Canonical entities detected from the query (preprocess stage). Providers
+    # that support it pre-filter retrieval to chunks carrying any of them.
+    entity_filter: list[str] = Field(default_factory=list)
 
 
 class RetrievalOutput(_ContractModel):
@@ -104,6 +115,7 @@ class EvidenceResolutionInput(_ContractModel):
     evidence_chunks: list[SearchResult] | None = None
     provider: str | None = None
     document_ids: list[str] | None = None
+    exclude_dedup_layers: list[str] = Field(default_factory=list)
     use_mock_evidence: bool = False
 
 
@@ -129,6 +141,45 @@ class SourceDocumentChunks(_ContractModel):
 
     chunks: list[Chunk]
     total_chunks: int
+
+
+class KnowledgeQualityFact(_ContractModel):
+    """One normalized fact extracted from a source chunk for quality checks."""
+
+    fact_id: str
+    chunk_id: str
+    entity: str
+    attribute: str
+    value: str
+    normalized_value: float | str
+    unit: str | None = None
+    span: str
+    start: int | None = None
+    end: int | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class KnowledgeQualityFinding(_ContractModel):
+    """A duplicate or conflict finding across one or more chunks."""
+
+    finding_id: str
+    kind: KnowledgeQualityFindingKind
+    severity: KnowledgeQualitySeverity
+    status: KnowledgeQualityStatus = "open"
+    chunk_ids: list[str]
+    fact_ids: list[str] = Field(default_factory=list)
+    summary: str
+    suggested_action: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class KnowledgeQualityReport(_ContractModel):
+    """Facts and findings produced by a knowledge-quality scan."""
+
+    facts: list[KnowledgeQualityFact] = Field(default_factory=list)
+    findings: list[KnowledgeQualityFinding] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class LLMCompletionInput(_ContractModel):
